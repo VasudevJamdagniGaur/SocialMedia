@@ -93,7 +93,7 @@ export default function BottomNavigation() {
                 : 'text-gray-500'
             }`}
           >
-            Community
+            Pod
           </span>
         </button>
       </div>
