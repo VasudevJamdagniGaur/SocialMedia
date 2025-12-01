@@ -15,6 +15,8 @@ import ChatPage from './components/ChatPage';
 import EmotionalWellbeing from './components/EmotionalWellbeing';
 import ProfilePage from './components/ProfilePage';
 import SplashScreen from './components/SplashScreen';
+import CommunityPage from './components/CommunityPage';
+import BottomNavigation from './components/BottomNavigation';
 
 // Lazy load Capacitor App plugin for deep link handling
 const getAppPlugin = async () => {
@@ -88,6 +90,10 @@ function AppContent() {
               // Navigate to dashboard from Profile
               console.log('📍 Navigating to dashboard from Profile');
               navigate('/dashboard', { replace: true });
+            } else if (location.pathname === '/community') {
+              // Navigate to dashboard from Community
+              console.log('📍 Navigating to dashboard from Community');
+              navigate('/dashboard', { replace: true });
             } else if (location.pathname === '/dashboard') {
               // If already on dashboard, exit app
               console.log('📍 Already on dashboard, exiting app');
@@ -145,10 +151,16 @@ function AppContent() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/community" element={<CommunityPage />} />
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/wellbeing" element={<EmotionalWellbeing />} />
         <Route path="/profile" element={<ProfilePage />} />
       </Routes>
+      
+      {/* Show bottom navigation only on main app pages */}
+      {(location.pathname === '/dashboard' || location.pathname === '/community') && (
+        <BottomNavigation />
+      )}
     </div>
   );
 }

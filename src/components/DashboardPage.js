@@ -356,7 +356,7 @@ export default function DashboardPage() {
 
   return (
     <div
-      className="min-h-screen px-6 py-8 relative overflow-hidden slide-up"
+      className="min-h-screen px-6 py-8 pb-20 relative overflow-hidden slide-up"
       style={{
         background: isDarkMode
           ? "#202124"
