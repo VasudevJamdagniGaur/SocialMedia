@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, Users } from 'lucide-react';
+import { Home, Users, UserCircle } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 
 export default function BottomNavigation() {
@@ -9,6 +9,7 @@ export default function BottomNavigation() {
   const { isDarkMode } = useTheme();
 
   const isHomeActive = location.pathname === '/dashboard';
+  const isPodActive = location.pathname === '/pod';
   const isCommunityActive = location.pathname === '/community';
 
   return (
@@ -66,10 +67,42 @@ export default function BottomNavigation() {
         </button>
 
         <button
-          onClick={() => navigate('/community')}
+          onClick={() => navigate('/pod')}
           className="flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 active:opacity-70"
         >
           <Users
+            className={`w-5 h-5 mb-0.5 transition-colors ${
+              isPodActive
+                ? isDarkMode
+                  ? 'text-[#8AB4F8]'
+                  : 'text-[#87A96B]'
+                : isDarkMode
+                ? 'text-gray-400'
+                : 'text-gray-500'
+            }`}
+            strokeWidth={isPodActive ? 2.5 : 2}
+            fill={isPodActive ? (isDarkMode ? '#8AB4F8' : '#87A96B') : 'none'}
+          />
+          <span
+            className={`text-[10px] font-medium transition-colors leading-tight ${
+              isPodActive
+                ? isDarkMode
+                  ? 'text-[#8AB4F8]'
+                  : 'text-[#87A96B]'
+                : isDarkMode
+                ? 'text-gray-400'
+                : 'text-gray-500'
+            }`}
+          >
+            Pod
+          </span>
+        </button>
+
+        <button
+          onClick={() => navigate('/community')}
+          className="flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 active:opacity-70"
+        >
+          <UserCircle
             className={`w-5 h-5 mb-0.5 transition-colors ${
               isCommunityActive
                 ? isDarkMode
@@ -93,7 +126,7 @@ export default function BottomNavigation() {
                 : 'text-gray-500'
             }`}
           >
-            Pod
+            Community
           </span>
         </button>
       </div>
