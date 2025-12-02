@@ -111,9 +111,46 @@ export default function PodPage() {
       </div>
 
       <div className="relative z-10 max-w-sm mx-auto">
-        {/* Header with Profile */}
-        <div className="relative flex items-center justify-end mb-8">
-          <div className="flex space-x-2 ml-auto">
+        {/* Title Section with Profile */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center space-x-3">
+              <div
+                onClick={handleProfileClick}
+                className={`w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity overflow-hidden ${
+                  isDarkMode ? 'backdrop-blur-md' : 'bg-white'
+                }`}
+                style={isDarkMode ? {
+                  backgroundColor: profilePicture ? "transparent" : "rgba(42, 42, 45, 0.6)",
+                  boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
+                  border: profilePicture ? "none" : "1px solid rgba(255, 255, 255, 0.08)",
+                } : {
+                  boxShadow: "0 2px 8px rgba(177, 156, 217, 0.15)",
+                }}
+              >
+                {profilePicture ? (
+                  <img 
+                    src={profilePicture} 
+                    alt="Profile" 
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <User className="w-5 h-5" style={{ color: isDarkMode ? "#81C995" : "#B19CD9" }} strokeWidth={1.5} />
+                )}
+              </div>
+              <div
+                className="w-12 h-12 rounded-full flex items-center justify-center"
+                style={{
+                  backgroundColor: isDarkMode ? "#7DD3C0" : "#87A96B",
+                  boxShadow: isDarkMode ? "0 4px 16px rgba(125, 211, 192, 0.3)" : "0 4px 12px rgba(134, 169, 107, 0.25)",
+                }}
+              >
+                <Users className="w-6 h-6 text-white" strokeWidth={2} />
+              </div>
+              <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                Pod
+              </h1>
+            </div>
             <div
               onClick={toggleTheme}
               className={`w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity ${
@@ -132,47 +169,6 @@ export default function PodPage() {
                 <Moon className="w-5 h-5" style={{ color: "#E6B3BA" }} strokeWidth={1.5} />
               }
             </div>
-            <div
-              onClick={handleProfileClick}
-              className={`w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity overflow-hidden ${
-                isDarkMode ? 'backdrop-blur-md' : 'bg-white'
-              }`}
-              style={isDarkMode ? {
-                backgroundColor: profilePicture ? "transparent" : "rgba(42, 42, 45, 0.6)",
-                boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-                border: profilePicture ? "none" : "1px solid rgba(255, 255, 255, 0.08)",
-              } : {
-                boxShadow: "0 2px 8px rgba(177, 156, 217, 0.15)",
-              }}
-            >
-              {profilePicture ? (
-                <img 
-                  src={profilePicture} 
-                  alt="Profile" 
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <User className="w-5 h-5" style={{ color: isDarkMode ? "#81C995" : "#B19CD9" }} strokeWidth={1.5} />
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Title Section */}
-        <div className="mb-8">
-          <div className="flex items-center space-x-3 mb-2">
-            <div
-              className="w-12 h-12 rounded-full flex items-center justify-center"
-              style={{
-                backgroundColor: isDarkMode ? "#7DD3C0" : "#87A96B",
-                boxShadow: isDarkMode ? "0 4px 16px rgba(125, 211, 192, 0.3)" : "0 4px 12px rgba(134, 169, 107, 0.25)",
-              }}
-            >
-              <Users className="w-6 h-6 text-white" strokeWidth={2} />
-            </div>
-            <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-              Pod
-            </h1>
           </div>
           <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
             Your personal wellness pod
