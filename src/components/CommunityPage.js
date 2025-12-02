@@ -1,9 +1,68 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
-import { Users, MessageCircle, Heart, TrendingUp } from 'lucide-react';
+import { Users, MessageCircle, Heart, TrendingUp, User, Sun, Moon } from 'lucide-react';
+import { getCurrentUser } from '../services/authService';
 
 export default function CommunityPage() {
-  const { isDarkMode } = useTheme();
+  const navigate = useNavigate();
+  const { isDarkMode, toggleTheme } = useTheme();
+  const [profilePicture, setProfilePicture] = useState(null);
+
+  // Load profile picture
+  useEffect(() => {
+    const loadProfilePicture = () => {
+      const user = getCurrentUser();
+      if (user) {
+        const savedPicture = localStorage.getItem(`user_profile_picture_${user.uid}`);
+        if (savedPicture) {
+          setProfilePicture(savedPicture);
+        } else {
+          setProfilePicture(null);
+        }
+      }
+    };
+
+    loadProfilePicture();
+
+    // Listen for storage changes and custom events (when profile picture is updated from ProfilePage)
+    const handleStorageChange = (e) => {
+      if (e.key && e.key.startsWith('user_profile_picture_')) {
+        loadProfilePicture();
+      }
+    };
+
+    const handleProfilePictureUpdate = () => {
+      loadProfilePicture();
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('profilePictureUpdated', handleProfilePictureUpdate);
+    
+    // Also check on focus and visibility change (when returning from ProfilePage)
+    const handleFocus = () => {
+      loadProfilePicture();
+    };
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        loadProfilePicture();
+      }
+    };
+    
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('profilePictureUpdated', handleProfilePictureUpdate);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+
+  const handleProfileClick = () => {
+    navigate('/profile');
+  };
 
   return (
     <div
@@ -52,7 +111,54 @@ export default function CommunityPage() {
       </div>
 
       <div className="relative z-10 max-w-sm mx-auto">
-        {/* Header */}
+        {/* Header with Profile */}
+        <div className="relative flex items-center justify-end mb-8">
+          <div className="flex space-x-2 ml-auto">
+            <div
+              onClick={toggleTheme}
+              className={`w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity ${
+                isDarkMode ? 'backdrop-blur-md' : 'bg-white'
+              }`}
+              style={isDarkMode ? {
+                backgroundColor: "rgba(42, 42, 45, 0.6)",
+                boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+              } : {
+                boxShadow: "0 2px 8px rgba(230, 179, 186, 0.15)",
+              }}
+            >
+              {isDarkMode ?
+                <Sun className="w-5 h-5" style={{ color: "#8AB4F8" }} strokeWidth={1.5} /> :
+                <Moon className="w-5 h-5" style={{ color: "#E6B3BA" }} strokeWidth={1.5} />
+              }
+            </div>
+            <div
+              onClick={handleProfileClick}
+              className={`w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity overflow-hidden ${
+                isDarkMode ? 'backdrop-blur-md' : 'bg-white'
+              }`}
+              style={isDarkMode ? {
+                backgroundColor: profilePicture ? "transparent" : "rgba(42, 42, 45, 0.6)",
+                boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
+                border: profilePicture ? "none" : "1px solid rgba(255, 255, 255, 0.08)",
+              } : {
+                boxShadow: "0 2px 8px rgba(177, 156, 217, 0.15)",
+              }}
+            >
+              {profilePicture ? (
+                <img 
+                  src={profilePicture} 
+                  alt="Profile" 
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <User className="w-5 h-5" style={{ color: isDarkMode ? "#81C995" : "#B19CD9" }} strokeWidth={1.5} />
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Title Section */}
         <div className="mb-8">
           <div className="flex items-center space-x-3 mb-2">
             <div
