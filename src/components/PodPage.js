@@ -116,6 +116,38 @@ export default function PodPage() {
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center space-x-3">
               <div
+                className="w-12 h-12 rounded-full flex items-center justify-center"
+                style={{
+                  backgroundColor: isDarkMode ? "#7DD3C0" : "#87A96B",
+                  boxShadow: isDarkMode ? "0 4px 16px rgba(125, 211, 192, 0.3)" : "0 4px 12px rgba(134, 169, 107, 0.25)",
+                }}
+              >
+                <Users className="w-6 h-6 text-white" strokeWidth={2} />
+              </div>
+              <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                Pod
+              </h1>
+            </div>
+            <div className="flex space-x-2">
+              <div
+                onClick={toggleTheme}
+                className={`w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity ${
+                  isDarkMode ? 'backdrop-blur-md' : 'bg-white'
+                }`}
+                style={isDarkMode ? {
+                  backgroundColor: "rgba(42, 42, 45, 0.6)",
+                  boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
+                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                } : {
+                  boxShadow: "0 2px 8px rgba(230, 179, 186, 0.15)",
+                }}
+              >
+                {isDarkMode ?
+                  <Sun className="w-5 h-5" style={{ color: "#8AB4F8" }} strokeWidth={1.5} /> :
+                  <Moon className="w-5 h-5" style={{ color: "#E6B3BA" }} strokeWidth={1.5} />
+                }
+              </div>
+              <div
                 onClick={handleProfileClick}
                 className={`w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity overflow-hidden ${
                   isDarkMode ? 'backdrop-blur-md' : 'bg-white'
@@ -138,36 +170,6 @@ export default function PodPage() {
                   <User className="w-5 h-5" style={{ color: isDarkMode ? "#81C995" : "#B19CD9" }} strokeWidth={1.5} />
                 )}
               </div>
-              <div
-                className="w-12 h-12 rounded-full flex items-center justify-center"
-                style={{
-                  backgroundColor: isDarkMode ? "#7DD3C0" : "#87A96B",
-                  boxShadow: isDarkMode ? "0 4px 16px rgba(125, 211, 192, 0.3)" : "0 4px 12px rgba(134, 169, 107, 0.25)",
-                }}
-              >
-                <Users className="w-6 h-6 text-white" strokeWidth={2} />
-              </div>
-              <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                Pod
-              </h1>
-            </div>
-            <div
-              onClick={toggleTheme}
-              className={`w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity ${
-                isDarkMode ? 'backdrop-blur-md' : 'bg-white'
-              }`}
-              style={isDarkMode ? {
-                backgroundColor: "rgba(42, 42, 45, 0.6)",
-                boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-                border: "1px solid rgba(255, 255, 255, 0.08)",
-              } : {
-                boxShadow: "0 2px 8px rgba(230, 179, 186, 0.15)",
-              }}
-            >
-              {isDarkMode ?
-                <Sun className="w-5 h-5" style={{ color: "#8AB4F8" }} strokeWidth={1.5} /> :
-                <Moon className="w-5 h-5" style={{ color: "#E6B3BA" }} strokeWidth={1.5} />
-              }
             </div>
           </div>
           <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
