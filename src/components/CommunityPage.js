@@ -1,13 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
-import { Users, MessageCircle, Heart, TrendingUp, User, Sun, Moon } from 'lucide-react';
+import { Users, MessageCircle, Heart, TrendingUp, User, Sun, Moon, Send, X } from 'lucide-react';
 import { getCurrentUser } from '../services/authService';
 
 export default function CommunityPage() {
   const navigate = useNavigate();
   const { isDarkMode, toggleTheme } = useTheme();
   const [profilePicture, setProfilePicture] = useState(null);
+  const [likes, setLikes] = useState(24);
+  const [isLiked, setIsLiked] = useState(false);
+  const [comments, setComments] = useState([
+    { id: 1, author: 'Alex', text: 'Great post! Keep it up! 🌟', time: '1 hour ago' },
+    { id: 2, author: 'Sam', text: 'Mindfulness has changed my life too!', time: '45 mins ago' },
+  ]);
+  const [showComments, setShowComments] = useState(false);
+  const [newComment, setNewComment] = useState('');
 
   // Load profile picture
   useEffect(() => {
@@ -62,6 +70,35 @@ export default function CommunityPage() {
 
   const handleProfileClick = () => {
     navigate('/profile');
+  };
+
+  const handleLike = () => {
+    if (isLiked) {
+      setLikes(likes - 1);
+      setIsLiked(false);
+    } else {
+      setLikes(likes + 1);
+      setIsLiked(true);
+    }
+  };
+
+  const handleCommentClick = () => {
+    setShowComments(!showComments);
+  };
+
+  const handleAddComment = () => {
+    if (newComment.trim()) {
+      const user = getCurrentUser();
+      const author = user?.displayName || 'You';
+      const newCommentObj = {
+        id: comments.length + 1,
+        author: author,
+        text: newComment.trim(),
+        time: 'Just now'
+      };
+      setComments([...comments, newCommentObj]);
+      setNewComment('');
+    }
   };
 
   return (
@@ -214,15 +251,112 @@ export default function CommunityPage() {
               "Today I practiced mindfulness for 10 minutes and it made such a difference in my day. Remember, small steps lead to big changes! 🌿"
             </p>
             <div className="flex items-center space-x-4">
-              <button className="flex items-center space-x-1">
-                <Heart className={`w-4 h-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
-                <span className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>24</span>
+              <button 
+                onClick={handleLike}
+                className="flex items-center space-x-1 transition-colors hover:opacity-80"
+              >
+                <Heart 
+                  className={`w-4 h-4 transition-colors ${
+                    isLiked 
+                      ? (isDarkMode ? 'text-red-500 fill-red-500' : 'text-red-500 fill-red-500')
+                      : (isDarkMode ? 'text-gray-400' : 'text-gray-500')
+                  }`} 
+                />
+                <span className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  {likes}
+                </span>
               </button>
-              <button className="flex items-center space-x-1">
+              <button 
+                onClick={handleCommentClick}
+                className="flex items-center space-x-1 transition-colors hover:opacity-80"
+              >
                 <MessageCircle className={`w-4 h-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
-                <span className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>8</span>
+                <span className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  {comments.length}
+                </span>
               </button>
             </div>
+
+            {/* Comments Section */}
+            {showComments && (
+              <div className="mt-4 pt-4 border-t" style={{ borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)' }}>
+                <div className="mb-3">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className={`text-sm font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                      Comments ({comments.length})
+                    </h3>
+                    <button
+                      onClick={() => setShowComments(false)}
+                      className={`p-1 rounded-full hover:opacity-80 transition-opacity ${
+                        isDarkMode ? 'hover:bg-gray-800/50' : 'hover:bg-gray-100'
+                      }`}
+                    >
+                      <X className={`w-4 h-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
+                    </button>
+                  </div>
+                  
+                  {/* Comments List */}
+                  <div className="space-y-3 max-h-48 overflow-y-auto mb-3" style={{ scrollbarWidth: 'thin' }}>
+                    {comments.map((comment) => (
+                      <div key={comment.id} className="flex items-start space-x-2">
+                        <div
+                          className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-xs"
+                          style={{
+                            backgroundColor: isDarkMode ? "#7DD3C0" + '30' : "#E6B3BA" + '20',
+                          }}
+                        >
+                          <span>👤</span>
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2 mb-1">
+                            <span className={`text-xs font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                              {comment.author}
+                            </span>
+                            <span className={`text-[10px] ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+                              {comment.time}
+                            </span>
+                          </div>
+                          <p className={`text-xs leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                            {comment.text}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Add Comment Input */}
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="text"
+                      value={newComment}
+                      onChange={(e) => setNewComment(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          handleAddComment();
+                        }
+                      }}
+                      placeholder="Add a comment..."
+                      className={`flex-1 rounded-lg px-3 py-2 text-xs border-none outline-none ${
+                        isDarkMode 
+                          ? 'bg-gray-800/50 text-white placeholder-gray-500' 
+                          : 'bg-gray-100 text-gray-800 placeholder-gray-500'
+                      }`}
+                    />
+                    <button
+                      onClick={handleAddComment}
+                      disabled={!newComment.trim()}
+                      className={`w-8 h-8 rounded-lg flex items-center justify-center transition-opacity ${
+                        newComment.trim()
+                          ? (isDarkMode ? 'bg-[#8AB4F8]' : 'bg-[#87A96B]')
+                          : (isDarkMode ? 'bg-gray-700 opacity-50' : 'bg-gray-300 opacity-50')
+                      }`}
+                    >
+                      <Send className="w-3 h-3 text-white" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Trending Topics Card */}
