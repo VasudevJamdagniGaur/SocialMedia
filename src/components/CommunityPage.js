@@ -241,7 +241,7 @@ export default function CommunityPage() {
             <div className="flex items-center space-x-2 mb-4">
               <TrendingUp className={`w-5 h-5 ${isDarkMode ? 'text-[#FDD663]' : 'text-[#87A96B]'}`} />
               <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                Hot Tea Right Now ☕🔥
+                Hot Tea ☕🔥
               </h2>
             </div>
             <div className="space-y-2">
