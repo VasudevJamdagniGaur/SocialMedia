@@ -286,7 +286,7 @@ export default function PodPage() {
               Welcome to Your Pod
             </h2>
             <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-              This is your personal space for wellness and growth. Connect with your inner self and track your journey.
+              Our group of 5 people who match your vibe, interests, mental wavelength, and personality. A space to talk, laugh, and gossip about IIT campus, our professors, life, and everything in between. with an anonymous identity
             </p>
           </div>
         </div>
