@@ -216,6 +216,50 @@ export default function CommunityPage() {
 
         {/* Community Cards */}
         <div className="space-y-4">
+          {/* Community Stats Card */}
+          <div
+            className={`rounded-2xl p-5 relative overflow-hidden ${
+              isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
+            }`}
+            style={isDarkMode ? {
+              backgroundColor: "rgba(42, 42, 45, 0.6)",
+              boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
+              border: "1px solid rgba(255, 255, 255, 0.08)",
+            } : {
+              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)",
+            }}
+          >
+            <h2 className={`text-lg font-semibold mb-4 ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+              Community Stats
+            </h2>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="text-center">
+                <div className={`text-2xl font-bold ${isDarkMode ? 'text-[#8AB4F8]' : 'text-[#87A96B]'}`}>
+                  1.2K
+                </div>
+                <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                  Active Members
+                </div>
+              </div>
+              <div className="text-center">
+                <div className={`text-2xl font-bold ${isDarkMode ? 'text-[#7DD3C0]' : 'text-[#E6B3BA]'}`}>
+                  456
+                </div>
+                <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                  Posts Today
+                </div>
+              </div>
+              <div className="text-center">
+                <div className={`text-2xl font-bold ${isDarkMode ? 'text-[#FDD663]' : 'text-[#B19CD9]'}`}>
+                  89
+                </div>
+                <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                  Existing Pods
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Featured Post Card */}
           <div
             className={`rounded-2xl p-5 relative overflow-hidden ${
@@ -391,50 +435,6 @@ export default function CommunityPage() {
                   </span>
                 </div>
               ))}
-            </div>
-          </div>
-
-          {/* Community Stats Card */}
-          <div
-            className={`rounded-2xl p-5 relative overflow-hidden ${
-              isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
-            }`}
-            style={isDarkMode ? {
-              backgroundColor: "rgba(42, 42, 45, 0.6)",
-              boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
-            } : {
-              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)",
-            }}
-          >
-            <h2 className={`text-lg font-semibold mb-4 ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-              Community Stats
-            </h2>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="text-center">
-                <div className={`text-2xl font-bold ${isDarkMode ? 'text-[#8AB4F8]' : 'text-[#87A96B]'}`}>
-                  1.2K
-                </div>
-                <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                  Active Members
-                </div>
-              </div>
-              <div className="text-center">
-                <div className={`text-2xl font-bold ${isDarkMode ? 'text-[#7DD3C0]' : 'text-[#E6B3BA]'}`}>
-                  456
-                </div>
-                <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                  Posts Today
-                </div>
-              </div>
-              <div className="text-center">
-                <div className={`text-2xl font-bold ${isDarkMode ? 'text-[#FDD663]' : 'text-[#B19CD9]'}`}>
-                  89
-                </div>
-                <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                  Existing Pods
-                </div>
-              </div>
             </div>
           </div>
         </div>
