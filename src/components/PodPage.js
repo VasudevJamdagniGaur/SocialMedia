@@ -225,7 +225,41 @@ export default function PodPage() {
             </div>
             
             {/* Group Members - Centered */}
-            <div className="flex items-center justify-center space-x-2">
+            <div className="flex items-center justify-center space-x-2 flex-wrap">
+              {/* Current User */}
+              {(() => {
+                const user = getCurrentUser();
+                const userName = user?.displayName || 'You';
+                return (
+                  <div
+                    className="flex flex-col items-center"
+                    title={userName}
+                  >
+                    <div
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-xs mb-1 overflow-hidden"
+                      style={{
+                        backgroundColor: profilePicture ? "transparent" : (isDarkMode ? '#8AB4F8' + '30' : '#87A96B' + '20'),
+                        border: profilePicture ? "none" : `2px solid ${isDarkMode ? '#8AB4F8' : '#87A96B'}40`,
+                      }}
+                    >
+                      {profilePicture ? (
+                        <img 
+                          src={profilePicture} 
+                          alt="You" 
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <User className="w-4 h-4" style={{ color: isDarkMode ? '#8AB4F8' : '#87A96B' }} />
+                      )}
+                    </div>
+                    <span className={`text-[10px] ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      {userName}
+                    </span>
+                  </div>
+                );
+              })()}
+              
+              {/* Other Members */}
               {[
                 { name: 'Alex', emoji: '👤', color: '#7DD3C0' },
                 { name: 'Sam', emoji: '👤', color: '#FDD663' },

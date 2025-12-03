@@ -1,15 +1,76 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
-import { ArrowLeft, Send, Users } from 'lucide-react';
+import { ArrowLeft, Send, Users, User } from 'lucide-react';
+import { getCurrentUser } from '../services/authService';
 
 export default function PodGroupChatPage() {
   const navigate = useNavigate();
   const { isDarkMode } = useTheme();
   const [inputMessage, setInputMessage] = useState('');
+  const [profilePicture, setProfilePicture] = useState(null);
   const messagesEndRef = useRef(null);
 
+  // Load profile picture
+  useEffect(() => {
+    const loadProfilePicture = () => {
+      const user = getCurrentUser();
+      if (user) {
+        const savedPicture = localStorage.getItem(`user_profile_picture_${user.uid}`);
+        if (savedPicture) {
+          setProfilePicture(savedPicture);
+        } else {
+          setProfilePicture(null);
+        }
+      }
+    };
+
+    loadProfilePicture();
+
+    const handleStorageChange = (e) => {
+      if (e.key && e.key.startsWith('user_profile_picture_')) {
+        loadProfilePicture();
+      }
+    };
+
+    const handleProfilePictureUpdate = () => {
+      loadProfilePicture();
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('profilePictureUpdated', handleProfilePictureUpdate);
+    
+    const handleFocus = () => {
+      loadProfilePicture();
+    };
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        loadProfilePicture();
+      }
+    };
+    
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('profilePictureUpdated', handleProfilePictureUpdate);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+
+  const user = getCurrentUser();
+  const userName = user?.displayName || 'You';
+  
   const groupMembers = [
+    { 
+      name: userName, 
+      emoji: '👤', 
+      color: isDarkMode ? '#8AB4F8' : '#87A96B',
+      isCurrentUser: true,
+      profilePicture: profilePicture
+    },
     { name: 'Alex', emoji: '👤', color: '#7DD3C0' },
     { name: 'Sam', emoji: '👤', color: '#FDD663' },
     { name: 'Jordan', emoji: '👤', color: '#8AB4F8' },
@@ -134,13 +195,27 @@ export default function PodGroupChatPage() {
             title={member.name}
           >
             <div
-              className="w-10 h-10 rounded-full flex items-center justify-center text-sm mb-1"
+              className="w-10 h-10 rounded-full flex items-center justify-center text-sm mb-1 overflow-hidden"
               style={{
-                backgroundColor: isDarkMode ? member.color + '30' : member.color + '20',
-                border: `2px solid ${member.color}40`,
+                backgroundColor: member.isCurrentUser && member.profilePicture 
+                  ? "transparent" 
+                  : (isDarkMode ? member.color + '30' : member.color + '20'),
+                border: member.isCurrentUser && member.profilePicture 
+                  ? "none" 
+                  : `2px solid ${member.color}40`,
               }}
             >
-              {member.emoji}
+              {member.isCurrentUser && member.profilePicture ? (
+                <img 
+                  src={member.profilePicture} 
+                  alt={member.name} 
+                  className="w-full h-full object-cover"
+                />
+              ) : member.isCurrentUser ? (
+                <User className="w-5 h-5" style={{ color: member.color }} />
+              ) : (
+                <span>{member.emoji}</span>
+              )}
             </div>
             <span className={`text-[10px] ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
               {member.name}
