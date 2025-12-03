@@ -510,7 +510,27 @@ export default function DashboardPage() {
       </div>
 
       <div className="relative z-10 max-w-sm mx-auto">
-        <div className="relative flex items-center justify-end mb-8">
+        <div className="relative flex items-center justify-between mb-8">
+          {/* Left icon - Theme Toggle */}
+          <div
+            onClick={toggleTheme}
+            className={`w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity ${
+              isDarkMode ? 'backdrop-blur-md' : 'bg-white'
+            }`}
+            style={isDarkMode ? {
+              backgroundColor: "rgba(42, 42, 45, 0.6)",
+              boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
+              border: "1px solid rgba(255, 255, 255, 0.08)",
+            } : {
+              boxShadow: "0 2px 8px rgba(230, 179, 186, 0.15)",
+            }}
+          >
+            {isDarkMode ?
+              <Sun className="w-5 h-5" style={{ color: "#8AB4F8" }} strokeWidth={1.5} /> :
+              <Moon className="w-5 h-5" style={{ color: "#E6B3BA" }} strokeWidth={1.5} />
+            }
+          </div>
+
           {/* Center brain icon - absolutely positioned */}
           <div
             className={`absolute left-1/2 transform -translate-x-1/2 w-14 h-14 rounded-full flex items-center justify-center ${
@@ -527,49 +547,29 @@ export default function DashboardPage() {
             <Brain className="w-7 h-7" style={{ color: isDarkMode ? "#8AB4F8" : "#87A96B" }} strokeWidth={1.5} />
           </div>
 
-          {/* Right icons */}
-          <div className="flex space-x-2 ml-auto">
-            <div
-              onClick={toggleTheme}
-              className={`w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity ${
-                isDarkMode ? 'backdrop-blur-md' : 'bg-white'
-              }`}
-              style={isDarkMode ? {
-                backgroundColor: "rgba(42, 42, 45, 0.6)",
-                boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-                border: "1px solid rgba(255, 255, 255, 0.08)",
-              } : {
-                boxShadow: "0 2px 8px rgba(230, 179, 186, 0.15)",
-              }}
-            >
-              {isDarkMode ?
-                <Sun className="w-5 h-5" style={{ color: "#8AB4F8" }} strokeWidth={1.5} /> :
-                <Moon className="w-5 h-5" style={{ color: "#E6B3BA" }} strokeWidth={1.5} />
-              }
-            </div>
-            <div
-              onClick={handleProfileClick}
-              className={`w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity overflow-hidden ${
-                isDarkMode ? 'backdrop-blur-md' : 'bg-white'
-              }`}
-              style={isDarkMode ? {
-                backgroundColor: profilePicture ? "transparent" : "rgba(42, 42, 45, 0.6)",
-                boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-                border: profilePicture ? "none" : "1px solid rgba(255, 255, 255, 0.08)",
-              } : {
-                boxShadow: "0 2px 8px rgba(177, 156, 217, 0.15)",
-              }}
-            >
-              {profilePicture ? (
-                <img 
-                  src={profilePicture} 
-                  alt="Profile" 
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <User className="w-5 h-5" style={{ color: isDarkMode ? "#81C995" : "#B19CD9" }} strokeWidth={1.5} />
-              )}
-            </div>
+          {/* Right icon - Profile */}
+          <div
+            onClick={handleProfileClick}
+            className={`w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity overflow-hidden ${
+              isDarkMode ? 'backdrop-blur-md' : 'bg-white'
+            }`}
+            style={isDarkMode ? {
+              backgroundColor: profilePicture ? "transparent" : "rgba(42, 42, 45, 0.6)",
+              boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
+              border: profilePicture ? "none" : "1px solid rgba(255, 255, 255, 0.08)",
+            } : {
+              boxShadow: "0 2px 8px rgba(177, 156, 217, 0.15)",
+            }}
+          >
+            {profilePicture ? (
+              <img 
+                src={profilePicture} 
+                alt="Profile" 
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <User className="w-5 h-5" style={{ color: isDarkMode ? "#81C995" : "#B19CD9" }} strokeWidth={1.5} />
+            )}
           </div>
         </div>
 
