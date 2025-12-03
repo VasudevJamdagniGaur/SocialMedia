@@ -276,7 +276,7 @@ export default function CommunityPage() {
             <h2 className={`text-lg font-semibold mb-4 ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
               Community Stats
             </h2>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div className="text-center">
                 <div className={`text-2xl font-bold ${isDarkMode ? 'text-[#8AB4F8]' : 'text-[#87A96B]'}`}>
                   1.2K
@@ -291,6 +291,14 @@ export default function CommunityPage() {
                 </div>
                 <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                   Posts Today
+                </div>
+              </div>
+              <div className="text-center">
+                <div className={`text-2xl font-bold ${isDarkMode ? 'text-[#FDD663]' : 'text-[#B19CD9]'}`}>
+                  89
+                </div>
+                <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                  Existing Pods
                 </div>
               </div>
             </div>
