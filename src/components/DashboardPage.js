@@ -220,9 +220,6 @@ export default function DashboardPage() {
     navigate('/chat', { state: { selectedDate: new Date().toISOString(), isWhisperMode: true, isFreshSession: true } });
   };
 
-  const handleWellbeingClick = () => {
-    navigate('/wellbeing');
-  };
 
   const handleProfileClick = () => {
     navigate('/profile');
@@ -513,24 +510,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="relative z-10 max-w-sm mx-auto">
-        <div className="relative flex items-center mb-8">
-          {/* Left icon */}
-          <div
-            onClick={handleWellbeingClick}
-            className={`w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity ${
-              isDarkMode ? 'backdrop-blur-md' : 'bg-white'
-            }`}
-            style={isDarkMode ? {
-              backgroundColor: "rgba(42, 42, 45, 0.6)",
-              boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
-            } : {
-              boxShadow: "0 2px 8px rgba(134, 169, 107, 0.15)",
-            }}
-          >
-            <Heart className="w-5 h-5" style={{ color: isDarkMode ? "#FDD663" : "#87A96B" }} strokeWidth={1.5} />
-          </div>
-
+        <div className="relative flex items-center justify-end mb-8">
           {/* Center brain icon - absolutely positioned */}
           <div
             className={`absolute left-1/2 transform -translate-x-1/2 w-14 h-14 rounded-full flex items-center justify-center ${
