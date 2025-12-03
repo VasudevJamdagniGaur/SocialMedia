@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
-import { Users, MessageCircle, Heart, TrendingUp, User, Sun, Moon, Bot, ChevronDown, ChevronUp } from 'lucide-react';
+import { Users, User, Sun, Moon, ChevronRight } from 'lucide-react';
 import { getCurrentUser } from '../services/authService';
 
 export default function PodPage() {
   const navigate = useNavigate();
   const { isDarkMode, toggleTheme } = useTheme();
   const [profilePicture, setProfilePicture] = useState(null);
-  const [isChatExpanded, setIsChatExpanded] = useState(false);
 
   // Load profile picture
   useEffect(() => {
@@ -203,7 +202,8 @@ export default function PodPage() {
 
           {/* Group Message Section */}
           <div
-            className={`rounded-2xl p-5 relative overflow-hidden ${
+            onClick={() => navigate('/pod/chat')}
+            className={`rounded-2xl p-5 relative overflow-hidden cursor-pointer transition-opacity hover:opacity-90 ${
               isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
             }`}
             style={isDarkMode ? {
@@ -214,27 +214,18 @@ export default function PodPage() {
               boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)",
             }}
           >
-            <div 
-              className="flex items-center justify-between cursor-pointer mb-4"
-              onClick={() => setIsChatExpanded(!isChatExpanded)}
-            >
+            <div className="flex items-center justify-between mb-4">
               <div className="flex items-center space-x-2">
                 <Users className={`w-5 h-5 ${isDarkMode ? 'text-[#8AB4F8]' : 'text-[#87A96B]'}`} />
                 <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
                   Pod Group Chat
                 </h2>
               </div>
-              {isChatExpanded ? (
-                <ChevronUp className={`w-5 h-5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
-              ) : (
-                <ChevronDown className={`w-5 h-5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
-              )}
+              <ChevronRight className={`w-5 h-5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
             </div>
             
-            {isChatExpanded && (
-              <>
-                {/* Group Members */}
-                <div className="flex items-center space-x-2 mb-4 pb-4 border-b" style={{ borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)' }}>
+            {/* Group Members */}
+            <div className="flex items-center space-x-2">
               {[
                 { name: 'Alex', emoji: '👤', color: '#7DD3C0' },
                 { name: 'Sam', emoji: '👤', color: '#FDD663' },
@@ -263,123 +254,6 @@ export default function PodPage() {
                 </div>
               ))}
             </div>
-
-            {/* Chat Messages */}
-            <div className="space-y-3 max-h-64 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
-              {[
-                { 
-                  sender: 'Alex', 
-                  message: 'Hey everyone! How are you all doing today? 🌟', 
-                  time: '10:30 AM',
-                  emoji: '👤',
-                  color: '#7DD3C0'
-                },
-                { 
-                  sender: 'AI', 
-                  message: 'Hello! I\'m here to support everyone in their wellness journey. How can I help today?', 
-                  time: '10:31 AM',
-                  emoji: '🤖',
-                  color: '#B19CD9'
-                },
-                { 
-                  sender: 'Sam', 
-                  message: 'I\'ve been practicing mindfulness this week and it\'s been amazing! 🧘‍♀️', 
-                  time: '10:32 AM',
-                  emoji: '👤',
-                  color: '#FDD663'
-                },
-                { 
-                  sender: 'Jordan', 
-                  message: 'That\'s awesome Sam! I\'ve been struggling with stress lately. Any tips?', 
-                  time: '10:33 AM',
-                  emoji: '👤',
-                  color: '#8AB4F8'
-                },
-                { 
-                  sender: 'AI', 
-                  message: 'Great question Jordan! Deep breathing exercises and short breaks can help. Would you like me to guide you through a quick 5-minute stress relief exercise?', 
-                  time: '10:34 AM',
-                  emoji: '🤖',
-                  color: '#B19CD9'
-                },
-                { 
-                  sender: 'Taylor', 
-                  message: 'I\'d love to join that too! 🙋‍♀️', 
-                  time: '10:35 AM',
-                  emoji: '👤',
-                  color: '#E6B3BA'
-                },
-                { 
-                  sender: 'Casey', 
-                  message: 'Count me in! This pod is so supportive 💚', 
-                  time: '10:36 AM',
-                  emoji: '👤',
-                  color: '#81C995'
-                },
-              ].map((msg, index) => (
-                <div
-                  key={index}
-                  className={`flex items-start space-x-2 ${
-                    msg.sender === 'AI' ? 'bg-opacity-20' : ''
-                  }`}
-                  style={msg.sender === 'AI' ? {
-                    backgroundColor: isDarkMode ? 'rgba(177, 156, 217, 0.15)' : 'rgba(177, 156, 217, 0.1)',
-                    padding: '8px',
-                    borderRadius: '12px',
-                  } : {}}
-                >
-                  <div
-                    className="w-7 h-7 rounded-full flex items-center justify-center text-xs flex-shrink-0"
-                    style={{
-                      backgroundColor: isDarkMode ? msg.color + '30' : msg.color + '20',
-                      border: `2px solid ${msg.color}40`,
-                    }}
-                  >
-                    {msg.emoji}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center space-x-2 mb-1">
-                      <span className={`text-xs font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                        {msg.sender}
-                      </span>
-                      <span className={`text-[10px] ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
-                        {msg.time}
-                      </span>
-                    </div>
-                    <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      {msg.message}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Input Area */}
-            <div className="mt-4 pt-4 border-t" style={{ borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)' }}>
-              <div className="flex items-center space-x-2">
-                <div
-                  className={`flex-1 rounded-lg px-3 py-2 ${
-                    isDarkMode ? 'bg-gray-800/50' : 'bg-gray-100'
-                  }`}
-                >
-                  <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                    Type a message...
-                  </span>
-                </div>
-                <button
-                  className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                    isDarkMode ? 'bg-[#8AB4F8]' : 'bg-[#87A96B]'
-                  }`}
-                  style={{
-                    boxShadow: isDarkMode ? "0 2px 8px rgba(138, 180, 248, 0.3)" : "0 2px 8px rgba(134, 169, 107, 0.3)",
-                  }}
-                >
-                  <MessageCircle className="w-5 h-5 text-white" />
-                </button>
-              </div>
-            </div>
-              </>
-            )}
           </div>
         </div>
       </div>
