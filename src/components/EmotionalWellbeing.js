@@ -3859,7 +3859,7 @@ Return in this JSON format:
   return (
     <ErrorBoundary>
       <div
-        className="min-h-screen flex flex-col relative overflow-hidden"
+        className="min-h-screen flex flex-col relative overflow-hidden pb-20"
         style={{
           background: isDarkMode
             ? "#202124"

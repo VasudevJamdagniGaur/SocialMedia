@@ -170,7 +170,7 @@ function AppContent() {
       </Routes>
       
       {/* Show bottom navigation only on main app pages */}
-      {(location.pathname === '/dashboard' || location.pathname === '/pod' || location.pathname === '/community') && (
+      {(location.pathname === '/dashboard' || location.pathname === '/pod' || location.pathname === '/community' || location.pathname === '/wellbeing') && (
         <BottomNavigation />
       )}
     </div>

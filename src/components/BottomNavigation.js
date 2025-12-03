@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, Users, UserCircle } from 'lucide-react';
+import { Home, Users, UserCircle, Heart } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 
 export default function BottomNavigation() {
@@ -11,6 +11,7 @@ export default function BottomNavigation() {
   const isHomeActive = location.pathname === '/dashboard';
   const isPodActive = location.pathname === '/pod';
   const isCommunityActive = location.pathname === '/community';
+  const isWellbeingActive = location.pathname === '/wellbeing';
 
   return (
     <div
@@ -127,6 +128,38 @@ export default function BottomNavigation() {
             }`}
           >
             Community
+          </span>
+        </button>
+
+        <button
+          onClick={() => navigate('/wellbeing')}
+          className="flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 active:opacity-70"
+        >
+          <Heart
+            className={`w-5 h-5 mb-0.5 transition-colors ${
+              isWellbeingActive
+                ? isDarkMode
+                  ? 'text-[#8AB4F8]'
+                  : 'text-[#87A96B]'
+                : isDarkMode
+                ? 'text-gray-400'
+                : 'text-gray-500'
+            }`}
+            strokeWidth={isWellbeingActive ? 2.5 : 2}
+            fill={isWellbeingActive ? (isDarkMode ? '#8AB4F8' : '#87A96B') : 'none'}
+          />
+          <span
+            className={`text-[10px] font-medium transition-colors leading-tight ${
+              isWellbeingActive
+                ? isDarkMode
+                  ? 'text-[#8AB4F8]'
+                  : 'text-[#87A96B]'
+                : isDarkMode
+                ? 'text-gray-400'
+                : 'text-gray-500'
+            }`}
+          >
+            Wellbeing
           </span>
         </button>
       </div>
