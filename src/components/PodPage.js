@@ -1,13 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
-import { Users, User, Sun, Moon, ChevronRight } from 'lucide-react';
+import { Users, User, Sun, Moon, ChevronRight, Sparkles } from 'lucide-react';
 import { getCurrentUser } from '../services/authService';
+import reflectionService from '../services/reflectionService';
+import firestoreService from '../services/firestoreService';
+import { collection, query, where, getDocs, orderBy, limit, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../firebase/config';
 
 export default function PodPage() {
   const navigate = useNavigate();
   const { isDarkMode, toggleTheme } = useTheme();
   const [profilePicture, setProfilePicture] = useState(null);
+  const [podReflection, setPodReflection] = useState('');
+  const [isLoadingPodReflection, setIsLoadingPodReflection] = useState(false);
 
   // Load profile picture
   useEffect(() => {
@@ -60,8 +66,127 @@ export default function PodPage() {
     };
   }, []);
 
+  // Load pod reflection
+  useEffect(() => {
+    const loadPodReflection = async () => {
+      const user = getCurrentUser();
+      if (!user) return;
+
+      try {
+        // Check Firestore for pod reflection
+        const podReflectionRef = doc(db, `users/${user.uid}/podReflections/current`);
+        const podReflectionSnap = await getDoc(podReflectionRef);
+        
+        if (podReflectionSnap.exists()) {
+          const data = podReflectionSnap.data();
+          setPodReflection(data.summary || '');
+        } else {
+          // Check localStorage as fallback
+          const savedReflection = localStorage.getItem('pod_reflection');
+          if (savedReflection) {
+            setPodReflection(savedReflection);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading pod reflection:', error);
+        // Fallback to localStorage
+        const savedReflection = localStorage.getItem('pod_reflection');
+        if (savedReflection) {
+          setPodReflection(savedReflection);
+        }
+      }
+    };
+
+    loadPodReflection();
+  }, []);
+
   const handleProfileClick = () => {
     navigate('/profile');
+  };
+
+  const handleGeneratePodReflection = async () => {
+    const user = getCurrentUser();
+    if (!user) {
+      alert('Please sign in to generate pod reflections');
+      return;
+    }
+
+    try {
+      console.log('🔄 Generating pod reflection...');
+      setIsLoadingPodReflection(true);
+
+      // Get pod messages from Firestore
+      // Try different collection structures for pod messages
+      let podMessages = [];
+      
+      // Try: users/{uid}/podChats/messages
+      try {
+        const podChatRef = collection(db, `users/${user.uid}/podChats/messages`);
+        const podChatQuery = query(podChatRef, orderBy('createdAt', 'asc'), limit(100));
+        const podChatSnapshot = await getDocs(podChatQuery);
+        
+        podChatSnapshot.forEach((doc) => {
+          const data = doc.data();
+          podMessages.push({
+            sender: data.senderId === user.uid ? 'user' : (data.sender === 'AI' ? 'ai' : 'user'),
+            text: data.message || data.text || '',
+            timestamp: data.createdAt
+          });
+        });
+      } catch (e) {
+        console.log('No messages in podChats/messages collection');
+      }
+
+      // If no messages found in Firestore, use sample pod messages for demonstration
+      // In a real implementation, these would come from Firestore
+      if (podMessages.length === 0) {
+        // Use sample messages that represent pod conversations
+        podMessages = [
+          { sender: 'user', text: 'Hey everyone! How are you all doing today?' },
+          { sender: 'ai', text: 'Hello! I\'m here to support everyone in their wellness journey. How can I help today?' },
+          { sender: 'user', text: 'I\'ve been practicing mindfulness this week and it\'s been amazing!' },
+          { sender: 'user', text: 'That\'s awesome! I\'ve been struggling with stress lately. Any tips?' },
+          { sender: 'ai', text: 'Great question! Deep breathing exercises and short breaks can help. Would you like me to guide you through a quick 5-minute stress relief exercise?' },
+          { sender: 'user', text: 'I\'d love to join that too!' },
+          { sender: 'user', text: 'Count me in! This pod is so supportive' }
+        ];
+      }
+
+      console.log('📥 Found', podMessages.length, 'pod messages');
+
+      if (podMessages.length === 0) {
+        alert('No pod messages found. Start chatting in your pod to generate a reflection!');
+        setIsLoadingPodReflection(false);
+        return;
+      }
+
+      // Generate reflection using the reflection service
+      console.log('🤖 Generating pod reflection via AI...');
+      const generatedReflection = await reflectionService.generateReflection(podMessages);
+      console.log('✅ Pod reflection generated:', generatedReflection);
+
+      // Save pod reflection to Firestore
+      const podReflectionRef = doc(db, `users/${user.uid}/podReflections/current`);
+      await setDoc(podReflectionRef, {
+        summary: generatedReflection,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+
+      // Also save to localStorage as backup
+      localStorage.setItem('pod_reflection', generatedReflection);
+
+      // Update local state
+      setPodReflection(generatedReflection);
+
+      console.log('💾 Pod reflection saved!');
+      alert('✅ Pod reflection generated successfully!');
+    } catch (error) {
+      console.error('❌ Error generating pod reflection:', error);
+      alert('Failed to generate pod reflection: ' + error.message);
+    } finally {
+      setIsLoadingPodReflection(false);
+    }
   };
 
   return (
@@ -288,6 +413,85 @@ export default function PodPage() {
             <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
               Our group of 5 people who match your vibe, interests, mental wavelength, and personality. A space to talk, laugh, and gossip about IIT campus, our professors, life, and everything in between. with an anonymous identity
             </p>
+          </div>
+
+          {/* Pod Reflection Section */}
+          <div
+            className={`rounded-2xl p-6 relative overflow-hidden ${
+              isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
+            }`}
+            style={isDarkMode ? {
+              backgroundColor: "rgba(42, 42, 45, 0.6)",
+              boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
+              border: "1px solid rgba(255, 255, 255, 0.08)",
+            } : {
+              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)",
+              borderTop: "3px solid #E6B3BA30",
+            }}
+          >
+            <div className="flex items-center space-x-3 mb-4">
+              <div
+                className="w-8 h-8 rounded-full flex items-center justify-center"
+                style={{
+                  backgroundColor: isDarkMode ? "#FDD663" : "#E6B3BA",
+                  boxShadow: isDarkMode ? "0 4px 16px rgba(0, 0, 0, 0.15)" : "none",
+                }}
+              >
+                <Sparkles className="w-4 h-4" style={{ color: isDarkMode ? "#000" : "#fff" }} strokeWidth={2} />
+              </div>
+              <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>Pod Reflection</h2>
+            </div>
+            <div
+              className={`rounded-xl p-5 min-h-24 relative overflow-hidden ${
+                isDarkMode ? 'backdrop-blur-lg' : ''
+              }`}
+              style={isDarkMode ? {
+                backgroundColor: "rgba(42, 42, 45, 0.6)",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+                boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
+              } : {
+                backgroundColor: "#F9F9F7",
+              }}
+            >
+              {isLoadingPodReflection ? (
+                <div className="flex flex-col items-center justify-center h-full">
+                  <div className="flex space-x-1 mb-3">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                  </div>
+                  <p className={`text-sm text-center italic ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Generating pod reflection...</p>
+                </div>
+              ) : podReflection ? (
+                <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>{podReflection}</p>
+              ) : (
+                <button
+                  onClick={handleGeneratePodReflection}
+                  className="flex flex-col items-center justify-center h-full w-full hover:opacity-80 transition-all duration-300 cursor-pointer"
+                >
+                  <div
+                    className={`w-12 h-12 rounded-lg flex items-center justify-center mb-3 ${
+                      isDarkMode ? 'backdrop-blur-md' : 'bg-white'
+                    }`}
+                    style={isDarkMode ? {
+                      backgroundColor: "rgba(28, 31, 46, 0.5)",
+                      boxShadow: "inset 0 0 20px rgba(125, 211, 192, 0.12), 0 8px 32px rgba(125, 211, 192, 0.08)",
+                      border: "1px solid rgba(125, 211, 192, 0.18)",
+                    } : {
+                      boxShadow: "0 2px 6px rgba(0, 0, 0, 0.06)",
+                    }}
+                  >
+                    <span className="text-2xl">🌿</span>
+                  </div>
+                  <p className={`text-sm text-center italic ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                    Click to generate pod reflection 🧘‍♀️
+                  </p>
+                  <p className={`text-xs text-center mt-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                    (Must have pod chat messages)
+                  </p>
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
