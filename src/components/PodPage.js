@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
-import { Users, MessageCircle, Heart, TrendingUp, User, Sun, Moon, Bot } from 'lucide-react';
+import { Users, MessageCircle, Heart, TrendingUp, User, Sun, Moon, Bot, ChevronDown, ChevronUp } from 'lucide-react';
 import { getCurrentUser } from '../services/authService';
 
 export default function PodPage() {
   const navigate = useNavigate();
   const { isDarkMode, toggleTheme } = useTheme();
   const [profilePicture, setProfilePicture] = useState(null);
+  const [isChatExpanded, setIsChatExpanded] = useState(false);
 
   // Load profile picture
   useEffect(() => {
@@ -213,15 +214,27 @@ export default function PodPage() {
               boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)",
             }}
           >
-            <div className="flex items-center space-x-2 mb-4">
-              <Users className={`w-5 h-5 ${isDarkMode ? 'text-[#8AB4F8]' : 'text-[#87A96B]'}`} />
-              <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                Pod Group Chat
-              </h2>
+            <div 
+              className="flex items-center justify-between cursor-pointer mb-4"
+              onClick={() => setIsChatExpanded(!isChatExpanded)}
+            >
+              <div className="flex items-center space-x-2">
+                <Users className={`w-5 h-5 ${isDarkMode ? 'text-[#8AB4F8]' : 'text-[#87A96B]'}`} />
+                <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                  Pod Group Chat
+                </h2>
+              </div>
+              {isChatExpanded ? (
+                <ChevronUp className={`w-5 h-5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
+              ) : (
+                <ChevronDown className={`w-5 h-5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
+              )}
             </div>
             
-            {/* Group Members */}
-            <div className="flex items-center space-x-2 mb-4 pb-4 border-b" style={{ borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)' }}>
+            {isChatExpanded && (
+              <>
+                {/* Group Members */}
+                <div className="flex items-center space-x-2 mb-4 pb-4 border-b" style={{ borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)' }}>
               {[
                 { name: 'Alex', emoji: '👤', color: '#7DD3C0' },
                 { name: 'Sam', emoji: '👤', color: '#FDD663' },
@@ -365,6 +378,8 @@ export default function PodPage() {
                 </button>
               </div>
             </div>
+              </>
+            )}
           </div>
         </div>
       </div>
