@@ -68,6 +68,38 @@ export default function BottomNavigation() {
         </button>
 
         <button
+          onClick={() => navigate('/wellbeing')}
+          className="flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 active:opacity-70"
+        >
+          <Heart
+            className={`w-5 h-5 mb-0.5 transition-colors ${
+              isWellbeingActive
+                ? isDarkMode
+                  ? 'text-[#8AB4F8]'
+                  : 'text-[#87A96B]'
+                : isDarkMode
+                ? 'text-gray-400'
+                : 'text-gray-500'
+            }`}
+            strokeWidth={isWellbeingActive ? 2.5 : 2}
+            fill={isWellbeingActive ? (isDarkMode ? '#8AB4F8' : '#87A96B') : 'none'}
+          />
+          <span
+            className={`text-[10px] font-medium transition-colors leading-tight ${
+              isWellbeingActive
+                ? isDarkMode
+                  ? 'text-[#8AB4F8]'
+                  : 'text-[#87A96B]'
+                : isDarkMode
+                ? 'text-gray-400'
+                : 'text-gray-500'
+            }`}
+          >
+            Wellbeing
+          </span>
+        </button>
+
+        <button
           onClick={() => navigate('/pod')}
           className="flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 active:opacity-70"
         >
@@ -128,38 +160,6 @@ export default function BottomNavigation() {
             }`}
           >
             Community
-          </span>
-        </button>
-
-        <button
-          onClick={() => navigate('/wellbeing')}
-          className="flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 active:opacity-70"
-        >
-          <Heart
-            className={`w-5 h-5 mb-0.5 transition-colors ${
-              isWellbeingActive
-                ? isDarkMode
-                  ? 'text-[#8AB4F8]'
-                  : 'text-[#87A96B]'
-                : isDarkMode
-                ? 'text-gray-400'
-                : 'text-gray-500'
-            }`}
-            strokeWidth={isWellbeingActive ? 2.5 : 2}
-            fill={isWellbeingActive ? (isDarkMode ? '#8AB4F8' : '#87A96B') : 'none'}
-          />
-          <span
-            className={`text-[10px] font-medium transition-colors leading-tight ${
-              isWellbeingActive
-                ? isDarkMode
-                  ? 'text-[#8AB4F8]'
-                  : 'text-[#87A96B]'
-                : isDarkMode
-                ? 'text-gray-400'
-                : 'text-gray-500'
-            }`}
-          >
-            Wellbeing
           </span>
         </button>
       </div>
