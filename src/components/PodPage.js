@@ -200,48 +200,6 @@ export default function PodPage() {
             </p>
           </div>
 
-          {/* Quick Actions */}
-          <div
-            className={`rounded-2xl p-5 relative overflow-hidden ${
-              isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
-            }`}
-            style={isDarkMode ? {
-              backgroundColor: "rgba(42, 42, 45, 0.6)",
-              boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
-            } : {
-              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)",
-            }}
-          >
-            <h2 className={`text-lg font-semibold mb-4 ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-              Quick Actions
-            </h2>
-            <div className="space-y-3">
-              {[
-                { icon: Heart, label: 'Daily Check-in', color: isDarkMode ? '#FDD663' : '#E6B3BA' },
-                { icon: TrendingUp, label: 'View Progress', color: isDarkMode ? '#7DD3C0' : '#87A96B' },
-                { icon: MessageCircle, label: 'Reflections', color: isDarkMode ? '#8AB4F8' : '#B19CD9' },
-              ].map((action, index) => (
-                <div
-                  key={index}
-                  className={`flex items-center space-x-3 px-3 py-2 rounded-lg cursor-pointer transition-colors ${
-                    isDarkMode ? 'hover:bg-gray-800/30' : 'hover:bg-gray-50'
-                  }`}
-                >
-                  <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center"
-                    style={{ backgroundColor: action.color + '20' }}
-                  >
-                    <action.icon className="w-4 h-4" style={{ color: action.color }} />
-                  </div>
-                  <span className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                    {action.label}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
           {/* Group Message Section */}
           <div
             className={`rounded-2xl p-5 relative overflow-hidden ${
