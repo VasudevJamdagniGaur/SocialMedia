@@ -214,18 +214,18 @@ export default function PodPage() {
               boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)",
             }}
           >
-            <div className="flex items-center justify-between mb-4">
+            {/* Title - Centered */}
+            <div className="flex items-center justify-center mb-4">
               <div className="flex items-center space-x-2">
                 <Users className={`w-5 h-5 ${isDarkMode ? 'text-[#8AB4F8]' : 'text-[#87A96B]'}`} />
                 <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
                   Pod Group Chat
                 </h2>
               </div>
-              <ChevronRight className={`w-5 h-5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
             </div>
             
-            {/* Group Members */}
-            <div className="flex items-center space-x-2">
+            {/* Group Members - Centered */}
+            <div className="flex items-center justify-center space-x-2">
               {[
                 { name: 'Alex', emoji: '👤', color: '#7DD3C0' },
                 { name: 'Sam', emoji: '👤', color: '#FDD663' },
