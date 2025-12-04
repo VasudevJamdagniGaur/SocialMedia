@@ -156,11 +156,11 @@ export default function BottomNavigation() {
               cx="12"
               cy="8"
               r="3"
-              fill={isCommunityActive ? '#000000' : (isDarkMode ? '#9CA3AF' : '#6B7280')}
+              fill={isCommunityActive ? '#FFFFFF' : (isDarkMode ? '#9CA3AF' : '#6B7280')}
             />
             <path
               d="M6 21c0-3.314 2.686-6 6-6s6 2.686 6 6"
-              stroke={isCommunityActive ? '#000000' : (isDarkMode ? '#9CA3AF' : '#6B7280')}
+              stroke={isCommunityActive ? '#FFFFFF' : (isDarkMode ? '#9CA3AF' : '#6B7280')}
               strokeWidth={isCommunityActive ? 2.5 : 2}
               strokeLinecap="round"
               fill="none"
