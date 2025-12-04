@@ -419,7 +419,7 @@ export default function AllPodsPage() {
             <div className="mb-4">
               <div
                 onClick={handleCalendarClick}
-                className={`rounded-lg px-3 py-2 flex items-center justify-between cursor-pointer hover:opacity-80 transition-opacity ${
+                className={`rounded-lg px-3 py-2 flex items-center ${selectedDate ? 'justify-between' : 'justify-center'} cursor-pointer hover:opacity-80 transition-opacity ${
                   isDarkMode ? 'backdrop-blur-md' : 'bg-white'
                 }`}
                 style={isDarkMode ? {
@@ -430,9 +430,9 @@ export default function AllPodsPage() {
                   boxShadow: "0 2px 6px rgba(0, 0, 0, 0.08)",
                 }}
               >
-                <div className="flex items-center space-x-2">
+                <div className={`flex items-center ${selectedDate ? 'space-x-2' : 'flex-col space-y-1'}`}>
                   <Calendar className="w-4 h-4" style={{ color: isDarkMode ? "#7DD3C0" : "#87A96B" }} />
-                  <div>
+                  <div className={selectedDate ? '' : 'text-center'}>
                     <div className={`text-sm font-medium ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
                       {selectedDate ? formatDateForDisplay(selectedDate) : 'Search by date'}
                     </div>
