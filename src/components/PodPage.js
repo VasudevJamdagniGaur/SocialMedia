@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
-import { Users, User, Sun, Moon, ChevronRight, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
+import { Users, User, Sun, Moon, ChevronRight, Sparkles, ChevronDown, ChevronUp, Calendar } from 'lucide-react';
 import { getCurrentUser } from '../services/authService';
 import reflectionService from '../services/reflectionService';
 import firestoreService from '../services/firestoreService';
+import CalendarPopup from './CalendarPopup';
+import { getDateId, formatDateForDisplay } from '../utils/dateUtils';
 
 export default function PodPage() {
   const navigate = useNavigate();
@@ -13,6 +15,9 @@ export default function PodPage() {
   const [podReflection, setPodReflection] = useState('');
   const [isLoadingPodReflection, setIsLoadingPodReflection] = useState(false);
   const [isReflectionExpanded, setIsReflectionExpanded] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [podDays, setPodDays] = useState([]);
 
   // Load profile picture
   useEffect(() => {
@@ -65,39 +70,116 @@ export default function PodPage() {
     };
   }, []);
 
-  // Load pod reflection
+  // Load pod days for calendar indicators
+  useEffect(() => {
+    const loadPodDays = async () => {
+      const user = getCurrentUser();
+      if (!user) return;
+
+      try {
+        const result = await firestoreService.getAllPods(user.uid);
+        if (result.success) {
+          // Extract dates from pods that have reflections
+          const daysWithReflections = result.pods
+            .filter(pod => pod.reflection && pod.startDate)
+            .map(pod => ({
+              date: pod.startDate,
+              hasReflection: true
+            }));
+          setPodDays(daysWithReflections);
+        }
+      } catch (error) {
+        console.error('Error loading pod days:', error);
+      }
+    };
+
+    loadPodDays();
+  }, []);
+
+  // Load pod reflection for selected date
   useEffect(() => {
     const loadPodReflection = async () => {
       const user = getCurrentUser();
       if (!user) return;
 
       try {
-        // Check Firestore for pod reflection using the service
-        const result = await firestoreService.getPodReflection(user.uid);
-        if (result.success && result.reflection) {
-          setPodReflection(result.reflection);
+        const dateId = getDateId(selectedDate);
+        setIsLoadingPodReflection(true);
+
+        // Try to get pod for this date
+        const podsResult = await firestoreService.getAllPods(user.uid);
+        if (podsResult.success) {
+          // Find pod that matches the selected date
+          const podForDate = podsResult.pods.find(pod => pod.startDate === dateId);
+          
+          if (podForDate && podForDate.reflection) {
+            setPodReflection(podForDate.reflection);
+          } else {
+            // If no pod found for this date, check if it's today and use current reflection
+            const todayId = getDateId(new Date());
+            if (dateId === todayId) {
+              const result = await firestoreService.getPodReflection(user.uid);
+              if (result.success && result.reflection) {
+                setPodReflection(result.reflection);
+              } else {
+                const savedReflection = localStorage.getItem('pod_reflection');
+                setPodReflection(savedReflection || '');
+              }
+            } else {
+              setPodReflection('');
+            }
+          }
         } else {
-          // Check localStorage as fallback
-          const savedReflection = localStorage.getItem('pod_reflection');
-          if (savedReflection) {
-            setPodReflection(savedReflection);
+          // Fallback to current reflection if today
+          const todayId = getDateId(new Date());
+          const dateId = getDateId(selectedDate);
+          if (dateId === todayId) {
+            const savedReflection = localStorage.getItem('pod_reflection');
+            setPodReflection(savedReflection || '');
+          } else {
+            setPodReflection('');
           }
         }
       } catch (error) {
         console.error('Error loading pod reflection:', error);
-        // Fallback to localStorage
-        const savedReflection = localStorage.getItem('pod_reflection');
-        if (savedReflection) {
-          setPodReflection(savedReflection);
-        }
+        setPodReflection('');
+      } finally {
+        setIsLoadingPodReflection(false);
       }
     };
 
     loadPodReflection();
-  }, []);
+  }, [selectedDate]);
 
   const handleProfileClick = () => {
     navigate('/profile');
+  };
+
+  const handleCalendarClick = async () => {
+    setIsCalendarOpen(true);
+    // Refresh pod days when opening calendar
+    const user = getCurrentUser();
+    if (user) {
+      try {
+        const result = await firestoreService.getAllPods(user.uid);
+        if (result.success) {
+          const daysWithReflections = result.pods
+            .filter(pod => pod.reflection && pod.startDate)
+            .map(pod => ({
+              date: pod.startDate,
+              hasReflection: true
+            }));
+          setPodDays(daysWithReflections);
+        }
+      } catch (error) {
+        console.error('Error refreshing pod days:', error);
+      }
+    }
+  };
+
+  const handleDateSelect = (date) => {
+    setSelectedDate(date);
+    setIsCalendarOpen(false);
   };
 
   const handleGeneratePodReflection = async () => {
@@ -438,9 +520,35 @@ export default function PodPage() {
               <ChevronRight className={`w-5 h-5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
             </div>
             
-            {/* Subheading: Today's Reflection */}
+            {/* Subheading: Date Selection with Calendar */}
             <div className="mb-3">
-              <h3 className={`text-base font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Today's Reflection</h3>
+              <h3 className={`text-base font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                {getDateId(selectedDate) === getDateId(new Date()) ? "Today's Reflection" : formatDateForDisplay(selectedDate)}
+              </h3>
+              <div
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleCalendarClick();
+                }}
+                className="flex items-center space-x-2 cursor-pointer hover:opacity-80 transition-opacity"
+              >
+                <div
+                  className={`rounded-lg px-3 py-2 flex items-center space-x-2 ${
+                    isDarkMode ? 'backdrop-blur-md' : 'bg-gray-50'
+                  }`}
+                  style={isDarkMode ? {
+                    backgroundColor: "rgba(28, 31, 46, 0.5)",
+                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                  } : {
+                    border: "1px solid rgba(0, 0, 0, 0.05)",
+                  }}
+                >
+                  <Calendar className="w-4 h-4" style={{ color: isDarkMode ? "#7DD3C0" : "#87A96B" }} />
+                  <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                    Click to change date
+                  </div>
+                </div>
+              </div>
             </div>
             
             {/* Reflection Content */}
@@ -486,6 +594,15 @@ export default function PodPage() {
           </div>
         </div>
       </div>
+
+      {/* Calendar Popup */}
+      <CalendarPopup
+        isOpen={isCalendarOpen}
+        onClose={() => setIsCalendarOpen(false)}
+        selectedDate={selectedDate}
+        onDateSelect={handleDateSelect}
+        chatDays={podDays}
+      />
     </div>
   );
 }
