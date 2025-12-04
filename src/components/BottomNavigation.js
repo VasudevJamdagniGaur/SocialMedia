@@ -39,19 +39,30 @@ export default function BottomNavigation() {
           onClick={() => navigate('/dashboard')}
           className="flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 active:opacity-70"
         >
-          <Home
-            className={`w-5 h-5 mb-0.5 transition-colors ${
-              isHomeActive
-                ? isDarkMode
-                  ? 'text-[#8AB4F8]'
-                  : 'text-[#87A96B]'
-                : isDarkMode
-                ? 'text-gray-400'
-                : 'text-gray-500'
-            }`}
-            strokeWidth={isHomeActive ? 2.5 : 2}
-            fill={isHomeActive ? (isDarkMode ? '#8AB4F8' : '#87A96B') : 'none'}
-          />
+          <svg
+            className="w-5 h-5 mb-0.5"
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+              stroke={isHomeActive 
+                ? (isDarkMode ? '#8AB4F8' : '#87A96B')
+                : (isDarkMode ? '#9CA3AF' : '#6B7280')
+              }
+              strokeWidth={isHomeActive ? 2.5 : 2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+            />
+            {isHomeActive && (
+              <path
+                d="M9 21v-6a1 1 0 011-1h4a1 1 0 011 1v6"
+                fill="#FFFFFF"
+              />
+            )}
+          </svg>
           <span
             className={`text-[10px] font-medium transition-colors leading-tight ${
               isHomeActive
@@ -71,19 +82,24 @@ export default function BottomNavigation() {
           onClick={() => navigate('/wellbeing')}
           className="flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 active:opacity-70"
         >
-          <Heart
-            className={`w-5 h-5 mb-0.5 transition-colors ${
-              isWellbeingActive
-                ? isDarkMode
-                  ? 'text-[#8AB4F8]'
-                  : 'text-[#87A96B]'
-                : isDarkMode
-                ? 'text-gray-400'
-                : 'text-gray-500'
-            }`}
-            strokeWidth={isWellbeingActive ? 2.5 : 2}
-            fill={isWellbeingActive ? (isDarkMode ? '#8AB4F8' : '#87A96B') : 'none'}
-          />
+          <svg
+            className="w-5 h-5 mb-0.5"
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"
+              stroke={isWellbeingActive 
+                ? (isDarkMode ? '#8AB4F8' : '#87A96B')
+                : (isDarkMode ? '#9CA3AF' : '#6B7280')
+              }
+              strokeWidth={isWellbeingActive ? 2.5 : 2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill={isWellbeingActive ? '#FFFFFF' : 'none'}
+            />
+          </svg>
           <span
             className={`text-[10px] font-medium transition-colors leading-tight ${
               isWellbeingActive
@@ -103,19 +119,66 @@ export default function BottomNavigation() {
           onClick={() => navigate('/pod')}
           className="flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 active:opacity-70"
         >
-          <Users
-            className={`w-5 h-5 mb-0.5 transition-colors ${
-              isPodActive
-                ? isDarkMode
-                  ? 'text-[#8AB4F8]'
-                  : 'text-[#87A96B]'
-                : isDarkMode
-                ? 'text-gray-400'
-                : 'text-gray-500'
-            }`}
-            strokeWidth={isPodActive ? 2.5 : 2}
-            fill={isPodActive ? (isDarkMode ? '#8AB4F8' : '#87A96B') : 'none'}
-          />
+          <svg
+            className="w-5 h-5 mb-0.5"
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"
+              stroke={isPodActive 
+                ? (isDarkMode ? '#8AB4F8' : '#87A96B')
+                : (isDarkMode ? '#9CA3AF' : '#6B7280')
+              }
+              strokeWidth={isPodActive ? 2.5 : 2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+            />
+            <circle
+              cx="9"
+              cy="7"
+              r="4"
+              stroke={isPodActive 
+                ? (isDarkMode ? '#8AB4F8' : '#87A96B')
+                : (isDarkMode ? '#9CA3AF' : '#6B7280')
+              }
+              strokeWidth={isPodActive ? 2.5 : 2}
+              fill={isPodActive ? '#FFFFFF' : 'none'}
+            />
+            <path
+              d="M23 21v-2a4 4 0 00-3-3.87"
+              stroke={isPodActive 
+                ? (isDarkMode ? '#8AB4F8' : '#87A96B')
+                : (isDarkMode ? '#9CA3AF' : '#6B7280')
+              }
+              strokeWidth={isPodActive ? 2.5 : 2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+            />
+            <path
+              d="M16 3.13a4 4 0 010 7.75"
+              stroke={isPodActive 
+                ? (isDarkMode ? '#8AB4F8' : '#87A96B')
+                : (isDarkMode ? '#9CA3AF' : '#6B7280')
+              }
+              strokeWidth={isPodActive ? 2.5 : 2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+            />
+            {isPodActive && (
+              <>
+                <circle cx="9" cy="7" r="2" fill="#FFFFFF" />
+                <path
+                  d="M17 19v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"
+                  fill="#FFFFFF"
+                />
+              </>
+            )}
+          </svg>
           <span
             className={`text-[10px] font-medium transition-colors leading-tight ${
               isPodActive
