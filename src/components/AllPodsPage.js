@@ -1,17 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
-import { ArrowLeft, Users, Calendar, Sparkles, User, Sun, Moon, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Users, Calendar, Sparkles, User, Sun, Moon, ChevronRight, X } from 'lucide-react';
 import { getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
+import CalendarPopup from './CalendarPopup';
+import { getDateId, formatDateForDisplay } from '../utils/dateUtils';
 
 export default function AllPodsPage() {
   const navigate = useNavigate();
   const { isDarkMode, toggleTheme } = useTheme();
   const [profilePicture, setProfilePicture] = useState(null);
   const [pods, setPods] = useState([]);
+  const [filteredPods, setFilteredPods] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedPod, setSelectedPod] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [podDays, setPodDays] = useState([]);
 
   // Load profile picture
   useEffect(() => {
@@ -76,6 +82,16 @@ export default function AllPodsPage() {
         const result = await firestoreService.getAllPods(user.uid);
         if (result.success) {
           setPods(result.pods);
+          setFilteredPods(result.pods);
+          
+          // Extract dates from pods for calendar indicators
+          const daysWithPods = result.pods
+            .filter(pod => pod.startDate)
+            .map(pod => ({
+              date: pod.startDate,
+              hasReflection: !!pod.reflection
+            }));
+          setPodDays(daysWithPods);
         } else {
           console.error('Error loading pods:', result.error);
         }
@@ -89,8 +105,50 @@ export default function AllPodsPage() {
     loadPods();
   }, []);
 
+  // Filter pods based on selected date
+  useEffect(() => {
+    if (selectedDate) {
+      const dateId = getDateId(selectedDate);
+      const filtered = pods.filter(pod => pod.startDate === dateId);
+      setFilteredPods(filtered);
+    } else {
+      setFilteredPods(pods);
+    }
+  }, [selectedDate, pods]);
+
   const handleProfileClick = () => {
     navigate('/profile');
+  };
+
+  const handleCalendarClick = async () => {
+    setIsCalendarOpen(true);
+    // Refresh pod days when opening calendar
+    const user = getCurrentUser();
+    if (user) {
+      try {
+        const result = await firestoreService.getAllPods(user.uid);
+        if (result.success) {
+          const daysWithPods = result.pods
+            .filter(pod => pod.startDate)
+            .map(pod => ({
+              date: pod.startDate,
+              hasReflection: !!pod.reflection
+            }));
+          setPodDays(daysWithPods);
+        }
+      } catch (error) {
+        console.error('Error refreshing pod days:', error);
+      }
+    }
+  };
+
+  const handleDateSelect = (date) => {
+    setSelectedDate(date);
+    setIsCalendarOpen(false);
+  };
+
+  const handleClearDateFilter = () => {
+    setSelectedDate(null);
   };
 
   const formatDate = (dateString) => {
@@ -348,13 +406,57 @@ export default function AllPodsPage() {
               </div>
             </div>
           </div>
-          <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-            All Pods
-          </h1>
-          <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-            View your pod history and reflections
-          </p>
-        </div>
+            <div className="flex items-center justify-between mb-2">
+              <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                All Pods
+              </h1>
+            </div>
+            <p className={`text-sm mb-3 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+              View your pod history and reflections
+            </p>
+            
+            {/* Date Search */}
+            <div className="mb-4">
+              <div
+                onClick={handleCalendarClick}
+                className={`rounded-lg px-3 py-2 flex items-center justify-between cursor-pointer hover:opacity-80 transition-opacity ${
+                  isDarkMode ? 'backdrop-blur-md' : 'bg-white'
+                }`}
+                style={isDarkMode ? {
+                  backgroundColor: "rgba(42, 42, 45, 0.6)",
+                  boxShadow: "0 2px 8px rgba(0, 0, 0, 0.15)",
+                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                } : {
+                  boxShadow: "0 2px 6px rgba(0, 0, 0, 0.08)",
+                }}
+              >
+                <div className="flex items-center space-x-2">
+                  <Calendar className="w-4 h-4" style={{ color: isDarkMode ? "#7DD3C0" : "#87A96B" }} />
+                  <div>
+                    <div className={`text-sm font-medium ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                      {selectedDate ? formatDateForDisplay(selectedDate) : 'Search by date'}
+                    </div>
+                    <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                      {selectedDate ? 'Tap to change date' : 'Tap to select a date'}
+                    </div>
+                  </div>
+                </div>
+                {selectedDate && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleClearDateFilter();
+                    }}
+                    className={`w-6 h-6 rounded-full flex items-center justify-center hover:opacity-80 transition-opacity ${
+                      isDarkMode ? 'bg-gray-700' : 'bg-gray-200'
+                    }`}
+                  >
+                    <X className={`w-3 h-3 ${isDarkMode ? 'text-white' : 'text-gray-600'}`} />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
 
         {/* Pods List */}
         {isLoading ? (
@@ -366,7 +468,7 @@ export default function AllPodsPage() {
             </div>
             <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Loading pods...</p>
           </div>
-        ) : pods.length === 0 ? (
+        ) : filteredPods.length === 0 ? (
           <div
             className={`rounded-2xl p-8 text-center ${
               isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
@@ -381,12 +483,16 @@ export default function AllPodsPage() {
           >
             <Users className={`w-12 h-12 mx-auto mb-4 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`} />
             <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-              No pods yet. Start chatting in your pod to create your first pod entry!
+              {selectedDate 
+                ? `No pods found for ${formatDateForDisplay(selectedDate)}. Try selecting a different date.`
+                : pods.length === 0
+                  ? 'No pods yet. Start chatting in your pod to create your first pod entry!'
+                  : 'No pods match your search criteria.'}
             </p>
           </div>
         ) : (
           <div className="space-y-4">
-            {pods.map((pod) => (
+            {filteredPods.map((pod) => (
               <div
                 key={pod.id}
                 onClick={() => handlePodClick(pod)}
@@ -429,6 +535,15 @@ export default function AllPodsPage() {
           </div>
         )}
       </div>
+
+      {/* Calendar Popup */}
+      <CalendarPopup
+        isOpen={isCalendarOpen}
+        onClose={() => setIsCalendarOpen(false)}
+        selectedDate={selectedDate || new Date()}
+        onDateSelect={handleDateSelect}
+        chatDays={podDays}
+      />
     </div>
   );
 }
