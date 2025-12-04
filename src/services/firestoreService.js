@@ -877,6 +877,164 @@ class FirestoreService {
       return { success: false, error: error.message, moodData: [] };
     }
   }
+
+  /**
+   * Save a pod with name, dates, and reflection
+   */
+  async savePod(uid, podData) {
+    try {
+      const podId = podData.id || doc(collection(this.db, `users/${uid}/pods`)).id;
+      const podRef = doc(this.db, `users/${uid}/pods/${podId}`);
+      
+      await setDoc(podRef, {
+        name: podData.name || 'My Pod',
+        startDate: podData.startDate,
+        endDate: podData.endDate || null,
+        reflection: podData.reflection || '',
+        createdAt: podData.createdAt || serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        memberCount: podData.memberCount || 5
+      }, { merge: true });
+
+      return { success: true, podId };
+    } catch (error) {
+      console.error('Error saving pod:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Get all pods for a user
+   */
+  async getAllPods(uid) {
+    try {
+      const podsRef = collection(this.db, `users/${uid}/pods`);
+      const q = query(podsRef, orderBy('createdAt', 'desc'));
+      const snapshot = await getDocs(q);
+      
+      const pods = [];
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        pods.push({
+          id: doc.id,
+          name: data.name || 'My Pod',
+          startDate: data.startDate,
+          endDate: data.endDate || null,
+          reflection: data.reflection || '',
+          createdAt: data.createdAt?.toDate() || new Date(),
+          updatedAt: data.updatedAt?.toDate() || new Date(),
+          memberCount: data.memberCount || 5
+        });
+      });
+
+      return { success: true, pods };
+    } catch (error) {
+      console.error('Error getting all pods:', error);
+      return { success: false, error: error.message, pods: [] };
+    }
+  }
+
+  /**
+   * Get a specific pod by ID
+   */
+  async getPod(uid, podId) {
+    try {
+      const podRef = doc(this.db, `users/${uid}/pods/${podId}`);
+      const snapshot = await getDoc(podRef);
+      
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        return {
+          success: true,
+          pod: {
+            id: snapshot.id,
+            name: data.name || 'My Pod',
+            startDate: data.startDate,
+            endDate: data.endDate || null,
+            reflection: data.reflection || '',
+            createdAt: data.createdAt?.toDate() || new Date(),
+            updatedAt: data.updatedAt?.toDate() || new Date(),
+            memberCount: data.memberCount || 5
+          }
+        };
+      } else {
+        return { success: true, pod: null };
+      }
+    } catch (error) {
+      console.error('Error getting pod:', error);
+      return { success: false, error: error.message, pod: null };
+    }
+  }
+
+  /**
+   * Save current pod reflection and create/update pod entry
+   */
+  async savePodReflection(uid, reflection) {
+    try {
+      const today = new Date();
+      const dateId = today.toISOString().split('T')[0];
+      
+      // Save to current pod reflection
+      const podReflectionRef = doc(this.db, `users/${uid}/podReflections/current`);
+      await setDoc(podReflectionRef, {
+        summary: reflection,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        dateId: dateId
+      }, { merge: true });
+
+      // Also save/update pod entry for today
+      const podsRef = collection(this.db, `users/${uid}/pods`);
+      const todayQuery = query(podsRef, where('startDate', '==', dateId), limit(1));
+      const todaySnapshot = await getDocs(todayQuery);
+      
+      if (todaySnapshot.empty) {
+        // Create new pod entry for today
+        const newPodRef = doc(podsRef);
+        await setDoc(newPodRef, {
+          name: `Pod - ${today.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`,
+          startDate: dateId,
+          endDate: null,
+          reflection: reflection,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          memberCount: 5
+        });
+      } else {
+        // Update existing pod entry
+        const podDoc = todaySnapshot.docs[0];
+        await setDoc(podDoc.ref, {
+          reflection: reflection,
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error saving pod reflection:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Get current pod reflection
+   */
+  async getPodReflection(uid) {
+    try {
+      const podReflectionRef = doc(this.db, `users/${uid}/podReflections/current`);
+      const snapshot = await getDoc(podReflectionRef);
+      
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        return { success: true, reflection: data.summary || '' };
+      } else {
+        return { success: true, reflection: '' };
+      }
+    } catch (error) {
+      console.error('Error getting pod reflection:', error);
+      return { success: false, error: error.message, reflection: '' };
+    }
+  }
 }
 
 export default new FirestoreService();

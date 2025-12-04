@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
-import { Users, User, Sun, Moon, ChevronRight, Sparkles } from 'lucide-react';
+import { Users, User, Sun, Moon, ChevronRight, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
 import { getCurrentUser } from '../services/authService';
 import reflectionService from '../services/reflectionService';
 import firestoreService from '../services/firestoreService';
-import { collection, query, where, getDocs, orderBy, limit, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../firebase/config';
 
 export default function PodPage() {
   const navigate = useNavigate();
@@ -14,6 +12,7 @@ export default function PodPage() {
   const [profilePicture, setProfilePicture] = useState(null);
   const [podReflection, setPodReflection] = useState('');
   const [isLoadingPodReflection, setIsLoadingPodReflection] = useState(false);
+  const [isReflectionExpanded, setIsReflectionExpanded] = useState(false);
 
   // Load profile picture
   useEffect(() => {
@@ -73,13 +72,10 @@ export default function PodPage() {
       if (!user) return;
 
       try {
-        // Check Firestore for pod reflection
-        const podReflectionRef = doc(db, `users/${user.uid}/podReflections/current`);
-        const podReflectionSnap = await getDoc(podReflectionRef);
-        
-        if (podReflectionSnap.exists()) {
-          const data = podReflectionSnap.data();
-          setPodReflection(data.summary || '');
+        // Check Firestore for pod reflection using the service
+        const result = await firestoreService.getPodReflection(user.uid);
+        if (result.success && result.reflection) {
+          setPodReflection(result.reflection);
         } else {
           // Check localStorage as fallback
           const savedReflection = localStorage.getItem('pod_reflection');
@@ -165,13 +161,8 @@ export default function PodPage() {
       const generatedReflection = await reflectionService.generateReflection(podMessages);
       console.log('✅ Pod reflection generated:', generatedReflection);
 
-      // Save pod reflection to Firestore
-      const podReflectionRef = doc(db, `users/${user.uid}/podReflections/current`);
-      await setDoc(podReflectionRef, {
-        summary: generatedReflection,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      }, { merge: true });
+      // Save pod reflection to Firestore using the service
+      await firestoreService.savePodReflection(user.uid, generatedReflection);
 
       // Also save to localStorage as backup
       localStorage.setItem('pod_reflection', generatedReflection);
@@ -304,6 +295,27 @@ export default function PodPage() {
 
         {/* Pod Content */}
         <div className="space-y-4">
+          {/* Welcome Card */}
+          <div
+            className={`rounded-2xl p-5 relative overflow-hidden ${
+              isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
+            }`}
+            style={isDarkMode ? {
+              backgroundColor: "rgba(42, 42, 45, 0.6)",
+              boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
+              border: "1px solid rgba(255, 255, 255, 0.08)",
+            } : {
+              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)",
+            }}
+          >
+            <h2 className={`text-lg font-semibold mb-3 ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+              Welcome to Your Pod
+            </h2>
+            <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+              Your group of 5 people who match your vibe, interests, mental wavelength, and personality. A space to talk, laugh, and gossip about IIT campus, our professors, life, and everything in between. with an anonymous identity
+            </p>
+          </div>
+
           {/* Group Message Section */}
           <div
             onClick={() => navigate('/pod/chat')}
@@ -394,30 +406,10 @@ export default function PodPage() {
             </div>
           </div>
 
-          {/* Welcome Card */}
+          {/* Pod Reflection Section - Dropdown Card */}
           <div
-            className={`rounded-2xl p-5 relative overflow-hidden ${
-              isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
-            }`}
-            style={isDarkMode ? {
-              backgroundColor: "rgba(42, 42, 45, 0.6)",
-              boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
-            } : {
-              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)",
-            }}
-          >
-            <h2 className={`text-lg font-semibold mb-3 ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-              Welcome to Your Pod
-            </h2>
-            <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-              Your group of 5 people who match your vibe, interests, mental wavelength, and personality. A space to talk, laugh, and gossip about IIT campus, our professors, life, and everything in between. with an anonymous identity
-            </p>
-          </div>
-
-          {/* Pod Reflection Section */}
-          <div
-            className={`rounded-2xl p-6 relative overflow-hidden ${
+            onClick={() => navigate('/pod/all')}
+            className={`rounded-2xl p-5 relative overflow-hidden cursor-pointer transition-all hover:opacity-90 ${
               isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
             }`}
             style={isDarkMode ? {
@@ -429,69 +421,60 @@ export default function PodPage() {
               borderTop: "3px solid #E6B3BA30",
             }}
           >
-            <div className="flex items-center space-x-3 mb-4">
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center"
-                style={{
-                  backgroundColor: isDarkMode ? "#FDD663" : "#E6B3BA",
-                  boxShadow: isDarkMode ? "0 4px 16px rgba(0, 0, 0, 0.15)" : "none",
-                }}
-              >
-                <Sparkles className="w-4 h-4" style={{ color: isDarkMode ? "#000" : "#fff" }} strokeWidth={2} />
-              </div>
-              <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>Pod Reflection</h2>
-            </div>
-            <div
-              className={`rounded-xl p-5 min-h-24 relative overflow-hidden ${
-                isDarkMode ? 'backdrop-blur-lg' : ''
-              }`}
-              style={isDarkMode ? {
-                backgroundColor: "rgba(42, 42, 45, 0.6)",
-                border: "1px solid rgba(255, 255, 255, 0.08)",
-                boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-              } : {
-                backgroundColor: "#F9F9F7",
-              }}
-            >
-              {isLoadingPodReflection ? (
-                <div className="flex flex-col items-center justify-center h-full">
-                  <div className="flex space-x-1 mb-3">
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                  </div>
-                  <p className={`text-sm text-center italic ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Generating pod reflection...</p>
-                </div>
-              ) : podReflection ? (
-                <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>{podReflection}</p>
-              ) : (
-                <button
-                  onClick={handleGeneratePodReflection}
-                  className="flex flex-col items-center justify-center h-full w-full hover:opacity-80 transition-all duration-300 cursor-pointer"
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center space-x-3">
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center"
+                  style={{
+                    backgroundColor: isDarkMode ? "#FDD663" : "#E6B3BA",
+                    boxShadow: isDarkMode ? "0 4px 16px rgba(0, 0, 0, 0.15)" : "none",
+                  }}
                 >
-                  <div
-                    className={`w-12 h-12 rounded-lg flex items-center justify-center mb-3 ${
-                      isDarkMode ? 'backdrop-blur-md' : 'bg-white'
-                    }`}
-                    style={isDarkMode ? {
-                      backgroundColor: "rgba(28, 31, 46, 0.5)",
-                      boxShadow: "inset 0 0 20px rgba(125, 211, 192, 0.12), 0 8px 32px rgba(125, 211, 192, 0.08)",
-                      border: "1px solid rgba(125, 211, 192, 0.18)",
-                    } : {
-                      boxShadow: "0 2px 6px rgba(0, 0, 0, 0.06)",
-                    }}
-                  >
-                    <span className="text-2xl">🌿</span>
-                  </div>
-                  <p className={`text-sm text-center italic ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                    Click to generate pod reflection 🧘‍♀️
-                  </p>
-                  <p className={`text-xs text-center mt-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                    (Must have pod chat messages)
-                  </p>
-                </button>
-              )}
+                  <Sparkles className="w-4 h-4" style={{ color: isDarkMode ? "#000" : "#fff" }} strokeWidth={2} />
+                </div>
+                <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>Today's Pod Reflection</h2>
+              </div>
+              <ChevronRight className={`w-5 h-5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
             </div>
+            {isLoadingPodReflection ? (
+              <div className="flex flex-col items-center justify-center py-4">
+                <div className="flex space-x-1 mb-3">
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                </div>
+                <p className={`text-sm text-center italic ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Generating pod reflection...</p>
+              </div>
+            ) : podReflection ? (
+              <div>
+                <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-600'} line-clamp-3`}>
+                  {podReflection}
+                </p>
+                <p className={`text-xs mt-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  Tap to view all pods →
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-4">
+                <div
+                  className={`w-12 h-12 rounded-lg flex items-center justify-center mb-3 ${
+                    isDarkMode ? 'backdrop-blur-md' : 'bg-white'
+                  }`}
+                  style={isDarkMode ? {
+                    backgroundColor: "rgba(28, 31, 46, 0.5)",
+                    boxShadow: "inset 0 0 20px rgba(125, 211, 192, 0.12), 0 8px 32px rgba(125, 211, 192, 0.08)",
+                    border: "1px solid rgba(125, 211, 192, 0.18)",
+                  } : {
+                    boxShadow: "0 2px 6px rgba(0, 0, 0, 0.06)",
+                  }}
+                >
+                  <span className="text-2xl">🌿</span>
+                </div>
+                <p className={`text-sm text-center italic ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                  No reflection yet. Tap to view all pods →
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -18,6 +18,7 @@ import SplashScreen from './components/SplashScreen';
 import CommunityPage from './components/CommunityPage';
 import PodPage from './components/PodPage';
 import PodGroupChatPage from './components/PodGroupChatPage';
+import AllPodsPage from './components/AllPodsPage';
 import BottomNavigation from './components/BottomNavigation';
 
 // Lazy load Capacitor App plugin for deep link handling
@@ -96,6 +97,10 @@ function AppContent() {
               // Navigate to pod from Pod Group Chat
               console.log('📍 Navigating to pod from Pod Group Chat');
               navigate('/pod', { replace: true });
+            } else if (location.pathname === '/pod/all') {
+              // Navigate to pod from All Pods
+              console.log('📍 Navigating to pod from All Pods');
+              navigate('/pod', { replace: true });
             } else if (location.pathname === '/pod') {
               // Navigate to dashboard from Pod
               console.log('📍 Navigating to dashboard from Pod');
@@ -163,6 +168,7 @@ function AppContent() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/pod" element={<PodPage />} />
         <Route path="/pod/chat" element={<PodGroupChatPage />} />
+        <Route path="/pod/all" element={<AllPodsPage />} />
         <Route path="/community" element={<CommunityPage />} />
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/wellbeing" element={<EmotionalWellbeing />} />
