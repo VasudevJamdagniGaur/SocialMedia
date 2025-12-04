@@ -128,56 +128,47 @@ export default function BottomNavigation() {
             <path
               d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"
               stroke={isPodActive 
-                ? (isDarkMode ? '#8AB4F8' : '#87A96B')
+                ? '#FFFFFF'
                 : (isDarkMode ? '#9CA3AF' : '#6B7280')
               }
               strokeWidth={isPodActive ? 2.5 : 2}
               strokeLinecap="round"
               strokeLinejoin="round"
-              fill="none"
+              fill={isPodActive ? (isDarkMode ? '#8AB4F8' : '#87A96B') : 'none'}
             />
             <circle
               cx="9"
               cy="7"
               r="4"
               stroke={isPodActive 
-                ? (isDarkMode ? '#8AB4F8' : '#87A96B')
+                ? '#FFFFFF'
                 : (isDarkMode ? '#9CA3AF' : '#6B7280')
               }
               strokeWidth={isPodActive ? 2.5 : 2}
-              fill={isPodActive ? '#FFFFFF' : 'none'}
+              fill={isPodActive ? (isDarkMode ? '#8AB4F8' : '#87A96B') : 'none'}
             />
             <path
               d="M23 21v-2a4 4 0 00-3-3.87"
               stroke={isPodActive 
-                ? (isDarkMode ? '#8AB4F8' : '#87A96B')
+                ? '#FFFFFF'
                 : (isDarkMode ? '#9CA3AF' : '#6B7280')
               }
               strokeWidth={isPodActive ? 2.5 : 2}
               strokeLinecap="round"
               strokeLinejoin="round"
-              fill="none"
+              fill={isPodActive ? (isDarkMode ? '#8AB4F8' : '#87A96B') : 'none'}
             />
             <path
               d="M16 3.13a4 4 0 010 7.75"
               stroke={isPodActive 
-                ? (isDarkMode ? '#8AB4F8' : '#87A96B')
+                ? '#FFFFFF'
                 : (isDarkMode ? '#9CA3AF' : '#6B7280')
               }
               strokeWidth={isPodActive ? 2.5 : 2}
               strokeLinecap="round"
               strokeLinejoin="round"
-              fill="none"
+              fill={isPodActive ? (isDarkMode ? '#8AB4F8' : '#87A96B') : 'none'}
             />
-            {isPodActive && (
-              <>
-                <circle cx="9" cy="7" r="2" fill="#FFFFFF" />
-                <path
-                  d="M17 19v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"
-                  fill="#FFFFFF"
-                />
-              </>
-            )}
           </svg>
           <span
             className={`text-[10px] font-medium transition-colors leading-tight ${
