@@ -421,24 +421,26 @@ export default function PodPage() {
               borderTop: "3px solid #E6B3BA30",
             }}
           >
-            {/* Main Heading: Pod */}
+            {/* Main Heading: Pod's Reflection */}
             <div className="flex items-center justify-between mb-4">
-              <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>Pod</h2>
+              <div className="flex items-center space-x-3">
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center"
+                  style={{
+                    backgroundColor: isDarkMode ? "#FDD663" : "#E6B3BA",
+                    boxShadow: isDarkMode ? "0 4px 16px rgba(0, 0, 0, 0.15)" : "none",
+                  }}
+                >
+                  <Sparkles className="w-4 h-4" style={{ color: isDarkMode ? "#000" : "#fff" }} strokeWidth={2} />
+                </div>
+                <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>Pod's Reflection</h2>
+              </div>
               <ChevronRight className={`w-5 h-5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
             </div>
             
             {/* Subheading: Today's Reflection */}
-            <div className="flex items-center space-x-3 mb-3">
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center"
-                style={{
-                  backgroundColor: isDarkMode ? "#FDD663" : "#E6B3BA",
-                  boxShadow: isDarkMode ? "0 4px 16px rgba(0, 0, 0, 0.15)" : "none",
-                }}
-              >
-                <Sparkles className="w-4 h-4" style={{ color: isDarkMode ? "#000" : "#fff" }} strokeWidth={2} />
-              </div>
-              <h3 className={`text-base font-medium ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>Today's Reflection</h3>
+            <div className="mb-3">
+              <h3 className={`text-base font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Today's Reflection</h3>
             </div>
             
             {/* Reflection Content */}
