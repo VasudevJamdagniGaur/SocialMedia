@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
-import { Users, MessageCircle, Heart, TrendingUp, User, Sun, Moon, Send, X, Plus, XCircle } from 'lucide-react';
+import { Users, MessageCircle, Heart, TrendingUp, User, Sun, Moon, Send, X, Plus, XCircle, Image, Link } from 'lucide-react';
 import { getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
-import { collection, addDoc, query, orderBy, getDocs, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, query, orderBy, getDocs, serverTimestamp, doc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
 export default function CommunityPage() {
@@ -25,6 +25,9 @@ export default function CommunityPage() {
   const [communityPosts, setCommunityPosts] = useState([]);
   const [postComments, setPostComments] = useState({});
   const [postLikes, setPostLikes] = useState({});
+  const [postImage, setPostImage] = useState(null);
+  const [postImageUrl, setPostImageUrl] = useState('');
+  const [uploadOption, setUploadOption] = useState(null); // 'device' or 'url'
 
   // Load profile picture
   useEffect(() => {
@@ -183,12 +186,62 @@ export default function CommunityPage() {
     loadPosts();
   }, []);
 
+  const handleImageUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        alert('Image size should be less than 10MB');
+        e.target.value = '';
+        return;
+      }
+      
+      if (!file.type.startsWith('image/')) {
+        alert('Please select a valid image file');
+        e.target.value = '';
+        return;
+      }
+      
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const result = event.target?.result;
+        if (result) {
+          setPostImage(result);
+          setPostImageUrl('');
+        }
+      };
+      reader.onerror = () => {
+        alert('Failed to read image file');
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleImageUrlChange = (url) => {
+    setPostImageUrl(url);
+    setPostImage(null);
+  };
+
+  const validateImageUrl = (url) => {
+    try {
+      new URL(url);
+      return /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?.*)?$/i.test(url);
+    } catch {
+      return false;
+    }
+  };
+
   const handleCreatePost = async () => {
-    if (!postContent.trim()) return;
+    if (!postContent.trim() && !postImage && !postImageUrl.trim()) return;
     
     const user = getCurrentUser();
     if (!user) {
       alert('Please sign in to create a post');
+      return;
+    }
+
+    // Validate URL if provided
+    if (postImageUrl.trim() && !validateImageUrl(postImageUrl.trim())) {
+      alert('Please enter a valid image URL');
       return;
     }
 
@@ -201,7 +254,8 @@ export default function CommunityPage() {
         createdAt: serverTimestamp(),
         likes: 0,
         comments: [],
-        profilePicture: profilePicture || null
+        profilePicture: profilePicture || null,
+        image: postImage || postImageUrl.trim() || null
       };
 
       await addDoc(collection(db, 'communityPosts'), postData);
@@ -234,6 +288,9 @@ export default function CommunityPage() {
       }
       
       setPostContent('');
+      setPostImage(null);
+      setPostImageUrl('');
+      setUploadOption(null);
       setShowCreatePost(false);
     } catch (error) {
       console.error('Error creating post:', error);
@@ -509,6 +566,18 @@ export default function CommunityPage() {
                 <p className={`text-sm leading-relaxed mb-4 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                   {post.content}
                 </p>
+                {post.image && (
+                  <div className="mb-4 rounded-lg overflow-hidden">
+                    <img 
+                      src={post.image} 
+                      alt="Post" 
+                      className="w-full max-h-96 object-cover"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                      }}
+                    />
+                  </div>
+                )}
                 <div className="flex items-center space-x-4">
                   <button 
                     onClick={() => handlePostLike(post.id)}
@@ -707,6 +776,9 @@ export default function CommunityPage() {
                 onClick={() => {
                   setShowCreatePost(false);
                   setPostContent('');
+                  setPostImage(null);
+                  setPostImageUrl('');
+                  setUploadOption(null);
                 }}
                 className={`p-1 rounded-full hover:opacity-80 transition-opacity ${
                   isDarkMode ? 'hover:bg-gray-800/50' : 'hover:bg-gray-100'
@@ -728,11 +800,153 @@ export default function CommunityPage() {
               }`}
             />
 
+            {/* Photo Upload Options */}
+            {!uploadOption && (
+              <div className="mb-4">
+                <p className={`text-sm mb-3 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                  Add a photo:
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => setUploadOption('device')}
+                    className={`flex flex-col items-center justify-center p-4 rounded-lg border-2 transition-all ${
+                      isDarkMode 
+                        ? 'border-gray-700 hover:border-[#8AB4F8] bg-gray-800/30' 
+                        : 'border-gray-300 hover:border-[#87A96B] bg-gray-50'
+                    }`}
+                  >
+                    <Image className={`w-6 h-6 mb-2 ${isDarkMode ? 'text-[#8AB4F8]' : 'text-[#87A96B]'}`} />
+                    <span className={`text-xs font-medium ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                      Upload Photo
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => setUploadOption('url')}
+                    className={`flex flex-col items-center justify-center p-4 rounded-lg border-2 transition-all ${
+                      isDarkMode 
+                        ? 'border-gray-700 hover:border-[#8AB4F8] bg-gray-800/30' 
+                        : 'border-gray-300 hover:border-[#87A96B] bg-gray-50'
+                    }`}
+                  >
+                    <Link className={`w-6 h-6 mb-2 ${isDarkMode ? 'text-[#8AB4F8]' : 'text-[#87A96B]'}`} />
+                    <span className={`text-xs font-medium ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                      From URL
+                    </span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Device Upload Option */}
+            {uploadOption === 'device' && (
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                    Upload from device
+                  </p>
+                  <button
+                    onClick={() => {
+                      setUploadOption(null);
+                      setPostImage(null);
+                    }}
+                    className={`text-xs ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-800'}`}
+                  >
+                    Change option
+                  </button>
+                </div>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  className="hidden"
+                  id="image-upload-input"
+                />
+                <label
+                  htmlFor="image-upload-input"
+                  className={`block w-full rounded-lg px-4 py-3 text-sm text-center cursor-pointer transition-all ${
+                    isDarkMode 
+                      ? 'bg-gray-800/50 text-white border border-gray-700 hover:bg-gray-800/70' 
+                      : 'bg-gray-100 text-gray-800 border border-gray-300 hover:bg-gray-200'
+                  }`}
+                >
+                  {postImage ? 'Change Photo' : 'Choose Photo'}
+                </label>
+                {postImage && (
+                  <div className="mt-3 relative">
+                    <img 
+                      src={postImage} 
+                      alt="Preview" 
+                      className="w-full rounded-lg max-h-48 object-cover"
+                    />
+                    <button
+                      onClick={() => setPostImage(null)}
+                      className="absolute top-2 right-2 p-1 rounded-full bg-black/50 hover:bg-black/70 transition-all"
+                    >
+                      <X className="w-4 h-4 text-white" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* URL Upload Option */}
+            {uploadOption === 'url' && (
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                    Upload from URL
+                  </p>
+                  <button
+                    onClick={() => {
+                      setUploadOption(null);
+                      setPostImageUrl('');
+                    }}
+                    className={`text-xs ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-800'}`}
+                  >
+                    Change option
+                  </button>
+                </div>
+                <input
+                  type="url"
+                  value={postImageUrl}
+                  onChange={(e) => handleImageUrlChange(e.target.value)}
+                  placeholder="https://example.com/image.jpg"
+                  className={`w-full rounded-lg px-4 py-3 text-sm border-none outline-none mb-3 ${
+                    isDarkMode 
+                      ? 'bg-gray-800/50 text-white placeholder-gray-500' 
+                      : 'bg-gray-100 text-gray-800 placeholder-gray-500'
+                  }`}
+                />
+                {postImageUrl && (
+                  <div className="relative">
+                    <img 
+                      src={postImageUrl} 
+                      alt="Preview" 
+                      className="w-full rounded-lg max-h-48 object-cover"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        alert('Failed to load image from URL. Please check the URL and try again.');
+                      }}
+                    />
+                    <button
+                      onClick={() => setPostImageUrl('')}
+                      className="absolute top-2 right-2 p-1 rounded-full bg-black/50 hover:bg-black/70 transition-all"
+                    >
+                      <X className="w-4 h-4 text-white" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="flex items-center space-x-3">
               <button
                 onClick={() => {
                   setShowCreatePost(false);
                   setPostContent('');
+                  setPostImage(null);
+                  setPostImageUrl('');
+                  setUploadOption(null);
                 }}
                 className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-opacity hover:opacity-80 ${
                   isDarkMode ? 'bg-gray-700 text-white' : 'bg-gray-200 text-gray-800'
@@ -742,9 +956,9 @@ export default function CommunityPage() {
               </button>
               <button
                 onClick={handleCreatePost}
-                disabled={!postContent.trim() || isPosting}
+                disabled={(!postContent.trim() && !postImage && !postImageUrl.trim()) || isPosting}
                 className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-opacity ${
-                  postContent.trim() && !isPosting
+                  (postContent.trim() || postImage || postImageUrl.trim()) && !isPosting
                     ? (isDarkMode ? 'bg-[#8AB4F8] text-white hover:opacity-90' : 'bg-[#87A96B] text-white hover:opacity-90')
                     : (isDarkMode ? 'bg-gray-700 opacity-50 text-gray-400' : 'bg-gray-300 opacity-50 text-gray-500')
                 }`}
