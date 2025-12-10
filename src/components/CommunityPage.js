@@ -398,7 +398,7 @@ export default function CommunityPage() {
                 <Users className="w-6 h-6 text-white" strokeWidth={2} />
               </div>
               <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                Community
+                HUB
               </h1>
             </div>
             <div className="flex space-x-2">
