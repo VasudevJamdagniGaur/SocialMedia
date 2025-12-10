@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
-import { Users, MessageCircle, Heart, TrendingUp, User, Sun, Moon, Send, X, Plus, XCircle, Image, Link } from 'lucide-react';
+import { Megaphone, MessageCircle, Heart, TrendingUp, User, Sun, Moon, Send, X, Plus, XCircle, Image, Link } from 'lucide-react';
 import { getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
 import { collection, addDoc, query, orderBy, getDocs, serverTimestamp, doc, setDoc } from 'firebase/firestore';
@@ -395,7 +395,7 @@ export default function CommunityPage() {
                   boxShadow: isDarkMode ? "0 4px 16px rgba(138, 180, 248, 0.3)" : "0 4px 12px rgba(134, 169, 107, 0.25)",
                 }}
               >
-                <Users className="w-6 h-6 text-white" strokeWidth={2} />
+                <Megaphone className="w-6 h-6 text-white" strokeWidth={2} />
               </div>
               <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
                 HUB
