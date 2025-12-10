@@ -396,32 +396,16 @@ export default function CommunityPage() {
                   width: '64px',
                   height: '64px',
                   filter: `
-                    drop-shadow(-1px -1px 0 white) 
-                    drop-shadow(1px -1px 0 white) 
-                    drop-shadow(-1px 1px 0 white) 
-                    drop-shadow(1px 1px 0 white)
-                    drop-shadow(-1px 0 0 white) 
-                    drop-shadow(1px 0 0 white) 
-                    drop-shadow(0 -1px 0 white) 
-                    drop-shadow(0 1px 0 white)
-                    drop-shadow(-0.5px -0.5px 0 white) 
-                    drop-shadow(0.5px -0.5px 0 white) 
-                    drop-shadow(-0.5px 0.5px 0 white) 
-                    drop-shadow(0.5px 0.5px 0 white)
+                    drop-shadow(-0.3px -0.3px 0 white) 
+                    drop-shadow(0.3px -0.3px 0 white) 
+                    drop-shadow(-0.3px 0.3px 0 white) 
+                    drop-shadow(0.3px 0.3px 0 white)
                   `,
                   WebkitFilter: `
-                    drop-shadow(-1px -1px 0 white) 
-                    drop-shadow(1px -1px 0 white) 
-                    drop-shadow(-1px 1px 0 white) 
-                    drop-shadow(1px 1px 0 white)
-                    drop-shadow(-1px 0 0 white) 
-                    drop-shadow(1px 0 0 white) 
-                    drop-shadow(0 -1px 0 white) 
-                    drop-shadow(0 1px 0 white)
-                    drop-shadow(-0.5px -0.5px 0 white) 
-                    drop-shadow(0.5px -0.5px 0 white) 
-                    drop-shadow(-0.5px 0.5px 0 white) 
-                    drop-shadow(0.5px 0.5px 0 white)
+                    drop-shadow(-0.3px -0.3px 0 white) 
+                    drop-shadow(0.3px -0.3px 0 white) 
+                    drop-shadow(-0.3px 0.3px 0 white) 
+                    drop-shadow(0.3px 0.3px 0 white)
                   `
                 }}
               />
