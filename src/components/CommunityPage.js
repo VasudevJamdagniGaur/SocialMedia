@@ -391,7 +391,39 @@ export default function CommunityPage() {
               <img 
                 src="/hub-logo.png" 
                 alt="HUB Logo" 
-                className="w-12 h-12 object-contain"
+                className="object-contain"
+                style={{
+                  width: '64px',
+                  height: '64px',
+                  filter: `
+                    drop-shadow(-1px -1px 0 white) 
+                    drop-shadow(1px -1px 0 white) 
+                    drop-shadow(-1px 1px 0 white) 
+                    drop-shadow(1px 1px 0 white)
+                    drop-shadow(-1px 0 0 white) 
+                    drop-shadow(1px 0 0 white) 
+                    drop-shadow(0 -1px 0 white) 
+                    drop-shadow(0 1px 0 white)
+                    drop-shadow(-0.5px -0.5px 0 white) 
+                    drop-shadow(0.5px -0.5px 0 white) 
+                    drop-shadow(-0.5px 0.5px 0 white) 
+                    drop-shadow(0.5px 0.5px 0 white)
+                  `,
+                  WebkitFilter: `
+                    drop-shadow(-1px -1px 0 white) 
+                    drop-shadow(1px -1px 0 white) 
+                    drop-shadow(-1px 1px 0 white) 
+                    drop-shadow(1px 1px 0 white)
+                    drop-shadow(-1px 0 0 white) 
+                    drop-shadow(1px 0 0 white) 
+                    drop-shadow(0 -1px 0 white) 
+                    drop-shadow(0 1px 0 white)
+                    drop-shadow(-0.5px -0.5px 0 white) 
+                    drop-shadow(0.5px -0.5px 0 white) 
+                    drop-shadow(-0.5px 0.5px 0 white) 
+                    drop-shadow(0.5px 0.5px 0 white)
+                  `
+                }}
               />
               <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
                 HUB
