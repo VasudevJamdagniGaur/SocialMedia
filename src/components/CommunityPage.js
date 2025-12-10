@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
-import { Users, MessageCircle, Heart, TrendingUp, User, Sun, Moon, Send, X, Plus, XCircle, Image, Link } from 'lucide-react';
+import { Users, MessageCircle, Heart, TrendingUp, User, Sun, Moon, Send, X, Plus, XCircle, Image, Link, FileText, Layers, Activity, Brain, Sprout, Coffee, Flame } from 'lucide-react';
 import { getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
 import { collection, addDoc, query, orderBy, getDocs, serverTimestamp, doc, setDoc } from 'firebase/firestore';
@@ -488,24 +488,33 @@ export default function CommunityPage() {
             </h2>
             <div className="grid grid-cols-3 gap-4">
               <div className="text-center">
-                <div className={`text-2xl font-bold ${isDarkMode ? 'text-[#8AB4F8]' : 'text-[#87A96B]'}`}>
-                  1.2K
+                <div className="flex items-center justify-center gap-2 mb-1">
+                  <Users className={`w-5 h-5 ${isDarkMode ? 'text-white' : 'text-gray-800'}`} strokeWidth={2} />
+                  <div className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                    1.2K
+                  </div>
                 </div>
                 <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                   Active Members
                 </div>
               </div>
               <div className="text-center">
-                <div className={`text-2xl font-bold ${isDarkMode ? 'text-[#7DD3C0]' : 'text-[#E6B3BA]'}`}>
-                  456
+                <div className="flex items-center justify-center gap-2 mb-1">
+                  <FileText className={`w-5 h-5 ${isDarkMode ? 'text-white' : 'text-gray-800'}`} strokeWidth={2} />
+                  <div className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                    456
+                  </div>
                 </div>
                 <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                   Posts Today
                 </div>
               </div>
               <div className="text-center">
-                <div className={`text-2xl font-bold ${isDarkMode ? 'text-[#FDD663]' : 'text-[#B19CD9]'}`}>
-                  89
+                <div className="flex items-center justify-center gap-2 mb-1">
+                  <Layers className={`w-5 h-5 ${isDarkMode ? 'text-white' : 'text-gray-800'}`} strokeWidth={2} />
+                  <div className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                    89
+                  </div>
                 </div>
                 <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                   Existing Pods
@@ -721,24 +730,35 @@ export default function CommunityPage() {
             }}
           >
             <div className="flex items-center space-x-2 mb-4">
-              <TrendingUp className={`w-5 h-5 ${isDarkMode ? 'text-[#FDD663]' : 'text-[#87A96B]'}`} />
+              <TrendingUp className={`w-5 h-5 ${isDarkMode ? 'text-white' : 'text-gray-800'}`} strokeWidth={2} />
               <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                Hot Tea ☕🔥
+                Hot Tea
               </h2>
+              <Coffee className={`w-4 h-4 ${isDarkMode ? 'text-white' : 'text-gray-800'}`} strokeWidth={2} />
+              <Flame className={`w-4 h-4 ${isDarkMode ? 'text-white' : 'text-gray-800'}`} strokeWidth={2} />
             </div>
             <div className="space-y-2">
-              {['Mindfulness Tips', 'Daily Gratitude', 'Stress Management', 'Self-Care Routines'].map((topic, index) => (
-                <div
-                  key={index}
-                  className={`px-3 py-2 rounded-lg cursor-pointer transition-colors ${
-                    isDarkMode ? 'hover:bg-gray-800/30' : 'hover:bg-gray-50'
-                  }`}
-                >
-                  <span className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                    #{topic}
-                  </span>
-                </div>
-              ))}
+              {[
+                { name: 'Mindfulness Tips', icon: Activity },
+                { name: 'Daily Gratitude', icon: Heart },
+                { name: 'Stress Management', icon: Brain },
+                { name: 'Self-Care Routines', icon: Sprout }
+              ].map((topic, index) => {
+                const IconComponent = topic.icon;
+                return (
+                  <div
+                    key={index}
+                    className={`flex items-center space-x-2 px-3 py-2 rounded-lg cursor-pointer transition-colors ${
+                      isDarkMode ? 'hover:bg-gray-800/30' : 'hover:bg-gray-50'
+                    }`}
+                  >
+                    <IconComponent className={`w-4 h-4 ${isDarkMode ? 'text-white' : 'text-gray-800'}`} strokeWidth={2} />
+                    <span className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                      #{topic.name}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
