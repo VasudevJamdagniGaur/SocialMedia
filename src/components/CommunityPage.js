@@ -388,15 +388,11 @@ export default function CommunityPage() {
         <div className="mb-8">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center space-x-3">
-              <div
-                className="w-12 h-12 rounded-full flex items-center justify-center"
-                style={{
-                  backgroundColor: isDarkMode ? "#8AB4F8" : "#87A96B",
-                  boxShadow: isDarkMode ? "0 4px 16px rgba(138, 180, 248, 0.3)" : "0 4px 12px rgba(134, 169, 107, 0.25)",
-                }}
-              >
-                <Users className="w-6 h-6 text-white" strokeWidth={2} />
-              </div>
+              <img 
+                src="/hub-logo.png" 
+                alt="HUB Logo" 
+                className="w-12 h-12 object-contain"
+              />
               <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
                 HUB
               </h1>
