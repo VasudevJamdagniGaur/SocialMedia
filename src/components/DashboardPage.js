@@ -518,7 +518,7 @@ export default function DashboardPage() {
               isDarkMode ? 'backdrop-blur-md' : 'bg-white'
             }`}
             style={isDarkMode ? {
-              backgroundColor: "rgba(42, 42, 45, 0.6)",
+              backgroundColor: "rgba(38, 38, 38, 0.6)",
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
               border: "1px solid rgba(255, 255, 255, 0.08)",
             } : {
@@ -537,7 +537,7 @@ export default function DashboardPage() {
               isDarkMode ? 'backdrop-blur-md' : 'bg-white'
             }`}
             style={isDarkMode ? {
-              backgroundColor: "rgba(42, 42, 45, 0.6)",
+              backgroundColor: "rgba(38, 38, 38, 0.6)",
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
               border: "1px solid rgba(255, 255, 255, 0.08)",
             } : {
@@ -554,7 +554,7 @@ export default function DashboardPage() {
               isDarkMode ? 'backdrop-blur-md' : 'bg-white'
             }`}
             style={isDarkMode ? {
-              backgroundColor: profilePicture ? "transparent" : "rgba(42, 42, 45, 0.6)",
+              backgroundColor: profilePicture ? "transparent" : "rgba(38, 38, 38, 0.6)",
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
               border: profilePicture ? "none" : "1px solid rgba(255, 255, 255, 0.08)",
             } : {
@@ -578,7 +578,7 @@ export default function DashboardPage() {
             isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
           }`}
           style={isDarkMode ? {
-            backgroundColor: "rgba(42, 42, 45, 0.6)",
+            backgroundColor: "rgba(38, 38, 38, 0.6)",
             boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
             border: "1px solid rgba(255, 255, 255, 0.08)",
           } : {
@@ -624,7 +624,7 @@ export default function DashboardPage() {
             isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
           }`}
           style={isDarkMode ? {
-            backgroundColor: "rgba(42, 42, 45, 0.6)",
+            backgroundColor: "rgba(38, 38, 38, 0.6)",
             boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
             border: "1px solid rgba(255, 255, 255, 0.08)",
           } : {
@@ -649,7 +649,7 @@ export default function DashboardPage() {
               isDarkMode ? 'backdrop-blur-lg' : ''
             }`}
             style={isDarkMode ? {
-              backgroundColor: "rgba(42, 42, 45, 0.6)",
+              backgroundColor: "rgba(38, 38, 38, 0.6)",
               border: "1px solid rgba(255, 255, 255, 0.08)",
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
             } : {
@@ -704,7 +704,7 @@ export default function DashboardPage() {
               isDarkMode ? 'backdrop-blur-lg text-white' : 'text-white'
             }`}
             style={isDarkMode ? {
-              backgroundColor: "rgba(42, 42, 45, 0.8)",
+              backgroundColor: "rgba(38, 38, 38, 0.8)",
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
               border: "1px solid rgba(255, 255, 255, 0.08)",
               color: "#FFFFFF",
@@ -725,7 +725,7 @@ export default function DashboardPage() {
               isDarkMode ? 'backdrop-blur-lg text-white' : 'text-white'
             }`}
             style={isDarkMode ? {
-              backgroundColor: "rgba(42, 42, 45, 0.8)",
+              backgroundColor: "rgba(38, 38, 38, 0.8)",
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
               border: "1px solid rgba(255, 255, 255, 0.08)",
               color: "#FFFFFF",

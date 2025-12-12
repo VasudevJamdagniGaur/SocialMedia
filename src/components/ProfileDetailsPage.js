@@ -161,7 +161,7 @@ const ProfileDetailsPage = () => {
 
         /* Mobile input styling to match app UI */
         .mobile-input {
-          background-color: rgba(42, 42, 45, 0.6);
+          background-color: rgba(38, 38, 38, 0.6);
           color: #FFFFFF;
           border: 1px solid rgba(255, 255, 255, 0.08);
           box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
@@ -301,7 +301,7 @@ const ProfileDetailsPage = () => {
                       style={{
                         backgroundColor: gender === option.value
                           ? "rgba(129, 201, 149, 0.2)"
-                          : "rgba(42, 42, 45, 0.6)",
+                          : "rgba(38, 38, 38, 0.6)",
                       }}
                     >
                       {option.label}
@@ -610,7 +610,7 @@ const BirthdayCalendar = ({ selectedDate, onDateSelect, onClose }) => {
         <div
           className="relative rounded-2xl p-6 max-w-sm w-full backdrop-blur-lg animate-in zoom-in-95 duration-300"
           style={{
-            backgroundColor: "rgba(42, 42, 45, 0.95)",
+            backgroundColor: "rgba(38, 38, 38, 0.95)",
             boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)",
             border: "1px solid rgba(255, 255, 255, 0.08)",
             maxHeight: '80vh',
@@ -713,7 +713,7 @@ const BirthdayCalendar = ({ selectedDate, onDateSelect, onClose }) => {
         <div
           className="relative rounded-2xl p-6 max-w-sm w-full backdrop-blur-lg animate-in zoom-in-95 duration-300"
           style={{
-            backgroundColor: "rgba(42, 42, 45, 0.95)",
+            backgroundColor: "rgba(38, 38, 38, 0.95)",
             boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)",
             border: "1px solid rgba(255, 255, 255, 0.08)",
             maxHeight: '80vh',
@@ -816,7 +816,7 @@ const BirthdayCalendar = ({ selectedDate, onDateSelect, onClose }) => {
       <div
         className="relative rounded-2xl p-6 max-w-sm w-full backdrop-blur-lg animate-in zoom-in-95 duration-300"
         style={{
-          backgroundColor: "rgba(42, 42, 45, 0.95)",
+          backgroundColor: "rgba(38, 38, 38, 0.95)",
           boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)",
           border: "1px solid rgba(255, 255, 255, 0.08)",
         }}

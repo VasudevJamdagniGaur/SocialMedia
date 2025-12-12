@@ -92,7 +92,7 @@ export default function WelcomePage() {
           <div
             className="w-20 h-20 rounded-full flex items-center justify-center relative overflow-hidden backdrop-blur-lg"
             style={{
-              backgroundColor: "rgba(42, 42, 45, 0.6)",
+              backgroundColor: "rgba(38, 38, 38, 0.6)",
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
               border: "1px solid rgba(255, 255, 255, 0.08)",
             }}
@@ -107,7 +107,7 @@ export default function WelcomePage() {
           <div
             className="rounded-2xl p-6 border backdrop-blur-lg relative overflow-hidden hover:shadow-md transition-all duration-300"
             style={{
-              backgroundColor: "rgba(42, 42, 45, 0.6)",
+              backgroundColor: "rgba(38, 38, 38, 0.6)",
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
               border: "1px solid rgba(255, 255, 255, 0.08)",
             }}
@@ -173,7 +173,7 @@ export default function WelcomePage() {
           <div
             className="rounded-2xl p-6 border backdrop-blur-lg relative overflow-hidden hover:shadow-md transition-all duration-300"
             style={{
-              backgroundColor: "rgba(42, 42, 45, 0.6)",
+              backgroundColor: "rgba(38, 38, 38, 0.6)",
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
               border: "1px solid rgba(255, 255, 255, 0.08)",
             }}
@@ -198,7 +198,7 @@ export default function WelcomePage() {
             onClick={handleGo}
             className="px-12 py-3 font-semibold rounded-full hover:shadow-lg transition-all duration-300 hover:scale-105 backdrop-blur-lg relative overflow-hidden"
             style={{
-              backgroundColor: "rgba(42, 42, 45, 0.8)",
+              backgroundColor: "rgba(38, 38, 38, 0.8)",
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
               color: "#FFFFFF",
               border: "1px solid rgba(255, 255, 255, 0.08)",

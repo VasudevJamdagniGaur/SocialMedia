@@ -157,7 +157,7 @@ export default function PodGroupChatPage() {
           isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
         }`}
         style={isDarkMode ? {
-          backgroundColor: "rgba(42, 42, 45, 0.95)",
+          backgroundColor: "rgba(38, 38, 38, 0.95)",
           boxShadow: "0 2px 8px rgba(0, 0, 0, 0.2)",
           borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
         } : {
@@ -273,7 +273,7 @@ export default function PodGroupChatPage() {
           isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
         }`}
         style={isDarkMode ? {
-          backgroundColor: "rgba(42, 42, 45, 0.95)",
+          backgroundColor: "rgba(38, 38, 38, 0.95)",
           boxShadow: "0 -2px 8px rgba(0, 0, 0, 0.2)",
           borderTop: "1px solid rgba(255, 255, 255, 0.08)",
         } : {

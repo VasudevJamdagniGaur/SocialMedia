@@ -213,7 +213,7 @@ export default function SplashScreen() {
         <div
           className="w-24 h-24 rounded-full flex items-center justify-center relative overflow-hidden backdrop-blur-lg"
           style={{
-            backgroundColor: "rgba(42, 42, 45, 0.6)",
+            backgroundColor: "rgba(38, 38, 38, 0.6)",
             boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
             border: "1px solid rgba(255, 255, 255, 0.08)",
           }}
