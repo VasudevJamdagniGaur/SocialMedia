@@ -323,7 +323,7 @@ export default function PodPage() {
                 <Users className="w-6 h-6 text-white" strokeWidth={2} />
               </div>
               <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                Pod
+                Sphere
               </h1>
             </div>
             <div className="flex space-x-2">
@@ -371,11 +371,11 @@ export default function PodPage() {
             </div>
           </div>
           <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-            Your personal wellness pod
+            Your personal wellness sphere
           </p>
         </div>
 
-        {/* Pod Content */}
+        {/* Sphere Content */}
         <div className="space-y-4">
           {/* Welcome Card */}
           <div
@@ -391,7 +391,7 @@ export default function PodPage() {
             }}
           >
             <h2 className={`text-lg font-semibold mb-3 ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-              Welcome to Your Pod
+              Welcome to Your Sphere
             </h2>
             <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
               Your group of 5 people who match your vibe, interests, mental wavelength, and personality. A space to talk, laugh, and gossip about IIT campus, our professors, life, and everything in between. with an anonymous identity
@@ -417,7 +417,7 @@ export default function PodPage() {
               <div className="flex items-center space-x-2">
                 <Users className={`w-5 h-5 ${isDarkMode ? 'text-[#8AB4F8]' : 'text-[#87A96B]'}`} />
                 <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                  Pod Group Chat
+                  Sphere Group Chat
                 </h2>
               </div>
             </div>
@@ -503,7 +503,7 @@ export default function PodPage() {
               borderTop: "3px solid #E6B3BA30",
             }}
           >
-            {/* Main Heading: Pod's Reflection */}
+            {/* Main Heading: Sphere's Reflection */}
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center space-x-3">
                 <div
@@ -515,7 +515,7 @@ export default function PodPage() {
                 >
                   <Sparkles className="w-4 h-4" style={{ color: isDarkMode ? "#000" : "#fff" }} strokeWidth={2} />
                 </div>
-                <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>Pod's Reflection</h2>
+                <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>Sphere's Reflection</h2>
               </div>
               <ChevronRight className={`w-5 h-5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
             </div>
@@ -559,7 +559,7 @@ export default function PodPage() {
                   <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
                   <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
                 </div>
-                <p className={`text-sm text-center italic ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Generating pod reflection...</p>
+                <p className={`text-sm text-center italic ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Generating sphere reflection...</p>
               </div>
             ) : podReflection ? (
               <div>
@@ -567,7 +567,7 @@ export default function PodPage() {
                   {podReflection}
                 </p>
                 <p className={`text-xs mt-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  Tap to view all pods →
+                  Tap to view all spheres →
                 </p>
               </div>
             ) : (
