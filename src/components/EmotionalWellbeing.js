@@ -11,7 +11,6 @@ import firestoreService from '../services/firestoreService';
 import { getDateId } from '../utils/dateUtils';
 import { 
   Brain, 
-  ArrowLeft, 
   Heart, 
   Star, 
   Smile,
@@ -1885,10 +1884,6 @@ export default function EmotionalWellbeing() {
     } finally {
       setPatternLoading(false);
     }
-  };
-
-  const handleBack = () => {
-    navigate('/dashboard');
   };
 
   // Note: Android hardware back button is handled globally in App.js
@@ -3877,22 +3872,6 @@ Return in this JSON format:
         }}
       >
         <div className="flex items-center space-x-2">
-          <button
-            onClick={handleBack}
-            className={`w-10 h-10 rounded-full flex items-center justify-center hover:opacity-80 transition-opacity touch-manipulation ${
-              isDarkMode ? 'backdrop-blur-md' : 'bg-white'
-            }`}
-            style={isDarkMode ? {
-              backgroundColor: "#262626",
-              boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
-            } : {
-              boxShadow: "0 2px 8px rgba(134, 169, 107, 0.15)",
-            }}
-          >
-            <ArrowLeft className="w-5 h-5" style={{ color: isDarkMode ? "#8AB4F8" : "#87A96B" }} strokeWidth={1.5} />
-          </button>
-
         </div>
 
         <div className="flex items-center space-x-3 flex-1 justify-center mx-4">
