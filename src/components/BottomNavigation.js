@@ -96,7 +96,7 @@ export default function BottomNavigation() {
           <img
             src="/crew-icon.png"
             alt="Crew"
-            className="w-14 h-14 object-contain"
+            className="w-16 h-16 object-contain"
             style={{
               opacity: isPodActive ? 1 : (isDarkMode ? 0.7 : 0.6),
               filter: isPodActive 
