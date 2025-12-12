@@ -118,7 +118,7 @@ export default function BottomNavigation() {
           <img
             src="/hub-icon.png"
             alt="HUB"
-            className="w-14 h-14 object-contain"
+            className="w-12 h-12 object-contain"
             style={{
               opacity: isCommunityActive ? 1 : (isDarkMode ? 0.7 : 0.6),
               filter: isCommunityActive 
