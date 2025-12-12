@@ -100,11 +100,11 @@ export default function BottomNavigation() {
             style={{
               opacity: isPodActive ? 1 : (isDarkMode ? 0.7 : 0.6),
               filter: isPodActive 
-                ? 'brightness(0) invert(1) drop-shadow(0 0 0.5px rgba(255, 255, 255, 1)) drop-shadow(0 0 0.5px rgba(255, 255, 255, 1)) drop-shadow(0 0 0.5px rgba(255, 255, 255, 1)) drop-shadow(0 0 1px rgba(255, 255, 255, 0.8)) drop-shadow(0 0 1px rgba(255, 255, 255, 0.8))'
-                : 'drop-shadow(0 0 0.5px rgba(255, 255, 255, 0.6)) drop-shadow(0 0 0.5px rgba(255, 255, 255, 0.6)) drop-shadow(0 0 0.5px rgba(255, 255, 255, 0.6)) drop-shadow(0 0 1px rgba(255, 255, 255, 0.4))',
+                ? 'brightness(0) invert(1) drop-shadow(0 0.5px 0 rgba(255, 255, 255, 1)) drop-shadow(0 -0.5px 0 rgba(255, 255, 255, 1)) drop-shadow(0.5px 0 0 rgba(255, 255, 255, 1)) drop-shadow(-0.5px 0 0 rgba(255, 255, 255, 1)) drop-shadow(0.5px 0.5px 0 rgba(255, 255, 255, 1)) drop-shadow(-0.5px -0.5px 0 rgba(255, 255, 255, 1)) drop-shadow(0.5px -0.5px 0 rgba(255, 255, 255, 1)) drop-shadow(-0.5px 0.5px 0 rgba(255, 255, 255, 1))'
+                : 'drop-shadow(0 0.5px 0 rgba(255, 255, 255, 0.6)) drop-shadow(0 -0.5px 0 rgba(255, 255, 255, 0.6)) drop-shadow(0.5px 0 0 rgba(255, 255, 255, 0.6)) drop-shadow(-0.5px 0 0 rgba(255, 255, 255, 0.6)) drop-shadow(0.5px 0.5px 0 rgba(255, 255, 255, 0.6)) drop-shadow(-0.5px -0.5px 0 rgba(255, 255, 255, 0.6))',
               WebkitFilter: isPodActive 
-                ? 'brightness(0) invert(1) drop-shadow(0 0 0.5px rgba(255, 255, 255, 1)) drop-shadow(0 0 0.5px rgba(255, 255, 255, 1)) drop-shadow(0 0 0.5px rgba(255, 255, 255, 1)) drop-shadow(0 0 1px rgba(255, 255, 255, 0.8)) drop-shadow(0 0 1px rgba(255, 255, 255, 0.8))'
-                : 'drop-shadow(0 0 0.5px rgba(255, 255, 255, 0.6)) drop-shadow(0 0 0.5px rgba(255, 255, 255, 0.6)) drop-shadow(0 0 0.5px rgba(255, 255, 255, 0.6)) drop-shadow(0 0 1px rgba(255, 255, 255, 0.4))',
+                ? 'brightness(0) invert(1) drop-shadow(0 0.5px 0 rgba(255, 255, 255, 1)) drop-shadow(0 -0.5px 0 rgba(255, 255, 255, 1)) drop-shadow(0.5px 0 0 rgba(255, 255, 255, 1)) drop-shadow(-0.5px 0 0 rgba(255, 255, 255, 1)) drop-shadow(0.5px 0.5px 0 rgba(255, 255, 255, 1)) drop-shadow(-0.5px -0.5px 0 rgba(255, 255, 255, 1)) drop-shadow(0.5px -0.5px 0 rgba(255, 255, 255, 1)) drop-shadow(-0.5px 0.5px 0 rgba(255, 255, 255, 1))'
+                : 'drop-shadow(0 0.5px 0 rgba(255, 255, 255, 0.6)) drop-shadow(0 -0.5px 0 rgba(255, 255, 255, 0.6)) drop-shadow(0.5px 0 0 rgba(255, 255, 255, 0.6)) drop-shadow(-0.5px 0 0 rgba(255, 255, 255, 0.6)) drop-shadow(0.5px 0.5px 0 rgba(255, 255, 255, 0.6)) drop-shadow(-0.5px -0.5px 0 rgba(255, 255, 255, 0.6))',
               fontWeight: 'bold'
             }}
           />
@@ -121,11 +121,11 @@ export default function BottomNavigation() {
             style={{
               opacity: isCommunityActive ? 1 : (isDarkMode ? 0.7 : 0.6),
               filter: isCommunityActive 
-                ? 'brightness(0) invert(1) drop-shadow(0 0 0.5px rgba(255, 255, 255, 1)) drop-shadow(0 0 0.5px rgba(255, 255, 255, 1)) drop-shadow(0 0 0.5px rgba(255, 255, 255, 1)) drop-shadow(0 0 1px rgba(255, 255, 255, 0.8)) drop-shadow(0 0 1px rgba(255, 255, 255, 0.8))'
-                : 'drop-shadow(0 0 0.5px rgba(255, 255, 255, 0.6)) drop-shadow(0 0 0.5px rgba(255, 255, 255, 0.6)) drop-shadow(0 0 0.5px rgba(255, 255, 255, 0.6)) drop-shadow(0 0 1px rgba(255, 255, 255, 0.4))',
+                ? 'brightness(0) invert(1) drop-shadow(0 0.5px 0 rgba(255, 255, 255, 1)) drop-shadow(0 -0.5px 0 rgba(255, 255, 255, 1)) drop-shadow(0.5px 0 0 rgba(255, 255, 255, 1)) drop-shadow(-0.5px 0 0 rgba(255, 255, 255, 1)) drop-shadow(0.5px 0.5px 0 rgba(255, 255, 255, 1)) drop-shadow(-0.5px -0.5px 0 rgba(255, 255, 255, 1)) drop-shadow(0.5px -0.5px 0 rgba(255, 255, 255, 1)) drop-shadow(-0.5px 0.5px 0 rgba(255, 255, 255, 1))'
+                : 'drop-shadow(0 0.5px 0 rgba(255, 255, 255, 0.6)) drop-shadow(0 -0.5px 0 rgba(255, 255, 255, 0.6)) drop-shadow(0.5px 0 0 rgba(255, 255, 255, 0.6)) drop-shadow(-0.5px 0 0 rgba(255, 255, 255, 0.6)) drop-shadow(0.5px 0.5px 0 rgba(255, 255, 255, 0.6)) drop-shadow(-0.5px -0.5px 0 rgba(255, 255, 255, 0.6))',
               WebkitFilter: isCommunityActive 
-                ? 'brightness(0) invert(1) drop-shadow(0 0 0.5px rgba(255, 255, 255, 1)) drop-shadow(0 0 0.5px rgba(255, 255, 255, 1)) drop-shadow(0 0 0.5px rgba(255, 255, 255, 1)) drop-shadow(0 0 1px rgba(255, 255, 255, 0.8)) drop-shadow(0 0 1px rgba(255, 255, 255, 0.8))'
-                : 'drop-shadow(0 0 0.5px rgba(255, 255, 255, 0.6)) drop-shadow(0 0 0.5px rgba(255, 255, 255, 0.6)) drop-shadow(0 0 0.5px rgba(255, 255, 255, 0.6)) drop-shadow(0 0 1px rgba(255, 255, 255, 0.4))',
+                ? 'brightness(0) invert(1) drop-shadow(0 0.5px 0 rgba(255, 255, 255, 1)) drop-shadow(0 -0.5px 0 rgba(255, 255, 255, 1)) drop-shadow(0.5px 0 0 rgba(255, 255, 255, 1)) drop-shadow(-0.5px 0 0 rgba(255, 255, 255, 1)) drop-shadow(0.5px 0.5px 0 rgba(255, 255, 255, 1)) drop-shadow(-0.5px -0.5px 0 rgba(255, 255, 255, 1)) drop-shadow(0.5px -0.5px 0 rgba(255, 255, 255, 1)) drop-shadow(-0.5px 0.5px 0 rgba(255, 255, 255, 1))'
+                : 'drop-shadow(0 0.5px 0 rgba(255, 255, 255, 0.6)) drop-shadow(0 -0.5px 0 rgba(255, 255, 255, 0.6)) drop-shadow(0.5px 0 0 rgba(255, 255, 255, 0.6)) drop-shadow(-0.5px 0 0 rgba(255, 255, 255, 0.6)) drop-shadow(0.5px 0.5px 0 rgba(255, 255, 255, 0.6)) drop-shadow(-0.5px -0.5px 0 rgba(255, 255, 255, 0.6))',
               fontWeight: 'bold'
             }}
           />
