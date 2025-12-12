@@ -52,7 +52,7 @@ export default function ForgotPasswordPage() {
     <div
       className="min-h-screen flex flex-col items-center justify-center px-6 py-12 relative overflow-hidden slide-up"
       style={{
-        background: "#202124",
+        background: "#131313",
       }}
     >
       <div className="absolute inset-0 overflow-hidden">

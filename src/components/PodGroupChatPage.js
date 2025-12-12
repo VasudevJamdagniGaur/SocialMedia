@@ -147,7 +147,7 @@ export default function PodGroupChatPage() {
       className="min-h-screen flex flex-col relative overflow-hidden"
       style={{
         background: isDarkMode
-          ? "#202124"
+          ? "#131313"
           : "#FAFAF8"
       }}
     >

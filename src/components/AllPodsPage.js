@@ -180,7 +180,7 @@ export default function AllPodsPage() {
       <div
         className="min-h-screen px-6 py-8 pb-20 relative overflow-hidden slide-up"
         style={{
-          background: isDarkMode ? "#202124" : "#FAFAF8"
+          background: isDarkMode ? "#131313" : "#FAFAF8"
         }}
       >
         <div className="relative z-10 max-w-sm mx-auto">
@@ -340,7 +340,7 @@ export default function AllPodsPage() {
     <div
       className="min-h-screen px-6 py-8 pb-20 relative overflow-hidden slide-up"
       style={{
-        background: isDarkMode ? "#202124" : "#FAFAF8"
+        background: isDarkMode ? "#131313" : "#FAFAF8"
       }}
     >
       <div className="relative z-10 max-w-sm mx-auto">

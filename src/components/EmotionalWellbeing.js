@@ -3830,7 +3830,7 @@ Return in this JSON format:
           className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden"
           style={{
             background: isDarkMode
-              ? "#202124"
+              ? "#131313"
               : "#FAFAF8",
           }}
         >
@@ -3862,7 +3862,7 @@ Return in this JSON format:
         className="min-h-screen flex flex-col relative overflow-hidden pb-20"
         style={{
           background: isDarkMode
-            ? "#202124"
+            ? "#131313"
             : "#FAFAF8",
         }}
       >
@@ -3872,7 +3872,7 @@ Return in this JSON format:
       }`}
         style={{
           backgroundColor: isDarkMode
-            ? "rgba(32, 33, 36, 0.95)"
+            ? "rgba(19, 19, 19, 0.95)"
             : "rgba(250, 250, 248, 0.95)",
         }}
       >

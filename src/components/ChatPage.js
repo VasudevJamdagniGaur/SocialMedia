@@ -1156,7 +1156,7 @@ export default function ChatPage() {
       className="min-h-screen flex flex-col relative overflow-hidden"
       style={{
         background: isDarkMode
-          ? "#202124"
+          ? "#131313"
           : "#FAFAF8",
       }}
     >
@@ -1166,7 +1166,7 @@ export default function ChatPage() {
       }`}
         style={{
           backgroundColor: isDarkMode
-            ? "rgba(32, 33, 36, 0.9)"
+            ? "rgba(19, 19, 19, 0.9)"
             : "rgba(250, 250, 248, 0.9)",
         }}
       >

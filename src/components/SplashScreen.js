@@ -115,7 +115,7 @@ export default function SplashScreen() {
     <div
       className="min-h-screen flex items-center justify-center relative overflow-hidden"
       style={{
-        background: "#202124",
+        background: "#131313",
       }}
     >
       <div className="absolute inset-0 overflow-hidden">
