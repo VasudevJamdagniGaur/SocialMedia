@@ -394,7 +394,9 @@ export default function CommunityPage() {
                 className="object-contain"
                 style={{
                   width: '64px',
-                  height: '64px'
+                  height: '64px',
+                  filter: 'brightness(0) invert(1)',
+                  WebkitFilter: 'brightness(0) invert(1)'
                 }}
               />
               <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
