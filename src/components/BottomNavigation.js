@@ -100,12 +100,13 @@ export default function BottomNavigation() {
             style={{
               opacity: isPodActive ? 1 : (isDarkMode ? 0.7 : 0.6),
               filter: isPodActive 
-                ? 'brightness(0) invert(1) drop-shadow(0 0.5px 0 rgba(255, 255, 255, 1)) drop-shadow(0 -0.5px 0 rgba(255, 255, 255, 1)) drop-shadow(0.5px 0 0 rgba(255, 255, 255, 1)) drop-shadow(-0.5px 0 0 rgba(255, 255, 255, 1)) drop-shadow(0.5px 0.5px 0 rgba(255, 255, 255, 1)) drop-shadow(-0.5px -0.5px 0 rgba(255, 255, 255, 1)) drop-shadow(0.5px -0.5px 0 rgba(255, 255, 255, 1)) drop-shadow(-0.5px 0.5px 0 rgba(255, 255, 255, 1))'
-                : 'drop-shadow(0 0.5px 0 rgba(255, 255, 255, 0.6)) drop-shadow(0 -0.5px 0 rgba(255, 255, 255, 0.6)) drop-shadow(0.5px 0 0 rgba(255, 255, 255, 0.6)) drop-shadow(-0.5px 0 0 rgba(255, 255, 255, 0.6)) drop-shadow(0.5px 0.5px 0 rgba(255, 255, 255, 0.6)) drop-shadow(-0.5px -0.5px 0 rgba(255, 255, 255, 0.6))',
+                ? 'brightness(0) invert(1)'
+                : 'none',
               WebkitFilter: isPodActive 
-                ? 'brightness(0) invert(1) drop-shadow(0 0.5px 0 rgba(255, 255, 255, 1)) drop-shadow(0 -0.5px 0 rgba(255, 255, 255, 1)) drop-shadow(0.5px 0 0 rgba(255, 255, 255, 1)) drop-shadow(-0.5px 0 0 rgba(255, 255, 255, 1)) drop-shadow(0.5px 0.5px 0 rgba(255, 255, 255, 1)) drop-shadow(-0.5px -0.5px 0 rgba(255, 255, 255, 1)) drop-shadow(0.5px -0.5px 0 rgba(255, 255, 255, 1)) drop-shadow(-0.5px 0.5px 0 rgba(255, 255, 255, 1))'
-                : 'drop-shadow(0 0.5px 0 rgba(255, 255, 255, 0.6)) drop-shadow(0 -0.5px 0 rgba(255, 255, 255, 0.6)) drop-shadow(0.5px 0 0 rgba(255, 255, 255, 0.6)) drop-shadow(-0.5px 0 0 rgba(255, 255, 255, 0.6)) drop-shadow(0.5px 0.5px 0 rgba(255, 255, 255, 0.6)) drop-shadow(-0.5px -0.5px 0 rgba(255, 255, 255, 0.6))',
-              fontWeight: 'bold'
+                ? 'brightness(0) invert(1)'
+                : 'none',
+              imageRendering: 'crisp-edges',
+              WebkitImageRendering: 'crisp-edges'
             }}
           />
         </button>
