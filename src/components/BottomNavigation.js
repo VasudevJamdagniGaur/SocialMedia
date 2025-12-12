@@ -96,7 +96,7 @@ export default function BottomNavigation() {
           <img
             src="/crew-icon.png"
             alt="Crew"
-            className="w-7 h-7 object-contain"
+            className="w-9 h-9 object-contain"
             style={{
               opacity: isPodActive ? 1 : (isDarkMode ? 0.6 : 0.5),
               filter: isPodActive 
@@ -116,7 +116,7 @@ export default function BottomNavigation() {
           <img
             src="/hub-icon.png"
             alt="HUB"
-            className="w-7 h-7 object-contain"
+            className="w-9 h-9 object-contain"
             style={{
               opacity: isCommunityActive ? 1 : (isDarkMode ? 0.6 : 0.5),
               filter: isCommunityActive 
