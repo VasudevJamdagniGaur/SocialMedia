@@ -98,13 +98,14 @@ export default function BottomNavigation() {
             alt="Crew"
             className="w-9 h-9 object-contain"
             style={{
-              opacity: isPodActive ? 1 : (isDarkMode ? 0.6 : 0.5),
+              opacity: isPodActive ? 1 : (isDarkMode ? 0.7 : 0.6),
               filter: isPodActive 
-                ? 'brightness(0) invert(1)'
-                : 'none',
+                ? 'brightness(0) invert(1) drop-shadow(0 0 1px rgba(255, 255, 255, 0.5))'
+                : 'drop-shadow(0 0 0.5px rgba(255, 255, 255, 0.3))',
               WebkitFilter: isPodActive 
-                ? 'brightness(0) invert(1)'
-                : 'none'
+                ? 'brightness(0) invert(1) drop-shadow(0 0 1px rgba(255, 255, 255, 0.5))'
+                : 'drop-shadow(0 0 0.5px rgba(255, 255, 255, 0.3))',
+              fontWeight: 'bold'
             }}
           />
         </button>
@@ -118,13 +119,14 @@ export default function BottomNavigation() {
             alt="HUB"
             className="w-9 h-9 object-contain"
             style={{
-              opacity: isCommunityActive ? 1 : (isDarkMode ? 0.6 : 0.5),
+              opacity: isCommunityActive ? 1 : (isDarkMode ? 0.7 : 0.6),
               filter: isCommunityActive 
-                ? 'brightness(0) invert(1)'
-                : 'none',
+                ? 'brightness(0) invert(1) drop-shadow(0 0 1px rgba(255, 255, 255, 0.5))'
+                : 'drop-shadow(0 0 0.5px rgba(255, 255, 255, 0.3))',
               WebkitFilter: isCommunityActive 
-                ? 'brightness(0) invert(1)'
-                : 'none'
+                ? 'brightness(0) invert(1) drop-shadow(0 0 1px rgba(255, 255, 255, 0.5))'
+                : 'drop-shadow(0 0 0.5px rgba(255, 255, 255, 0.3))',
+              fontWeight: 'bold'
             }}
           />
         </button>
