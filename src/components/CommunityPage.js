@@ -394,19 +394,7 @@ export default function CommunityPage() {
                 className="object-contain"
                 style={{
                   width: '64px',
-                  height: '64px',
-                  filter: `
-                    drop-shadow(-0.3px -0.3px 0 white) 
-                    drop-shadow(0.3px -0.3px 0 white) 
-                    drop-shadow(-0.3px 0.3px 0 white) 
-                    drop-shadow(0.3px 0.3px 0 white)
-                  `,
-                  WebkitFilter: `
-                    drop-shadow(-0.3px -0.3px 0 white) 
-                    drop-shadow(0.3px -0.3px 0 white) 
-                    drop-shadow(-0.3px 0.3px 0 white) 
-                    drop-shadow(0.3px 0.3px 0 white)
-                  `
+                  height: '64px'
                 }}
               />
               <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
