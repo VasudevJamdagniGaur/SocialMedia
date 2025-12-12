@@ -2825,7 +2825,7 @@ Return in this JSON format:
               isDarkMode ? 'border border-gray-600/20' : 'bg-white/40 border border-gray-200/30'
             }`}
             style={isDarkMode ? {
-              backgroundColor: "rgba(38, 38, 38, 0.6)",
+              backgroundColor: "#262626",
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
             } : {
               backgroundColor: "rgba(255, 255, 255, 0.6)",
@@ -2896,7 +2896,7 @@ Return in this JSON format:
                 <div
                   className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3"
                   style={isDarkMode ? {
-                    backgroundColor: "rgba(38, 38, 38, 0.6)",
+                    backgroundColor: "#262626",
                     border: "1px solid rgba(255, 255, 255, 0.08)",
                   } : {
                     backgroundColor: "rgba(255, 255, 255, 0.6)",
@@ -3029,7 +3029,7 @@ Return in this JSON format:
                 isDarkMode ? 'border border-gray-600/20' : 'bg-white/40 border border-gray-200/30'
               }`}
               style={isDarkMode ? {
-                backgroundColor: "rgba(38, 38, 38, 0.6)",
+                backgroundColor: "#262626",
                 boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
               } : {
                 backgroundColor: "rgba(255, 255, 255, 0.6)",
@@ -3100,7 +3100,7 @@ Return in this JSON format:
                 <div
                   className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3"
                   style={isDarkMode ? {
-                    backgroundColor: "rgba(38, 38, 38, 0.6)",
+                    backgroundColor: "#262626",
                     border: "1px solid rgba(255, 255, 255, 0.08)",
                   } : {
                     backgroundColor: "rgba(255, 255, 255, 0.6)",
@@ -3209,7 +3209,7 @@ Return in this JSON format:
               isDarkMode ? 'border border-gray-600/20' : 'bg-white/40 border border-gray-200/30'
             }`}
             style={isDarkMode ? {
-              backgroundColor: "rgba(38, 38, 38, 0.6)",
+              backgroundColor: "#262626",
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
             } : {
               backgroundColor: "rgba(255, 255, 255, 0.6)",
@@ -3220,7 +3220,7 @@ Return in this JSON format:
               <div
                 className="w-10 h-10 rounded-full flex items-center justify-center"
                 style={isDarkMode ? {
-                  backgroundColor: "rgba(38, 38, 38, 0.6)",
+                  backgroundColor: "#262626",
                   border: "1px solid rgba(255, 255, 255, 0.08)",
                 } : {
                   backgroundColor: "rgba(255, 255, 255, 0.6)",
@@ -3244,7 +3244,7 @@ Return in this JSON format:
             <div
               className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3"
               style={isDarkMode ? {
-                backgroundColor: "rgba(38, 38, 38, 0.6)",
+                backgroundColor: "#262626",
                 border: "1px solid rgba(255, 255, 255, 0.08)",
               } : {
                 backgroundColor: "rgba(255, 255, 255, 0.6)",
@@ -3357,7 +3357,7 @@ Return in this JSON format:
               isDarkMode ? 'border border-gray-600/20' : 'bg-white/40 border border-gray-200/30'
             }`}
             style={isDarkMode ? {
-              backgroundColor: "rgba(38, 38, 38, 0.6)",
+              backgroundColor: "#262626",
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
             } : {
               backgroundColor: "rgba(255, 255, 255, 0.6)",
@@ -3368,7 +3368,7 @@ Return in this JSON format:
               <div
                 className="w-10 h-10 rounded-full flex items-center justify-center"
                 style={isDarkMode ? {
-                  backgroundColor: "rgba(38, 38, 38, 0.6)",
+                  backgroundColor: "#262626",
                   border: "1px solid rgba(255, 255, 255, 0.08)",
                 } : {
                   backgroundColor: "rgba(255, 255, 255, 0.6)",
@@ -3387,7 +3387,7 @@ Return in this JSON format:
             <div
               className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3"
               style={isDarkMode ? {
-                backgroundColor: "rgba(38, 38, 38, 0.6)",
+                backgroundColor: "#262626",
                 border: "1px solid rgba(255, 255, 255, 0.08)",
               } : {
                 backgroundColor: "rgba(255, 255, 255, 0.6)",
@@ -3575,7 +3575,7 @@ Return in this JSON format:
               isDarkMode ? 'border border-gray-600/20' : 'bg-white/40 border border-gray-200/30'
             }`}
             style={isDarkMode ? {
-              backgroundColor: "rgba(38, 38, 38, 0.6)",
+              backgroundColor: "#262626",
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
             } : {
               backgroundColor: "rgba(255, 255, 255, 0.6)",
@@ -3586,7 +3586,7 @@ Return in this JSON format:
               <div
                 className="w-10 h-10 rounded-full flex items-center justify-center"
                 style={isDarkMode ? {
-                  backgroundColor: "rgba(38, 38, 38, 0.6)",
+                  backgroundColor: "#262626",
                   border: "1px solid rgba(255, 255, 255, 0.08)",
                 } : {
                   backgroundColor: "rgba(255, 255, 255, 0.6)",
@@ -3605,7 +3605,7 @@ Return in this JSON format:
             <div
               className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3"
               style={isDarkMode ? {
-                backgroundColor: "rgba(38, 38, 38, 0.6)",
+                backgroundColor: "#262626",
                 border: "1px solid rgba(255, 255, 255, 0.08)",
               } : {
                 backgroundColor: "rgba(255, 255, 255, 0.6)",
@@ -3670,7 +3670,7 @@ Return in this JSON format:
                     <div
                       className="w-8 h-8 rounded-full flex items-center justify-center animate-pulse"
                       style={isDarkMode ? {
-                        backgroundColor: "rgba(38, 38, 38, 0.6)",
+                        backgroundColor: "#262626",
                         border: "1px solid rgba(255, 255, 255, 0.08)",
                       } : {
                         backgroundColor: "rgba(255, 255, 255, 0.6)",
@@ -3838,7 +3838,7 @@ Return in this JSON format:
             <div
               className="w-16 h-16 rounded-full flex items-center justify-center animate-pulse"
               style={isDarkMode ? {
-                backgroundColor: "rgba(38, 38, 38, 0.6)",
+                backgroundColor: "#262626",
                 border: "1px solid rgba(255, 255, 255, 0.08)",
               } : {
                 backgroundColor: "rgba(255, 255, 255, 0.6)",
@@ -3883,7 +3883,7 @@ Return in this JSON format:
               isDarkMode ? 'backdrop-blur-md' : 'bg-white'
             }`}
             style={isDarkMode ? {
-              backgroundColor: "rgba(38, 38, 38, 0.6)",
+              backgroundColor: "#262626",
               boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
               border: "1px solid rgba(255, 255, 255, 0.08)",
             } : {
@@ -3901,7 +3901,7 @@ Return in this JSON format:
               isDarkMode ? 'backdrop-blur-md' : 'bg-white'
             }`}
             style={isDarkMode ? {
-              backgroundColor: "rgba(38, 38, 38, 0.6)",
+              backgroundColor: "#262626",
               boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
               border: "1px solid rgba(255, 255, 255, 0.08)",
             } : {
@@ -3925,7 +3925,7 @@ Return in this JSON format:
                   : 'text-white shadow-lg hover:shadow-xl transform hover:scale-105'
               }`}
               style={isDarkMode ? {
-                backgroundColor: isUpdating ? "" : "rgba(38, 38, 38, 0.8)",
+                backgroundColor: isUpdating ? "" : "#262626",
                 border: isUpdating ? "" : "1px solid rgba(255, 255, 255, 0.08)",
               } : {
                 backgroundColor: isUpdating ? "" : "rgba(134, 169, 107, 0.95)",
@@ -4073,10 +4073,10 @@ Return in this JSON format:
                 onClick={() => setShowDetailsModal(false)}
                 className="px-6 py-2 text-white rounded-full hover:opacity-90 transition-opacity"
                 style={isDarkMode ? {
-                  backgroundColor: "rgba(38, 38, 38, 0.8)",
+                  backgroundColor: "#262626",
                   border: "1px solid rgba(255, 255, 255, 0.08)",
                 } : {
-                  backgroundColor: "rgba(38, 38, 38, 0.8)",
+                  backgroundColor: "#262626",
                   border: "1px solid rgba(0, 0, 0, 0.08)",
                 }}
               >
@@ -4143,10 +4143,10 @@ Return in this JSON format:
                 onClick={() => setSelectedGuidanceTip(null)}
                 className="px-6 py-2 text-white rounded-full hover:opacity-90 transition-opacity"
                 style={isDarkMode ? {
-                  backgroundColor: "rgba(38, 38, 38, 0.8)",
+                  backgroundColor: "#262626",
                   border: "1px solid rgba(255, 255, 255, 0.08)",
                 } : {
-                  backgroundColor: "rgba(38, 38, 38, 0.8)",
+                  backgroundColor: "#262626",
                   border: "1px solid rgba(0, 0, 0, 0.08)",
                 }}
               >

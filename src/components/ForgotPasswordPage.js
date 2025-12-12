@@ -131,7 +131,7 @@ export default function ForgotPasswordPage() {
           <div
             className="w-20 h-20 rounded-full flex items-center justify-center relative overflow-hidden backdrop-blur-lg"
             style={{
-              backgroundColor: "rgba(38, 38, 38, 0.6)",
+              backgroundColor: "#262626",
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
               border: "1px solid rgba(255, 255, 255, 0.08)",
             }}
@@ -143,7 +143,7 @@ export default function ForgotPasswordPage() {
         <div
           className="w-full rounded-2xl p-8 border backdrop-blur-lg relative overflow-hidden"
           style={{
-            backgroundColor: "rgba(38, 38, 38, 0.6)",
+            backgroundColor: "#262626",
             boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
             border: "1px solid rgba(255, 255, 255, 0.08)",
           }}
@@ -168,7 +168,7 @@ export default function ForgotPasswordPage() {
                 onClick={handleBackToLogin}
                 className="w-full py-3 font-semibold rounded-xl hover:shadow-lg transition-all duration-300 hover:scale-105 backdrop-blur-lg"
                 style={{
-                  backgroundColor: "rgba(38, 38, 38, 0.8)",
+                  backgroundColor: "#262626",
                   boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
                   color: "#FFFFFF",
                   border: "1px solid rgba(255, 255, 255, 0.08)",
@@ -192,7 +192,7 @@ export default function ForgotPasswordPage() {
                   placeholder="Email Address"
                   className="w-full pl-12 pr-4 py-3 rounded-xl focus:outline-none focus:ring-2 text-white placeholder-gray-400 backdrop-blur-md"
                   style={{
-                    backgroundColor: "rgba(38, 38, 38, 0.6)",
+                    backgroundColor: "#262626",
                     border: `1px solid ${error ? '#ff6b6b' : 'rgba(255, 255, 255, 0.08)'}`,
                     boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
                   }}
@@ -204,7 +204,7 @@ export default function ForgotPasswordPage() {
                 disabled={loading}
                 className="w-full py-3 font-semibold rounded-xl hover:shadow-lg transition-all duration-300 hover:scale-105 mt-6 backdrop-blur-lg relative overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                 style={{
-                  backgroundColor: "rgba(38, 38, 38, 0.8)",
+                  backgroundColor: "#262626",
                   boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
                   color: "#FFFFFF",
                   border: "1px solid rgba(255, 255, 255, 0.08)",

@@ -75,7 +75,7 @@ const EmailSignupPage = () => {
 
         /* Mobile input styling to match app UI */
         .mobile-input {
-          background-color: rgba(38, 38, 38, 0.6);
+          background-color: #262626;
           color: #FFFFFF;
           border: 1px solid rgba(255, 255, 255, 0.08);
           box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);

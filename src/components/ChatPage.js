@@ -1176,7 +1176,7 @@ export default function ChatPage() {
             isDarkMode ? 'backdrop-blur-md' : 'bg-white'
           }`}
           style={isDarkMode ? {
-            backgroundColor: "rgba(38, 38, 38, 0.6)",
+            backgroundColor: "#262626",
             boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
             border: "1px solid rgba(255, 255, 255, 0.08)",
           } : {
@@ -1192,7 +1192,7 @@ export default function ChatPage() {
               isDarkMode ? 'backdrop-blur-md' : 'bg-white'
             }`}
             style={isDarkMode ? {
-              backgroundColor: "rgba(38, 38, 38, 0.6)",
+              backgroundColor: "#262626",
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
               border: "1px solid rgba(255, 255, 255, 0.08)",
             } : {
@@ -1214,7 +1214,7 @@ export default function ChatPage() {
             isDarkMode ? 'backdrop-blur-md' : 'bg-white'
           }`}
           style={isDarkMode ? {
-            backgroundColor: profilePicture ? "transparent" : "rgba(38, 38, 38, 0.6)",
+            backgroundColor: profilePicture ? "transparent" : "#262626",
             boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
             border: profilePicture ? "none" : "1px solid rgba(255, 255, 255, 0.08)",
           } : {
@@ -1248,8 +1248,8 @@ export default function ChatPage() {
                 backgroundColor: message.sender === 'user'
                   ? "rgba(129, 201, 149, 0.08)"
                   : message.isProcessingReel
-                  ? "rgba(38, 38, 38, 0.8)"
-                  : "rgba(38, 38, 38, 0.6)",
+                  ? "#262626"
+                  : "#262626",
                 boxShadow: message.sender === 'user'
                   ? "0 4px 16px rgba(0, 0, 0, 0.15)"
                   : "0 4px 16px rgba(0, 0, 0, 0.15)",
@@ -1423,7 +1423,7 @@ export default function ChatPage() {
             disabled={isLoading}
             className="w-12 h-12 rounded-2xl flex items-center justify-center backdrop-blur-lg transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100"
             style={{
-              backgroundColor: selectedImage ? "rgba(129, 201, 149, 0.3)" : "rgba(38, 38, 38, 0.6)",
+              backgroundColor: selectedImage ? "rgba(129, 201, 149, 0.3)" : "#262626",
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
               border: selectedImage ? "1px solid rgba(129, 201, 149, 0.5)" : "1px solid rgba(255, 255, 255, 0.08)",
             }}
@@ -1445,7 +1445,7 @@ export default function ChatPage() {
             disabled={isLoading}
             className="flex-1 px-4 py-3 rounded-2xl focus:outline-none focus:ring-2 text-white placeholder-gray-400 backdrop-blur-md"
             style={{
-              backgroundColor: "rgba(38, 38, 38, 0.6)",
+              backgroundColor: "#262626",
               border: "1px solid rgba(255, 255, 255, 0.08)",
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
             }}
@@ -1456,8 +1456,8 @@ export default function ChatPage() {
             className="w-12 h-12 rounded-2xl flex items-center justify-center backdrop-blur-lg transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100"
             style={{
               background: (inputMessage.trim() || selectedImage) && !isLoading
-                ? "rgba(38, 38, 38, 0.8)"
-                : "rgba(38, 38, 38, 0.4)",
+                ? "#262626"
+                : "#262626",
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
               border: "1px solid rgba(255, 255, 255, 0.08)",
             }}
@@ -1485,7 +1485,7 @@ export default function ChatPage() {
               isDarkMode ? 'border border-gray-600/20' : 'bg-white/40 border border-gray-200/30'
             }`}
             style={isDarkMode ? {
-              backgroundColor: "rgba(38, 38, 38, 0.6)",
+              backgroundColor: "#262626",
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
             } : {
               backgroundColor: "rgba(255, 255, 255, 0.6)",
@@ -1498,7 +1498,7 @@ export default function ChatPage() {
               <div 
                 className="w-12 h-12 rounded-full flex items-center justify-center"
                 style={isDarkMode ? {
-                  backgroundColor: "rgba(38, 38, 38, 0.6)",
+                  backgroundColor: "#262626",
                   border: "1px solid rgba(255, 255, 255, 0.08)",
                 } : {
                   backgroundColor: "rgba(255, 255, 255, 0.6)",

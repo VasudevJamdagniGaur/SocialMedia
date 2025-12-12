@@ -113,7 +113,7 @@ const CalendarPopup = ({ isOpen, onClose, selectedDate, onDateSelect, chatDays =
       <div
         className="relative rounded-2xl p-6 max-w-sm w-full backdrop-blur-lg animate-in zoom-in-95 duration-300"
         style={{
-          backgroundColor: "rgba(38, 38, 38, 0.95)",
+          backgroundColor: "#262626",
           boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)",
           border: "1px solid rgba(255, 255, 255, 0.08)",
         }}
@@ -226,7 +226,7 @@ const CalendarPopup = ({ isOpen, onClose, selectedDate, onDateSelect, chatDays =
             onClick={() => handleDateClick(new Date())}
             className="px-4 py-2 rounded-xl text-sm font-medium text-white hover:opacity-80 transition-all duration-200"
             style={{
-              backgroundColor: "rgba(38, 38, 38, 0.8)",
+              backgroundColor: "#262626",
               border: "1px solid rgba(255, 255, 255, 0.08)",
             }}
           >

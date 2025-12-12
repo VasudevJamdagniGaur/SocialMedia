@@ -877,7 +877,7 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
             onClick={handleBack}
             className="w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md hover:opacity-80 transition-opacity"
             style={{
-              backgroundColor: "rgba(38, 38, 38, 0.6)",
+              backgroundColor: "#262626",
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
               border: "1px solid rgba(255, 255, 255, 0.08)",
             }}
@@ -893,7 +893,7 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
         <div
           className="backdrop-blur-lg border-2 rounded-2xl p-6"
           style={{
-            backgroundColor: "rgba(38, 38, 38, 0.6)",
+            backgroundColor: "#262626",
             boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
             border: "1px solid rgba(255, 255, 255, 0.08)",
           }}
@@ -905,7 +905,7 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
                 <div 
                   className="w-24 h-24 rounded-full flex items-center justify-center text-2xl font-bold text-white relative overflow-hidden"
                   style={{
-                    backgroundColor: "rgba(38, 38, 38, 0.8)",
+                    backgroundColor: "#262626",
                     boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
                     border: "1px solid rgba(255, 255, 255, 0.08)",
                   }}
@@ -925,7 +925,7 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
                   style={{
                     backgroundColor: "rgba(138, 180, 248, 0.9)",
                     boxShadow: "0 2px 8px rgba(0, 0, 0, 0.2)",
-                    border: "2px solid rgba(38, 38, 38, 0.8)",
+                    border: "2px solid #262626",
                   }}
                   title="Change profile picture"
                 >
@@ -968,7 +968,7 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
                 <div
                   className="p-4 rounded-xl"
                   style={{
-                    backgroundColor: "rgba(38, 38, 38, 0.6)",
+                    backgroundColor: "#262626",
                     border: "1px solid rgba(255, 255, 255, 0.08)",
                   }}
                 >
@@ -984,7 +984,7 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
                 <div
                   className="p-4 rounded-xl"
                   style={{
-                    backgroundColor: "rgba(38, 38, 38, 0.6)",
+                    backgroundColor: "#262626",
                     border: "1px solid rgba(255, 255, 255, 0.08)",
                   }}
                 >
@@ -1004,7 +1004,7 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
                 <div
                   className="p-4 rounded-xl"
                   style={{
-                    backgroundColor: "rgba(38, 38, 38, 0.6)",
+                    backgroundColor: "#262626",
                     border: "1px solid rgba(255, 255, 255, 0.08)",
                   }}
                 >
@@ -1020,7 +1020,7 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
                 <div
                   className="p-4 rounded-xl"
                   style={{
-                    backgroundColor: "rgba(38, 38, 38, 0.6)",
+                    backgroundColor: "#262626",
                     border: "1px solid rgba(255, 255, 255, 0.08)",
                   }}
                 >
@@ -1039,7 +1039,7 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
                 onClick={() => setIsEditing(true)}
                 className="w-full mt-6 py-3 px-4 rounded-xl font-semibold text-white hover:opacity-90 transition-all duration-300"
                 style={{
-                  backgroundColor: "rgba(38, 38, 38, 0.8)",
+                  backgroundColor: "#262626",
                   color: "#FFFFFF",
                   border: "1px solid rgba(255, 255, 255, 0.08)",
                 }}
@@ -1057,7 +1057,7 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
                   <div
                     className="w-full px-3 py-2 rounded-xl text-white"
                     style={{
-                      backgroundColor: "rgba(38, 38, 38, 0.6)",
+                      backgroundColor: "#262626",
                       border: "1px solid rgba(255, 255, 255, 0.08)",
                     }}
                   >
@@ -1084,7 +1084,7 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
                       }}
                       className="w-full px-3 py-2 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-400 text-left"
                       style={{
-                        backgroundColor: "rgba(38, 38, 38, 0.6)",
+                        backgroundColor: "#262626",
                         border: "1px solid rgba(255, 255, 255, 0.08)",
                       }}
                     >
@@ -1140,7 +1140,7 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
                           style={{
                             backgroundColor: editData.gender === option.value
                               ? "rgba(129, 201, 149, 0.2)"
-                              : "rgba(38, 38, 38, 0.6)",
+                              : "#262626",
                           }}
                         >
                           {option.label}
@@ -1157,7 +1157,7 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
                   disabled={loading}
                   className="flex-1 py-3 px-4 rounded-xl font-semibold text-white transition-all duration-300 disabled:opacity-50"
                   style={{
-                    backgroundColor: "rgba(38, 38, 38, 0.8)",
+                    backgroundColor: "#262626",
                     border: "1px solid rgba(255, 255, 255, 0.08)",
                   }}
                 >
@@ -1180,7 +1180,7 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
         <div
           className="backdrop-blur-lg border-2 rounded-2xl p-6"
           style={{
-            backgroundColor: "rgba(38, 38, 38, 0.6)",
+            backgroundColor: "#262626",
             boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
             border: "1px solid rgba(255, 255, 255, 0.08)",
           }}
@@ -1219,7 +1219,7 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
         <div
           className="backdrop-blur-lg border rounded-2xl p-6 space-y-4"
           style={{
-            backgroundColor: "rgba(38, 38, 38, 0.6)",
+            backgroundColor: "#262626",
             border: "1px solid rgba(255, 255, 255, 0.08)",
           }}
         >
@@ -1249,7 +1249,7 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
         <div
           className="backdrop-blur-lg border rounded-2xl p-6 space-y-4"
           style={{
-            backgroundColor: "rgba(38, 38, 38, 0.6)",
+            backgroundColor: "#262626",
             border: "1px solid rgba(129, 201, 149, 0.15)",
           }}
         >
@@ -1298,7 +1298,7 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
         <div
           className="backdrop-blur-lg border-2 rounded-2xl p-6"
           style={{
-            backgroundColor: "rgba(38, 38, 38, 0.6)",
+            backgroundColor: "#262626",
             border: "1px solid rgba(242, 139, 130, 0.15)",
             boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
           }}
@@ -1727,7 +1727,7 @@ const BirthdayCalendar = ({ selectedDate, onDateSelect, onClose }) => {
         <div
           className="relative rounded-2xl p-6 max-w-sm w-full backdrop-blur-lg animate-in zoom-in-95 duration-300"
           style={{
-            backgroundColor: "rgba(38, 38, 38, 0.95)",
+            backgroundColor: "#262626",
             boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)",
             border: "1px solid rgba(255, 255, 255, 0.08)",
             maxHeight: '80vh',
@@ -1830,7 +1830,7 @@ const BirthdayCalendar = ({ selectedDate, onDateSelect, onClose }) => {
         <div
           className="relative rounded-2xl p-6 max-w-sm w-full backdrop-blur-lg animate-in zoom-in-95 duration-300"
           style={{
-            backgroundColor: "rgba(38, 38, 38, 0.95)",
+            backgroundColor: "#262626",
             boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)",
             border: "1px solid rgba(255, 255, 255, 0.08)",
             maxHeight: '80vh',
@@ -1933,7 +1933,7 @@ const BirthdayCalendar = ({ selectedDate, onDateSelect, onClose }) => {
       <div
         className="relative rounded-2xl p-6 max-w-sm w-full backdrop-blur-lg animate-in zoom-in-95 duration-300"
         style={{
-          backgroundColor: "rgba(38, 38, 38, 0.95)",
+          backgroundColor: "#262626",
           boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)",
           border: "1px solid rgba(255, 255, 255, 0.08)",
         }}

@@ -88,7 +88,7 @@ const SignupPage = () => {
             style={{
               width: '120px',
               height: '120px',
-              backgroundColor: "rgba(38, 38, 38, 0.8)",
+              backgroundColor: "#262626",
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
               border: "1px solid rgba(255, 255, 255, 0.08)",
               backdropFilter: 'blur(10px)',

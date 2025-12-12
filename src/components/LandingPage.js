@@ -145,7 +145,7 @@ export default function LandingPage() {
           <div
             className="w-24 h-24 rounded-full flex items-center justify-center relative overflow-hidden backdrop-blur-lg"
             style={{
-              backgroundColor: "rgba(38, 38, 38, 0.6)",
+              backgroundColor: "#262626",
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
               border: "1px solid rgba(255, 255, 255, 0.08)",
             }}
@@ -164,7 +164,7 @@ export default function LandingPage() {
             onClick={handleGetStarted}
             className="px-8 py-3 font-semibold rounded-full hover:shadow-lg transition-all duration-300 hover:scale-105 backdrop-blur-lg relative overflow-hidden"
             style={{
-              backgroundColor: "rgba(38, 38, 38, 0.8)",
+              backgroundColor: "#262626",
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
               color: "#FFFFFF",
               border: "1px solid rgba(255, 255, 255, 0.08)",

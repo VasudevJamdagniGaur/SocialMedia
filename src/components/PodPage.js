@@ -333,7 +333,7 @@ export default function PodPage() {
                   isDarkMode ? 'backdrop-blur-md' : 'bg-white'
                 }`}
                 style={isDarkMode ? {
-                  backgroundColor: "rgba(38, 38, 38, 0.6)",
+                  backgroundColor: "#262626",
                   boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
                   border: "1px solid rgba(255, 255, 255, 0.08)",
                 } : {
@@ -351,7 +351,7 @@ export default function PodPage() {
                   isDarkMode ? 'backdrop-blur-md' : 'bg-white'
                 }`}
                 style={isDarkMode ? {
-                  backgroundColor: profilePicture ? "transparent" : "rgba(38, 38, 38, 0.6)",
+                  backgroundColor: profilePicture ? "transparent" : "#262626",
                   boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
                   border: profilePicture ? "none" : "1px solid rgba(255, 255, 255, 0.08)",
                 } : {
@@ -383,7 +383,7 @@ export default function PodPage() {
               isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
             }`}
             style={isDarkMode ? {
-              backgroundColor: "rgba(38, 38, 38, 0.6)",
+              backgroundColor: "#262626",
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
               border: "1px solid rgba(255, 255, 255, 0.08)",
             } : {
@@ -405,7 +405,7 @@ export default function PodPage() {
               isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
             }`}
             style={isDarkMode ? {
-              backgroundColor: "rgba(38, 38, 38, 0.6)",
+              backgroundColor: "#262626",
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
               border: "1px solid rgba(255, 255, 255, 0.08)",
             } : {
@@ -495,7 +495,7 @@ export default function PodPage() {
               isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
             }`}
             style={isDarkMode ? {
-              backgroundColor: "rgba(38, 38, 38, 0.6)",
+              backgroundColor: "#262626",
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
               border: "1px solid rgba(255, 255, 255, 0.08)",
             } : {
