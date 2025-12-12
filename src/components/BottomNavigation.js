@@ -181,7 +181,7 @@ export default function BottomNavigation() {
                 : 'text-gray-500'
             }`}
           >
-            Pod
+            Sphere
           </span>
         </button>
 
