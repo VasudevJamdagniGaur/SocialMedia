@@ -189,37 +189,17 @@ export default function BottomNavigation() {
           onClick={() => navigate('/community')}
           className="flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 active:opacity-70"
         >
-          <svg
-            className="w-5 h-5 mb-0.5"
-            viewBox="0 0 24 24"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <circle
-              cx="12"
-              cy="12"
-              r="10"
-              stroke={isCommunityActive 
-                ? (isDarkMode ? '#8AB4F8' : '#87A96B')
-                : (isDarkMode ? '#9CA3AF' : '#6B7280')
-              }
-              strokeWidth={isCommunityActive ? 2.5 : 2}
-              fill="none"
-            />
-            <circle
-              cx="12"
-              cy="8"
-              r="3"
-              fill={isCommunityActive ? '#FFFFFF' : (isDarkMode ? '#9CA3AF' : '#6B7280')}
-            />
-            <path
-              d="M6 21c0-3.314 2.686-6 6-6s6 2.686 6 6"
-              stroke={isCommunityActive ? '#FFFFFF' : (isDarkMode ? '#9CA3AF' : '#6B7280')}
-              strokeWidth={isCommunityActive ? 2.5 : 2}
-              strokeLinecap="round"
-              fill="none"
-            />
-          </svg>
+          <img
+            src="/hub-icon.png"
+            alt="HUB"
+            className="w-5 h-5 mb-0.5 object-contain"
+            style={{
+              opacity: isCommunityActive ? 1 : (isDarkMode ? 0.6 : 0.5),
+              filter: isCommunityActive 
+                ? (isDarkMode ? 'brightness(1.2) saturate(1.2)' : 'brightness(0.9) saturate(1.1)')
+                : 'none'
+            }}
+          />
           <span
             className={`text-[10px] font-medium transition-colors leading-tight ${
               isCommunityActive
