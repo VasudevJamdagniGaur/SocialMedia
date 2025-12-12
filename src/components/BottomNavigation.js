@@ -196,7 +196,10 @@ export default function BottomNavigation() {
             style={{
               opacity: isCommunityActive ? 1 : (isDarkMode ? 0.6 : 0.5),
               filter: isCommunityActive 
-                ? (isDarkMode ? 'brightness(1.2) saturate(1.2)' : 'brightness(0.9) saturate(1.1)')
+                ? 'brightness(0) invert(1)'
+                : 'none',
+              WebkitFilter: isCommunityActive 
+                ? 'brightness(0) invert(1)'
                 : 'none'
             }}
           />
