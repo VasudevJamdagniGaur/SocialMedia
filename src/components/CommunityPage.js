@@ -389,7 +389,7 @@ export default function CommunityPage() {
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center space-x-3">
               <img 
-                src="/hub-logo.png" 
+                src="/hub-icon.png" 
                 alt="HUB Logo" 
                 className="object-contain"
                 style={{
