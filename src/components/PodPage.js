@@ -316,7 +316,7 @@ export default function PodPage() {
               <img
                 src="/crew-icon.png"
                 alt="Crew"
-                className="w-12 h-12 object-contain"
+                className="w-16 h-16 object-contain"
                 style={{
                   filter: 'brightness(0) invert(1)',
                   WebkitFilter: 'brightness(0) invert(1)'
