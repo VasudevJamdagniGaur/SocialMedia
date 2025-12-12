@@ -231,7 +231,7 @@ export default function BottomNavigation() {
                 : 'text-gray-500'
             }`}
           >
-            Community
+            HUB
           </span>
         </button>
       </div>
