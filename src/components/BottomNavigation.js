@@ -37,10 +37,10 @@ export default function BottomNavigation() {
       >
         <button
           onClick={() => navigate('/dashboard')}
-          className="flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 active:opacity-70"
+          className="flex items-center justify-center flex-1 h-full transition-all duration-200 active:opacity-70"
         >
           <svg
-            className="w-5 h-5 mb-0.5"
+            className="w-7 h-7"
             viewBox="0 0 24 24"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
@@ -63,27 +63,14 @@ export default function BottomNavigation() {
               />
             )}
           </svg>
-          <span
-            className={`text-[10px] font-medium transition-colors leading-tight ${
-              isHomeActive
-                ? isDarkMode
-                  ? 'text-[#8AB4F8]'
-                  : 'text-[#87A96B]'
-                : isDarkMode
-                ? 'text-gray-400'
-                : 'text-gray-500'
-            }`}
-          >
-            Home
-          </span>
         </button>
 
         <button
           onClick={() => navigate('/wellbeing')}
-          className="flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 active:opacity-70"
+          className="flex items-center justify-center flex-1 h-full transition-all duration-200 active:opacity-70"
         >
           <svg
-            className="w-5 h-5 mb-0.5"
+            className="w-7 h-7"
             viewBox="0 0 24 24"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
@@ -100,29 +87,16 @@ export default function BottomNavigation() {
               fill={isWellbeingActive ? (isDarkMode ? '#8AB4F8' : '#87A96B') : 'none'}
             />
           </svg>
-          <span
-            className={`text-[10px] font-medium transition-colors leading-tight ${
-              isWellbeingActive
-                ? isDarkMode
-                  ? 'text-[#8AB4F8]'
-                  : 'text-[#87A96B]'
-                : isDarkMode
-                ? 'text-gray-400'
-                : 'text-gray-500'
-            }`}
-          >
-            Wellbeing
-          </span>
         </button>
 
         <button
           onClick={() => navigate('/pod')}
-          className="flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 active:opacity-70"
+          className="flex items-center justify-center flex-1 h-full transition-all duration-200 active:opacity-70"
         >
           <img
             src="/crew-icon.png"
             alt="Crew"
-            className="w-5 h-5 mb-0.5 object-contain"
+            className="w-7 h-7 object-contain"
             style={{
               opacity: isPodActive ? 1 : (isDarkMode ? 0.6 : 0.5),
               filter: isPodActive 
@@ -133,29 +107,16 @@ export default function BottomNavigation() {
                 : 'none'
             }}
           />
-          <span
-            className={`text-[10px] font-medium transition-colors leading-tight ${
-              isPodActive
-                ? isDarkMode
-                  ? 'text-[#8AB4F8]'
-                  : 'text-[#87A96B]'
-                : isDarkMode
-                ? 'text-gray-400'
-                : 'text-gray-500'
-            }`}
-          >
-            Crew
-          </span>
         </button>
 
         <button
           onClick={() => navigate('/community')}
-          className="flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 active:opacity-70"
+          className="flex items-center justify-center flex-1 h-full transition-all duration-200 active:opacity-70"
         >
           <img
             src="/hub-icon.png"
             alt="HUB"
-            className="w-5 h-5 mb-0.5 object-contain"
+            className="w-7 h-7 object-contain"
             style={{
               opacity: isCommunityActive ? 1 : (isDarkMode ? 0.6 : 0.5),
               filter: isCommunityActive 
@@ -166,19 +127,6 @@ export default function BottomNavigation() {
                 : 'none'
             }}
           />
-          <span
-            className={`text-[10px] font-medium transition-colors leading-tight ${
-              isCommunityActive
-                ? isDarkMode
-                  ? 'text-[#8AB4F8]'
-                  : 'text-[#87A96B]'
-                : isDarkMode
-                ? 'text-gray-400'
-                : 'text-gray-500'
-            }`}
-          >
-            HUB
-          </span>
         </button>
       </div>
     </div>
