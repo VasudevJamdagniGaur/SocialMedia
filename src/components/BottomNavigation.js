@@ -119,57 +119,20 @@ export default function BottomNavigation() {
           onClick={() => navigate('/pod')}
           className="flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 active:opacity-70"
         >
-          <svg
-            className="w-5 h-5 mb-0.5"
-            viewBox="0 0 24 24"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path
-              d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"
-              stroke={isPodActive 
-                ? '#FFFFFF'
-                : (isDarkMode ? '#9CA3AF' : '#6B7280')
-              }
-              strokeWidth={isPodActive ? 2.5 : 2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              fill={isPodActive ? (isDarkMode ? '#8AB4F8' : '#87A96B') : 'none'}
-            />
-            <circle
-              cx="9"
-              cy="7"
-              r="4"
-              stroke={isPodActive 
-                ? '#FFFFFF'
-                : (isDarkMode ? '#9CA3AF' : '#6B7280')
-              }
-              strokeWidth={isPodActive ? 2.5 : 2}
-              fill={isPodActive ? (isDarkMode ? '#8AB4F8' : '#87A96B') : 'none'}
-            />
-            <path
-              d="M23 21v-2a4 4 0 00-3-3.87"
-              stroke={isPodActive 
-                ? '#FFFFFF'
-                : (isDarkMode ? '#9CA3AF' : '#6B7280')
-              }
-              strokeWidth={isPodActive ? 2.5 : 2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              fill={isPodActive ? (isDarkMode ? '#8AB4F8' : '#87A96B') : 'none'}
-            />
-            <path
-              d="M16 3.13a4 4 0 010 7.75"
-              stroke={isPodActive 
-                ? '#FFFFFF'
-                : (isDarkMode ? '#9CA3AF' : '#6B7280')
-              }
-              strokeWidth={isPodActive ? 2.5 : 2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              fill={isPodActive ? (isDarkMode ? '#8AB4F8' : '#87A96B') : 'none'}
-            />
-          </svg>
+          <img
+            src="/crew-icon.png"
+            alt="Crew"
+            className="w-5 h-5 mb-0.5 object-contain"
+            style={{
+              opacity: isPodActive ? 1 : (isDarkMode ? 0.6 : 0.5),
+              filter: isPodActive 
+                ? 'brightness(0) invert(1)'
+                : 'none',
+              WebkitFilter: isPodActive 
+                ? 'brightness(0) invert(1)'
+                : 'none'
+            }}
+          />
           <span
             className={`text-[10px] font-medium transition-colors leading-tight ${
               isPodActive

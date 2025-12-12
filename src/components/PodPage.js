@@ -313,15 +313,15 @@ export default function PodPage() {
         <div className="mb-8">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center space-x-3">
-              <div
-                className="w-12 h-12 rounded-full flex items-center justify-center"
+              <img
+                src="/crew-icon.png"
+                alt="Crew"
+                className="w-12 h-12 object-contain"
                 style={{
-                  backgroundColor: isDarkMode ? "#7DD3C0" : "#87A96B",
-                  boxShadow: isDarkMode ? "0 4px 16px rgba(125, 211, 192, 0.3)" : "0 4px 12px rgba(134, 169, 107, 0.25)",
+                  filter: 'brightness(0) invert(1)',
+                  WebkitFilter: 'brightness(0) invert(1)'
                 }}
-              >
-                <Users className="w-6 h-6 text-white" strokeWidth={2} />
-              </div>
+              />
               <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
                 Crew
               </h1>
@@ -415,7 +415,15 @@ export default function PodPage() {
             {/* Title - Centered */}
             <div className="flex items-center justify-center mb-4">
               <div className="flex items-center space-x-2">
-                <Users className={`w-5 h-5 ${isDarkMode ? 'text-[#8AB4F8]' : 'text-[#87A96B]'}`} />
+                <img
+                  src="/crew-icon.png"
+                  alt="Crew"
+                  className="w-5 h-5 object-contain"
+                  style={{
+                    filter: isDarkMode ? 'brightness(0) invert(1)' : 'none',
+                    WebkitFilter: isDarkMode ? 'brightness(0) invert(1)' : 'none'
+                  }}
+                />
                 <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
                   Crew Group Chat
                 </h2>
