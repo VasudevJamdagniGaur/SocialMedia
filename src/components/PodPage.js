@@ -268,11 +268,32 @@ export default function PodPage() {
       const memberUids = memberUsers.map(member => member.uid).filter(uid => uid);
 
       console.log('👥 Members to add (excluding self):', memberUids.length, memberUids);
+      console.log('👤 Current user:', user.uid);
+      console.log('📋 All active users:', result.users.map(u => ({ uid: u.uid, name: u.displayName })));
 
+      // If no other users found, check if current user has messages and create sphere with just them
       if (memberUids.length === 0) {
-        alert('No other active users found. You need at least one other user who has sent a message in the past week.');
-        setIsCreatingSphere(false);
-        return;
+        // Check if current user is in the active users list (has sent messages)
+        const currentUserHasMessages = result.users.some(u => u.uid === user.uid);
+        
+        if (currentUserHasMessages) {
+          // Create sphere with just the current user (they can add others later)
+          console.log('⚠️ No other users found, creating sphere with just current user');
+          const createResult = await firestoreService.createCrewSphere(user.uid, []);
+          
+          if (createResult.success) {
+            alert('Crew sphere created! You can add more members later when other users send messages.');
+            navigate('/pod/chat');
+          } else {
+            alert(`Error creating crew sphere: ${createResult.error}`);
+          }
+          setIsCreatingSphere(false);
+          return;
+        } else {
+          alert('No active users found. Make sure you have sent at least one message to Deite, then try again.');
+          setIsCreatingSphere(false);
+          return;
+        }
       }
 
       console.log('🔨 Creating crew sphere with members:', memberUids);

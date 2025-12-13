@@ -1191,48 +1191,41 @@ class FirestoreService {
         const metadataSnap = await getDoc(metadataRef);
         const metadata = metadataSnap.exists() ? metadataSnap.data() : {};
         
-        // Check for messages in the past week - check all date IDs
+        // Check for messages - check ALL days, not just specific date IDs
         let hasRecentMessage = false;
         
         // Check new structure: users/{uid}/days/{dateId}/messages
-        for (const dateId of dateIds) {
-          try {
-            const messagesRef = collection(this.db, `users/${userId}/days/${dateId}/messages`);
-            const messagesSnapshot = await getDocs(query(messagesRef, limit(10)));
-            
-            if (!messagesSnapshot.empty) {
-              // Check if any message is from user (role === 'user')
-              for (const msgDoc of messagesSnapshot.docs) {
-                const msgData = msgDoc.data();
-                if (msgData.role === 'user') {
-                  hasRecentMessage = true;
-                  console.log('✅ Found user message for', userId, 'on date', dateId);
-                  break;
-                }
-              }
-            }
-            
-            if (hasRecentMessage) break;
-          } catch (err) {
-            // Collection might not exist, continue
-            continue;
-          }
-        }
-        
-        // Also check old structure: users/{uid}/chats/{dateId}/messages
-        if (!hasRecentMessage) {
-          for (const dateId of dateIds) {
+        // Check ALL days collections for this user
+        try {
+          const daysRef = collection(this.db, `users/${userId}/days`);
+          const daysSnapshot = await getDocs(daysRef);
+          
+          console.log(`📁 User ${userId} has ${daysSnapshot.size} day collections`);
+          
+          for (const dayDoc of daysSnapshot.docs) {
+            const dateId = dayDoc.id;
+            // Check if this date is within the past week (or just check all if we want to be lenient)
             try {
-              const messagesRef = collection(this.db, `users/${userId}/chats/${dateId}/messages`);
-              const messagesSnapshot = await getDocs(query(messagesRef, limit(10)));
+              const messagesRef = collection(this.db, `users/${userId}/days/${dateId}/messages`);
+              const messagesSnapshot = await getDocs(query(messagesRef, limit(50)));
               
               if (!messagesSnapshot.empty) {
+                console.log(`📨 User ${userId} has ${messagesSnapshot.size} messages on ${dateId}`);
+                // Check if any message is from user (role === 'user' OR sender === 'user' OR has text and is not assistant)
                 for (const msgDoc of messagesSnapshot.docs) {
                   const msgData = msgDoc.data();
-                  // Check if message is from user (sender === 'user' or role === 'user')
-                  if (msgData.sender === 'user' || msgData.role === 'user') {
+                  console.log(`📝 Message data:`, { role: msgData.role, sender: msgData.sender, text: msgData.text?.substring(0, 20) });
+                  
+                  // Check multiple conditions for user messages
+                  const isUserMessage = 
+                    msgData.role === 'user' || 
+                    msgData.sender === 'user' ||
+                    (msgData.text && msgData.role !== 'assistant' && !msgData.sender) ||
+                    (msgData.text && !msgData.role && !msgData.sender);
+                  
+                  if (isUserMessage) {
                     hasRecentMessage = true;
-                    console.log('✅ Found user message (old structure) for', userId, 'on date', dateId);
+                    console.log('✅ Found user message for', userId, 'on date', dateId);
                     break;
                   }
                 }
@@ -1240,9 +1233,45 @@ class FirestoreService {
               
               if (hasRecentMessage) break;
             } catch (err) {
-              // Collection might not exist, continue
+              console.log(`⚠️ Error checking messages for ${userId}/${dateId}:`, err.message);
               continue;
             }
+          }
+        } catch (err) {
+          console.log(`⚠️ Error checking days for ${userId}:`, err.message);
+        }
+        
+        // Also check old structure: users/{uid}/chats/{dateId}/messages
+        if (!hasRecentMessage) {
+          try {
+            const chatsRef = collection(this.db, `users/${userId}/chats`);
+            const chatsSnapshot = await getDocs(chatsRef);
+            
+            for (const chatDoc of chatsSnapshot.docs) {
+              const dateId = chatDoc.id;
+              try {
+                const messagesRef = collection(this.db, `users/${userId}/chats/${dateId}/messages`);
+                const messagesSnapshot = await getDocs(query(messagesRef, limit(50)));
+                
+                if (!messagesSnapshot.empty) {
+                  for (const msgDoc of messagesSnapshot.docs) {
+                    const msgData = msgDoc.data();
+                    // Check if message is from user (sender === 'user' or role === 'user')
+                    if (msgData.sender === 'user' || msgData.role === 'user') {
+                      hasRecentMessage = true;
+                      console.log('✅ Found user message (old structure) for', userId, 'on date', dateId);
+                      break;
+                    }
+                  }
+                }
+                
+                if (hasRecentMessage) break;
+              } catch (err) {
+                continue;
+              }
+            }
+          } catch (err) {
+            console.log(`⚠️ Error checking chats for ${userId}:`, err.message);
           }
         }
         
@@ -1254,6 +1283,8 @@ class FirestoreService {
             email: userData.email
           });
           console.log('✅ Added active user:', userId, userData.displayName || metadata.displayName || 'User');
+        } else {
+          console.log(`❌ User ${userId} has no recent messages`);
         }
       }
       
