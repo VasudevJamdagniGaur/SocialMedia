@@ -176,7 +176,7 @@ export default function PodGroupChatPage() {
         <div className="flex items-center space-x-2 flex-1">
           <Users className={`w-5 h-5 ${isDarkMode ? 'text-[#8AB4F8]' : 'text-[#87A96B]'}`} />
           <h1 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-            Crew Sphere
+            Crew's Sphere
           </h1>
         </div>
       </div>
