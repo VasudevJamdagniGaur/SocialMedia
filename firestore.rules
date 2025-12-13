@@ -32,6 +32,25 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
     
+    // Messages subcollections - allow reading for crew matching
+    match /users/{userId}/days/{dateId}/messages/{messageId} {
+      // Allow users to read their own messages
+      allow read: if request.auth != null && request.auth.uid == userId;
+      // Allow authenticated users to read messages for crew matching (checking if users are active)
+      allow read: if request.auth != null;
+      // Allow users to write their own messages
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    match /users/{userId}/chats/{chatId}/messages/{messageId} {
+      // Allow users to read their own messages
+      allow read: if request.auth != null && request.auth.uid == userId;
+      // Allow authenticated users to read messages for crew matching
+      allow read: if request.auth != null;
+      // Allow users to write their own messages
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
     // Community posts
     match /communityPosts/{postId} {
       // Allow authenticated users to read all posts
@@ -46,11 +65,17 @@ service cloud.firestore {
     match /crewSpheres/{sphereId} {
       // Allow authenticated users to read spheres they are members of
       allow read: if request.auth != null && 
-        (request.auth.uid in resource.data.members || request.auth.uid == resource.data.creatorUid);
-      // Allow authenticated users to create spheres
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.creatorUid;
-      // Allow creators to update spheres
-      allow update: if request.auth != null && request.auth.uid == resource.data.creatorUid;
+        (request.auth.uid in resource.data.members || 
+         request.auth.uid == resource.data.creatorUid);
+      // Allow authenticated users to create spheres (they must be the creator)
+      allow create: if request.auth != null && 
+        request.auth.uid == request.resource.data.creatorUid &&
+        request.resource.data.members != null &&
+        request.resource.data.members is list;
+      // Allow creators and members to update spheres
+      allow update: if request.auth != null && 
+        (request.auth.uid == resource.data.creatorUid ||
+         request.auth.uid in resource.data.members);
     }
     
     // User pods - allow access to pods that reference crew spheres
