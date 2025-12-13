@@ -227,47 +227,43 @@ export default function PodPage() {
 
     setIsCreatingSphere(true);
     try {
-      // Get crew members if not already loaded
-      let membersToUse = crewMembers;
-      if (membersToUse.length === 0) {
-        // Update user metadata to mark as active
-        await firestoreService.updateUserMetadata(user.uid, {
-          displayName: user.displayName || 'User',
-          profilePicture: profilePicture,
-          crewEnrolled: localStorage.getItem(`user_crew_enrolled_${user.uid}`) === 'true'
-        });
+      // Update user metadata to mark as active
+      await firestoreService.updateUserMetadata(user.uid, {
+        displayName: user.displayName || 'User',
+        profilePicture: profilePicture,
+        crewEnrolled: localStorage.getItem(`user_crew_enrolled_${user.uid}`) === 'true'
+      });
 
-        // Get crew members
-        const result = await firestoreService.getCrewMembers(user.uid, 5);
-        if (result.success && result.members.length > 0) {
-          membersToUse = result.members;
-          setCrewMembers(result.members);
-        }
-      }
-
-      if (membersToUse.length === 0) {
-        alert('No active crew members found. Make sure you and other users are enrolled in crew features and have been active recently.');
+      // Get users who have sent at least one message in the past week
+      const result = await firestoreService.getActiveUsersWithMessages(7);
+      
+      if (!result.success || result.users.length === 0) {
+        alert('No active users found who have sent messages in the past week. Make sure you and other users have sent at least one message to Deite recently.');
         setIsCreatingSphere(false);
         return;
       }
 
-      // Extract member UIDs
-      const memberUids = membersToUse.map(member => member.uid).filter(uid => uid);
+      // Filter out the current user and get member UIDs
+      const memberUsers = result.users.filter(u => u.uid !== user.uid);
+      const memberUids = memberUsers.map(member => member.uid).filter(uid => uid);
+
+      if (memberUids.length === 0) {
+        alert('No other active users found. You need at least one other user who has sent a message in the past week.');
+        setIsCreatingSphere(false);
+        return;
+      }
 
       // Create the crew sphere
-      const result = await firestoreService.createCrewSphere(user.uid, memberUids);
+      const createResult = await firestoreService.createCrewSphere(user.uid, memberUids);
       
-      if (result.success) {
-        alert(`Crew sphere created successfully with ${memberUids.length + 1} members!`);
-        // Reload crew members to refresh the display
-        const reloadResult = await firestoreService.getCrewMembers(user.uid, 5);
-        if (reloadResult.success && reloadResult.members.length > 0) {
-          setCrewMembers(reloadResult.members);
-        }
+      if (createResult.success) {
+        // Update crew members display with the new members
+        setCrewMembers(memberUsers);
+        alert(`Crew sphere created successfully with ${memberUids.length + 1} members (including you)!`);
         // Navigate to chat
         navigate('/pod/chat');
       } else {
-        alert(`Error creating crew sphere: ${result.error}`);
+        alert(`Error creating crew sphere: ${createResult.error}`);
       }
     } catch (error) {
       console.error('Error creating crew sphere:', error);

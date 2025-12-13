@@ -1156,6 +1156,105 @@ class FirestoreService {
   }
 
   /**
+   * Get users who have sent at least one message in the past week
+   */
+  async getActiveUsersWithMessages(days = 7) {
+    try {
+      const now = new Date();
+      const daysAgo = new Date(now.getTime() - (days * 24 * 60 * 60 * 1000));
+      const daysAgoStr = daysAgo.toISOString().split('T')[0];
+      
+      // Get all users
+      const usersRef = collection(this.db, 'users');
+      const usersSnapshot = await getDocs(usersRef);
+      
+      const activeUsers = [];
+      
+      for (const userDoc of usersSnapshot.docs) {
+        const userId = userDoc.id;
+        const userData = userDoc.data();
+        
+        // Check if user is enrolled in crew
+        const metadataRef = doc(this.db, `usersMetadata/${userId}`);
+        const metadataSnap = await getDoc(metadataRef);
+        const isEnrolled = metadataSnap.exists() ? metadataSnap.data().crewEnrolled === true : false;
+        
+        if (!isEnrolled) continue;
+        
+        // Check for messages in the past week using both old and new structures
+        let hasRecentMessage = false;
+        
+        // Check new structure: users/{uid}/days/{dateId}/messages
+        const daysRef = collection(this.db, `users/${userId}/days`);
+        const daysSnapshot = await getDocs(daysRef);
+        
+        for (const dayDoc of daysSnapshot.docs) {
+          const dateId = dayDoc.id;
+          // Check if date is within the past week
+          if (dateId >= daysAgoStr) {
+            const messagesRef = collection(this.db, `users/${userId}/days/${dateId}/messages`);
+            const messagesSnapshot = await getDocs(query(messagesRef, limit(1)));
+            
+            if (!messagesSnapshot.empty) {
+              // Check if any message is from user (role === 'user')
+              for (const msgDoc of messagesSnapshot.docs) {
+                const msgData = msgDoc.data();
+                if (msgData.role === 'user') {
+                  hasRecentMessage = true;
+                  break;
+                }
+              }
+            }
+            
+            if (hasRecentMessage) break;
+          }
+        }
+        
+        // Also check old structure: users/{uid}/chats/{dateId}/messages
+        if (!hasRecentMessage) {
+          const chatsRef = collection(this.db, `users/${userId}/chats`);
+          const chatsSnapshot = await getDocs(chatsRef);
+          
+          for (const chatDoc of chatsSnapshot.docs) {
+            const dateId = chatDoc.id;
+            if (dateId >= daysAgoStr) {
+              const messagesRef = collection(this.db, `users/${userId}/chats/${dateId}/messages`);
+              const messagesSnapshot = await getDocs(query(messagesRef, limit(1)));
+              
+              if (!messagesSnapshot.empty) {
+                for (const msgDoc of messagesSnapshot.docs) {
+                  const msgData = msgDoc.data();
+                  // Check if message is from user (sender === 'user' or role === 'user')
+                  if (msgData.sender === 'user' || msgData.role === 'user') {
+                    hasRecentMessage = true;
+                    break;
+                  }
+                }
+              }
+              
+              if (hasRecentMessage) break;
+            }
+          }
+        }
+        
+        if (hasRecentMessage) {
+          activeUsers.push({
+            uid: userId,
+            displayName: userData.displayName || metadataSnap.data()?.displayName || 'User',
+            profilePicture: metadataSnap.data()?.profilePicture || null,
+            email: userData.email
+          });
+        }
+      }
+      
+      return { success: true, users: activeUsers };
+    } catch (error) {
+      console.error('Error getting active users with messages:', error);
+      return { success: false, error: error.message, users: [] };
+    }
+  }
+
+  /**
    * Create a crew sphere with members
    */
   async createCrewSphere(creatorUid, memberUids) {
