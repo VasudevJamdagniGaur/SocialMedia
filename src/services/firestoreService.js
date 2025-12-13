@@ -1159,12 +1159,39 @@ class FirestoreService {
    */
   async getTotalUserCount() {
     try {
+      console.log('👥 Getting total user count from usersMetadata collection...');
       // Count users from usersMetadata collection (more reliable)
       const usersMetadataRef = collection(this.db, 'usersMetadata');
       const usersSnapshot = await getDocs(usersMetadataRef);
       
       const totalCount = usersSnapshot.size;
-      console.log('👥 Total user count:', totalCount);
+      console.log('👥 Total user count from usersMetadata:', totalCount);
+      
+      // If usersMetadata is empty, try to count from communityPosts (users who have posted)
+      if (totalCount === 0) {
+        console.log('👥 usersMetadata is empty, trying alternative method...');
+        try {
+          const postsRef = collection(this.db, 'communityPosts');
+          const postsSnapshot = await getDocs(postsRef);
+          
+          // Get unique user IDs from posts
+          const uniqueUserIds = new Set();
+          postsSnapshot.forEach((doc) => {
+            const data = doc.data();
+            if (data.userId) {
+              uniqueUserIds.add(data.userId);
+            }
+          });
+          
+          const uniqueCount = uniqueUserIds.size;
+          console.log('👥 Unique users from communityPosts:', uniqueCount);
+          
+          // Return the higher count (at least 1 if there are any posts)
+          return { success: true, count: uniqueCount > 0 ? uniqueCount : 0 };
+        } catch (altError) {
+          console.warn('⚠️ Alternative count method failed:', altError);
+        }
+      }
       
       return { success: true, count: totalCount };
     } catch (error) {

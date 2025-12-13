@@ -177,12 +177,19 @@ export default function CommunityPage() {
   useEffect(() => {
     const loadActiveMembersCount = async () => {
       try {
+        console.log('📊 Loading active members count...');
         const result = await firestoreService.getTotalUserCount();
+        console.log('📊 Result:', result);
         if (result.success) {
+          console.log('✅ Setting active members count to:', result.count);
           setActiveMembersCount(result.count);
+        } else {
+          console.warn('⚠️ Failed to get user count:', result.error);
+          setActiveMembersCount(0); // Show 0 if failed
         }
       } catch (error) {
-        console.error('Error loading active members count:', error);
+        console.error('❌ Error loading active members count:', error);
+        setActiveMembersCount(0); // Show 0 on error
       }
     };
 
@@ -580,7 +587,7 @@ export default function CommunityPage() {
                 <div className="flex items-center justify-center gap-2 mb-1">
                   <Users className={`w-5 h-5 ${isDarkMode ? 'text-white' : 'text-gray-800'}`} strokeWidth={2} />
                   <div className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                    {activeMembersCount > 0 ? activeMembersCount.toLocaleString() : '...'}
+                    {activeMembersCount.toLocaleString()}
                   </div>
                 </div>
                 <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
