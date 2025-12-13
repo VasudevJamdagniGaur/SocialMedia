@@ -4,6 +4,7 @@ import {
   getDoc, 
   addDoc, 
   collection, 
+  collectionGroup,
   query, 
   orderBy, 
   limit, 
@@ -15,6 +16,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { getDateId } from '../utils/dateUtils';
+import { getCurrentUser } from '../services/authService';
 
 class FirestoreService {
   constructor() {
@@ -1161,6 +1163,20 @@ class FirestoreService {
     try {
       console.log('👥 Getting total authenticated user count...');
       
+      // Check current user first
+      let currentUserUid = null;
+      try {
+        const currentUser = getCurrentUser();
+        if (currentUser) {
+          currentUserUid = currentUser.uid;
+          console.log('👥 Current user UID:', currentUserUid);
+        } else {
+          console.log('👥 No current user found');
+        }
+      } catch (authError) {
+        console.warn('⚠️ Could not get current user:', authError);
+      }
+      
       // Primary method: Count from users collection (created by ensureUser)
       // This collection contains all authenticated users
       try {
@@ -1169,9 +1185,12 @@ class FirestoreService {
         const usersCount = usersSnapshot.size;
         console.log('👥 Total authenticated users from users collection:', usersCount);
         
+        // Always return the count, even if 0, so we can try fallbacks
         if (usersCount > 0) {
           return { success: true, count: usersCount };
         }
+        // If 0, continue to fallbacks
+        console.log('👥 users collection is empty, trying fallback methods...');
       } catch (usersError) {
         console.warn('⚠️ Could not count from users collection:', usersError);
       }
@@ -1206,13 +1225,81 @@ class FirestoreService {
         const uniqueCount = uniqueUserIds.size;
         console.log('👥 Unique authenticated users from communityPosts:', uniqueCount);
         
-        return { success: true, count: uniqueCount };
+        if (uniqueCount > 0) {
+          return { success: true, count: uniqueCount };
+        }
       } catch (postsError) {
         console.warn('⚠️ Could not count from communityPosts:', postsError);
       }
       
+      // Fallback 3: Count unique user UIDs from subcollections using collectionGroup
+      // This catches users who have data but no top-level document
+      try {
+        console.log('👥 Trying to count from user subcollections using collectionGroup...');
+        const userUids = new Set();
+        
+        // Count from users collection first (if any exist)
+        const usersRef = collection(this.db, 'users');
+        const usersSnapshot = await getDocs(usersRef);
+        usersSnapshot.docs.forEach((doc) => {
+          userUids.add(doc.id);
+        });
+        console.log('👥 Users from users collection:', userUids.size);
+        
+        // Try collectionGroup query for 'days' subcollection
+        // Note: This requires a Firestore index. If it fails, we'll catch the error.
+        try {
+          const allDaysRef = collectionGroup(this.db, 'days');
+          const daysSnapshot = await getDocs(allDaysRef);
+          
+          daysSnapshot.docs.forEach((doc) => {
+            // Extract UID from path: users/{uid}/days/{dateId}
+            const pathParts = doc.ref.path.split('/');
+            if (pathParts.length >= 2 && pathParts[0] === 'users') {
+              userUids.add(pathParts[1]);
+            }
+          });
+          console.log('👥 Added users from days subcollection. Total so far:', userUids.size);
+        } catch (collectionGroupError) {
+          console.warn('⚠️ collectionGroup query failed (may need Firestore index):', collectionGroupError.message);
+          // Continue without collectionGroup
+        }
+        
+        // Also try collectionGroup for 'chats' subcollection
+        try {
+          const allChatsRef = collectionGroup(this.db, 'chats');
+          const chatsSnapshot = await getDocs(allChatsRef);
+          
+          chatsSnapshot.docs.forEach((doc) => {
+            const pathParts = doc.ref.path.split('/');
+            if (pathParts.length >= 2 && pathParts[0] === 'users') {
+              userUids.add(pathParts[1]);
+            }
+          });
+          console.log('👥 Added users from chats subcollection. Total so far:', userUids.size);
+        } catch (chatsError) {
+          console.warn('⚠️ collectionGroup for chats failed:', chatsError.message);
+        }
+        
+        const totalUniqueUsers = userUids.size;
+        console.log('👥 Total unique users from all sources:', totalUniqueUsers);
+        
+        if (totalUniqueUsers > 0) {
+          return { success: true, count: totalUniqueUsers };
+        }
+      } catch (subcollectionsError) {
+        console.warn('⚠️ Could not count from subcollections:', subcollectionsError);
+      }
+      
+      // Final fallback: If current user is logged in, return at least 1
+      // This ensures we show at least the current user
+      if (currentUserUid) {
+        console.log('👥 All counting methods returned 0, but current user exists. Returning 1 as minimum.');
+        return { success: true, count: 1 };
+      }
+      
       // If all methods fail, return 0
-      console.log('⚠️ All counting methods failed, returning 0');
+      console.log('⚠️ All counting methods returned 0 or failed, and no current user');
       return { success: true, count: 0 };
     } catch (error) {
       console.error('❌ Error getting user count:', error);

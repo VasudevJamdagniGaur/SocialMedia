@@ -173,27 +173,63 @@ export default function CommunityPage() {
     }
   };
 
-  // Load active members count
+  // Ensure current user document exists and load active members count
   useEffect(() => {
     const loadActiveMembersCount = async () => {
+      const user = getCurrentUser();
+      
+      // First, ensure current user document exists
+      if (user) {
+        try {
+          await firestoreService.ensureUser(user.uid, {
+            email: user.email,
+            displayName: user.displayName || 'User',
+            createdAt: new Date().toISOString()
+          });
+          console.log('✅ Current user document ensured');
+        } catch (error) {
+          console.error('Error ensuring current user document:', error);
+        }
+      }
+      
+      // Then load the count
       try {
         console.log('📊 Loading active members count...');
         const result = await firestoreService.getTotalUserCount();
         console.log('📊 Result:', result);
+        console.log('📊 Result count value:', result.count);
         if (result.success) {
           console.log('✅ Setting active members count to:', result.count);
-          setActiveMembersCount(result.count);
+          setActiveMembersCount(result.count || 0);
         } else {
           console.warn('⚠️ Failed to get user count:', result.error);
-          setActiveMembersCount(0); // Show 0 if failed
+          // If failed but we have a current user, show at least 1
+          if (user) {
+            console.log('⚠️ Showing 1 as fallback (current user exists)');
+            setActiveMembersCount(1);
+          } else {
+            setActiveMembersCount(0);
+          }
         }
       } catch (error) {
         console.error('❌ Error loading active members count:', error);
-        setActiveMembersCount(0); // Show 0 on error
+        // If error but we have a current user, show at least 1
+        if (user) {
+          setActiveMembersCount(1);
+        } else {
+          setActiveMembersCount(0);
+        }
       }
     };
 
     loadActiveMembersCount();
+    
+    // Also refresh count periodically (every 30 seconds) to catch new users
+    const refreshInterval = setInterval(() => {
+      loadActiveMembersCount();
+    }, 30000);
+    
+    return () => clearInterval(refreshInterval);
   }, []);
 
   // Load community posts from Firestore
