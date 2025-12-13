@@ -4,7 +4,6 @@ import { useTheme } from '../contexts/ThemeContext';
 import { ArrowLeft, Send, Users, User, Image as ImageIcon, X } from 'lucide-react';
 import { getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
-import firestoreService from '../services/firestoreService';
 
 export default function PodGroupChatPage() {
   const navigate = useNavigate();
