@@ -1,18 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
-import { ArrowLeft, Zap, Check } from 'lucide-react';
+import { ArrowLeft, Zap, Check, Calendar, X } from 'lucide-react';
 import { getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
-import { getDateId } from '../utils/dateUtils';
+import { getDateId, formatDateForDisplay } from '../utils/dateUtils';
 import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
+import CalendarPopup from './CalendarPopup';
 
 export default function AllDayReflectionsPage() {
   const navigate = useNavigate();
   const { isDarkMode } = useTheme();
   const [reflections, setReflections] = useState([]);
+  const [filteredReflections, setFilteredReflections] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [reflectionDays, setReflectionDays] = useState([]);
 
   // Format date for display (e.g., "8 October 2025 • Wed, 3:54 pm")
   const formatReflectionDate = (reflectionItem) => {
@@ -220,6 +225,14 @@ export default function AllDayReflectionsPage() {
         
         console.log(`✅ Total reflections loaded: ${allReflections.length}`);
         setReflections(allReflections);
+        setFilteredReflections(allReflections);
+        
+        // Extract reflection days for calendar indicators
+        const daysWithReflections = allReflections.map(r => ({
+          date: r.date,
+          hasReflection: true
+        }));
+        setReflectionDays(daysWithReflections);
       } catch (error) {
         console.error('❌ Error loading reflections:', error);
         setReflections([]);
@@ -230,6 +243,30 @@ export default function AllDayReflectionsPage() {
 
     loadReflections();
   }, []);
+
+  // Filter reflections based on selected date
+  useEffect(() => {
+    if (selectedDate) {
+      const dateId = getDateId(selectedDate);
+      const filtered = reflections.filter(r => r.date === dateId);
+      setFilteredReflections(filtered);
+    } else {
+      setFilteredReflections(reflections);
+    }
+  }, [selectedDate, reflections]);
+
+  const handleCalendarClick = () => {
+    setIsCalendarOpen(true);
+  };
+
+  const handleDateSelect = (date) => {
+    setSelectedDate(date);
+    setIsCalendarOpen(false);
+  };
+
+  const handleClearDateFilter = () => {
+    setSelectedDate(null);
+  };
 
   return (
     <div
@@ -266,9 +303,49 @@ export default function AllDayReflectionsPage() {
             </h1>
           </div>
         </div>
-        <p className={`text-sm ml-14 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+        <p className={`text-sm ml-14 mb-3 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
           All your day reflections
         </p>
+        
+        {/* Date Search */}
+        <div className="ml-14 mb-4">
+          <div
+            onClick={handleCalendarClick}
+            className={`rounded-lg px-3 py-2 flex items-center ${selectedDate ? 'justify-between' : 'justify-center'} cursor-pointer hover:opacity-80 transition-opacity ${
+              isDarkMode ? 'backdrop-blur-md' : 'bg-white'
+            }`}
+            style={isDarkMode ? {
+              backgroundColor: "#262626",
+              boxShadow: "0 2px 8px rgba(0, 0, 0, 0.15)",
+              border: "1px solid rgba(255, 255, 255, 0.08)",
+            } : {
+              boxShadow: "0 2px 6px rgba(0, 0, 0, 0.08)",
+            }}
+          >
+            <div className={`flex items-center ${selectedDate ? 'space-x-2' : 'flex-col space-y-1'}`}>
+              <Calendar className="w-4 h-4" style={{ color: isDarkMode ? "#7DD3C0" : "#87A96B" }} />
+              <div className={selectedDate ? '' : 'text-center'}>
+                <div className={`text-sm font-medium ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                  {selectedDate ? formatDateForDisplay(selectedDate) : 'Search by date'}
+                </div>
+                <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  {selectedDate ? 'Tap to change date' : 'Tap to select a date'}
+                </div>
+              </div>
+            </div>
+            {selectedDate && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleClearDateFilter();
+                }}
+                className="ml-2 p-1 rounded-full hover:opacity-80 transition-opacity"
+              >
+                <X className={`w-4 h-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Reflections List */}
@@ -283,7 +360,7 @@ export default function AllDayReflectionsPage() {
             Loading reflections...
           </p>
         </div>
-      ) : reflections.length === 0 ? (
+      ) : filteredReflections.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12">
           <div
             className={`w-16 h-16 rounded-lg flex items-center justify-center mb-4 ${
@@ -300,12 +377,12 @@ export default function AllDayReflectionsPage() {
             <span className="text-3xl">🌿</span>
           </div>
           <p className={`text-sm text-center ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-            No reflections yet. Start chatting with Deite to generate reflections!
+            {selectedDate ? 'No reflection found for the selected date.' : 'No reflections yet. Start chatting with Deite to generate reflections!'}
           </p>
         </div>
       ) : (
         <div className="space-y-3 max-w-sm mx-auto">
-          {reflections.map((reflection) => (
+          {filteredReflections.map((reflection) => (
             <div
               key={reflection.id}
               className={`rounded-2xl p-4 relative overflow-hidden ${
@@ -336,6 +413,15 @@ export default function AllDayReflectionsPage() {
           ))}
         </div>
       )}
+
+      {/* Calendar Popup */}
+      <CalendarPopup
+        isOpen={isCalendarOpen}
+        onClose={() => setIsCalendarOpen(false)}
+        selectedDate={selectedDate || new Date()}
+        onDateSelect={handleDateSelect}
+        chatDays={reflectionDays}
+      />
     </div>
   );
 }
