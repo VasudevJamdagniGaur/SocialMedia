@@ -318,8 +318,8 @@ export default function PodPage() {
                 alt="Crew"
                 className="w-16 h-16 object-contain"
                 style={{
-                  filter: 'brightness(0) invert(1)',
-                  WebkitFilter: 'brightness(0) invert(1)'
+                  filter: isDarkMode ? 'brightness(0) invert(1)' : 'brightness(0)',
+                  WebkitFilter: isDarkMode ? 'brightness(0) invert(1)' : 'brightness(0)'
                 }}
               />
               <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
