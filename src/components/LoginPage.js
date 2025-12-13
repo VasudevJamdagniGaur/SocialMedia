@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { useNavigate } from 'react-router-dom';
 import { Brain, Heart, Star, Mail, Lock, Eye, EyeOff } from "lucide-react";
-import { signInUser } from '../services/authService';
+import { signInUser, getCurrentUser } from '../services/authService';
+import firestoreService from '../services/firestoreService';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -66,6 +67,23 @@ export default function LoginPage() {
       
       if (result.success) {
         console.log('User signed in successfully:', result.user);
+        
+        // Ensure user document exists in Firestore (for counting authenticated users)
+        const user = getCurrentUser();
+        if (user) {
+          try {
+            await firestoreService.ensureUser(user.uid, {
+              email: user.email,
+              displayName: user.displayName || 'User',
+              createdAt: new Date().toISOString()
+            });
+            console.log('✅ User document ensured in Firestore');
+          } catch (error) {
+            console.error('Error ensuring user document:', error);
+            // Don't block login if this fails
+          }
+        }
+        
         navigate('/dashboard');
       } else {
         if (

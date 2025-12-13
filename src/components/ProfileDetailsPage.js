@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { signUpUser, getCurrentUser } from '../services/authService';
+import firestoreService from '../services/firestoreService';
 import LaserFlow from './LaserFlow';
 import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
 
@@ -95,6 +96,19 @@ const ProfileDetailsPage = () => {
         // Get the current user to save profile data
         const user = getCurrentUser();
         if (user) {
+          // Create user document in Firestore (for counting authenticated users)
+          try {
+            await firestoreService.ensureUser(user.uid, {
+              email: user.email,
+              displayName: user.displayName || name.trim(),
+              createdAt: new Date().toISOString()
+            });
+            console.log('✅ User document created in Firestore');
+          } catch (error) {
+            console.error('Error creating user document:', error);
+            // Don't block signup if this fails
+          }
+          
           // Calculate age from birthday
           const age = calculateAge(birthday);
           

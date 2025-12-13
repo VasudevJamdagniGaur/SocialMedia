@@ -18,6 +18,26 @@ export default function DashboardPage() {
   const [chatDays, setChatDays] = useState([]);
   const [profilePicture, setProfilePicture] = useState(null);
 
+  // Ensure user document exists in Firestore (for counting authenticated users)
+  useEffect(() => {
+    const ensureUserExists = async () => {
+      const user = getCurrentUser();
+      if (user) {
+        try {
+          await firestoreService.ensureUser(user.uid, {
+            email: user.email,
+            displayName: user.displayName || 'User',
+            createdAt: new Date().toISOString()
+          });
+        } catch (error) {
+          console.error('Error ensuring user document:', error);
+        }
+      }
+    };
+    
+    ensureUserExists();
+  }, []);
+
   // Load profile picture
   useEffect(() => {
     const loadProfilePicture = () => {
