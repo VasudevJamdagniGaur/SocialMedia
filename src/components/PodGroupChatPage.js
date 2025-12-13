@@ -83,17 +83,21 @@ export default function PodGroupChatPage() {
   const userName = user?.displayName || 'You';
   const [crewMembers, setCrewMembers] = useState([]);
   const [isLoadingCrew, setIsLoadingCrew] = useState(true);
+  const [sphereId, setSphereId] = useState(null);
+  const [isLoadingSphere, setIsLoadingSphere] = useState(true);
 
-  // Load crew members
+  // Load crew sphere and members
   useEffect(() => {
-    const loadCrewMembers = async () => {
+    const loadCrewSphere = async () => {
       if (!user) {
         setIsLoadingCrew(false);
+        setIsLoadingSphere(false);
         return;
       }
 
       try {
         setIsLoadingCrew(true);
+        setIsLoadingSphere(true);
         
         // Update user metadata to mark as active
         await firestoreService.updateUserMetadata(user.uid, {
@@ -102,25 +106,50 @@ export default function PodGroupChatPage() {
           crewEnrolled: localStorage.getItem(`user_crew_enrolled_${user.uid}`) === 'true'
         });
 
-        // Get crew members
-        const result = await firestoreService.getCrewMembers(user.uid, 5);
+        // Get user's crew sphere
+        const sphereResult = await firestoreService.getUserCrewSphere(user.uid);
         
-        if (result.success && result.members.length > 0) {
-          setCrewMembers(result.members);
+        if (sphereResult.success && sphereResult.sphereId) {
+          setSphereId(sphereResult.sphereId);
+          
+          // Get members from sphere
+          if (sphereResult.sphere && sphereResult.sphere.members) {
+            const memberUids = sphereResult.sphere.members.filter(uid => uid !== user.uid);
+            
+            // Get member details
+            const members = [];
+            for (const memberUid of memberUids) {
+              try {
+                const memberResult = await firestoreService.getUser(memberUid);
+                if (memberResult.success && memberResult.data) {
+                  members.push({
+                    uid: memberUid,
+                    displayName: memberResult.data.displayName || 'User',
+                    profilePicture: memberResult.data.profilePicture || null
+                  });
+                }
+              } catch (err) {
+                console.error(`Error loading member ${memberUid}:`, err);
+              }
+            }
+            
+            setCrewMembers(members);
+          }
         } else {
-          // Only show real members, no fallback
+          setSphereId(null);
           setCrewMembers([]);
         }
       } catch (error) {
-        console.error('Error loading crew members:', error);
-        // Only show real members, no fallback
+        console.error('Error loading crew sphere:', error);
+        setSphereId(null);
         setCrewMembers([]);
       } finally {
         setIsLoadingCrew(false);
+        setIsLoadingSphere(false);
       }
     };
 
-    loadCrewMembers();
+    loadCrewSphere();
   }, [user, profilePicture]);
 
   const groupMembers = [
@@ -146,6 +175,104 @@ export default function PodGroupChatPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Helper function to get member info
+  const getMemberInfo = (uid) => {
+    if (uid === user?.uid) {
+      return {
+        emoji: '👤',
+        color: isDarkMode ? '#8AB4F8' : '#87A96B',
+        profilePicture: profilePicture
+      };
+    }
+    const member = crewMembers.find(m => m.uid === uid);
+    if (member) {
+      const index = crewMembers.findIndex(m => m.uid === uid);
+      return {
+        emoji: '👤',
+        color: ['#7DD3C0', '#FDD663', '#8AB4F8', '#E6B3BA', '#81C995'][index % 5],
+        profilePicture: member.profilePicture || null
+      };
+    }
+    return {
+      emoji: '👤',
+      color: isDarkMode ? '#8AB4F8' : '#87A96B',
+      profilePicture: null
+    };
+  };
+
+  // Load messages from crew sphere and set up real-time listener
+  useEffect(() => {
+    if (!sphereId || !user) {
+      setMessages([]);
+      return;
+    }
+
+    let unsubscribe = null;
+
+    const loadMessages = async () => {
+      try {
+        // Load initial messages
+        const result = await firestoreService.getCrewSphereMessages(sphereId);
+        if (result.success) {
+          // Format messages for display
+          const formattedMessages = result.messages.map(msg => {
+            const isCurrentUser = msg.senderUid === user.uid;
+            const memberInfo = getMemberInfo(msg.senderUid);
+            
+            return {
+              id: msg.id,
+              sender: msg.sender,
+              senderUid: msg.senderUid,
+              message: msg.message,
+              image: msg.image,
+              time: msg.time,
+              emoji: memberInfo.emoji,
+              color: memberInfo.color,
+              isCurrentUser: isCurrentUser,
+              profilePicture: memberInfo.profilePicture
+            };
+          });
+          
+          setMessages(formattedMessages);
+        }
+
+        // Set up real-time listener
+        unsubscribe = firestoreService.subscribeToCrewSphereMessages(sphereId, (newMessages) => {
+          const formattedMessages = newMessages.map(msg => {
+            const isCurrentUser = msg.senderUid === user.uid;
+            const memberInfo = getMemberInfo(msg.senderUid);
+            
+            return {
+              id: msg.id,
+              sender: msg.sender,
+              senderUid: msg.senderUid,
+              message: msg.message,
+              image: msg.image,
+              time: msg.time,
+              emoji: memberInfo.emoji,
+              color: memberInfo.color,
+              isCurrentUser: isCurrentUser,
+              profilePicture: memberInfo.profilePicture
+            };
+          });
+          
+          setMessages(formattedMessages);
+        });
+      } catch (error) {
+        console.error('Error loading crew sphere messages:', error);
+        setMessages([]);
+      }
+    };
+
+    loadMessages();
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [sphereId, user, crewMembers, profilePicture, isDarkMode]);
 
   const handleImageSelect = (e) => {
     const file = e.target.files?.[0];
@@ -176,37 +303,49 @@ export default function PodGroupChatPage() {
     }
   };
 
-  const handleSend = () => {
-    if (inputMessage.trim() || selectedImage) {
-      const user = getCurrentUser();
-      const userName = user?.displayName || 'You';
-      
-      // Create message object
-      const newMessage = {
-        id: Date.now().toString(),
-        sender: userName,
-        message: inputMessage.trim(),
-        image: selectedImage ? URL.createObjectURL(selectedImage) : null,
-        time: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
-        emoji: '👤',
-        color: isDarkMode ? '#8AB4F8' : '#87A96B',
-        isCurrentUser: true
-      };
-      
-      // Add message to messages array
-      setMessages(prevMessages => [...prevMessages, newMessage]);
-      
-      // Clear input
-      setInputMessage('');
-      setSelectedImage(null);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
+  const handleSend = async () => {
+    if ((!inputMessage.trim() && !selectedImage) || !sphereId || !user) {
+      return;
+    }
+
+    const messageText = inputMessage.trim();
+    
+    // selectedImage is already a data URL string from FileReader in handleImageSelect
+    const imageData = selectedImage || null;
+
+    await saveMessageToFirestore(messageText, imageData);
+  };
+
+  const saveMessageToFirestore = async (messageText, imageData) => {
+    if (!sphereId || !user) return;
+
+    try {
+      // Save message to Firestore
+      const result = await firestoreService.saveCrewSphereMessage(sphereId, user.uid, {
+        senderName: user.displayName || 'User',
+        message: messageText,
+        image: imageData
+      });
+
+      if (result.success) {
+        // Clear input
+        setInputMessage('');
+        setSelectedImage(null);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+        
+        // Scroll to bottom after message is added
+        setTimeout(() => {
+          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }, 100);
+      } else {
+        console.error('Error saving message:', result.error);
+        alert('Failed to send message. Please try again.');
       }
-      
-      // Scroll to bottom after message is added
-      setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }, 100);
+    } catch (error) {
+      console.error('Error saving message:', error);
+      alert('Failed to send message. Please try again.');
     }
   };
 

@@ -82,6 +82,22 @@ service cloud.firestore {
       allow update: if request.auth != null && 
         (request.auth.uid == resource.data.creatorUid ||
          request.auth.uid in resource.data.members);
+      
+      // Crew sphere messages - shared group chat
+      match /messages/{messageId} {
+        // Allow members to read all messages in the sphere
+        allow read: if request.auth != null && 
+          (request.auth.uid in get(/databases/$(database)/documents/crewSpheres/$(sphereId)).data.members ||
+           request.auth.uid == get(/databases/$(database)/documents/crewSpheres/$(sphereId)).data.creatorUid);
+        // Allow members to create messages
+        allow create: if request.auth != null && 
+          (request.auth.uid in get(/databases/$(database)/documents/crewSpheres/$(sphereId)).data.members ||
+           request.auth.uid == get(/databases/$(database)/documents/crewSpheres/$(sphereId)).data.creatorUid) &&
+          request.resource.data.senderUid == request.auth.uid;
+        // Allow users to update/delete only their own messages
+        allow update, delete: if request.auth != null && 
+          resource.data.senderUid == request.auth.uid;
+      }
     }
     
     // User pods - allow access to pods that reference crew spheres

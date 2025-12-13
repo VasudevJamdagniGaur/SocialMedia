@@ -12,7 +12,8 @@ import {
   serverTimestamp,
   where,
   increment,
-  deleteDoc
+  deleteDoc,
+  onSnapshot
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { getDateId } from '../utils/dateUtils';
@@ -1475,6 +1476,128 @@ class FirestoreService {
     } catch (error) {
       console.error('❌ Error getting user count:', error);
       return { success: false, error: error.message, count: 0 };
+    }
+  }
+
+  /**
+   * Get user's crew sphere ID
+   */
+  async getUserCrewSphere(uid) {
+    try {
+      // Get user's pods to find the crew sphere
+      const podsRef = collection(this.db, `users/${uid}/pods`);
+      const podsSnapshot = await getDocs(podsRef);
+      
+      for (const podDoc of podsSnapshot.docs) {
+        const podData = podDoc.data();
+        if (podData.sphereId) {
+          // Verify the sphere exists and user is a member
+          const sphereRef = doc(this.db, `crewSpheres/${podData.sphereId}`);
+          const sphereSnap = await getDoc(sphereRef);
+          
+          if (sphereSnap.exists()) {
+            const sphereData = sphereSnap.data();
+            if (sphereData.members && sphereData.members.includes(uid)) {
+              return { success: true, sphereId: podData.sphereId, sphere: sphereData };
+            }
+          }
+        }
+      }
+      
+      return { success: false, sphereId: null };
+    } catch (error) {
+      console.error('Error getting user crew sphere:', error);
+      return { success: false, error: error.message, sphereId: null };
+    }
+  }
+
+  /**
+   * Save message to crew sphere
+   */
+  async saveCrewSphereMessage(sphereId, senderUid, messageData) {
+    try {
+      const messageRef = doc(collection(this.db, `crewSpheres/${sphereId}/messages`));
+      const messageDoc = {
+        id: messageRef.id,
+        senderUid: senderUid,
+        senderName: messageData.senderName || 'User',
+        message: messageData.message || '',
+        image: messageData.image || null,
+        timestamp: serverTimestamp(),
+        createdAt: serverTimestamp()
+      };
+      
+      await setDoc(messageRef, messageDoc);
+      
+      return { success: true, messageId: messageRef.id };
+    } catch (error) {
+      console.error('Error saving crew sphere message:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Get messages from crew sphere
+   */
+  async getCrewSphereMessages(sphereId) {
+    try {
+      const messagesRef = collection(this.db, `crewSpheres/${sphereId}/messages`);
+      const q = query(messagesRef, orderBy('timestamp', 'asc'));
+      const snapshot = await getDocs(q);
+      
+      const messages = [];
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        messages.push({
+          id: doc.id,
+          senderUid: data.senderUid,
+          sender: data.senderName || 'User',
+          message: data.message || '',
+          image: data.image || null,
+          timestamp: data.timestamp?.toDate() || data.createdAt?.toDate() || new Date(),
+          time: (data.timestamp?.toDate() || data.createdAt?.toDate() || new Date()).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+        });
+      });
+      
+      return { success: true, messages };
+    } catch (error) {
+      console.error('Error getting crew sphere messages:', error);
+      return { success: false, error: error.message, messages: [] };
+    }
+  }
+
+  /**
+   * Set up real-time listener for crew sphere messages
+   */
+  subscribeToCrewSphereMessages(sphereId, callback) {
+    try {
+      const messagesRef = collection(this.db, `crewSpheres/${sphereId}/messages`);
+      const q = query(messagesRef, orderBy('timestamp', 'asc'));
+      
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const messages = [];
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          messages.push({
+            id: doc.id,
+            senderUid: data.senderUid,
+            sender: data.senderName || 'User',
+            message: data.message || '',
+            image: data.image || null,
+            timestamp: data.timestamp?.toDate() || data.createdAt?.toDate() || new Date(),
+            time: (data.timestamp?.toDate() || data.createdAt?.toDate() || new Date()).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+          });
+        });
+        callback(messages);
+      }, (error) => {
+        console.error('Error in crew sphere messages listener:', error);
+        callback([]);
+      });
+      
+      return unsubscribe;
+    } catch (error) {
+      console.error('Error setting up crew sphere messages listener:', error);
+      return () => {}; // Return empty unsubscribe function
     }
   }
 }
