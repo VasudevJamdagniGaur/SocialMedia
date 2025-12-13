@@ -452,28 +452,6 @@ export default function CommunityPage() {
           </p>
         </div>
 
-        {/* Create Post Button */}
-        <div className="mb-4">
-          <button
-            onClick={() => setShowCreatePost(true)}
-            className={`w-full rounded-2xl p-4 flex items-center justify-center space-x-2 transition-opacity hover:opacity-90 ${
-              isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
-            }`}
-            style={isDarkMode ? {
-              backgroundColor: "#262626",
-              boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
-            } : {
-              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)",
-            }}
-          >
-            <Plus className={`w-5 h-5 ${isDarkMode ? 'text-[#8AB4F8]' : 'text-[#87A96B]'}`} />
-            <span className={`font-medium ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-              Create a Post
-            </span>
-          </button>
-        </div>
-
         {/* Community Cards */}
         <div className="space-y-4">
           {/* Community Stats Card */}
@@ -769,6 +747,18 @@ export default function CommunityPage() {
           </div>
         </div>
       </div>
+
+      {/* Floating Action Button - Create Post */}
+      <button
+        onClick={() => setShowCreatePost(true)}
+        className="fixed bottom-20 left-6 z-40 w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95 shadow-lg"
+        style={{
+          backgroundColor: "#8AB4F8",
+          boxShadow: "0 4px 16px rgba(138, 180, 248, 0.4)",
+        }}
+      >
+        <Plus className="w-6 h-6 text-white" strokeWidth={2.5} />
+      </button>
 
       {/* Create Post Modal */}
       {showCreatePost && (
