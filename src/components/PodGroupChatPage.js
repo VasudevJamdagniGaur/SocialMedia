@@ -135,50 +135,7 @@ export default function PodGroupChatPage() {
     { name: 'AI', emoji: '🤖', color: '#B19CD9', avatar: '/ai-avatar.png' },
   ];
 
-  const messages = [
-    { 
-      sender: 'Alex', 
-      message: 'Hey everyone! How are you all doing today? 🌟', 
-      time: '10:30 AM',
-      emoji: '👤',
-      color: '#7DD3C0'
-    },
-    { 
-      sender: 'AI', 
-      message: 'Hello! I\'m here to support everyone in their wellness journey. How can I help today?', 
-      time: '10:31 AM',
-      emoji: '🤖',
-      color: '#B19CD9'
-    },
-    { 
-      sender: 'Sam', 
-      message: 'I\'ve been practicing mindfulness this week and it\'s been amazing! 🧘‍♀️', 
-      time: '10:32 AM',
-      emoji: '👤',
-      color: '#FDD663'
-    },
-    { 
-      sender: 'Jordan', 
-      message: 'That\'s awesome Sam! I\'ve been struggling with stress lately. Any tips?', 
-      time: '10:33 AM',
-      emoji: '👤',
-      color: '#8AB4F8'
-    },
-    { 
-      sender: 'AI', 
-      message: 'Great question Jordan! Deep breathing exercises and short breaks can help. Would you like me to guide you through a quick 5-minute stress relief exercise?', 
-      time: '10:34 AM',
-      emoji: '🤖',
-      color: '#B19CD9'
-    },
-    { 
-      sender: 'Taylor', 
-      message: 'I\'d love to join that too! 🙋‍♀️', 
-      time: '10:35 AM',
-      emoji: '👤',
-      color: '#E6B3BA'
-    },
-  ];
+  const [messages, setMessages] = useState([]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -317,7 +274,18 @@ export default function PodGroupChatPage() {
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto px-4 py-4 pb-20" style={{ scrollbarWidth: 'thin' }}>
         <div className="space-y-4 max-w-sm mx-auto">
-          {messages.map((msg, index) => (
+          {messages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center min-h-[400px] text-center px-4">
+              <Users className={`w-16 h-16 mb-4 ${isDarkMode ? 'text-gray-600' : 'text-gray-300'}`} />
+              <h3 className={`text-lg font-semibold mb-2 ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                No messages yet
+              </h3>
+              <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                Start the conversation with your crew!
+              </p>
+            </div>
+          ) : (
+            messages.map((msg, index) => (
             <div
               key={index}
               className={`flex items-start space-x-2 ${
@@ -371,7 +339,8 @@ export default function PodGroupChatPage() {
                 )}
               </div>
             </div>
-          ))}
+            ))
+          )}
           <div ref={messagesEndRef} />
         </div>
       </div>
