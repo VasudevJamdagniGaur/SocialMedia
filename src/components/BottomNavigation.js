@@ -107,10 +107,10 @@ export default function BottomNavigation() {
               opacity: isPodActive ? 1 : 0.4,
               filter: isPodActive 
                 ? (isDarkMode ? 'brightness(0) invert(1)' : 'brightness(0)')
-                : 'none',
+                : (isDarkMode ? 'none' : 'brightness(0) saturate(0)'),
               WebkitFilter: isPodActive 
                 ? (isDarkMode ? 'brightness(0) invert(1)' : 'brightness(0)')
-                : 'none',
+                : (isDarkMode ? 'none' : 'brightness(0) saturate(0)'),
               imageRendering: 'crisp-edges',
               WebkitImageRendering: 'crisp-edges'
             }}
