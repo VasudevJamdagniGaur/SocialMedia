@@ -645,11 +645,11 @@ export default function CommunityPage() {
                 <div className="flex items-center justify-center gap-2 mb-1">
                   <Layers className={`w-5 h-5 ${isDarkMode ? 'text-white' : 'text-gray-800'}`} strokeWidth={2} />
                   <div className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                    89
+                    1
                   </div>
                 </div>
                 <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                  Existing Pods
+                  Existing Spheres
                 </div>
               </div>
             </div>
