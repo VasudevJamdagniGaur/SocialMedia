@@ -528,16 +528,27 @@ export default function PodPage() {
                 <p className={`text-sm text-center italic ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Generating crew reflection...</p>
               </div>
             ) : podReflection ? (
-              <div>
-                <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-600'} line-clamp-3`}>
-                  {podReflection}
-                </p>
-                <p className={`text-xs mt-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  Tap to view all crews →
-                </p>
+              <div
+                onClick={() => navigate('/pod/reflections')}
+                className="cursor-pointer"
+              >
+                <div className="flex items-start gap-2">
+                  <ChevronRight className={`w-4 h-4 mt-0.5 flex-shrink-0 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
+                  <div className="flex-1">
+                    <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-600'} line-clamp-3`}>
+                      {podReflection}
+                    </p>
+                    <p className={`text-xs mt-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                      Tap to view all reflections →
+                    </p>
+                  </div>
+                </div>
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center py-4">
+              <div
+                onClick={() => navigate('/pod/reflections')}
+                className="flex flex-col items-center justify-center py-4 cursor-pointer"
+              >
                 <div
                   className={`w-12 h-12 rounded-lg flex items-center justify-center mb-3 ${
                     isDarkMode ? 'backdrop-blur-md' : 'bg-white'
@@ -553,7 +564,7 @@ export default function PodPage() {
                   <span className="text-2xl">🌿</span>
                 </div>
                 <p className={`text-sm text-center italic ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                  No reflection yet. Tap to view all pods →
+                  No reflection yet. Tap to view all reflections →
                 </p>
               </div>
             )}

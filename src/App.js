@@ -19,6 +19,7 @@ import CommunityPage from './components/CommunityPage';
 import PodPage from './components/PodPage';
 import PodGroupChatPage from './components/PodGroupChatPage';
 import AllPodsPage from './components/AllPodsPage';
+import AllReflectionsPage from './components/AllReflectionsPage';
 import BottomNavigation from './components/BottomNavigation';
 
 // Lazy load Capacitor App plugin for deep link handling
@@ -169,6 +170,7 @@ function AppContent() {
         <Route path="/pod" element={<PodPage />} />
         <Route path="/pod/chat" element={<PodGroupChatPage />} />
         <Route path="/pod/all" element={<AllPodsPage />} />
+        <Route path="/pod/reflections" element={<AllReflectionsPage />} />
         <Route path="/community" element={<CommunityPage />} />
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/wellbeing" element={<EmotionalWellbeing />} />
