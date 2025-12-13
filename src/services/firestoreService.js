@@ -1035,6 +1035,124 @@ class FirestoreService {
       return { success: false, error: error.message, reflection: '' };
     }
   }
+
+  /**
+   * Get crew members based on emotional state similarity and activity
+   * Returns users with similar emotional states who were active in last 7 days
+   */
+  async getCrewMembers(currentUserId, limitCount = 5) {
+    try {
+      console.log('👥 Getting crew members for user:', currentUserId);
+      
+      // Get current user's emotional state (average of last 7 days)
+      const currentUserMoodData = await this.getMoodChartDataNew(currentUserId, 7);
+      if (!currentUserMoodData.success || currentUserMoodData.moodData.length === 0) {
+        console.log('⚠️ No mood data for current user, returning empty crew');
+        return { success: true, members: [] };
+      }
+
+      const currentUserMoods = currentUserMoodData.moodData;
+      const avgHappiness = currentUserMoods.reduce((sum, d) => sum + (d.happiness || 50), 0) / currentUserMoods.length;
+      const avgEnergy = currentUserMoods.reduce((sum, d) => sum + (d.energy || 50), 0) / currentUserMoods.length;
+      const avgStress = currentUserMoods.reduce((sum, d) => sum + (d.stress || 30), 0) / currentUserMoods.length;
+      const avgAnxiety = currentUserMoods.reduce((sum, d) => sum + (d.anxiety || 30), 0) / currentUserMoods.length;
+
+      console.log('📊 Current user emotional state:', { avgHappiness, avgEnergy, avgStress, avgAnxiety });
+
+      // Get all users from usersMetadata collection (we'll create this)
+      // For now, we'll need to maintain a usersMetadata collection
+      // Check if usersMetadata collection exists, if not return empty
+      const usersMetadataRef = collection(this.db, 'usersMetadata');
+      const usersSnapshot = await getDocs(usersMetadataRef);
+      
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
+
+      const potentialMembers = [];
+
+      // Check each user
+      for (const userDoc of usersSnapshot.docs) {
+        const userId = userDoc.id;
+        if (userId === currentUserId) continue; // Skip current user
+
+        const userData = userDoc.data();
+        
+        // Check if user is enrolled in crew
+        const isEnrolled = userData.crewEnrolled === true;
+        if (!isEnrolled) continue;
+
+        // Check if user was active in last 7 days
+        const lastActive = userData.lastActive;
+        if (!lastActive) continue;
+        
+        const lastActiveDate = lastActive.toDate ? lastActive.toDate() : new Date(lastActive);
+        const lastActiveStr = lastActiveDate.toISOString().split('T')[0];
+        
+        if (lastActiveStr < sevenDaysAgoStr) continue; // Not active in last 7 days
+
+        // Get user's emotional state
+        const userMoodData = await this.getMoodChartDataNew(userId, 7);
+        if (!userMoodData.success || userMoodData.moodData.length === 0) continue;
+
+        const userMoods = userMoodData.moodData;
+        const userAvgHappiness = userMoods.reduce((sum, d) => sum + (d.happiness || 50), 0) / userMoods.length;
+        const userAvgEnergy = userMoods.reduce((sum, d) => sum + (d.energy || 50), 0) / userMoods.length;
+        const userAvgStress = userMoods.reduce((sum, d) => sum + (d.stress || 30), 0) / userMoods.length;
+        const userAvgAnxiety = userMoods.reduce((sum, d) => sum + (d.anxiety || 30), 0) / userMoods.length;
+
+        // Calculate similarity score (lower difference = more similar)
+        const happinessDiff = Math.abs(avgHappiness - userAvgHappiness);
+        const energyDiff = Math.abs(avgEnergy - userAvgEnergy);
+        const stressDiff = Math.abs(avgStress - userAvgStress);
+        const anxietyDiff = Math.abs(avgAnxiety - userAvgAnxiety);
+        
+        const totalDiff = happinessDiff + energyDiff + stressDiff + anxietyDiff;
+        const similarityScore = 400 - totalDiff; // Higher score = more similar
+
+        potentialMembers.push({
+          uid: userId,
+          displayName: userData.displayName || 'User',
+          profilePicture: userData.profilePicture || null,
+          similarityScore,
+          emotionalState: {
+            happiness: userAvgHappiness,
+            energy: userAvgEnergy,
+            stress: userAvgStress,
+            anxiety: userAvgAnxiety
+          }
+        });
+      }
+
+      // Sort by similarity and take top N
+      potentialMembers.sort((a, b) => b.similarityScore - a.similarityScore);
+      const selectedMembers = potentialMembers.slice(0, limitCount);
+
+      console.log('✅ Found crew members:', selectedMembers.length);
+      return { success: true, members: selectedMembers };
+    } catch (error) {
+      console.error('❌ Error getting crew members:', error);
+      return { success: false, error: error.message, members: [] };
+    }
+  }
+
+  /**
+   * Update user metadata for crew matching
+   */
+  async updateUserMetadata(uid, userData) {
+    try {
+      const userMetadataRef = doc(this.db, `usersMetadata/${uid}`);
+      await setDoc(userMetadataRef, {
+        ...userData,
+        lastActive: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating user metadata:', error);
+      return { success: false, error: error.message };
+    }
+  }
 }
 
 export default new FirestoreService();

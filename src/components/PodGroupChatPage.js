@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
 import { ArrowLeft, Send, Users, User, Image as ImageIcon, X } from 'lucide-react';
 import { getCurrentUser } from '../services/authService';
+import firestoreService from '../services/firestoreService';
 
 export default function PodGroupChatPage() {
   const navigate = useNavigate();
@@ -64,7 +65,58 @@ export default function PodGroupChatPage() {
 
   const user = getCurrentUser();
   const userName = user?.displayName || 'You';
-  
+  const [crewMembers, setCrewMembers] = useState([]);
+  const [isLoadingCrew, setIsLoadingCrew] = useState(true);
+
+  // Load crew members
+  useEffect(() => {
+    const loadCrewMembers = async () => {
+      if (!user) {
+        setIsLoadingCrew(false);
+        return;
+      }
+
+      try {
+        setIsLoadingCrew(true);
+        
+        // Update user metadata to mark as active
+        await firestoreService.updateUserMetadata(user.uid, {
+          displayName: user.displayName || 'User',
+          profilePicture: profilePicture,
+          crewEnrolled: localStorage.getItem(`user_crew_enrolled_${user.uid}`) === 'true'
+        });
+
+        // Get crew members
+        const result = await firestoreService.getCrewMembers(user.uid, 5);
+        
+        if (result.success && result.members.length > 0) {
+          setCrewMembers(result.members);
+        } else {
+          // Fallback to default members if no crew members found
+          setCrewMembers([
+            { name: 'Alex', emoji: '👤', color: '#7DD3C0' },
+            { name: 'Sam', emoji: '👤', color: '#FDD663' },
+            { name: 'Jordan', emoji: '👤', color: '#8AB4F8' },
+            { name: 'Taylor', emoji: '👤', color: '#E6B3BA' },
+          ]);
+        }
+      } catch (error) {
+        console.error('Error loading crew members:', error);
+        // Fallback to default members on error
+        setCrewMembers([
+          { name: 'Alex', emoji: '👤', color: '#7DD3C0' },
+          { name: 'Sam', emoji: '👤', color: '#FDD663' },
+          { name: 'Jordan', emoji: '👤', color: '#8AB4F8' },
+          { name: 'Taylor', emoji: '👤', color: '#E6B3BA' },
+        ]);
+      } finally {
+        setIsLoadingCrew(false);
+      }
+    };
+
+    loadCrewMembers();
+  }, [user, profilePicture]);
+
   const groupMembers = [
     { 
       name: userName, 
@@ -73,10 +125,13 @@ export default function PodGroupChatPage() {
       isCurrentUser: true,
       profilePicture: profilePicture
     },
-    { name: 'Alex', emoji: '👤', color: '#7DD3C0' },
-    { name: 'Sam', emoji: '👤', color: '#FDD663' },
-    { name: 'Jordan', emoji: '👤', color: '#8AB4F8' },
-    { name: 'Taylor', emoji: '👤', color: '#E6B3BA' },
+    ...crewMembers.map((member, index) => ({
+      name: member.displayName || member.name || 'User',
+      emoji: '👤',
+      color: ['#7DD3C0', '#FDD663', '#8AB4F8', '#E6B3BA', '#81C995'][index % 5],
+      profilePicture: member.profilePicture || null,
+      uid: member.uid
+    })),
     { name: 'AI', emoji: '🤖', color: '#B19CD9', avatar: '/ai-avatar.png' },
   ];
 
@@ -226,10 +281,10 @@ export default function PodGroupChatPage() {
             <div
               className="w-10 h-10 rounded-full flex items-center justify-center text-sm mb-1 overflow-hidden"
               style={{
-                backgroundColor: (member.isCurrentUser && member.profilePicture) || member.avatar
+                backgroundColor: (member.isCurrentUser && member.profilePicture) || member.avatar || member.profilePicture
                   ? "transparent" 
                   : (isDarkMode ? member.color + '30' : member.color + '20'),
-                border: (member.isCurrentUser && member.profilePicture) || member.avatar
+                border: (member.isCurrentUser && member.profilePicture) || member.avatar || member.profilePicture
                   ? "none" 
                   : `2px solid ${member.color}40`,
               }}
@@ -240,7 +295,7 @@ export default function PodGroupChatPage() {
                   alt={member.name} 
                   className="w-full h-full object-cover"
                 />
-              ) : member.isCurrentUser && member.profilePicture ? (
+              ) : (member.isCurrentUser || member.profilePicture) && member.profilePicture ? (
                 <img 
                   src={member.profilePicture} 
                   alt={member.name} 

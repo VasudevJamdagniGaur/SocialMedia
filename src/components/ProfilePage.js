@@ -822,11 +822,23 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
     }
   };
 
-  const handleCrewEnrollmentToggle = () => {
+  const handleCrewEnrollmentToggle = async () => {
     if (!user) return;
     const newValue = !isCrewEnrolled;
     setIsCrewEnrolled(newValue);
     localStorage.setItem(`user_crew_enrolled_${user.uid}`, newValue.toString());
+    
+    // Update user metadata in Firestore
+    try {
+      const savedPicture = localStorage.getItem(`user_profile_picture_${user.uid}`);
+      await firestoreService.updateUserMetadata(user.uid, {
+        displayName: user.displayName || 'User',
+        profilePicture: savedPicture,
+        crewEnrolled: newValue
+      });
+    } catch (error) {
+      console.error('Error updating user metadata:', error);
+    }
   };
 
   const handleDeleteAccount = async () => {

@@ -18,6 +18,7 @@ export default function PodPage() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [podDays, setPodDays] = useState([]);
+  const [crewMembers, setCrewMembers] = useState([]);
 
   // Load profile picture
   useEffect(() => {
@@ -95,6 +96,48 @@ export default function PodPage() {
 
     loadPodDays();
   }, []);
+
+  // Load crew members
+  useEffect(() => {
+    const loadCrewMembers = async () => {
+      const user = getCurrentUser();
+      if (!user) return;
+
+      try {
+        // Update user metadata to mark as active
+        await firestoreService.updateUserMetadata(user.uid, {
+          displayName: user.displayName || 'User',
+          profilePicture: profilePicture,
+          crewEnrolled: localStorage.getItem(`user_crew_enrolled_${user.uid}`) === 'true'
+        });
+
+        // Get crew members
+        const result = await firestoreService.getCrewMembers(user.uid, 5);
+        
+        if (result.success && result.members.length > 0) {
+          setCrewMembers(result.members);
+        } else {
+          // Fallback to default members
+          setCrewMembers([
+            { name: 'Alex', emoji: '👤', color: '#7DD3C0' },
+            { name: 'Sam', emoji: '👤', color: '#FDD663' },
+            { name: 'Jordan', emoji: '👤', color: '#8AB4F8' },
+            { name: 'Taylor', emoji: '👤', color: '#E6B3BA' },
+          ]);
+        }
+      } catch (error) {
+        console.error('Error loading crew members:', error);
+        setCrewMembers([
+          { name: 'Alex', emoji: '👤', color: '#7DD3C0' },
+          { name: 'Sam', emoji: '👤', color: '#FDD663' },
+          { name: 'Jordan', emoji: '👤', color: '#8AB4F8' },
+          { name: 'Taylor', emoji: '👤', color: '#E6B3BA' },
+        ]);
+      }
+    };
+
+    loadCrewMembers();
+  }, [profilePicture]);
 
   // Load pod reflection for selected date
   useEffect(() => {
@@ -456,10 +499,13 @@ export default function PodPage() {
               
               {/* Other Members */}
               {[
-                { name: 'Alex', emoji: '👤', color: '#7DD3C0' },
-                { name: 'Sam', emoji: '👤', color: '#FDD663' },
-                { name: 'Jordan', emoji: '👤', color: '#8AB4F8' },
-                { name: 'Taylor', emoji: '👤', color: '#E6B3BA' },
+                ...crewMembers.map((member, index) => ({
+                  name: member.displayName || member.name || 'User',
+                  emoji: '👤',
+                  color: ['#7DD3C0', '#FDD663', '#8AB4F8', '#E6B3BA', '#81C995'][index % 5],
+                  profilePicture: member.profilePicture || null,
+                  uid: member.uid
+                })),
                 { name: 'AI', emoji: '🤖', color: '#B19CD9', avatar: '/ai-avatar.png' },
               ].map((member, index) => (
                 <div
@@ -477,6 +523,12 @@ export default function PodPage() {
                     {member.avatar ? (
                       <img 
                         src={member.avatar} 
+                        alt={member.name} 
+                        className="w-full h-full object-cover"
+                      />
+                    ) : member.profilePicture ? (
+                      <img 
+                        src={member.profilePicture} 
                         alt={member.name} 
                         className="w-full h-full object-cover"
                       />
