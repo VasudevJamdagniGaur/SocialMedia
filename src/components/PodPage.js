@@ -456,12 +456,10 @@ export default function PodPage() {
               
               {/* Other Members */}
               {[
-                { name: 'Vasudev', emoji: '👤', color: '#7DD3C0', avatar: '/apple-avatar.png' },
                 { name: 'Alex', emoji: '👤', color: '#7DD3C0' },
                 { name: 'Sam', emoji: '👤', color: '#FDD663' },
                 { name: 'Jordan', emoji: '👤', color: '#8AB4F8' },
                 { name: 'Taylor', emoji: '👤', color: '#E6B3BA' },
-                { name: 'Casey', emoji: '👤', color: '#81C995' },
                 { name: 'AI', emoji: '🤖', color: '#B19CD9' },
               ].map((member, index) => (
                 <div
