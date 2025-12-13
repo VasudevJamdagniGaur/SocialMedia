@@ -465,8 +465,8 @@ export default function CommunityPage() {
                 style={{
                   width: '64px',
                   height: '64px',
-                  filter: 'brightness(0) invert(1)',
-                  WebkitFilter: 'brightness(0) invert(1)'
+                  filter: isDarkMode ? 'brightness(0) invert(1)' : 'brightness(0)',
+                  WebkitFilter: isDarkMode ? 'brightness(0) invert(1)' : 'brightness(0)'
                 }}
               />
               <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
