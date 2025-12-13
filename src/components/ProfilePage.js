@@ -7,6 +7,7 @@ import Cropper from 'react-easy-crop';
 import {
   ArrowLeft,
   User,
+  Users,
   Calendar,
   Mail,
   Edit3,
@@ -48,6 +49,7 @@ export default function ProfilePage() {
   const [isBioUpdating, setIsBioUpdating] = useState(false);
   const [showBirthdayCalendar, setShowBirthdayCalendar] = useState(false);
   const [birthdayDate, setBirthdayDate] = useState(null);
+  const [isCrewEnrolled, setIsCrewEnrolled] = useState(false);
   
   // Helper function to format date for display
   const formatDateDisplay = (dateString) => {
@@ -137,6 +139,12 @@ export default function ProfilePage() {
       const savedBioUpdated = localStorage.getItem(`user_bio_updated_${currentUser.uid}`);
       if (savedBioUpdated) {
         setBioLastUpdated(savedBioUpdated);
+      }
+
+      // Load crew enrollment status
+      const savedCrewEnrollment = localStorage.getItem(`user_crew_enrolled_${currentUser.uid}`);
+      if (savedCrewEnrollment !== null) {
+        setIsCrewEnrolled(savedCrewEnrollment === 'true');
       }
     } else {
       navigate('/login');
@@ -786,6 +794,13 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
     }
   };
 
+  const handleCrewEnrollmentToggle = () => {
+    if (!user) return;
+    const newValue = !isCrewEnrolled;
+    setIsCrewEnrolled(newValue);
+    localStorage.setItem(`user_crew_enrolled_${user.uid}`, newValue.toString());
+  };
+
   const handleDeleteAccount = async () => {
     if (!user) return;
 
@@ -1243,6 +1258,43 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
               </div>
             </div>
           </button>
+
+          {/* Crew Enrollment Toggle */}
+          <div
+            className="w-full p-4 rounded-xl border border-gray-600"
+            style={{
+              backgroundColor: "rgba(11, 14, 20, 0.4)",
+            }}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3 flex-1">
+                <Users className="w-5 h-5 text-white" />
+                <div>
+                  <p className="font-medium text-white">Enroll for Crew</p>
+                  <p className="text-sm text-gray-400">
+                    {isCrewEnrolled ? 'Enrolled in crew features' : 'Not enrolled in crew'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={handleCrewEnrollmentToggle}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                  isCrewEnrolled ? 'focus:ring-[#8AB4F8]' : 'focus:ring-gray-500'
+                }`}
+                style={{
+                  backgroundColor: isCrewEnrolled ? '#8AB4F8' : 'rgba(107, 114, 128, 0.5)',
+                }}
+                role="switch"
+                aria-checked={isCrewEnrolled}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 ${
+                    isCrewEnrolled ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Helpdesk Section */}
