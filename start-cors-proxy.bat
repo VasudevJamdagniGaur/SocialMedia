@@ -35,7 +35,7 @@ echo 🌐 Server will be available at: http://localhost:3001
 echo 💬 Chat API: http://localhost:3001/api/chat
 echo 🧠 Emotional Analysis API: http://localhost:3001/api/emotional-analysis
 echo 🔍 Pattern Analysis API: http://localhost:3001/api/pattern-analysis
-echo 🔗 Proxying to RunPod: https://bwera83ull6arq-11434.proxy.runpod.net/
+echo 🔗 Proxying to RunPod: https://uyuwcw4zaa1mzb-11434.proxy.runpod.net/
 echo.
 
 REM Start the server

@@ -8,7 +8,7 @@ Your Deite app was experiencing 20-40 second delays on first chat messages due t
 ### **1. Express Backend Server (`server.js`)**
 - **Ollama Warm-up System**: Automatically preloads `llama3:70b` model into GPU memory on startup
 - **Keep-alive Ping**: Maintains model active with periodic requests every 4 minutes
-- **RunPod Integration**: Uses your RunPod Ollama instance at `https://bwera83ull6arq-11434.proxy.runpod.net/`
+- **RunPod Integration**: Uses your RunPod Ollama instance at `https://uyuwcw4zaa1mzb-11434.proxy.runpod.net/`
 - **API Endpoints**: Chat, emotional analysis, and pattern analysis endpoints
 - **Non-blocking Startup**: Server starts immediately while warm-up runs in background
 
@@ -29,7 +29,7 @@ Your Deite app was experiencing 20-40 second delays on first chat messages due t
 ### **Automatic Model Preloading**
 ```javascript
 // Runs on server startup - loads llama3:70b into GPU memory
-await fetch('https://bwera83ull6arq-11434.proxy.runpod.net/api/generate', {
+await fetch('https://uyuwcw4zaa1mzb-11434.proxy.runpod.net/api/generate', {
   method: 'POST',
   body: JSON.stringify({
     model: 'llama3:70b',
@@ -43,7 +43,7 @@ await fetch('https://bwera83ull6arq-11434.proxy.runpod.net/api/generate', {
 ```javascript
 // Runs every 4 minutes to keep model active
 setInterval(() => {
-  fetch('https://bwera83ull6arq-11434.proxy.runpod.net/api/generate', {
+  fetch('https://uyuwcw4zaa1mzb-11434.proxy.runpod.net/api/generate', {
     method: 'POST',
     body: JSON.stringify({
       model: 'llama3:70b',
@@ -102,7 +102,7 @@ node test-backend.js
 You can modify these settings in `server.js`:
 
 ```javascript
-const OLLAMA_BASE_URL = 'https://bwera83ull6arq-11434.proxy.runpod.net/';
+const OLLAMA_BASE_URL = 'https://uyuwcw4zaa1mzb-11434.proxy.runpod.net/';
 const MODEL_NAME = 'llama3:70b'; // Your available model
 const KEEP_ALIVE_INTERVAL = 4 * 60 * 1000; // 4 minutes
 ```
