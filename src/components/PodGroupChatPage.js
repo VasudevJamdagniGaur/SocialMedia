@@ -77,7 +77,6 @@ export default function PodGroupChatPage() {
     { name: 'Sam', emoji: '👤', color: '#FDD663' },
     { name: 'Jordan', emoji: '👤', color: '#8AB4F8' },
     { name: 'Taylor', emoji: '👤', color: '#E6B3BA' },
-    { name: 'Casey', emoji: '👤', color: '#81C995' },
     { name: 'AI', emoji: '🤖', color: '#B19CD9' },
   ];
 
@@ -123,13 +122,6 @@ export default function PodGroupChatPage() {
       time: '10:35 AM',
       emoji: '👤',
       color: '#E6B3BA'
-    },
-    { 
-      sender: 'Casey', 
-      message: 'Count me in! This pod is so supportive 💚', 
-      time: '10:36 AM',
-      emoji: '👤',
-      color: '#81C995'
     },
   ];
 
