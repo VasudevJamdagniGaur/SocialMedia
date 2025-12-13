@@ -13,20 +13,30 @@ export default function AllDayReflectionsPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   // Format date for display (e.g., "8 October 2025 • Wed, 3:54 pm")
-  const formatReflectionDate = (dateString) => {
-    if (!dateString) return '';
+  const formatReflectionDate = (reflectionItem) => {
+    if (!reflectionItem) return '';
     try {
-      let date;
-      if (dateString.includes('-')) {
-        // Parse dateId format (YYYY-MM-DD)
-        const [year, month, day] = dateString.split('-');
-        date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-      } else {
-        date = new Date(dateString);
+      // Use createdAt if available (has actual time), otherwise use dateObj
+      let date = reflectionItem.createdAt || reflectionItem.dateObj;
+      
+      if (!date) {
+        // Fallback to parsing date string
+        const dateString = reflectionItem.date;
+        if (dateString.includes('-')) {
+          const [year, month, day] = dateString.split('-');
+          date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        } else {
+          date = new Date(dateString);
+        }
       }
       
-      if (isNaN(date.getTime())) {
-        return dateString;
+      // Handle Firestore Timestamp
+      if (date && typeof date.toDate === 'function') {
+        date = date.toDate();
+      }
+      
+      if (!date || isNaN(date.getTime())) {
+        return reflectionItem.date || '';
       }
       
       const day = date.getDate();
@@ -42,7 +52,7 @@ export default function AllDayReflectionsPage() {
       return `${day} ${month} ${year} • ${dayName}, ${time}`;
     } catch (error) {
       console.error('Error formatting date:', error);
-      return dateString;
+      return reflectionItem.date || '';
     }
   };
 
@@ -57,49 +67,85 @@ export default function AllDayReflectionsPage() {
 
       try {
         setIsLoading(true);
+        console.log('🔄 Loading all day reflections from Firebase...');
         
         // Get all reflection days
         const result = await firestoreService.getAllReflectionDays(user.uid);
         const allReflections = [];
         
-        if (result.success && result.reflectionDays) {
+        console.log('📅 Found reflection days:', result.reflectionDays?.length || 0);
+        
+        if (result.success && result.reflectionDays && result.reflectionDays.length > 0) {
           // Fetch reflection details for each day
           for (const day of result.reflectionDays) {
             try {
+              console.log(`📖 Fetching reflection for date: ${day.date}`);
               const reflectionResult = await firestoreService.getReflectionNew(user.uid, day.date);
-              if (reflectionResult.success && reflectionResult.reflection?.summary) {
-                let reflectionDate;
-                try {
-                  if (day.date.includes('-')) {
-                    const [year, month, dayNum] = day.date.split('-');
-                    reflectionDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(dayNum));
-                  } else {
-                    reflectionDate = new Date(day.date);
-                  }
-                } catch (e) {
-                  reflectionDate = new Date();
+              
+              if (reflectionResult.success && reflectionResult.reflection) {
+                // Handle different data structures
+                let reflectionText = null;
+                let createdAt = null;
+                
+                // getReflectionNew returns: { success: true, reflection: data.summary, fullData: data }
+                if (reflectionResult.fullData) {
+                  // Use fullData if available (contains createdAt and other metadata)
+                  reflectionText = reflectionResult.fullData.summary || reflectionResult.reflection;
+                  createdAt = reflectionResult.fullData.createdAt;
+                } else {
+                  // Fallback to reflection string
+                  reflectionText = reflectionResult.reflection;
                 }
                 
-                allReflections.push({
-                  id: day.date,
-                  date: day.date,
-                  dateObj: reflectionDate,
-                  reflection: reflectionResult.reflection.summary,
-                  createdAt: reflectionResult.reflection.createdAt || reflectionDate
-                });
+                if (reflectionText) {
+                  let reflectionDate;
+                  try {
+                    if (day.date.includes('-')) {
+                      const [year, month, dayNum] = day.date.split('-');
+                      reflectionDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(dayNum));
+                    } else {
+                      reflectionDate = new Date(day.date);
+                    }
+                  } catch (e) {
+                    reflectionDate = new Date();
+                  }
+                  
+                  // Convert Firestore timestamp to Date if needed
+                  if (createdAt && createdAt.toDate) {
+                    createdAt = createdAt.toDate();
+                  } else if (createdAt && typeof createdAt === 'object') {
+                    createdAt = reflectionDate;
+                  } else if (!createdAt) {
+                    createdAt = reflectionDate;
+                  }
+                  
+                  allReflections.push({
+                    id: day.date,
+                    date: day.date,
+                    dateObj: reflectionDate,
+                    reflection: reflectionText,
+                    createdAt: createdAt
+                  });
+                  
+                  console.log(`✅ Loaded reflection for ${day.date}`);
+                } else {
+                  console.log(`⚠️ No reflection text found for ${day.date}`);
+                }
+              } else {
+                console.error(`❌ Error loading reflection for ${day.date}:`, reflectionResult.error);
               }
             } catch (error) {
-              console.error(`Error loading reflection for ${day.date}:`, error);
+              console.error(`❌ Exception loading reflection for ${day.date}:`, error);
             }
           }
         }
         
-        // Also check localStorage for any reflections
+        // Also check localStorage for any reflections (as fallback)
         const localStorageKeys = Object.keys(localStorage);
         localStorageKeys.forEach(key => {
           if (key.startsWith('reflection_')) {
             const dateId = key.replace('reflection_', '');
-            // Check if already in list
+            // Check if already in list (prefer Firebase data)
             if (!allReflections.find(r => r.date === dateId)) {
               const reflectionText = localStorage.getItem(key);
               if (reflectionText) {
@@ -122,6 +168,8 @@ export default function AllDayReflectionsPage() {
                   reflection: reflectionText,
                   createdAt: reflectionDate
                 });
+                
+                console.log(`📦 Loaded reflection from localStorage for ${dateId}`);
               }
             }
           }
@@ -134,9 +182,11 @@ export default function AllDayReflectionsPage() {
           return dateB - dateA;
         });
         
+        console.log(`✅ Total reflections loaded: ${allReflections.length}`);
         setReflections(allReflections);
       } catch (error) {
-        console.error('Error loading reflections:', error);
+        console.error('❌ Error loading reflections:', error);
+        setReflections([]);
       } finally {
         setIsLoading(false);
       }
@@ -239,7 +289,7 @@ export default function AllDayReflectionsPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className={`text-xs font-medium mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                    {formatReflectionDate(reflection.date)}
+                    {formatReflectionDate(reflection)}
                   </div>
                   <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-700'} line-clamp-3`}>
                     {reflection.reflection}
