@@ -77,19 +77,57 @@ export default function AllDayReflectionsPage() {
 
       try {
         setIsLoading(true);
-        console.log('🔄 Loading all day reflections from Firebase...');
         
+        // STEP 1: Load from localStorage first (instant display)
+        const cachedReflectionsKey = `all_day_reflections_${user.uid}`;
+        const cachedReflections = localStorage.getItem(cachedReflectionsKey);
+        
+        if (cachedReflections) {
+          try {
+            const parsed = JSON.parse(cachedReflections);
+            // Convert date strings back to Date objects
+            const reflectionsWithDates = parsed.map(r => ({
+              ...r,
+              dateObj: r.date ? new Date(r.date) : new Date(r.dateObj),
+              createdAt: r.createdAt ? new Date(r.createdAt) : (r.dateObj ? new Date(r.dateObj) : new Date())
+            }));
+            
+            // Sort by date (newest first)
+            reflectionsWithDates.sort((a, b) => {
+              const dateA = a.dateObj?.getTime() || 0;
+              const dateB = b.dateObj?.getTime() || 0;
+              return dateB - dateA;
+            });
+            
+            setReflections(reflectionsWithDates);
+            setFilteredReflections(reflectionsWithDates);
+            
+            // Extract reflection days for calendar
+            const daysWithReflections = reflectionsWithDates.map(r => ({
+              date: r.date,
+              hasReflection: true
+            }));
+            setReflectionDays(daysWithReflections);
+            
+            console.log(`✅ Loaded ${reflectionsWithDates.length} reflections from cache`);
+            setIsLoading(false); // Show cached data immediately
+          } catch (e) {
+            console.error('Error parsing cached reflections:', e);
+          }
+        }
+        
+        // STEP 2: Fetch from Firebase in background and update
+        console.log('🔄 Fetching reflections from Firebase in background...');
         const allReflections = [];
         
         // Method 1: Get all days from users/{uid}/days and check each for reflections
-        console.log('📅 Method 1: Checking all days in users/{uid}/days collection...');
         const daysRef = collection(db, `users/${user.uid}/days`);
         const daysSnapshot = await getDocs(daysRef);
         
         console.log(`📅 Found ${daysSnapshot.docs.length} days in collection`);
         
-        // Check each day for reflection
-        for (const dayDoc of daysSnapshot.docs) {
+        // Use Promise.all for parallel fetching instead of sequential
+        const reflectionPromises = daysSnapshot.docs.map(async (dayDoc) => {
           const dateId = dayDoc.id;
           try {
             const reflectionRef = doc(db, `users/${user.uid}/days/${dateId}/reflection/meta`);
@@ -122,24 +160,26 @@ export default function AllDayReflectionsPage() {
                   createdAt = reflectionDate;
                 }
                 
-                allReflections.push({
+                return {
                   id: dateId,
                   date: dateId,
                   dateObj: reflectionDate,
                   reflection: reflectionText,
                   createdAt: createdAt
-                });
-                
-                console.log(`✅ Found reflection for ${dateId}`);
+                };
               }
             }
           } catch (error) {
             console.error(`❌ Error checking reflection for ${dateId}:`, error);
           }
-        }
+          return null;
+        });
+        
+        const reflectionResults = await Promise.all(reflectionPromises);
+        const validReflections = reflectionResults.filter(r => r !== null);
+        allReflections.push(...validReflections);
         
         // Method 2: Also check old structure (dayReflections collection) as fallback
-        console.log('📅 Method 2: Checking old structure (dayReflections collection)...');
         try {
           const oldReflectionsRef = collection(db, `users/${user.uid}/dayReflections`);
           const oldSnapshot = await getDocs(oldReflectionsRef);
@@ -176,18 +216,16 @@ export default function AllDayReflectionsPage() {
                 reflection: reflectionText,
                 createdAt: createdAt
               });
-              
-              console.log(`✅ Found reflection in old structure for ${dateId}`);
             }
           });
         } catch (error) {
           console.log('⚠️ Old structure not found or error:', error);
         }
         
-        // Also check localStorage for any reflections (as fallback)
+        // Also check localStorage for any individual reflections (as fallback)
         const localStorageKeys = Object.keys(localStorage);
         localStorageKeys.forEach(key => {
-          if (key.startsWith('reflection_')) {
+          if (key.startsWith('reflection_') && !key.startsWith('all_day_reflections_')) {
             const dateId = key.replace('reflection_', '');
             // Check if already in list (prefer Firebase data)
             if (!allReflections.find(r => r.date === dateId)) {
@@ -212,8 +250,6 @@ export default function AllDayReflectionsPage() {
                   reflection: reflectionText,
                   createdAt: reflectionDate
                 });
-                
-                console.log(`📦 Loaded reflection from localStorage for ${dateId}`);
               }
             }
           }
@@ -226,7 +262,18 @@ export default function AllDayReflectionsPage() {
           return dateB - dateA;
         });
         
-        console.log(`✅ Total reflections loaded: ${allReflections.length}`);
+        console.log(`✅ Total reflections loaded from Firebase: ${allReflections.length}`);
+        
+        // Save to localStorage for future fast loading
+        const reflectionsToCache = allReflections.map(r => ({
+          ...r,
+          dateObj: r.dateObj.toISOString(),
+          createdAt: r.createdAt.toISOString()
+        }));
+        localStorage.setItem(cachedReflectionsKey, JSON.stringify(reflectionsToCache));
+        console.log('💾 Saved reflections to localStorage cache');
+        
+        // Update state with fresh data
         setReflections(allReflections);
         setFilteredReflections(allReflections);
         
@@ -238,7 +285,36 @@ export default function AllDayReflectionsPage() {
         setReflectionDays(daysWithReflections);
       } catch (error) {
         console.error('❌ Error loading reflections:', error);
-        setReflections([]);
+        // If Firebase fails, try to use cached data if available
+        const cachedReflectionsKey = `all_day_reflections_${user.uid}`;
+        const cachedReflections = localStorage.getItem(cachedReflectionsKey);
+        if (cachedReflections) {
+          try {
+            const parsed = JSON.parse(cachedReflections);
+            const reflectionsWithDates = parsed.map(r => ({
+              ...r,
+              dateObj: new Date(r.dateObj),
+              createdAt: new Date(r.createdAt)
+            }));
+            reflectionsWithDates.sort((a, b) => {
+              const dateA = a.dateObj?.getTime() || 0;
+              const dateB = b.dateObj?.getTime() || 0;
+              return dateB - dateA;
+            });
+            setReflections(reflectionsWithDates);
+            setFilteredReflections(reflectionsWithDates);
+            const daysWithReflections = reflectionsWithDates.map(r => ({
+              date: r.date,
+              hasReflection: true
+            }));
+            setReflectionDays(daysWithReflections);
+          } catch (e) {
+            console.error('Error using cached data:', e);
+            setReflections([]);
+          }
+        } else {
+          setReflections([]);
+        }
       } finally {
         setIsLoading(false);
       }
