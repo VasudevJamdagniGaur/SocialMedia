@@ -32,7 +32,6 @@ export default function CommunityPage() {
   const [lastScrollY, setLastScrollY] = useState(0);
   const [showRecap, setShowRecap] = useState(false);
   const [activeMembersCount, setActiveMembersCount] = useState(0);
-  const [activeMembersCount, setActiveMembersCount] = useState(0);
 
   // Load profile picture
   useEffect(() => {
