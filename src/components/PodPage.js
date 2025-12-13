@@ -415,7 +415,7 @@ export default function PodPage() {
             {/* Title - Centered */}
             <div className="flex items-center justify-center mb-4">
               <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                Crew Group Chat
+                Crew Sphere
               </h2>
             </div>
             
