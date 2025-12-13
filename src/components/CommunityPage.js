@@ -844,8 +844,8 @@ export default function CommunityPage() {
           showFAB ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
         }`}
         style={{
-          backgroundColor: "#8AB4F8",
-          boxShadow: "0 4px 16px rgba(138, 180, 248, 0.4)",
+          backgroundColor: "#1d9bf0",
+          boxShadow: "0 4px 16px rgba(29, 155, 240, 0.4)",
         }}
       >
         <Plus className="w-6 h-6 text-white" strokeWidth={2.5} />
