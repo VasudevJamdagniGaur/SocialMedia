@@ -411,27 +411,6 @@ export default function PodPage() {
 
         {/* Crew Content */}
         <div className="space-y-4">
-          {/* Welcome Card */}
-          <div
-            className={`rounded-2xl p-5 relative overflow-hidden ${
-              isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
-            }`}
-            style={isDarkMode ? {
-              backgroundColor: "#262626",
-              boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
-            } : {
-              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)",
-            }}
-          >
-            <h2 className={`text-lg font-semibold mb-3 ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-              Welcome to Your Crew
-            </h2>
-            <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-              Your crew of 5 people who match your vibe, interests, mental wavelength, and personality. A space to talk, laugh, and gossip about IIT campus, our professors, life, and everything in between. with an anonymous identity
-            </p>
-          </div>
-
           {/* Group Message Section */}
           <div
             onClick={() => navigate('/pod/chat')}
