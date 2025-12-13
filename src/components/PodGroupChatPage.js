@@ -73,7 +73,6 @@ export default function PodGroupChatPage() {
       isCurrentUser: true,
       profilePicture: profilePicture
     },
-    { name: 'Vasudev', emoji: '👤', color: '#7DD3C0', avatar: '/apple-avatar.png' },
     { name: 'Alex', emoji: '👤', color: '#7DD3C0' },
     { name: 'Sam', emoji: '👤', color: '#FDD663' },
     { name: 'Jordan', emoji: '👤', color: '#8AB4F8' },
