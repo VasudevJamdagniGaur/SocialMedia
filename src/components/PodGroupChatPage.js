@@ -77,7 +77,7 @@ export default function PodGroupChatPage() {
     { name: 'Sam', emoji: '👤', color: '#FDD663' },
     { name: 'Jordan', emoji: '👤', color: '#8AB4F8' },
     { name: 'Taylor', emoji: '👤', color: '#E6B3BA' },
-    { name: 'AI', emoji: '🤖', color: '#B19CD9' },
+    { name: 'AI', emoji: '🤖', color: '#B19CD9', avatar: '/ai-avatar.png' },
   ];
 
   const messages = [
@@ -275,13 +275,21 @@ export default function PodGroupChatPage() {
               } : {}}
             >
               <div
-                className="w-8 h-8 rounded-full flex items-center justify-center text-xs flex-shrink-0"
+                className="w-8 h-8 rounded-full flex items-center justify-center text-xs flex-shrink-0 overflow-hidden"
                 style={{
-                  backgroundColor: isDarkMode ? msg.color + '30' : msg.color + '20',
-                  border: `2px solid ${msg.color}40`,
+                  backgroundColor: msg.sender === 'AI' ? "transparent" : (isDarkMode ? msg.color + '30' : msg.color + '20'),
+                  border: msg.sender === 'AI' ? "none" : `2px solid ${msg.color}40`,
                 }}
               >
-                {msg.emoji}
+                {msg.sender === 'AI' ? (
+                  <img 
+                    src="/ai-avatar.png" 
+                    alt="AI" 
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span>{msg.emoji}</span>
+                )}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center space-x-2 mb-1">

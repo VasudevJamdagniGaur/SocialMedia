@@ -460,7 +460,7 @@ export default function PodPage() {
                 { name: 'Sam', emoji: '👤', color: '#FDD663' },
                 { name: 'Jordan', emoji: '👤', color: '#8AB4F8' },
                 { name: 'Taylor', emoji: '👤', color: '#E6B3BA' },
-                { name: 'AI', emoji: '🤖', color: '#B19CD9' },
+                { name: 'AI', emoji: '🤖', color: '#B19CD9', avatar: '/ai-avatar.png' },
               ].map((member, index) => (
                 <div
                   key={index}
