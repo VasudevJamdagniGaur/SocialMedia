@@ -132,11 +132,33 @@ export default function ProfilePage() {
           console.error('Error parsing birthday:', error);
         }
       }
-      // Load profile picture from localStorage
-      const savedPicture = localStorage.getItem(`user_profile_picture_${currentUser.uid}`);
-      if (savedPicture) {
-        setProfilePicture(savedPicture);
-      }
+      // Load profile picture from Firestore first, then fallback to localStorage
+      const loadProfilePicture = async () => {
+        try {
+          const result = await firestoreService.getUser(currentUser.uid);
+          if (result.success && result.data?.profilePicture) {
+            const firestorePicture = result.data.profilePicture;
+            setProfilePicture(firestorePicture);
+            // Also save to localStorage for faster access
+            localStorage.setItem(`user_profile_picture_${currentUser.uid}`, firestorePicture);
+            console.log('✅ Avatar loaded from Firestore');
+          } else {
+            // Fallback to localStorage
+            const savedPicture = localStorage.getItem(`user_profile_picture_${currentUser.uid}`);
+            if (savedPicture) {
+              setProfilePicture(savedPicture);
+            }
+          }
+        } catch (error) {
+          console.error('Error loading avatar from Firestore:', error);
+          // Fallback to localStorage
+          const savedPicture = localStorage.getItem(`user_profile_picture_${currentUser.uid}`);
+          if (savedPicture) {
+            setProfilePicture(savedPicture);
+          }
+        }
+      };
+      loadProfilePicture();
 
       const savedBioUpdated = localStorage.getItem(`user_bio_updated_${currentUser.uid}`);
       if (savedBioUpdated) {
@@ -259,10 +281,23 @@ export default function ProfilePage() {
     { name: 'Broccoli', path: '/broccoli-avatar.png' },
   ];
 
-  const handleAvatarSelect = (avatarPath) => {
+  const handleAvatarSelect = async (avatarPath) => {
     setProfilePicture(avatarPath);
     if (user) {
+      // Save to localStorage for immediate use
       localStorage.setItem(`user_profile_picture_${user.uid}`, avatarPath);
+      
+      // Save to Firestore for persistence across devices
+      try {
+        await firestoreService.ensureUser(user.uid, {
+          profilePicture: avatarPath
+        });
+        console.log('✅ Avatar saved to Firestore');
+      } catch (error) {
+        console.error('Error saving avatar to Firestore:', error);
+        // Continue even if Firestore save fails
+      }
+      
       window.dispatchEvent(new Event('profilePictureUpdated'));
     }
     setShowAvatarModal(false);

@@ -40,9 +40,25 @@ export default function DashboardPage() {
 
   // Load profile picture
   useEffect(() => {
-    const loadProfilePicture = () => {
+    const loadProfilePicture = async () => {
       const user = getCurrentUser();
       if (user) {
+        try {
+          // Try to load from Firestore first
+          const result = await firestoreService.getUser(user.uid);
+          if (result.success && result.data?.profilePicture) {
+            const firestorePicture = result.data.profilePicture;
+            setProfilePicture(firestorePicture);
+            // Also save to localStorage for faster access
+            localStorage.setItem(`user_profile_picture_${user.uid}`, firestorePicture);
+            console.log('✅ Avatar loaded from Firestore in Dashboard');
+            return;
+          }
+        } catch (error) {
+          console.error('Error loading avatar from Firestore:', error);
+        }
+        
+        // Fallback to localStorage
         const savedPicture = localStorage.getItem(`user_profile_picture_${user.uid}`);
         if (savedPicture) {
           setProfilePicture(savedPicture);

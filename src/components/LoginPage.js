@@ -78,6 +78,18 @@ export default function LoginPage() {
               createdAt: new Date().toISOString()
             });
             console.log('✅ User document ensured in Firestore');
+            
+            // Load profile picture from Firestore and save to localStorage
+            try {
+              const userResult = await firestoreService.getUser(user.uid);
+              if (userResult.success && userResult.data?.profilePicture) {
+                localStorage.setItem(`user_profile_picture_${user.uid}`, userResult.data.profilePicture);
+                console.log('✅ Avatar loaded from Firestore on sign-in');
+              }
+            } catch (avatarError) {
+              console.error('Error loading avatar from Firestore:', avatarError);
+              // Don't block login if this fails
+            }
           } catch (error) {
             console.error('Error ensuring user document:', error);
             // Don't block login if this fails

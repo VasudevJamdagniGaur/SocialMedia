@@ -4,6 +4,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { ArrowLeft, Send, Users, User, Image as ImageIcon, X } from 'lucide-react';
 import { getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
+import firestoreService from '../services/firestoreService';
 
 export default function PodGroupChatPage() {
   const navigate = useNavigate();
@@ -16,9 +17,25 @@ export default function PodGroupChatPage() {
 
   // Load profile picture
   useEffect(() => {
-    const loadProfilePicture = () => {
+    const loadProfilePicture = async () => {
       const user = getCurrentUser();
       if (user) {
+        try {
+          // Try to load from Firestore first
+          const result = await firestoreService.getUser(user.uid);
+          if (result.success && result.data?.profilePicture) {
+            const firestorePicture = result.data.profilePicture;
+            setProfilePicture(firestorePicture);
+            // Also save to localStorage for faster access
+            localStorage.setItem(`user_profile_picture_${user.uid}`, firestorePicture);
+            console.log('✅ Avatar loaded from Firestore in PodGroupChat');
+            return;
+          }
+        } catch (error) {
+          console.error('Error loading avatar from Firestore:', error);
+        }
+        
+        // Fallback to localStorage
         const savedPicture = localStorage.getItem(`user_profile_picture_${user.uid}`);
         if (savedPicture) {
           setProfilePicture(savedPicture);

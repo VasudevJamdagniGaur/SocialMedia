@@ -41,6 +41,23 @@ class FirestoreService {
   }
 
   /**
+   * Get user data from Firestore
+   */
+  async getUser(uid) {
+    try {
+      const userRef = doc(this.db, `users/${uid}`);
+      const userSnap = await getDoc(userRef);
+      if (userSnap.exists()) {
+        return { success: true, data: userSnap.data() };
+      }
+      return { success: false, error: 'User not found' };
+    } catch (error) {
+      console.error('Error getting user:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
    * Create or update a chat day document
    */
   async ensureChatDay(uid, dateId) {
