@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
-import { ArrowLeft, Send, Users, User } from 'lucide-react';
+import { ArrowLeft, Send, Users, User, Image as ImageIcon, X } from 'lucide-react';
 import { getCurrentUser } from '../services/authService';
 
 export default function PodGroupChatPage() {
@@ -9,7 +9,9 @@ export default function PodGroupChatPage() {
   const { isDarkMode } = useTheme();
   const [inputMessage, setInputMessage] = useState('');
   const [profilePicture, setProfilePicture] = useState(null);
+  const [selectedImage, setSelectedImage] = useState(null);
   const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   // Load profile picture
   useEffect(() => {
@@ -135,10 +137,45 @@ export default function PodGroupChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  const handleImageSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        alert('Image size should be less than 10MB');
+        e.target.value = '';
+        return;
+      }
+      
+      if (!file.type.startsWith('image/')) {
+        alert('Please select a valid image file');
+        e.target.value = '';
+        return;
+      }
+      
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const result = event.target?.result;
+        if (result) {
+          setSelectedImage(result);
+        }
+      };
+      reader.onerror = () => {
+        alert('Failed to read image file');
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleSend = () => {
-    if (inputMessage.trim()) {
+    if (inputMessage.trim() || selectedImage) {
       // Handle send message logic here
+      // You can add the message with image to your messages array or send to backend
+      console.log('Sending message:', { text: inputMessage, image: selectedImage });
       setInputMessage('');
+      setSelectedImage(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -257,9 +294,20 @@ export default function PodGroupChatPage() {
                     {msg.time}
                   </span>
                 </div>
-                <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  {msg.message}
-                </p>
+                {msg.image && (
+                  <div className="mb-2 rounded-lg overflow-hidden">
+                    <img 
+                      src={msg.image} 
+                      alt="Message attachment" 
+                      className="w-full max-h-64 object-cover"
+                    />
+                  </div>
+                )}
+                {msg.message && (
+                  <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    {msg.message}
+                  </p>
+                )}
               </div>
             </div>
           ))}
@@ -281,7 +329,56 @@ export default function PodGroupChatPage() {
           borderTop: "1px solid rgba(0, 0, 0, 0.05)",
         }}
       >
+        {/* Image Preview */}
+        {selectedImage && (
+          <div className="max-w-sm mx-auto mb-3 relative">
+            <div className="relative rounded-lg overflow-hidden" style={{ maxHeight: '200px' }}>
+              <img 
+                src={selectedImage} 
+                alt="Preview" 
+                className="w-full h-auto object-contain"
+                style={{ maxHeight: '200px' }}
+              />
+              <button
+                onClick={() => {
+                  setSelectedImage(null);
+                  if (fileInputRef.current) {
+                    fileInputRef.current.value = '';
+                  }
+                }}
+                className="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 hover:bg-black/70 transition-all"
+              >
+                <X className="w-4 h-4 text-white" />
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center space-x-2 max-w-sm mx-auto">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleImageSelect}
+            className="hidden"
+            id="image-input"
+          />
+          <label
+            htmlFor="image-input"
+            className="w-10 h-10 rounded-lg flex items-center justify-center cursor-pointer transition-all duration-300 hover:opacity-80"
+            style={{
+              backgroundColor: selectedImage ? (isDarkMode ? "rgba(129, 201, 149, 0.3)" : "rgba(129, 201, 149, 0.2)") : (isDarkMode ? "#262626" : "#F3F4F6"),
+              border: selectedImage 
+                ? (isDarkMode ? "1px solid rgba(129, 201, 149, 0.5)" : "1px solid rgba(129, 201, 149, 0.3)")
+                : (isDarkMode ? "1px solid rgba(255, 255, 255, 0.08)" : "1px solid rgba(0, 0, 0, 0.05)"),
+            }}
+          >
+            <ImageIcon 
+              className="w-5 h-5" 
+              style={{ color: selectedImage ? (isDarkMode ? "#81C995" : "#87A96B") : (isDarkMode ? "#8AB4F8" : "#87A96B") }} 
+              strokeWidth={1.5} 
+            />
+          </label>
           <input
             type="text"
             value={inputMessage}
@@ -298,14 +395,14 @@ export default function PodGroupChatPage() {
           />
           <button
             onClick={handleSend}
-            disabled={!inputMessage.trim()}
+            disabled={!inputMessage.trim() && !selectedImage}
             className={`w-10 h-10 rounded-lg flex items-center justify-center transition-opacity ${
-              inputMessage.trim()
+              (inputMessage.trim() || selectedImage)
                 ? isDarkMode ? 'bg-[#8AB4F8]' : 'bg-[#87A96B]'
                 : isDarkMode ? 'bg-gray-700 opacity-50' : 'bg-gray-300 opacity-50'
             }`}
             style={{
-              boxShadow: inputMessage.trim() 
+              boxShadow: (inputMessage.trim() || selectedImage)
                 ? (isDarkMode ? "0 2px 8px rgba(138, 180, 248, 0.3)" : "0 2px 8px rgba(134, 169, 107, 0.3)")
                 : 'none',
             }}
