@@ -51,7 +51,7 @@ export default function BottomNavigation() {
             <path
               d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
               stroke={isHomeActive 
-                ? '#FFFFFF'
+                ? (isDarkMode ? '#FFFFFF' : '#000000')
                 : (isDarkMode ? '#9CA3AF' : '#6B7280')
               }
               strokeWidth={isHomeActive ? 2.5 : 2}
@@ -62,7 +62,7 @@ export default function BottomNavigation() {
             {isHomeActive && (
               <path
                 d="M9 21v-6a1 1 0 011-1h4a1 1 0 011 1v6"
-                fill="#FFFFFF"
+                fill={isDarkMode ? '#FFFFFF' : '#000000'}
               />
             )}
           </svg>
@@ -84,13 +84,13 @@ export default function BottomNavigation() {
             <path
               d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"
               stroke={isWellbeingActive 
-                ? '#FFFFFF'
+                ? (isDarkMode ? '#FFFFFF' : '#000000')
                 : (isDarkMode ? '#9CA3AF' : '#6B7280')
               }
               strokeWidth={isWellbeingActive ? 2.5 : 2}
               strokeLinecap="round"
               strokeLinejoin="round"
-              fill={isWellbeingActive ? '#FFFFFF' : 'none'}
+              fill={isWellbeingActive ? (isDarkMode ? '#FFFFFF' : '#000000') : 'none'}
             />
           </svg>
         </button>
@@ -106,10 +106,10 @@ export default function BottomNavigation() {
             style={{
               opacity: isPodActive ? 1 : 0.4,
               filter: isPodActive 
-                ? 'brightness(0) invert(1)'
+                ? (isDarkMode ? 'brightness(0) invert(1)' : 'brightness(0)')
                 : 'none',
               WebkitFilter: isPodActive 
-                ? 'brightness(0) invert(1)'
+                ? (isDarkMode ? 'brightness(0) invert(1)' : 'brightness(0)')
                 : 'none',
               imageRendering: 'crisp-edges',
               WebkitImageRendering: 'crisp-edges'
@@ -128,10 +128,10 @@ export default function BottomNavigation() {
             style={{
               opacity: isCommunityActive ? 1 : (isDarkMode ? 2.0 : 0.65),
               filter: isCommunityActive 
-                ? 'brightness(0) invert(1)'
+                ? (isDarkMode ? 'brightness(0) invert(1)' : 'brightness(0)')
                 : 'none',
               WebkitFilter: isCommunityActive 
-                ? 'brightness(0) invert(1)'
+                ? (isDarkMode ? 'brightness(0) invert(1)' : 'brightness(0)')
                 : 'none',
               imageRendering: 'crisp-edges',
               WebkitImageRendering: 'crisp-edges'
