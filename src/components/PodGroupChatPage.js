@@ -242,9 +242,9 @@ export default function PodGroupChatPage() {
                   : `2px solid ${member.color}40`,
               }}
             >
-              {member.name === 'Vasudev' || member.avatar ? (
+              {member.avatar ? (
                 <img 
-                  src={member.avatar || '/apple-avatar.png'} 
+                  src={member.avatar} 
                   alt={member.name} 
                   className="w-full h-full object-cover"
                 />
