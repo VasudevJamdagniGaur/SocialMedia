@@ -751,7 +751,7 @@ export default function CommunityPage() {
       {/* Floating Action Button - Create Post */}
       <button
         onClick={() => setShowCreatePost(true)}
-        className="fixed bottom-20 left-6 z-40 w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95 shadow-lg"
+        className="fixed bottom-20 right-4 z-40 w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95 shadow-lg"
         style={{
           backgroundColor: "#8AB4F8",
           boxShadow: "0 4px 16px rgba(138, 180, 248, 0.4)",
