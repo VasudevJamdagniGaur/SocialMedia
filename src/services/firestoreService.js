@@ -1155,45 +1155,65 @@ class FirestoreService {
   }
 
   /**
-   * Get total count of active users/accounts
+   * Get total count of authenticated users/accounts
    */
   async getTotalUserCount() {
     try {
-      console.log('👥 Getting total user count from usersMetadata collection...');
-      // Count users from usersMetadata collection (more reliable)
-      const usersMetadataRef = collection(this.db, 'usersMetadata');
-      const usersSnapshot = await getDocs(usersMetadataRef);
+      console.log('👥 Getting total authenticated user count...');
       
-      const totalCount = usersSnapshot.size;
-      console.log('👥 Total user count from usersMetadata:', totalCount);
-      
-      // If usersMetadata is empty, try to count from communityPosts (users who have posted)
-      if (totalCount === 0) {
-        console.log('👥 usersMetadata is empty, trying alternative method...');
-        try {
-          const postsRef = collection(this.db, 'communityPosts');
-          const postsSnapshot = await getDocs(postsRef);
-          
-          // Get unique user IDs from posts
-          const uniqueUserIds = new Set();
-          postsSnapshot.forEach((doc) => {
-            const data = doc.data();
-            if (data.userId) {
-              uniqueUserIds.add(data.userId);
-            }
-          });
-          
-          const uniqueCount = uniqueUserIds.size;
-          console.log('👥 Unique users from communityPosts:', uniqueCount);
-          
-          // Return the higher count (at least 1 if there are any posts)
-          return { success: true, count: uniqueCount > 0 ? uniqueCount : 0 };
-        } catch (altError) {
-          console.warn('⚠️ Alternative count method failed:', altError);
+      // Primary method: Count from users collection (created by ensureUser)
+      // This collection contains all authenticated users
+      try {
+        const usersRef = collection(this.db, 'users');
+        const usersSnapshot = await getDocs(usersRef);
+        const usersCount = usersSnapshot.size;
+        console.log('👥 Total authenticated users from users collection:', usersCount);
+        
+        if (usersCount > 0) {
+          return { success: true, count: usersCount };
         }
+      } catch (usersError) {
+        console.warn('⚠️ Could not count from users collection:', usersError);
       }
       
-      return { success: true, count: totalCount };
+      // Fallback 1: Count from usersMetadata collection
+      try {
+        const usersMetadataRef = collection(this.db, 'usersMetadata');
+        const usersMetadataSnapshot = await getDocs(usersMetadataRef);
+        const metadataCount = usersMetadataSnapshot.size;
+        console.log('👥 Total users from usersMetadata:', metadataCount);
+        
+        if (metadataCount > 0) {
+          return { success: true, count: metadataCount };
+        }
+      } catch (metadataError) {
+        console.warn('⚠️ Could not count from usersMetadata:', metadataError);
+      }
+      
+      // Fallback 2: Count unique users from communityPosts
+      try {
+        const postsRef = collection(this.db, 'communityPosts');
+        const postsSnapshot = await getDocs(postsRef);
+        
+        const uniqueUserIds = new Set();
+        postsSnapshot.forEach((doc) => {
+          const data = doc.data();
+          if (data.userId) {
+            uniqueUserIds.add(data.userId);
+          }
+        });
+        
+        const uniqueCount = uniqueUserIds.size;
+        console.log('👥 Unique authenticated users from communityPosts:', uniqueCount);
+        
+        return { success: true, count: uniqueCount };
+      } catch (postsError) {
+        console.warn('⚠️ Could not count from communityPosts:', postsError);
+      }
+      
+      // If all methods fail, return 0
+      console.log('⚠️ All counting methods failed, returning 0');
+      return { success: true, count: 0 };
     } catch (error) {
       console.error('❌ Error getting user count:', error);
       return { success: false, error: error.message, count: 0 };
