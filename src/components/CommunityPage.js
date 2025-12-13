@@ -31,6 +31,8 @@ export default function CommunityPage() {
   const [showFAB, setShowFAB] = useState(true);
   const [lastScrollY, setLastScrollY] = useState(0);
   const [showRecap, setShowRecap] = useState(false);
+  const [activeMembersCount, setActiveMembersCount] = useState(0);
+  const [activeMembersCount, setActiveMembersCount] = useState(0);
 
   // Load profile picture
   useEffect(() => {
@@ -171,6 +173,22 @@ export default function CommunityPage() {
       }
     }
   };
+
+  // Load active members count
+  useEffect(() => {
+    const loadActiveMembersCount = async () => {
+      try {
+        const result = await firestoreService.getTotalUserCount();
+        if (result.success) {
+          setActiveMembersCount(result.count);
+        }
+      } catch (error) {
+        console.error('Error loading active members count:', error);
+      }
+    };
+
+    loadActiveMembersCount();
+  }, []);
 
   // Load community posts from Firestore
   useEffect(() => {
@@ -563,7 +581,7 @@ export default function CommunityPage() {
                 <div className="flex items-center justify-center gap-2 mb-1">
                   <Users className={`w-5 h-5 ${isDarkMode ? 'text-white' : 'text-gray-800'}`} strokeWidth={2} />
                   <div className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                    1.2K
+                    {activeMembersCount > 0 ? activeMembersCount.toLocaleString() : '...'}
                   </div>
                 </div>
                 <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>

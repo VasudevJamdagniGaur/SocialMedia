@@ -1153,6 +1153,25 @@ class FirestoreService {
       return { success: false, error: error.message };
     }
   }
+
+  /**
+   * Get total count of active users/accounts
+   */
+  async getTotalUserCount() {
+    try {
+      // Count users from usersMetadata collection (more reliable)
+      const usersMetadataRef = collection(this.db, 'usersMetadata');
+      const usersSnapshot = await getDocs(usersMetadataRef);
+      
+      const totalCount = usersSnapshot.size;
+      console.log('👥 Total user count:', totalCount);
+      
+      return { success: true, count: totalCount };
+    } catch (error) {
+      console.error('❌ Error getting user count:', error);
+      return { success: false, error: error.message, count: 0 };
+    }
+  }
 }
 
 export default new FirestoreService();
