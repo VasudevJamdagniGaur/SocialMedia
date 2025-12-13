@@ -50,6 +50,8 @@ export default function ProfilePage() {
   const [showBirthdayCalendar, setShowBirthdayCalendar] = useState(false);
   const [birthdayDate, setBirthdayDate] = useState(null);
   const [isCrewEnrolled, setIsCrewEnrolled] = useState(false);
+  const [showAvatarModal, setShowAvatarModal] = useState(false);
+  const fileInputRef = useRef(null);
   
   // Helper function to format date for display
   const formatDateDisplay = (dateString) => {
@@ -246,6 +248,32 @@ export default function ProfilePage() {
       setBioLastUpdated(savedUpdated || null);
     }
     setIsEditing(false);
+  };
+
+  const avatars = [
+    { name: 'Apple', path: '/apple-avatar.png' },
+    { name: 'Pineapple', path: '/pineapple-avatar.png' },
+    { name: 'Carrot', path: '/carrot-avatar.png' },
+    { name: 'Banana', path: '/banana-avatar.png' },
+    { name: 'Strawberry', path: '/strawberry-avatar.png' },
+    { name: 'Broccoli', path: '/broccoli-avatar.png' },
+  ];
+
+  const handleAvatarSelect = (avatarPath) => {
+    setProfilePicture(avatarPath);
+    if (user) {
+      localStorage.setItem(`user_profile_picture_${user.uid}`, avatarPath);
+      window.dispatchEvent(new Event('profilePictureUpdated'));
+    }
+    setShowAvatarModal(false);
+  };
+
+  const handleUploadFromGallery = () => {
+    setShowAvatarModal(false);
+    // Trigger file input click
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
   };
 
   const handleProfilePictureChange = (e) => {
@@ -936,22 +964,25 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
                   )}
                 </div>
                 {/* Change Picture Button - Always available */}
-                <label className="absolute bottom-0 right-0 w-8 h-8 rounded-full flex items-center justify-center cursor-pointer transition-all hover:scale-110"
+                <button 
+                  className="absolute bottom-0 right-0 w-8 h-8 rounded-full flex items-center justify-center cursor-pointer transition-all hover:scale-110"
                   style={{
                     backgroundColor: "rgba(138, 180, 248, 0.9)",
                     boxShadow: "0 2px 8px rgba(0, 0, 0, 0.2)",
                     border: "2px solid #262626",
                   }}
                   title="Change profile picture"
+                  onClick={() => setShowAvatarModal(true)}
                 >
                   <Camera className="w-4 h-4 text-white" />
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleProfilePictureChange}
-                    className="hidden"
-                  />
-                </label>
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleProfilePictureChange}
+                  className="hidden"
+                />
                 {/* Remove Picture Button - Only show in edit mode and if picture exists */}
                 {isEditing && profilePicture && (
                   <button
@@ -1473,6 +1504,71 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
             >
               Crop & Continue
             </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {showAvatarModal && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div
+          className="absolute inset-0 bg-black/70"
+          onClick={() => setShowAvatarModal(false)}
+        />
+        <div
+          className="relative z-10 w-full max-w-md rounded-3xl p-6 space-y-6"
+          style={{
+            backgroundColor: "rgba(18, 18, 18, 0.95)",
+            border: "1px solid rgba(255, 255, 255, 0.1)",
+            boxShadow: "0 25px 50px -12px rgba(0,0,0,0.7)",
+          }}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-semibold text-white">Select Profile Picture</h3>
+            <button
+              onClick={() => setShowAvatarModal(false)}
+              className="p-2 rounded-full hover:bg-gray-700/40 transition-all"
+            >
+              <X className="w-5 h-5 text-gray-400" />
+            </button>
+          </div>
+          
+          <div className="space-y-4">
+            <p className="text-gray-400 text-sm">Choose an avatar:</p>
+            <div className="grid grid-cols-3 gap-4">
+              {avatars.map((avatar, index) => (
+                <button
+                  key={index}
+                  onClick={() => handleAvatarSelect(avatar.path)}
+                  className="flex flex-col items-center p-3 rounded-xl hover:bg-gray-700/40 transition-all group"
+                >
+                  <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-transparent group-hover:border-blue-400 transition-all mb-2">
+                    <img
+                      src={avatar.path}
+                      alt={avatar.name}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <span className="text-xs text-gray-400 group-hover:text-white transition-colors">
+                    {avatar.name}
+                  </span>
+                </button>
+              ))}
+            </div>
+            
+            <div className="pt-4 border-t border-gray-700">
+              <button
+                onClick={handleUploadFromGallery}
+                className="w-full py-3 px-4 rounded-xl font-semibold text-white flex items-center justify-center gap-2 hover:opacity-90 transition-all"
+                style={{
+                  backgroundColor: "#8AB4F8",
+                  boxShadow: "0 10px 20px rgba(138, 180, 248, 0.35)",
+                }}
+              >
+                <ImageIcon className="w-5 h-5" />
+                Upload from Gallery
+              </button>
+            </div>
           </div>
         </div>
       </div>
