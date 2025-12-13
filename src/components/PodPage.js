@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
-import { Users, User, Sun, Moon, ChevronRight, Sparkles, ChevronDown, ChevronUp, Plus } from 'lucide-react';
+import { Users, User, Sun, Moon, ChevronRight, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
 import { getCurrentUser } from '../services/authService';
 import reflectionService from '../services/reflectionService';
 import firestoreService from '../services/firestoreService';
@@ -214,36 +214,6 @@ export default function PodPage() {
   const handleDateSelect = (date) => {
     setSelectedDate(date);
     setIsCalendarOpen(false);
-  };
-
-  const handleFormSphere = async (e) => {
-    e.stopPropagation(); // Prevent the container's onClick from firing
-    const user = getCurrentUser();
-    if (!user) return;
-
-    try {
-      // Form/create the sphere by ensuring crew members are set up
-      await firestoreService.updateUserMetadata(user.uid, {
-        displayName: user.displayName || 'User',
-        profilePicture: profilePicture,
-        crewEnrolled: true
-      });
-
-      // Get crew members to form the sphere
-      const result = await firestoreService.getCrewMembers(user.uid, 5);
-      
-      if (result.success) {
-        setCrewMembers(result.members);
-        alert('Sphere formed successfully!');
-        // Navigate to chat after forming
-        navigate('/pod/chat');
-      } else {
-        alert('Sphere formation initiated. Crew members will be matched soon.');
-      }
-    } catch (error) {
-      console.error('Error forming sphere:', error);
-      alert('Error forming sphere. Please try again.');
-    }
   };
 
   const handleGeneratePodReflection = async () => {
@@ -541,24 +511,6 @@ export default function PodPage() {
                   </span>
                 </div>
               ))}
-            </div>
-
-            {/* Form Sphere Button */}
-            <div className="mt-4 flex justify-center">
-              <button
-                onClick={handleFormSphere}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-300 hover:opacity-90 ${
-                  isDarkMode 
-                    ? 'bg-[#8AB4F8] text-white hover:bg-[#7AA3E8]' 
-                    : 'bg-[#87A96B] text-white hover:bg-[#7A9960]'
-                }`}
-                style={{
-                  boxShadow: "0 2px 8px rgba(0, 0, 0, 0.15)",
-                }}
-              >
-                <Plus className="w-4 h-4" />
-                <span>Form Sphere</span>
-              </button>
             </div>
           </div>
 
