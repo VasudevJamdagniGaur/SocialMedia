@@ -3289,10 +3289,10 @@ Return in this JSON format:
                   </>
                 ) : (
                   <>
-                    <p className="text-sm text-gray-300 group-hover:text-gray-200 transition-colors duration-300 leading-relaxed mb-2">
+                    <p className={`text-sm leading-relaxed mb-2 group-hover:transition-colors duration-300 ${isDarkMode ? 'text-gray-300 group-hover:text-gray-200' : 'text-gray-800 group-hover:text-gray-900'}`}>
                       {highlights.peak?.description || 'Your highest emotional peak this period.'}
                     </p>
-                    <p className="text-xs text-gray-400 group-hover:text-gray-300 transition-colors duration-300">
+                    <p className={`text-xs transition-colors duration-300 ${isDarkMode ? 'text-gray-400 group-hover:text-gray-300' : 'text-gray-600 group-hover:text-gray-700'}`}>
                       {highlights.peak?.date || 'No data available'}
                     </p>
                   </>
@@ -3333,10 +3333,10 @@ Return in this JSON format:
                   </>
                 ) : (
                   <>
-                    <p className="text-sm text-gray-300 group-hover:text-gray-200 transition-colors duration-300 leading-relaxed mb-2">
+                    <p className={`text-sm leading-relaxed mb-2 group-hover:transition-colors duration-300 ${isDarkMode ? 'text-gray-300 group-hover:text-gray-200' : 'text-gray-800 group-hover:text-gray-900'}`}>
                       {highlights.toughestDay?.description || 'Your most challenging emotional period.'}
                     </p>
-                    <p className="text-xs text-gray-400 group-hover:text-gray-300 transition-colors duration-300">
+                    <p className={`text-xs transition-colors duration-300 ${isDarkMode ? 'text-gray-400 group-hover:text-gray-300' : 'text-gray-600 group-hover:text-gray-700'}`}>
                       {highlights.toughestDay?.date || 'No data available'}
                     </p>
                   </>
