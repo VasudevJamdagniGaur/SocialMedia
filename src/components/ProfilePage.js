@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
 import { getCurrentUser, signOutUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
+import { updateProfile } from 'firebase/auth';
+import { auth } from '../firebase/config';
 import Cropper from 'react-easy-crop';
 import {
   ArrowLeft,
@@ -114,8 +116,9 @@ export default function ProfilePage() {
       const savedBirthday = localStorage.getItem(`user_birthday_${currentUser.uid}`) || '';
       // Calculate age from birthday if available, otherwise use saved age
       const calculatedAge = savedBirthday ? calculateAgeFromBirthday(savedBirthday) : (localStorage.getItem(`user_age_${currentUser.uid}`) || '');
+      const savedDisplayName = localStorage.getItem(`user_display_name_${currentUser.uid}`) || currentUser.displayName || '';
       setEditData({
-        displayName: currentUser.displayName || '',
+        displayName: savedDisplayName,
         age: calculatedAge,
         gender: localStorage.getItem(`user_gender_${currentUser.uid}`) || '',
         bio: localStorage.getItem(`user_bio_${currentUser.uid}`) || '',
@@ -211,14 +214,34 @@ export default function ProfilePage() {
 
     setLoading(true);
     try {
+      // Update display name in Firebase Auth if it changed
+      if (editData.displayName && editData.displayName.trim() !== user.displayName) {
+        try {
+          const currentUser = auth.currentUser;
+          if (currentUser) {
+            await updateProfile(currentUser, {
+              displayName: editData.displayName.trim()
+            });
+            // Update local user state
+            setUser({ ...user, displayName: editData.displayName.trim() });
+            console.log('✅ Display name updated in Firebase Auth');
+          }
+        } catch (error) {
+          console.error('Error updating display name:', error);
+          // Continue with other saves even if this fails
+        }
+      }
+
       // Always calculate age from birthday if birthday is provided, otherwise use existing age
       let ageToSave = editData.age;
       if (editData.birthday) {
         ageToSave = calculateAgeFromBirthday(editData.birthday);
       }
 
-      // Since Firebase Auth doesn't store custom profile data, 
-      // we'll use localStorage for this demo
+      // Save to localStorage
+      if (editData.displayName) {
+        localStorage.setItem(`user_display_name_${user.uid}`, editData.displayName.trim());
+      }
       localStorage.setItem(`user_age_${user.uid}`, ageToSave);
       localStorage.setItem(`user_gender_${user.uid}`, editData.gender);
       localStorage.setItem(`user_bio_${user.uid}`, editData.bio);
@@ -239,6 +262,18 @@ export default function ProfilePage() {
         console.log('✅ Profile picture removed from localStorage');
       }
 
+      // Update Firestore with display name and other profile data
+      try {
+        await firestoreService.ensureUser(user.uid, {
+          displayName: editData.displayName.trim() || user.displayName || 'User',
+          email: user.email
+        });
+        console.log('✅ Profile data updated in Firestore');
+      } catch (error) {
+        console.error('Error updating Firestore:', error);
+        // Don't block save if Firestore update fails
+      }
+
       // Trigger a custom event to notify other components (like Dashboard) of the change
       window.dispatchEvent(new Event('profilePictureUpdated'));
 
@@ -255,8 +290,9 @@ export default function ProfilePage() {
   const handleCancel = () => {
     const savedBirthday = localStorage.getItem(`user_birthday_${user?.uid}`) || '';
     const calculatedAge = savedBirthday ? calculateAgeFromBirthday(savedBirthday) : (localStorage.getItem(`user_age_${user?.uid}`) || '');
+    const savedDisplayName = localStorage.getItem(`user_display_name_${user?.uid}`) || user?.displayName || '';
     setEditData({
-      displayName: user?.displayName || '',
+      displayName: savedDisplayName,
       age: calculatedAge,
       gender: localStorage.getItem(`user_gender_${user?.uid}`) || '',
       bio: localStorage.getItem(`user_bio_${user?.uid}`) || '',
@@ -1145,6 +1181,21 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
             <>
               {/* Edit Mode */}
               <div className="space-y-4 mt-6">
+                <div>
+                  <label className="block mb-2 font-medium text-gray-300">Display Name</label>
+                  <input
+                    type="text"
+                    value={editData.displayName}
+                    onChange={(e) => setEditData({ ...editData, displayName: e.target.value })}
+                    placeholder="Enter your display name"
+                    className="w-full px-3 py-2 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-400"
+                    style={{
+                      backgroundColor: "#262626",
+                      border: "1px solid rgba(255, 255, 255, 0.08)",
+                    }}
+                  />
+                </div>
+
                 <div>
                   <label className="block mb-2 font-medium text-gray-300">Age</label>
                   <div
