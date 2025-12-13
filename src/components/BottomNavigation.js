@@ -45,7 +45,7 @@ export default function BottomNavigation() {
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
             style={{
-              opacity: isHomeActive ? 1 : (isDarkMode ? 0.7 : 0.6)
+              opacity: isHomeActive ? 1 : 0.4
             }}
           >
             <path
@@ -78,7 +78,7 @@ export default function BottomNavigation() {
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
             style={{
-              opacity: isWellbeingActive ? 1 : (isDarkMode ? 0.7 : 0.6)
+              opacity: isWellbeingActive ? 1 : 0.4
             }}
           >
             <path
@@ -104,7 +104,7 @@ export default function BottomNavigation() {
             alt="Crew"
             className="w-16 h-16 object-contain"
             style={{
-              opacity: isPodActive ? 1 : (isDarkMode ? 0.7 : 0.6),
+              opacity: isPodActive ? 1 : 0.4,
               filter: isPodActive 
                 ? 'brightness(0) invert(1)'
                 : 'none',
