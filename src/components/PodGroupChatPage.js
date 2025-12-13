@@ -92,23 +92,13 @@ export default function PodGroupChatPage() {
         if (result.success && result.members.length > 0) {
           setCrewMembers(result.members);
         } else {
-          // Fallback to default members if no crew members found
-          setCrewMembers([
-            { name: 'Alex', emoji: '👤', color: '#7DD3C0' },
-            { name: 'Sam', emoji: '👤', color: '#FDD663' },
-            { name: 'Jordan', emoji: '👤', color: '#8AB4F8' },
-            { name: 'Taylor', emoji: '👤', color: '#E6B3BA' },
-          ]);
+          // Only show real members, no fallback
+          setCrewMembers([]);
         }
       } catch (error) {
         console.error('Error loading crew members:', error);
-        // Fallback to default members on error
-        setCrewMembers([
-          { name: 'Alex', emoji: '👤', color: '#7DD3C0' },
-          { name: 'Sam', emoji: '👤', color: '#FDD663' },
-          { name: 'Jordan', emoji: '👤', color: '#8AB4F8' },
-          { name: 'Taylor', emoji: '👤', color: '#E6B3BA' },
-        ]);
+        // Only show real members, no fallback
+        setCrewMembers([]);
       } finally {
         setIsLoadingCrew(false);
       }
