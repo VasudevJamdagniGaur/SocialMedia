@@ -530,10 +530,10 @@ export default function PodPage() {
             ) : podReflection ? (
               <div
                 onClick={() => navigate('/pod/reflections')}
-                className="cursor-pointer"
+                className="cursor-pointer transition-opacity hover:opacity-90"
               >
-                <div className="flex items-start gap-2">
-                  <ChevronRight className={`w-4 h-4 mt-0.5 flex-shrink-0 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
+                <div className="flex items-start gap-3">
+                  <ChevronRight className={`w-5 h-5 mt-0.5 flex-shrink-0 ${isDarkMode ? 'text-[#8AB4F8]' : 'text-[#87A96B]'}`} strokeWidth={2.5} />
                   <div className="flex-1">
                     <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-600'} line-clamp-3`}>
                       {podReflection}

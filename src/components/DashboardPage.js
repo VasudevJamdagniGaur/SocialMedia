@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
-import { Brain, MessageCircle, Calendar, Heart, Sparkles, User, Sun, Moon } from "lucide-react";
+import { Brain, MessageCircle, Calendar, Heart, Sparkles, User, Sun, Moon, ChevronRight } from "lucide-react";
 import { useTheme } from '../contexts/ThemeContext';
 import CalendarPopup from './CalendarPopup';
 import reflectionService from '../services/reflectionService';
@@ -632,20 +632,27 @@ export default function DashboardPage() {
             borderTop: "3px solid #E6B3BA30",
           }}
         >
-          <div className="flex items-center space-x-3 mb-4">
-            <div
-              className="w-8 h-8 rounded-full flex items-center justify-center"
-              style={{
-                backgroundColor: isDarkMode ? "#FDD663" : "#E6B3BA",
-                boxShadow: isDarkMode ? "0 4px 16px rgba(0, 0, 0, 0.15)" : "none",
-              }}
-            >
-              <span className={isDarkMode ? "text-black" : "text-white"} style={{ fontSize: '14px' }}>⚡</span>
+          <div 
+            onClick={() => navigate('/reflections')}
+            className="flex items-center justify-between mb-4 cursor-pointer transition-opacity hover:opacity-80"
+          >
+            <div className="flex items-center space-x-3">
+              <div
+                className="w-8 h-8 rounded-full flex items-center justify-center"
+                style={{
+                  backgroundColor: isDarkMode ? "#FDD663" : "#E6B3BA",
+                  boxShadow: isDarkMode ? "0 4px 16px rgba(0, 0, 0, 0.15)" : "none",
+                }}
+              >
+                <span className={isDarkMode ? "text-black" : "text-white"} style={{ fontSize: '14px' }}>⚡</span>
+              </div>
+              <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>Day's Reflect</h2>
             </div>
-            <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>Day's Reflect</h2>
+            <ChevronRight className={`w-5 h-5 ${isDarkMode ? 'text-[#8AB4F8]' : 'text-[#87A96B]'}`} strokeWidth={2.5} />
           </div>
           <div
-            className={`rounded-xl p-5 min-h-24 relative overflow-hidden ${
+            onClick={() => navigate('/reflections')}
+            className={`rounded-xl p-5 min-h-24 relative overflow-hidden cursor-pointer transition-opacity hover:opacity-90 ${
               isDarkMode ? 'backdrop-blur-lg' : ''
             }`}
             style={isDarkMode ? {
