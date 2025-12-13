@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
-import { Users, User, Sun, Moon, ChevronRight, Sparkles, ChevronDown, ChevronUp, Calendar } from 'lucide-react';
+import { Users, User, Sun, Moon, ChevronRight, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
 import { getCurrentUser } from '../services/authService';
 import reflectionService from '../services/reflectionService';
 import firestoreService from '../services/firestoreService';
@@ -515,37 +515,6 @@ export default function PodPage() {
                 <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>Crew's Reflection</h2>
               </div>
               <ChevronRight className={`w-5 h-5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
-            </div>
-            
-            {/* Subheading: Date Selection with Calendar */}
-            <div className="mb-3">
-              <h3 className={`text-base font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                {getDateId(selectedDate) === getDateId(new Date()) ? "Today's Reflection" : formatDateForDisplay(selectedDate)}
-              </h3>
-              <div
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleCalendarClick();
-                }}
-                className="flex items-center space-x-2 cursor-pointer hover:opacity-80 transition-opacity"
-              >
-                <div
-                  className={`rounded-lg px-3 py-2 flex items-center space-x-2 ${
-                    isDarkMode ? 'backdrop-blur-md' : 'bg-gray-50'
-                  }`}
-                  style={isDarkMode ? {
-                    backgroundColor: "rgba(28, 31, 46, 0.5)",
-                    border: "1px solid rgba(255, 255, 255, 0.08)",
-                  } : {
-                    border: "1px solid rgba(0, 0, 0, 0.05)",
-                  }}
-                >
-                  <Calendar className="w-4 h-4" style={{ color: isDarkMode ? "#7DD3C0" : "#87A96B" }} />
-                  <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                    Click to change date
-                  </div>
-                </div>
-              </div>
             </div>
             
             {/* Reflection Content */}
