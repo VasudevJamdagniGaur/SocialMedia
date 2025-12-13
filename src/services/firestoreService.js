@@ -1160,13 +1160,25 @@ class FirestoreService {
    */
   async getActiveUsersWithMessages(days = 7) {
     try {
-      const now = new Date();
-      const daysAgo = new Date(now.getTime() - (days * 24 * 60 * 60 * 1000));
-      const daysAgoStr = daysAgo.toISOString().split('T')[0];
+      console.log('🔍 Getting active users with messages in past', days, 'days...');
+      
+      // Calculate date range - include today and past 7 days
+      const today = new Date();
+      const dateIds = [];
+      for (let i = 0; i <= days; i++) {
+        const date = new Date(today);
+        date.setDate(date.getDate() - i);
+        const dateId = getDateId(date);
+        dateIds.push(dateId);
+      }
+      
+      console.log('📅 Checking date IDs:', dateIds);
       
       // Get all users
       const usersRef = collection(this.db, 'users');
       const usersSnapshot = await getDocs(usersRef);
+      
+      console.log('👥 Total users found:', usersSnapshot.size);
       
       const activeUsers = [];
       
@@ -1174,26 +1186,19 @@ class FirestoreService {
         const userId = userDoc.id;
         const userData = userDoc.data();
         
-        // Check if user is enrolled in crew
+        // Get user metadata
         const metadataRef = doc(this.db, `usersMetadata/${userId}`);
         const metadataSnap = await getDoc(metadataRef);
-        const isEnrolled = metadataSnap.exists() ? metadataSnap.data().crewEnrolled === true : false;
+        const metadata = metadataSnap.exists() ? metadataSnap.data() : {};
         
-        if (!isEnrolled) continue;
-        
-        // Check for messages in the past week using both old and new structures
+        // Check for messages in the past week - check all date IDs
         let hasRecentMessage = false;
         
         // Check new structure: users/{uid}/days/{dateId}/messages
-        const daysRef = collection(this.db, `users/${userId}/days`);
-        const daysSnapshot = await getDocs(daysRef);
-        
-        for (const dayDoc of daysSnapshot.docs) {
-          const dateId = dayDoc.id;
-          // Check if date is within the past week
-          if (dateId >= daysAgoStr) {
+        for (const dateId of dateIds) {
+          try {
             const messagesRef = collection(this.db, `users/${userId}/days/${dateId}/messages`);
-            const messagesSnapshot = await getDocs(query(messagesRef, limit(1)));
+            const messagesSnapshot = await getDocs(query(messagesRef, limit(10)));
             
             if (!messagesSnapshot.empty) {
               // Check if any message is from user (role === 'user')
@@ -1201,25 +1206,25 @@ class FirestoreService {
                 const msgData = msgDoc.data();
                 if (msgData.role === 'user') {
                   hasRecentMessage = true;
+                  console.log('✅ Found user message for', userId, 'on date', dateId);
                   break;
                 }
               }
             }
             
             if (hasRecentMessage) break;
+          } catch (err) {
+            // Collection might not exist, continue
+            continue;
           }
         }
         
         // Also check old structure: users/{uid}/chats/{dateId}/messages
         if (!hasRecentMessage) {
-          const chatsRef = collection(this.db, `users/${userId}/chats`);
-          const chatsSnapshot = await getDocs(chatsRef);
-          
-          for (const chatDoc of chatsSnapshot.docs) {
-            const dateId = chatDoc.id;
-            if (dateId >= daysAgoStr) {
+          for (const dateId of dateIds) {
+            try {
               const messagesRef = collection(this.db, `users/${userId}/chats/${dateId}/messages`);
-              const messagesSnapshot = await getDocs(query(messagesRef, limit(1)));
+              const messagesSnapshot = await getDocs(query(messagesRef, limit(10)));
               
               if (!messagesSnapshot.empty) {
                 for (const msgDoc of messagesSnapshot.docs) {
@@ -1227,12 +1232,16 @@ class FirestoreService {
                   // Check if message is from user (sender === 'user' or role === 'user')
                   if (msgData.sender === 'user' || msgData.role === 'user') {
                     hasRecentMessage = true;
+                    console.log('✅ Found user message (old structure) for', userId, 'on date', dateId);
                     break;
                   }
                 }
               }
               
               if (hasRecentMessage) break;
+            } catch (err) {
+              // Collection might not exist, continue
+              continue;
             }
           }
         }
@@ -1240,16 +1249,18 @@ class FirestoreService {
         if (hasRecentMessage) {
           activeUsers.push({
             uid: userId,
-            displayName: userData.displayName || metadataSnap.data()?.displayName || 'User',
-            profilePicture: metadataSnap.data()?.profilePicture || null,
+            displayName: userData.displayName || metadata.displayName || 'User',
+            profilePicture: metadata.profilePicture || null,
             email: userData.email
           });
+          console.log('✅ Added active user:', userId, userData.displayName || metadata.displayName || 'User');
         }
       }
       
+      console.log('✅ Total active users found:', activeUsers.length);
       return { success: true, users: activeUsers };
     } catch (error) {
-      console.error('Error getting active users with messages:', error);
+      console.error('❌ Error getting active users with messages:', error);
       return { success: false, error: error.message, users: [] };
     }
   }
