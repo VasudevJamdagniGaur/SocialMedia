@@ -162,14 +162,35 @@ export default function PodGroupChatPage() {
 
   const handleSend = () => {
     if (inputMessage.trim() || selectedImage) {
-      // Handle send message logic here
-      // You can add the message with image to your messages array or send to backend
-      console.log('Sending message:', { text: inputMessage, image: selectedImage });
+      const user = getCurrentUser();
+      const userName = user?.displayName || 'You';
+      
+      // Create message object
+      const newMessage = {
+        id: Date.now().toString(),
+        sender: userName,
+        message: inputMessage.trim(),
+        image: selectedImage ? URL.createObjectURL(selectedImage) : null,
+        time: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
+        emoji: '👤',
+        color: isDarkMode ? '#8AB4F8' : '#87A96B',
+        isCurrentUser: true
+      };
+      
+      // Add message to messages array
+      setMessages(prevMessages => [...prevMessages, newMessage]);
+      
+      // Clear input
       setInputMessage('');
       setSelectedImage(null);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
+      
+      // Scroll to bottom after message is added
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
     }
   };
 
@@ -250,6 +271,12 @@ export default function PodGroupChatPage() {
                 />
               ) : member.isCurrentUser ? (
                 <User className="w-5 h-5" style={{ color: member.color }} />
+              ) : member.profilePicture ? (
+                <img 
+                  src={member.profilePicture} 
+                  alt={member.name} 
+                  className="w-full h-full object-cover"
+                />
               ) : (
                 <span>{member.emoji}</span>
               )}
@@ -275,9 +302,9 @@ export default function PodGroupChatPage() {
               </p>
             </div>
           ) : (
-            messages.map((msg, index) => (
+            messages.map((msg) => (
             <div
-              key={index}
+              key={msg.id || Date.now() + Math.random()}
               className={`flex items-start space-x-2 ${
                 msg.sender === 'AI' ? 'bg-opacity-20' : ''
               }`}
@@ -290,14 +317,20 @@ export default function PodGroupChatPage() {
               <div
                 className="w-8 h-8 rounded-full flex items-center justify-center text-xs flex-shrink-0 overflow-hidden"
                 style={{
-                  backgroundColor: msg.sender === 'AI' ? "transparent" : (isDarkMode ? msg.color + '30' : msg.color + '20'),
-                  border: msg.sender === 'AI' ? "none" : `2px solid ${msg.color}40`,
+                  backgroundColor: (msg.sender === 'AI' || (msg.isCurrentUser && profilePicture)) ? "transparent" : (isDarkMode ? msg.color + '30' : msg.color + '20'),
+                  border: (msg.sender === 'AI' || (msg.isCurrentUser && profilePicture)) ? "none" : `2px solid ${msg.color}40`,
                 }}
               >
                 {msg.sender === 'AI' ? (
                   <img 
                     src="/ai-avatar.png" 
                     alt="AI" 
+                    className="w-full h-full object-cover"
+                  />
+                ) : msg.isCurrentUser && profilePicture ? (
+                  <img 
+                    src={profilePicture} 
+                    alt={msg.sender} 
                     className="w-full h-full object-cover"
                   />
                 ) : (
