@@ -19,6 +19,7 @@ export default function PodPage() {
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [podDays, setPodDays] = useState([]);
   const [crewMembers, setCrewMembers] = useState([]);
+  const [isCreatingSphere, setIsCreatingSphere] = useState(false);
 
   // Load profile picture
   useEffect(() => {
