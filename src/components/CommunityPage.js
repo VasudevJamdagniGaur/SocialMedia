@@ -28,6 +28,8 @@ export default function CommunityPage() {
   const [postImage, setPostImage] = useState(null);
   const [postImageUrl, setPostImageUrl] = useState('');
   const [uploadOption, setUploadOption] = useState(null); // 'device' or 'url'
+  const [showFAB, setShowFAB] = useState(true);
+  const [lastScrollY, setLastScrollY] = useState(0);
 
   // Load profile picture
   useEffect(() => {
@@ -79,6 +81,30 @@ export default function CommunityPage() {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);
+
+  // Scroll detection for FAB visibility
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      
+      // Show FAB when scrolling up, hide when scrolling down
+      if (currentScrollY < lastScrollY) {
+        // Scrolling up
+        setShowFAB(true);
+      } else if (currentScrollY > lastScrollY && currentScrollY > 100) {
+        // Scrolling down and past 100px
+        setShowFAB(false);
+      }
+      
+      setLastScrollY(currentScrollY);
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, [lastScrollY]);
 
   const handleProfileClick = () => {
     navigate('/profile');
@@ -751,7 +777,9 @@ export default function CommunityPage() {
       {/* Floating Action Button - Create Post */}
       <button
         onClick={() => setShowCreatePost(true)}
-        className="fixed bottom-20 right-4 z-40 w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95 shadow-lg"
+        className={`fixed bottom-20 right-4 z-40 w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95 shadow-lg ${
+          showFAB ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
+        }`}
         style={{
           backgroundColor: "#8AB4F8",
           boxShadow: "0 4px 16px rgba(138, 180, 248, 0.4)",
