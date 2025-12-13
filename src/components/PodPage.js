@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
-import { Users, User, Sun, Moon, ChevronRight, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
+import { Users, User, Sun, Moon, ChevronRight, Sparkles, ChevronDown, ChevronUp, Plus } from 'lucide-react';
 import { getCurrentUser } from '../services/authService';
 import reflectionService from '../services/reflectionService';
 import firestoreService from '../services/firestoreService';
@@ -214,6 +214,66 @@ export default function PodPage() {
   const handleDateSelect = (date) => {
     setSelectedDate(date);
     setIsCalendarOpen(false);
+  };
+
+  const handleCreateSphere = async (e) => {
+    e.stopPropagation(); // Prevent the container's onClick from firing
+    const user = getCurrentUser();
+    if (!user) {
+      alert('Please sign in to create a crew sphere');
+      return;
+    }
+
+    setIsCreatingSphere(true);
+    try {
+      // Get crew members if not already loaded
+      let membersToUse = crewMembers;
+      if (membersToUse.length === 0) {
+        // Update user metadata to mark as active
+        await firestoreService.updateUserMetadata(user.uid, {
+          displayName: user.displayName || 'User',
+          profilePicture: profilePicture,
+          crewEnrolled: localStorage.getItem(`user_crew_enrolled_${user.uid}`) === 'true'
+        });
+
+        // Get crew members
+        const result = await firestoreService.getCrewMembers(user.uid, 5);
+        if (result.success && result.members.length > 0) {
+          membersToUse = result.members;
+          setCrewMembers(result.members);
+        }
+      }
+
+      if (membersToUse.length === 0) {
+        alert('No active crew members found. Make sure you and other users are enrolled in crew features and have been active recently.');
+        setIsCreatingSphere(false);
+        return;
+      }
+
+      // Extract member UIDs
+      const memberUids = membersToUse.map(member => member.uid).filter(uid => uid);
+
+      // Create the crew sphere
+      const result = await firestoreService.createCrewSphere(user.uid, memberUids);
+      
+      if (result.success) {
+        alert(`Crew sphere created successfully with ${memberUids.length + 1} members!`);
+        // Reload crew members to refresh the display
+        const reloadResult = await firestoreService.getCrewMembers(user.uid, 5);
+        if (reloadResult.success && reloadResult.members.length > 0) {
+          setCrewMembers(reloadResult.members);
+        }
+        // Navigate to chat
+        navigate('/pod/chat');
+      } else {
+        alert(`Error creating crew sphere: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Error creating crew sphere:', error);
+      alert('Error creating crew sphere. Please try again.');
+    } finally {
+      setIsCreatingSphere(false);
+    }
   };
 
   const handleGeneratePodReflection = async () => {
@@ -511,6 +571,25 @@ export default function PodPage() {
                   </span>
                 </div>
               ))}
+            </div>
+
+            {/* Create Sphere Button */}
+            <div className="mt-4 flex justify-center">
+              <button
+                onClick={handleCreateSphere}
+                disabled={isCreatingSphere}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-300 hover:opacity-90 disabled:opacity-50 ${
+                  isDarkMode 
+                    ? 'bg-[#1d9bf0] text-white hover:bg-[#1a8cd8]' 
+                    : 'bg-[#1d9bf0] text-white hover:bg-[#1a8cd8]'
+                }`}
+                style={{
+                  boxShadow: "0 2px 8px rgba(29, 155, 240, 0.3)",
+                }}
+              >
+                <Plus className="w-4 h-4" />
+                <span>{isCreatingSphere ? 'Creating...' : 'Create Sphere'}</span>
+              </button>
             </div>
           </div>
 

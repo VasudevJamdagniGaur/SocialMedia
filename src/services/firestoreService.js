@@ -1156,6 +1156,49 @@ class FirestoreService {
   }
 
   /**
+   * Create a crew sphere with members
+   */
+  async createCrewSphere(creatorUid, memberUids) {
+    try {
+      const dateId = getDateId(new Date());
+      const sphereId = doc(collection(this.db, 'crewSpheres')).id;
+      
+      // Create sphere document with all members
+      const allMembers = [creatorUid, ...memberUids];
+      const sphereData = {
+        id: sphereId,
+        creatorUid: creatorUid,
+        members: allMembers,
+        createdAt: serverTimestamp(),
+        startDate: dateId,
+        isActive: true
+      };
+      
+      const sphereRef = doc(this.db, `crewSpheres/${sphereId}`);
+      await setDoc(sphereRef, sphereData);
+      
+      // Also create pod reference for each member so they can see it
+      for (const memberUid of allMembers) {
+        const memberPodRef = doc(this.db, `users/${memberUid}/pods/${sphereId}`);
+        await setDoc(memberPodRef, {
+          name: "Crew's Sphere",
+          startDate: dateId,
+          sphereId: sphereId,
+          members: allMembers,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          memberCount: allMembers.length
+        }, { merge: true });
+      }
+      
+      return { success: true, sphereId };
+    } catch (error) {
+      console.error('Error creating crew sphere:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
    * Update user metadata for crew matching
    */
   async updateUserMetadata(uid, userData) {
