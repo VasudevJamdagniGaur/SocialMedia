@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
-import { Users, MessageCircle, Heart, TrendingUp, User, Sun, Moon, Send, X, Plus, XCircle, Image, Link, FileText, Layers, Activity, Brain, Sprout, Coffee, Flame, BookOpen } from 'lucide-react';
+import { Users, MessageCircle, Heart, TrendingUp, User, Sun, Moon, Send, X, Plus, XCircle, Image, Link, FileText, Layers, Activity, Brain, Sprout, Coffee, Flame } from 'lucide-react';
 import { getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
 import { collection, addDoc, query, orderBy, getDocs, serverTimestamp, doc, setDoc } from 'firebase/firestore';
@@ -30,7 +30,6 @@ export default function CommunityPage() {
   const [uploadOption, setUploadOption] = useState(null); // 'device' or 'url'
   const [showFAB, setShowFAB] = useState(true);
   const [lastScrollY, setLastScrollY] = useState(0);
-  const [showRecap, setShowRecap] = useState(false);
   const [activeMembersCount, setActiveMembersCount] = useState(0);
 
   // Load profile picture
@@ -424,48 +423,6 @@ export default function CommunityPage() {
     return `${days} ${days === 1 ? 'day' : 'days'} ago`;
   };
 
-  // Calculate recap statistics
-  const getRecapStats = () => {
-    const totalPosts = communityPosts.length;
-    const totalLikes = Object.values(postLikes).reduce((sum, likes) => sum + (likes || 0), 0);
-    const totalComments = Object.values(postComments).reduce((sum, data) => sum + (data.comments?.length || 0), 0);
-    
-    // Find most liked post
-    let mostLikedPost = null;
-    let maxLikes = 0;
-    communityPosts.forEach(post => {
-      const likes = postLikes[post.id] || post.likes || 0;
-      if (likes > maxLikes) {
-        maxLikes = likes;
-        mostLikedPost = post;
-      }
-    });
-
-    // Find most commented post
-    let mostCommentedPost = null;
-    let maxComments = 0;
-    communityPosts.forEach(post => {
-      const comments = postComments[post.id]?.comments?.length || post.comments?.length || 0;
-      if (comments > maxComments) {
-        maxComments = comments;
-        mostCommentedPost = post;
-      }
-    });
-
-    // Get recent posts (last 5)
-    const recentPosts = [...communityPosts]
-      .sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0))
-      .slice(0, 5);
-
-    return {
-      totalPosts,
-      totalLikes,
-      totalComments,
-      mostLikedPost,
-      mostCommentedPost,
-      recentPosts
-    };
-  };
 
   return (
     <div
@@ -601,22 +558,6 @@ export default function CommunityPage() {
               <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
                 Community Stats
               </h2>
-              <button
-                onClick={() => setShowRecap(true)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all duration-300 hover:opacity-80 ${
-                  isDarkMode ? 'bg-gray-800/50' : 'bg-gray-100'
-                }`}
-                style={isDarkMode ? {
-                  border: "1px solid rgba(255, 255, 255, 0.08)",
-                } : {
-                  border: "1px solid rgba(0, 0, 0, 0.05)",
-                }}
-              >
-                <BookOpen className={`w-4 h-4 ${isDarkMode ? 'text-[#8AB4F8]' : 'text-[#87A96B]'}`} />
-                <span className={`text-xs font-medium ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                  Recap
-                </span>
-              </button>
             </div>
             <div className="grid grid-cols-3 gap-4">
               <div className="text-center">
@@ -1132,181 +1073,6 @@ export default function CommunityPage() {
         </div>
       )}
 
-      {/* Community Recap Modal */}
-      {showRecap && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
-          onClick={() => setShowRecap(false)}
-        >
-          <div
-            className={`rounded-2xl p-6 w-full max-w-sm relative max-h-[90vh] overflow-y-auto ${
-              isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
-            }`}
-            style={isDarkMode ? {
-              backgroundColor: "#262626",
-              boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)",
-              border: "1px solid rgba(255, 255, 255, 0.1)",
-            } : {
-              boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-2">
-                <BookOpen className={`w-5 h-5 ${isDarkMode ? 'text-[#8AB4F8]' : 'text-[#87A96B]'}`} />
-                <h2 className={`text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                  Community Recap
-                </h2>
-              </div>
-              <button
-                onClick={() => setShowRecap(false)}
-                className={`p-1 rounded-full hover:opacity-80 transition-opacity ${
-                  isDarkMode ? 'hover:bg-gray-800/50' : 'hover:bg-gray-100'
-                }`}
-              >
-                <XCircle className={`w-5 h-5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
-              </button>
-            </div>
-
-            {(() => {
-              const stats = getRecapStats();
-              return (
-                <div className="space-y-6">
-                  {/* Overall Statistics */}
-                  <div className="space-y-3">
-                    <h3 className={`text-sm font-semibold ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      Overall Statistics
-                    </h3>
-                    <div className="grid grid-cols-3 gap-3">
-                      <div className={`text-center p-3 rounded-lg ${
-                        isDarkMode ? 'bg-gray-800/50' : 'bg-gray-100'
-                      }`}>
-                        <div className={`text-2xl font-bold mb-1 ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                          {stats.totalPosts}
-                        </div>
-                        <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                          Total Posts
-                        </div>
-                      </div>
-                      <div className={`text-center p-3 rounded-lg ${
-                        isDarkMode ? 'bg-gray-800/50' : 'bg-gray-100'
-                      }`}>
-                        <div className={`text-2xl font-bold mb-1 ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                          {stats.totalLikes}
-                        </div>
-                        <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                          Total Likes
-                        </div>
-                      </div>
-                      <div className={`text-center p-3 rounded-lg ${
-                        isDarkMode ? 'bg-gray-800/50' : 'bg-gray-100'
-                      }`}>
-                        <div className={`text-2xl font-bold mb-1 ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                          {stats.totalComments}
-                        </div>
-                        <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                          Comments
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Most Liked Post */}
-                  {stats.mostLikedPost && (
-                    <div className="space-y-2">
-                      <h3 className={`text-sm font-semibold ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                        Most Liked Post
-                      </h3>
-                      <div className={`p-3 rounded-lg ${
-                        isDarkMode ? 'bg-gray-800/50' : 'bg-gray-100'
-                      }`}>
-                        <div className="flex items-center gap-2 mb-2">
-                          <Heart className={`w-4 h-4 ${isDarkMode ? 'text-[#8AB4F8]' : 'text-[#87A96B]'}`} />
-                          <span className={`text-xs font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                            {postLikes[stats.mostLikedPost.id] || stats.mostLikedPost.likes || 0} likes
-                          </span>
-                        </div>
-                        <p className={`text-sm ${isDarkMode ? 'text-white' : 'text-gray-800'} mb-1`}>
-                          {stats.mostLikedPost.author}
-                        </p>
-                        <p className={`text-xs line-clamp-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                          {stats.mostLikedPost.content}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Most Commented Post */}
-                  {stats.mostCommentedPost && (
-                    <div className="space-y-2">
-                      <h3 className={`text-sm font-semibold ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                        Most Commented Post
-                      </h3>
-                      <div className={`p-3 rounded-lg ${
-                        isDarkMode ? 'bg-gray-800/50' : 'bg-gray-100'
-                      }`}>
-                        <div className="flex items-center gap-2 mb-2">
-                          <MessageCircle className={`w-4 h-4 ${isDarkMode ? 'text-[#8AB4F8]' : 'text-[#87A96B]'}`} />
-                          <span className={`text-xs font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                            {postComments[stats.mostCommentedPost.id]?.comments?.length || stats.mostCommentedPost.comments?.length || 0} comments
-                          </span>
-                        </div>
-                        <p className={`text-sm ${isDarkMode ? 'text-white' : 'text-gray-800'} mb-1`}>
-                          {stats.mostCommentedPost.author}
-                        </p>
-                        <p className={`text-xs line-clamp-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                          {stats.mostCommentedPost.content}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Recent Posts */}
-                  {stats.recentPosts.length > 0 && (
-                    <div className="space-y-2">
-                      <h3 className={`text-sm font-semibold ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                        Recent Posts
-                      </h3>
-                      <div className="space-y-2 max-h-48 overflow-y-auto">
-                        {stats.recentPosts.map((post) => (
-                          <div
-                            key={post.id}
-                            className={`p-2 rounded-lg ${
-                              isDarkMode ? 'bg-gray-800/50' : 'bg-gray-100'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between mb-1">
-                              <p className={`text-xs font-medium ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                                {post.author}
-                              </p>
-                              <span className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
-                                {formatTimeAgo(post.createdAt)}
-                              </span>
-                            </div>
-                            <p className={`text-xs line-clamp-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                              {post.content}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {stats.totalPosts === 0 && (
-                    <div className="text-center py-8">
-                      <BookOpen className={`w-12 h-12 mx-auto mb-3 ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`} />
-                      <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                        No posts yet. Be the first to share!
-                      </p>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
