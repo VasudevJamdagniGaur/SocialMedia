@@ -1,0 +1,49 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users collection - allow authenticated users to read for counting
+    match /users/{userId} {
+      // Allow users to read any user document (for counting active members)
+      allow read: if request.auth != null;
+      // Allow users to create/update their own document
+      allow create, update: if request.auth != null && request.auth.uid == userId;
+      // Allow users to delete their own document
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Users metadata collection
+    match /usersMetadata/{userId} {
+      // Allow users to read any metadata (for crew matching)
+      allow read: if request.auth != null;
+      // Allow users to create/update their own metadata
+      allow create, update: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // User subcollections (days, chats, etc.)
+    match /users/{userId}/days/{dateId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    match /users/{userId}/chats/{chatId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    match /users/{userId}/days/{dateId}/reflection/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Community posts
+    match /communityPosts/{postId} {
+      // Allow authenticated users to read all posts
+      allow read: if request.auth != null;
+      // Allow authenticated users to create posts
+      allow create: if request.auth != null;
+      // Allow users to update/delete their own posts
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+    
+    // Collection group queries (for counting users from subcollections)
+    // These are handled by the parent collection rules above
+  }
+}
+

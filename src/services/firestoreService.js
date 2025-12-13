@@ -1192,7 +1192,14 @@ class FirestoreService {
         // If 0, continue to fallbacks
         console.log('👥 users collection is empty, trying fallback methods...');
       } catch (usersError) {
-        console.warn('⚠️ Could not count from users collection:', usersError);
+        // Check if it's a permission error
+        if (usersError.code === 'permission-denied' || usersError.message?.includes('permission')) {
+          console.warn('⚠️ Permission denied for users collection. Please deploy Firestore security rules.');
+          console.warn('⚠️ See firestore.rules file and deploy it via Firebase Console or CLI.');
+        } else {
+          console.warn('⚠️ Could not count from users collection:', usersError);
+        }
+        // Continue to fallbacks
       }
       
       // Fallback 1: Count from usersMetadata collection
