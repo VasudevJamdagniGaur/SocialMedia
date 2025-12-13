@@ -244,8 +244,8 @@ export default function PodPage() {
 
       console.log('👤 User metadata updated, fetching active users...');
 
-      // Get users who have sent at least one message in the past week
-      const result = await firestoreService.getActiveUsersWithMessages(7);
+      // Get users who have generated day reflections in the past week
+      const result = await firestoreService.getActiveUsersWithReflections(7);
       
       console.log('📊 Active users result:', result);
       
@@ -256,7 +256,7 @@ export default function PodPage() {
       }
       
       if (result.users.length === 0) {
-        alert('No active users found who have sent messages in the past week. Make sure you and other users have sent at least one message to Deite recently.');
+        alert('No active users found who have generated day reflections in the past week. Make sure you and other users have generated at least one day reflection recently.');
         setIsCreatingSphere(false);
         return;
       }
@@ -271,18 +271,18 @@ export default function PodPage() {
       console.log('👤 Current user:', user.uid);
       console.log('📋 All active users:', result.users.map(u => ({ uid: u.uid, name: u.displayName })));
 
-      // If no other users found, check if current user has messages and create sphere with just them
+      // If no other users found, check if current user has reflections and create sphere with just them
       if (memberUids.length === 0) {
-        // Check if current user is in the active users list (has sent messages)
-        const currentUserHasMessages = result.users.some(u => u.uid === user.uid);
+        // Check if current user is in the active users list (has generated reflections)
+        const currentUserHasReflections = result.users.some(u => u.uid === user.uid);
         
-        if (currentUserHasMessages) {
+        if (currentUserHasReflections) {
           // Create sphere with just the current user (they can add others later)
           console.log('⚠️ No other users found, creating sphere with just current user');
           const createResult = await firestoreService.createCrewSphere(user.uid, []);
           
           if (createResult.success) {
-            alert('Crew sphere created! You can add more members later when other users send messages.');
+            alert('Crew sphere created! You can add more members later when other users generate day reflections.');
             navigate('/pod/chat');
           } else {
             alert(`Error creating crew sphere: ${createResult.error}`);
@@ -290,7 +290,7 @@ export default function PodPage() {
           setIsCreatingSphere(false);
           return;
         } else {
-          alert('No active users found. Make sure you have sent at least one message to Deite, then try again.');
+          alert('No active users found. Make sure you have generated at least one day reflection, then try again.');
           setIsCreatingSphere(false);
           return;
         }
