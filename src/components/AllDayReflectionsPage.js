@@ -18,6 +18,9 @@ export default function AllDayReflectionsPage() {
   const [selectedDate, setSelectedDate] = useState(null);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [reflectionDays, setReflectionDays] = useState([]);
+  const [selectedReflection, setSelectedReflection] = useState(null);
+  const [moodData, setMoodData] = useState(null);
+  const [isLoadingMood, setIsLoadingMood] = useState(false);
 
   // Format date for display (e.g., "8 October 2025 • Wed, 3:54 pm")
   const formatReflectionDate = (reflectionItem) => {
@@ -259,9 +262,54 @@ export default function AllDayReflectionsPage() {
     setIsCalendarOpen(true);
   };
 
-  const handleDateSelect = (date) => {
+  const handleDateSelect = async (date) => {
     setSelectedDate(date);
     setIsCalendarOpen(false);
+    
+    // Find reflection for this date and load mood data
+    const dateId = getDateId(date);
+    const reflection = reflections.find(r => r.date === dateId);
+    
+    if (reflection) {
+      setSelectedReflection(reflection);
+      await loadMoodDataForDate(dateId);
+    } else {
+      setSelectedReflection(null);
+      setMoodData(null);
+    }
+  };
+
+  const loadMoodDataForDate = async (dateId) => {
+    const user = getCurrentUser();
+    if (!user) return;
+
+    try {
+      setIsLoadingMood(true);
+      const moodRef = doc(db, `users/${user.uid}/days/${dateId}/moodChart/daily`);
+      const snapshot = await getDoc(moodRef);
+      
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        setMoodData({
+          happiness: data.happiness || 0,
+          anxiety: data.anxiety || 0,
+          stress: data.stress || 0,
+          energy: data.energy || 0
+        });
+      } else {
+        setMoodData(null);
+      }
+    } catch (error) {
+      console.error('Error loading mood data:', error);
+      setMoodData(null);
+    } finally {
+      setIsLoadingMood(false);
+    }
+  };
+
+  const handleReflectionClick = async (reflection) => {
+    setSelectedReflection(reflection);
+    await loadMoodDataForDate(reflection.date);
   };
 
   const handleClearDateFilter = () => {
@@ -385,7 +433,8 @@ export default function AllDayReflectionsPage() {
           {filteredReflections.map((reflection) => (
             <div
               key={reflection.id}
-              className={`rounded-2xl p-4 relative overflow-hidden ${
+              onClick={() => handleReflectionClick(reflection)}
+              className={`rounded-2xl p-4 relative overflow-hidden cursor-pointer transition-opacity hover:opacity-90 ${
                 isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
               }`}
               style={isDarkMode ? {
@@ -422,6 +471,186 @@ export default function AllDayReflectionsPage() {
         onDateSelect={handleDateSelect}
         chatDays={reflectionDays}
       />
+
+      {/* Reflection Detail Modal */}
+      {selectedReflection && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+          onClick={() => {
+            setSelectedReflection(null);
+            setMoodData(null);
+          }}
+        >
+          <div
+            className={`rounded-2xl p-6 w-full max-w-sm relative max-h-[90vh] overflow-y-auto ${
+              isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
+            }`}
+            style={isDarkMode ? {
+              backgroundColor: "#262626",
+              boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)",
+              border: "1px solid rgba(255, 255, 255, 0.1)",
+            } : {
+              boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-2">
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center"
+                  style={{
+                    backgroundColor: isDarkMode ? "#FDD663" : "#E6B3BA",
+                    boxShadow: isDarkMode ? "0 4px 16px rgba(0, 0, 0, 0.15)" : "none",
+                  }}
+                >
+                  <Zap className={`w-4 h-4 ${isDarkMode ? 'text-black' : 'text-white'}`} />
+                </div>
+                <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                  Day's Reflect
+                </h2>
+              </div>
+              <button
+                onClick={() => {
+                  setSelectedReflection(null);
+                  setMoodData(null);
+                }}
+                className={`p-1 rounded-full hover:opacity-80 transition-opacity ${
+                  isDarkMode ? 'hover:bg-gray-800/50' : 'hover:bg-gray-100'
+                }`}
+              >
+                <X className={`w-5 h-5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
+              </button>
+            </div>
+
+            {/* Date */}
+            <div className={`text-xs font-medium mb-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+              {formatReflectionDate(selectedReflection)}
+            </div>
+
+            {/* Mood Metrics */}
+            {isLoadingMood ? (
+              <div className="mb-4 flex items-center justify-center py-4">
+                <div className="flex space-x-1">
+                  <div className={`w-2 h-2 rounded-full animate-bounce ${isDarkMode ? 'bg-gray-400' : 'bg-gray-500'}`} style={{ animationDelay: '0ms' }}></div>
+                  <div className={`w-2 h-2 rounded-full animate-bounce ${isDarkMode ? 'bg-gray-400' : 'bg-gray-500'}`} style={{ animationDelay: '150ms' }}></div>
+                  <div className={`w-2 h-2 rounded-full animate-bounce ${isDarkMode ? 'bg-gray-400' : 'bg-gray-500'}`} style={{ animationDelay: '300ms' }}></div>
+                </div>
+              </div>
+            ) : moodData ? (
+              <div className="mb-6 space-y-3">
+                <h3 className={`text-sm font-semibold mb-3 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                  Emotional Metrics
+                </h3>
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Happiness */}
+                  <div className={`p-3 rounded-lg ${isDarkMode ? 'bg-gray-800/50' : 'bg-gray-100'}`}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className={`text-xs font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                        Happiness
+                      </span>
+                      <span className={`text-sm font-bold ${isDarkMode ? 'text-[#81C995]' : 'text-[#87A96B]'}`}>
+                        {moodData.happiness}%
+                      </span>
+                    </div>
+                    <div className={`h-2 rounded-full ${isDarkMode ? 'bg-gray-700' : 'bg-gray-200'}`}>
+                      <div
+                        className="h-2 rounded-full transition-all"
+                        style={{
+                          width: `${moodData.happiness}%`,
+                          backgroundColor: '#81C995'
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Energy */}
+                  <div className={`p-3 rounded-lg ${isDarkMode ? 'bg-gray-800/50' : 'bg-gray-100'}`}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className={`text-xs font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                        Energy
+                      </span>
+                      <span className={`text-sm font-bold ${isDarkMode ? 'text-[#8AB4F8]' : 'text-[#87A96B]'}`}>
+                        {moodData.energy}%
+                      </span>
+                    </div>
+                    <div className={`h-2 rounded-full ${isDarkMode ? 'bg-gray-700' : 'bg-gray-200'}`}>
+                      <div
+                        className="h-2 rounded-full transition-all"
+                        style={{
+                          width: `${moodData.energy}%`,
+                          backgroundColor: '#8AB4F8'
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Anxiety */}
+                  <div className={`p-3 rounded-lg ${isDarkMode ? 'bg-gray-800/50' : 'bg-gray-100'}`}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className={`text-xs font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                        Anxiety
+                      </span>
+                      <span className={`text-sm font-bold ${isDarkMode ? 'text-[#E6B3BA]' : 'text-[#E6B3BA]'}`}>
+                        {moodData.anxiety}%
+                      </span>
+                    </div>
+                    <div className={`h-2 rounded-full ${isDarkMode ? 'bg-gray-700' : 'bg-gray-200'}`}>
+                      <div
+                        className="h-2 rounded-full transition-all"
+                        style={{
+                          width: `${moodData.anxiety}%`,
+                          backgroundColor: '#E6B3BA'
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Stress */}
+                  <div className={`p-3 rounded-lg ${isDarkMode ? 'bg-gray-800/50' : 'bg-gray-100'}`}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className={`text-xs font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                        Stress
+                      </span>
+                      <span className={`text-sm font-bold ${isDarkMode ? 'text-[#FDD663]' : 'text-[#FDD663]'}`}>
+                        {moodData.stress}%
+                      </span>
+                    </div>
+                    <div className={`h-2 rounded-full ${isDarkMode ? 'bg-gray-700' : 'bg-gray-200'}`}>
+                      <div
+                        className="h-2 rounded-full transition-all"
+                        style={{
+                          width: `${moodData.stress}%`,
+                          backgroundColor: '#FDD663'
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className={`mb-6 p-3 rounded-lg ${isDarkMode ? 'bg-gray-800/30' : 'bg-gray-100'}`}>
+                <p className={`text-xs text-center ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+                  No emotional metrics available for this date
+                </p>
+              </div>
+            )}
+
+            {/* Reflection Content */}
+            <div className="mb-4">
+              <h3 className={`text-sm font-semibold mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                Reflection
+              </h3>
+              <div className={`p-4 rounded-lg ${isDarkMode ? 'bg-gray-800/50' : 'bg-gray-100'}`}>
+                <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                  {selectedReflection.reflection}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
