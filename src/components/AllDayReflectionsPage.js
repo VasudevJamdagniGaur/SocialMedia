@@ -5,6 +5,8 @@ import { ArrowLeft, Zap, Check } from 'lucide-react';
 import { getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
 import { getDateId } from '../utils/dateUtils';
+import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
+import { db } from '../firebase/config';
 
 export default function AllDayReflectionsPage() {
   const navigate = useNavigate();
@@ -69,75 +71,109 @@ export default function AllDayReflectionsPage() {
         setIsLoading(true);
         console.log('🔄 Loading all day reflections from Firebase...');
         
-        // Get all reflection days
-        const result = await firestoreService.getAllReflectionDays(user.uid);
         const allReflections = [];
         
-        console.log('📅 Found reflection days:', result.reflectionDays?.length || 0);
+        // Method 1: Get all days from users/{uid}/days and check each for reflections
+        console.log('📅 Method 1: Checking all days in users/{uid}/days collection...');
+        const daysRef = collection(db, `users/${user.uid}/days`);
+        const daysSnapshot = await getDocs(daysRef);
         
-        if (result.success && result.reflectionDays && result.reflectionDays.length > 0) {
-          // Fetch reflection details for each day
-          for (const day of result.reflectionDays) {
-            try {
-              console.log(`📖 Fetching reflection for date: ${day.date}`);
-              const reflectionResult = await firestoreService.getReflectionNew(user.uid, day.date);
+        console.log(`📅 Found ${daysSnapshot.docs.length} days in collection`);
+        
+        // Check each day for reflection
+        for (const dayDoc of daysSnapshot.docs) {
+          const dateId = dayDoc.id;
+          try {
+            const reflectionRef = doc(db, `users/${user.uid}/days/${dateId}/reflection/meta`);
+            const reflectionSnap = await getDoc(reflectionRef);
+            
+            if (reflectionSnap.exists()) {
+              const reflectionData = reflectionSnap.data();
+              const reflectionText = reflectionData.summary || reflectionData.reflection || reflectionData.text;
               
-              if (reflectionResult.success && reflectionResult.reflection) {
-                // Handle different data structures
-                let reflectionText = null;
-                let createdAt = null;
-                
-                // getReflectionNew returns: { success: true, reflection: data.summary, fullData: data }
-                if (reflectionResult.fullData) {
-                  // Use fullData if available (contains createdAt and other metadata)
-                  reflectionText = reflectionResult.fullData.summary || reflectionResult.reflection;
-                  createdAt = reflectionResult.fullData.createdAt;
-                } else {
-                  // Fallback to reflection string
-                  reflectionText = reflectionResult.reflection;
+              if (reflectionText) {
+                let reflectionDate;
+                try {
+                  if (dateId.includes('-')) {
+                    const [year, month, dayNum] = dateId.split('-');
+                    reflectionDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(dayNum));
+                  } else {
+                    reflectionDate = new Date(dateId);
+                  }
+                } catch (e) {
+                  reflectionDate = new Date();
                 }
                 
-                if (reflectionText) {
-                  let reflectionDate;
-                  try {
-                    if (day.date.includes('-')) {
-                      const [year, month, dayNum] = day.date.split('-');
-                      reflectionDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(dayNum));
-                    } else {
-                      reflectionDate = new Date(day.date);
-                    }
-                  } catch (e) {
-                    reflectionDate = new Date();
-                  }
-                  
-                  // Convert Firestore timestamp to Date if needed
-                  if (createdAt && createdAt.toDate) {
-                    createdAt = createdAt.toDate();
-                  } else if (createdAt && typeof createdAt === 'object') {
-                    createdAt = reflectionDate;
-                  } else if (!createdAt) {
-                    createdAt = reflectionDate;
-                  }
-                  
-                  allReflections.push({
-                    id: day.date,
-                    date: day.date,
-                    dateObj: reflectionDate,
-                    reflection: reflectionText,
-                    createdAt: createdAt
-                  });
-                  
-                  console.log(`✅ Loaded reflection for ${day.date}`);
-                } else {
-                  console.log(`⚠️ No reflection text found for ${day.date}`);
+                // Handle createdAt timestamp
+                let createdAt = reflectionData.createdAt || reflectionData.updatedAt || reflectionDate;
+                if (createdAt && typeof createdAt.toDate === 'function') {
+                  createdAt = createdAt.toDate();
+                } else if (createdAt && typeof createdAt === 'object' && !(createdAt instanceof Date)) {
+                  createdAt = reflectionDate;
+                } else if (!createdAt) {
+                  createdAt = reflectionDate;
                 }
-              } else {
-                console.error(`❌ Error loading reflection for ${day.date}:`, reflectionResult.error);
+                
+                allReflections.push({
+                  id: dateId,
+                  date: dateId,
+                  dateObj: reflectionDate,
+                  reflection: reflectionText,
+                  createdAt: createdAt
+                });
+                
+                console.log(`✅ Found reflection for ${dateId}`);
               }
-            } catch (error) {
-              console.error(`❌ Exception loading reflection for ${day.date}:`, error);
             }
+          } catch (error) {
+            console.error(`❌ Error checking reflection for ${dateId}:`, error);
           }
+        }
+        
+        // Method 2: Also check old structure (dayReflections collection) as fallback
+        console.log('📅 Method 2: Checking old structure (dayReflections collection)...');
+        try {
+          const oldReflectionsRef = collection(db, `users/${user.uid}/dayReflections`);
+          const oldSnapshot = await getDocs(oldReflectionsRef);
+          
+          oldSnapshot.forEach((doc) => {
+            const data = doc.data();
+            const dateId = doc.id;
+            const reflectionText = data.summary || data.reflection || data.text;
+            
+            if (reflectionText && !allReflections.find(r => r.date === dateId)) {
+              let reflectionDate;
+              try {
+                if (dateId.includes('-')) {
+                  const [year, month, dayNum] = dateId.split('-');
+                  reflectionDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(dayNum));
+                } else {
+                  reflectionDate = new Date(dateId);
+                }
+              } catch (e) {
+                reflectionDate = new Date();
+              }
+              
+              let createdAt = data.createdAt || data.updatedAt || reflectionDate;
+              if (createdAt && typeof createdAt.toDate === 'function') {
+                createdAt = createdAt.toDate();
+              } else if (!createdAt || (typeof createdAt === 'object' && !(createdAt instanceof Date))) {
+                createdAt = reflectionDate;
+              }
+              
+              allReflections.push({
+                id: dateId,
+                date: dateId,
+                dateObj: reflectionDate,
+                reflection: reflectionText,
+                createdAt: createdAt
+              });
+              
+              console.log(`✅ Found reflection in old structure for ${dateId}`);
+            }
+          });
+        } catch (error) {
+          console.log('⚠️ Old structure not found or error:', error);
         }
         
         // Also check localStorage for any reflections (as fallback)
