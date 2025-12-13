@@ -126,7 +126,7 @@ export default function BottomNavigation() {
             alt="HUB"
             className="w-12 h-12 object-contain"
             style={{
-              opacity: isCommunityActive ? 1 : (isDarkMode ? 1.0 : 0.65),
+              opacity: isCommunityActive ? 1 : (isDarkMode ? 2.0 : 0.65),
               filter: isCommunityActive 
                 ? 'brightness(0) invert(1)'
                 : 'none',
