@@ -456,6 +456,7 @@ export default function PodPage() {
               
               {/* Other Members */}
               {[
+                { name: 'Vasudev', emoji: '👤', color: '#7DD3C0', avatar: '/apple-avatar.png' },
                 { name: 'Alex', emoji: '👤', color: '#7DD3C0' },
                 { name: 'Sam', emoji: '👤', color: '#FDD663' },
                 { name: 'Jordan', emoji: '👤', color: '#8AB4F8' },
@@ -469,13 +470,21 @@ export default function PodPage() {
                   title={member.name}
                 >
                   <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-xs mb-1"
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-xs mb-1 overflow-hidden"
                     style={{
-                      backgroundColor: isDarkMode ? member.color + '30' : member.color + '20',
-                      border: `2px solid ${member.color}40`,
+                      backgroundColor: member.avatar ? "transparent" : (isDarkMode ? member.color + '30' : member.color + '20'),
+                      border: member.avatar ? "none" : `2px solid ${member.color}40`,
                     }}
                   >
-                    {member.emoji}
+                    {member.avatar ? (
+                      <img 
+                        src={member.avatar} 
+                        alt={member.name} 
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span>{member.emoji}</span>
+                    )}
                   </div>
                   <span className={`text-[10px] ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                     {member.name}

@@ -73,6 +73,7 @@ export default function PodGroupChatPage() {
       isCurrentUser: true,
       profilePicture: profilePicture
     },
+    { name: 'Vasudev', emoji: '👤', color: '#7DD3C0', avatar: '/apple-avatar.png' },
     { name: 'Alex', emoji: '👤', color: '#7DD3C0' },
     { name: 'Sam', emoji: '👤', color: '#FDD663' },
     { name: 'Jordan', emoji: '👤', color: '#8AB4F8' },
@@ -234,15 +235,21 @@ export default function PodGroupChatPage() {
             <div
               className="w-10 h-10 rounded-full flex items-center justify-center text-sm mb-1 overflow-hidden"
               style={{
-                backgroundColor: member.isCurrentUser && member.profilePicture 
+                backgroundColor: (member.isCurrentUser && member.profilePicture) || member.avatar
                   ? "transparent" 
                   : (isDarkMode ? member.color + '30' : member.color + '20'),
-                border: member.isCurrentUser && member.profilePicture 
+                border: (member.isCurrentUser && member.profilePicture) || member.avatar
                   ? "none" 
                   : `2px solid ${member.color}40`,
               }}
             >
-              {member.isCurrentUser && member.profilePicture ? (
+              {member.name === 'Vasudev' || member.avatar ? (
+                <img 
+                  src={member.avatar || '/apple-avatar.png'} 
+                  alt={member.name} 
+                  className="w-full h-full object-cover"
+                />
+              ) : member.isCurrentUser && member.profilePicture ? (
                 <img 
                   src={member.profilePicture} 
                   alt={member.name} 
