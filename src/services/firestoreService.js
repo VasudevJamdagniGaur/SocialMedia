@@ -1553,10 +1553,21 @@ class FirestoreService {
       
       // Method 2: If no pod document found, check if user is a member of any sphere directly
       // This handles the case where Account 2 is added to a sphere but doesn't have a pod document yet
+      // OPTIMIZED: Only query recent spheres to avoid slow full collection scan
       try {
-        console.log('🔍 No pod document found, checking sphere membership directly...');
+        console.log('🔍 No pod document found, checking recent sphere membership...');
         const spheresRef = collection(this.db, 'crewSpheres');
-        const spheresSnapshot = await getDocs(spheresRef);
+        // Try to query with ordering first (faster), fallback to simple query if index doesn't exist
+        let spheresSnapshot;
+        try {
+          const recentSpheresQuery = query(spheresRef, orderBy('createdAt', 'desc'), limit(50));
+          spheresSnapshot = await getDocs(recentSpheresQuery);
+        } catch (orderError) {
+          // If index doesn't exist, use simple query with limit
+          console.warn('⚠️ Index not found, using simple query:', orderError);
+          const simpleQuery = query(spheresRef, limit(50));
+          spheresSnapshot = await getDocs(simpleQuery);
+        }
         
         for (const sphereDoc of spheresSnapshot.docs) {
           const sphereData = sphereDoc.data();
@@ -1564,30 +1575,26 @@ class FirestoreService {
             const sphereId = sphereDoc.id;
             console.log('✅ Found sphere membership for user:', sphereId);
             
-            // Create pod document for this user so they can see it in the future
-            try {
-              const podRef = doc(this.db, `users/${uid}/pods/${sphereId}`);
-              const dateId = sphereData.startDate || getDateId(new Date());
-              await setDoc(podRef, {
-                name: "Crew's Sphere",
-                startDate: dateId,
-                sphereId: sphereId,
-                members: sphereData.members,
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
-                memberCount: sphereData.members ? sphereData.members.length : 0
-              }, { merge: true });
-              console.log('✅ Created pod document for user:', uid);
-            } catch (podError) {
+            // Create pod document for this user so they can see it in the future (in background)
+            const podRef = doc(this.db, `users/${uid}/pods/${sphereId}`);
+            const dateId = sphereData.startDate || getDateId(new Date());
+            setDoc(podRef, {
+              name: "Crew's Sphere",
+              startDate: dateId,
+              sphereId: sphereId,
+              members: sphereData.members,
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+              memberCount: sphereData.members ? sphereData.members.length : 0
+            }, { merge: true }).catch(podError => {
               console.warn('⚠️ Could not create pod document (may not have permission):', podError);
-              // Continue anyway - we can still return the sphere
-            }
+            });
             
             return { success: true, sphereId: sphereId, sphere: sphereData };
           }
         }
       } catch (queryError) {
-        console.warn('⚠️ Could not query all spheres (permission issue):', queryError);
+        console.warn('⚠️ Could not query spheres (permission issue or no index):', queryError);
         // This is okay - we'll just return no sphere found
         // The user will need to wait for the pod document to be created by the sphere creator
       }
@@ -1602,46 +1609,70 @@ class FirestoreService {
   /**
    * Sync pod documents for a user - ensures they have pod documents for all spheres they're a member of
    * This is useful when Account 2 logs in and needs to see spheres they were added to
+   * OPTIMIZED: Only checks recent spheres (last 50) to avoid slow full collection scan
    */
   async syncUserPodDocuments(uid) {
     try {
       console.log('🔄 Syncing pod documents for user:', uid);
       
-      // Get all spheres and check if user is a member
+      // OPTIMIZED: Only get recent spheres (last 50) to avoid slow full collection scan
       const spheresRef = collection(this.db, 'crewSpheres');
-      const spheresSnapshot = await getDocs(spheresRef);
+      let spheresSnapshot;
+      try {
+        // Try to query with ordering first (faster), fallback to simple query if index doesn't exist
+        const recentSpheresQuery = query(spheresRef, orderBy('createdAt', 'desc'), limit(50));
+        spheresSnapshot = await getDocs(recentSpheresQuery);
+      } catch (orderError) {
+        // If index doesn't exist, use simple query with limit
+        console.warn('⚠️ Index not found, using simple query:', orderError);
+        const simpleQuery = query(spheresRef, limit(50));
+        spheresSnapshot = await getDocs(simpleQuery);
+      }
       
       let syncedCount = 0;
+      const podPromises = [];
+      
       for (const sphereDoc of spheresSnapshot.docs) {
         const sphereData = sphereDoc.data();
         const sphereId = sphereDoc.id;
         
         if (sphereData.members && Array.isArray(sphereData.members) && sphereData.members.includes(uid)) {
-          // Check if pod document already exists
+          // Check if pod document already exists (in parallel)
           const podRef = doc(this.db, `users/${uid}/pods/${sphereId}`);
-          const podSnap = await getDoc(podRef);
-          
-          if (!podSnap.exists()) {
-            // Create pod document
-            try {
-              const dateId = sphereData.startDate || getDateId(new Date());
-              await setDoc(podRef, {
-                name: "Crew's Sphere",
-                startDate: dateId,
-                sphereId: sphereId,
-                members: sphereData.members,
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
-                memberCount: sphereData.members ? sphereData.members.length : 0
-              }, { merge: true });
-              console.log('✅ Created missing pod document for sphere:', sphereId);
-              syncedCount++;
-            } catch (podError) {
-              console.warn(`⚠️ Could not create pod document for sphere ${sphereId}:`, podError);
-            }
-          }
+          podPromises.push(
+            getDoc(podRef).then(async (podSnap) => {
+              if (!podSnap.exists()) {
+                // Create pod document
+                try {
+                  const dateId = sphereData.startDate || getDateId(new Date());
+                  await setDoc(podRef, {
+                    name: "Crew's Sphere",
+                    startDate: dateId,
+                    sphereId: sphereId,
+                    members: sphereData.members,
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp(),
+                    memberCount: sphereData.members ? sphereData.members.length : 0
+                  }, { merge: true });
+                  console.log('✅ Created missing pod document for sphere:', sphereId);
+                  return 1;
+                } catch (podError) {
+                  console.warn(`⚠️ Could not create pod document for sphere ${sphereId}:`, podError);
+                  return 0;
+                }
+              }
+              return 0;
+            }).catch(err => {
+              console.warn(`⚠️ Error checking pod for sphere ${sphereId}:`, err);
+              return 0;
+            })
+          );
         }
       }
+      
+      // Wait for all pod checks/creates to complete in parallel
+      const results = await Promise.all(podPromises);
+      syncedCount = results.reduce((sum, count) => sum + count, 0);
       
       console.log(`✅ Pod sync complete: ${syncedCount} pod documents created`);
       return { success: true, syncedCount };

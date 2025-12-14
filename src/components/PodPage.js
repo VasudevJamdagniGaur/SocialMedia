@@ -104,17 +104,21 @@ export default function PodPage() {
       if (!user) return;
 
       try {
-        // Sync pod documents first - ensures Account 2 can see spheres they were added to
-        await firestoreService.syncUserPodDocuments(user.uid);
+        // Run sync in background (don't wait for it)
+        firestoreService.syncUserPodDocuments(user.uid).catch(err => {
+          console.warn('Background sync failed:', err);
+        });
         
-        // Update user metadata to mark as active
-        await firestoreService.updateUserMetadata(user.uid, {
+        // Update user metadata in background
+        firestoreService.updateUserMetadata(user.uid, {
           displayName: user.displayName || 'User',
           profilePicture: profilePicture,
           crewEnrolled: localStorage.getItem(`user_crew_enrolled_${user.uid}`) === 'true'
+        }).catch(err => {
+          console.warn('Metadata update failed:', err);
         });
 
-        // Get user's crew sphere and load members from it
+        // Get user's crew sphere
         const sphereResult = await firestoreService.getUserCrewSphere(user.uid);
         
         if (sphereResult.success && sphereResult.sphereId && sphereResult.sphere) {
@@ -122,22 +126,25 @@ export default function PodPage() {
           if (sphereResult.sphere.members && Array.isArray(sphereResult.sphere.members)) {
             const memberUids = sphereResult.sphere.members.filter(uid => uid !== user.uid);
             
-            // Get member details
-            const members = [];
-            for (const memberUid of memberUids) {
+            // Load all member details in parallel for faster loading
+            const memberPromises = memberUids.map(async (memberUid) => {
               try {
                 const memberResult = await firestoreService.getUser(memberUid);
                 if (memberResult.success && memberResult.data) {
-                  members.push({
+                  return {
                     uid: memberUid,
                     displayName: memberResult.data.displayName || 'User',
                     profilePicture: memberResult.data.profilePicture || null
-                  });
+                  };
                 }
+                return null;
               } catch (err) {
                 console.error(`Error loading member ${memberUid}:`, err);
+                return null;
               }
-            }
+            });
+            
+            const members = (await Promise.all(memberPromises)).filter(m => m !== null);
             
             console.log('✅ Loaded crew members from sphere:', members.length);
             setCrewMembers(members);
