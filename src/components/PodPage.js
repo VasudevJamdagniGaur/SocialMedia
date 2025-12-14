@@ -572,7 +572,17 @@ export default function PodPage() {
                 </div>
                 <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>Crew's Reflection</h2>
               </div>
-              <ChevronRight className={`w-5 h-5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate('/pod/reflections');
+                }}
+                className={`p-1 rounded-full transition-opacity hover:opacity-80 ${
+                  isDarkMode ? 'hover:bg-gray-800/50' : 'hover:bg-gray-100'
+                }`}
+              >
+                <ChevronRight className={`w-5 h-5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
+              </button>
             </div>
             
             {/* Reflection Content */}
@@ -586,20 +596,11 @@ export default function PodPage() {
                 <p className={`text-sm text-center italic ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Generating crew reflection...</p>
               </div>
             ) : podReflection ? (
-              <div
-                onClick={(e) => {
-                  e.stopPropagation();
-                  navigate('/pod/reflections');
-                }}
-                className="cursor-pointer transition-opacity hover:opacity-90 reflection-content"
-              >
+              <div className="reflection-content">
                 <div className="flex items-start">
                   <div className="flex-1">
                     <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-600'} whitespace-pre-wrap break-words`}>
                       {podReflection}
-                    </p>
-                    <p className={`text-xs mt-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                      Tap to view all reflections →
                     </p>
                   </div>
                 </div>
