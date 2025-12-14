@@ -194,18 +194,21 @@ export default function EmotionalWellbeing() {
   // Cache management functions
   const saveToCache = (key, data) => {
     try {
+      const now = new Date();
       const cacheData = {
         data,
-        timestamp: new Date().toISOString(),
+        timestamp: now.toISOString(),
+        lastFetchTimestamp: now.toISOString(), // Track when we last fetched from Firebase
         version: '1.0'
       };
       localStorage.setItem(key, JSON.stringify(cacheData));
+      console.log(`💾 CACHE: Saved data to cache with timestamp: ${now.toISOString()}`);
     } catch (error) {
       console.error('Error saving to cache:', error);
     }
   };
 
-  const loadFromCache = (key, maxAgeMinutes = 30) => {
+  const loadFromCache = (key, maxAgeMinutes = 30, check12PM = false) => {
     try {
       const cached = localStorage.getItem(key);
       if (!cached) {
@@ -218,10 +221,20 @@ export default function EmotionalWellbeing() {
       // Handle both old format (cacheData.data) and new format (cacheData directly)
       const data = cacheData.data || cacheData;
       const timestamp = cacheData.timestamp || cacheData.data?.timestamp;
+      const lastFetchTimestamp = cacheData.lastFetchTimestamp || timestamp;
       
       if (!timestamp) {
         console.log(`💾 CACHE: Invalid cache format for key: ${key}`);
         return null;
+      }
+      
+      // If check12PM is enabled, check if we should fetch fresh data
+      if (check12PM) {
+        const shouldFetch = shouldFetchFreshData(lastFetchTimestamp, false);
+        if (shouldFetch) {
+          console.log(`💾 CACHE: After 12 PM and need fresh data, not using cache for key: ${key}`);
+          return null; // Don't use cache, will fetch fresh
+        }
       }
       
       const ageMinutes = (Date.now() - new Date(timestamp).getTime()) / (1000 * 60);
@@ -252,7 +265,8 @@ export default function EmotionalWellbeing() {
   // Data loading functions
   const loadCachedEmotionalData = useCallback((userId, period) => {
     const cacheKey = getCacheKey('emotional', period, userId);
-    const cachedData = loadFromCache(cacheKey, 60); // 60 minutes cache (increased for better performance)
+    // Check 12 PM rule - only use cache if before 12 PM or already fetched after 12 PM today
+    const cachedData = loadFromCache(cacheKey, 24 * 60, true); // 24 hours cache, check 12 PM rule
     
     if (cachedData && cachedData.weeklyMoodData && cachedData.weeklyMoodData.length > 0) {
       console.log(`⚡ Setting cached emotional data instantly (${cachedData.weeklyMoodData.length} days)`);
@@ -262,13 +276,14 @@ export default function EmotionalWellbeing() {
       setLastCacheUpdate(cachedData.timestamp);
       return true; // Cache exists
     }
-    console.log('⚡ No valid cache found for emotional data');
+    console.log('⚡ No valid cache found for emotional data (or need fresh data after 12 PM)');
     return false; // No cache
-  }, []);
+  }, [shouldFetchFreshData]);
 
   const loadCachedBalanceData = useCallback((userId, period) => {
     const cacheKey = getCacheKey('balance', period, userId);
-    const cachedData = loadFromCache(cacheKey, 30); // 30 minutes cache
+    // Check 12 PM rule - only use cache if before 12 PM or already fetched after 12 PM today
+    const cachedData = loadFromCache(cacheKey, 24 * 60, true); // 24 hours cache, check 12 PM rule
     
     if (cachedData) {
       console.log('⚡ Setting cached balance data instantly');
@@ -277,19 +292,44 @@ export default function EmotionalWellbeing() {
       return true; // Cache exists
     }
     return false; // No cache
-  }, []);
+  }, [shouldFetchFreshData]);
 
-  // Helper function to check if it's a new day after 12 PM
-  const shouldRefreshForNewDay = useCallback((lastUpdateDate) => {
-    if (!lastUpdateDate) return false;
+  // Helper function to check if we should fetch fresh data (after 12 PM or forced refresh)
+  const shouldFetchFreshData = useCallback((lastFetchTimestamp, forceRefresh = false) => {
+    if (forceRefresh) {
+      console.log('🔄 Force refresh requested');
+      return true;
+    }
     
     const now = new Date();
     const currentHour = now.getHours();
     const currentDate = now.toDateString();
     
-    // If it's after 12 PM AND it's a new day
-    if (currentHour >= 12 && lastUpdateDate !== currentDate) {
-      return true;
+    // If it's before 12 PM, use cached data
+    if (currentHour < 12) {
+      console.log('⏰ Before 12 PM - using cached data');
+      return false;
+    }
+    
+    // If it's after 12 PM, check if we've already fetched today
+    if (currentHour >= 12) {
+      if (!lastFetchTimestamp) {
+        console.log('⏰ After 12 PM - no previous fetch, will fetch');
+        return true;
+      }
+      
+      const lastFetch = new Date(lastFetchTimestamp);
+      const lastFetchDate = lastFetch.toDateString();
+      const lastFetchHour = lastFetch.getHours();
+      
+      // If it's a different day, or same day but last fetch was before 12 PM, fetch again
+      if (lastFetchDate !== currentDate || lastFetchHour < 12) {
+        console.log('⏰ After 12 PM - new day or last fetch was before 12 PM, will fetch');
+        return true;
+      }
+      
+      console.log('⏰ After 12 PM - already fetched today after 12 PM, using cache');
+      return false;
     }
     
     return false;
@@ -305,19 +345,19 @@ export default function EmotionalWellbeing() {
       setTriggers(cachedData.triggers || {});
       setHasEnoughData(cachedData.hasEnoughData !== false);
       
-      // Check if it's a new day after 12 PM
-      const lastUpdateDate = cachedData.lastUpdateDate;
+      // Check if we should fetch fresh data (after 12 PM)
+      const lastFetchTimestamp = cachedData.lastFetchTimestamp || cachedData.timestamp;
       
-      if (shouldRefreshForNewDay(lastUpdateDate)) {
-        console.log('📅 New day after 12 PM detected, will refresh in background');
+      if (shouldFetchFreshData(lastFetchTimestamp, false)) {
+        console.log('⏰ After 12 PM - will refresh pattern data in background');
         // Don't return early - let it load fresh data in background
       } else {
-        console.log('📅 Same day or before 12 PM, using cached pattern data');
+        console.log('⏰ Before 12 PM or already fetched today - using cached pattern data');
         return true; // Use cached data, no need to refresh
       }
     }
     return false;
-  }, [shouldRefreshForNewDay]);
+  }, [shouldFetchFreshData]);
 
   const loadCachedHighlightsData = useCallback((userId, period) => {
     const cacheKey = getCacheKey('highlights', '3months', userId);
@@ -328,14 +368,14 @@ export default function EmotionalWellbeing() {
       setHighlights(cachedData.highlights || {});
       setHighlightsLoading(false);
       
-      // Check if it's a new day after 12 PM
-      const lastUpdateDate = cachedData.lastUpdateDate;
+      // Check if we should fetch fresh data (after 12 PM)
+      const lastFetchTimestamp = cachedData.lastFetchTimestamp || cachedData.timestamp;
       
-      if (shouldRefreshForNewDay(lastUpdateDate)) {
-        console.log('📅 New day after 12 PM detected, will refresh in background');
+      if (shouldFetchFreshData(lastFetchTimestamp, false)) {
+        console.log('⏰ After 12 PM - will refresh highlights data in background');
         // Don't return early - let it load fresh data in background
       } else {
-        console.log('📅 Same day or before 12 PM, using cached highlights data');
+        console.log('⏰ Before 12 PM or already fetched today - using cached highlights data');
         return true; // Use cached data, no need to refresh
       }
     } else {
@@ -343,7 +383,7 @@ export default function EmotionalWellbeing() {
       setHighlightsLoading(true);
     }
     return false;
-  }, [shouldRefreshForNewDay]);
+  }, [shouldFetchFreshData]);
 
   const loadCachedData = useCallback((userId) => {
     console.log('⚡ Loading all cached data instantly...');
@@ -362,9 +402,30 @@ export default function EmotionalWellbeing() {
   }, [selectedPeriod, balancePeriod, patternPeriod, highlightsPeriod, loadCachedEmotionalData, loadCachedBalanceData, loadCachedPatternData, loadCachedHighlightsData]);
 
   // Fresh data loading functions (background) - Define individual functions first
-  const loadFreshEmotionalData = async (period = selectedPeriod, requestId = startNewPeriodRequest(period)) => {
+  const loadFreshEmotionalData = async (forceRefresh = false, period = selectedPeriod, requestId = startNewPeriodRequest(period)) => {
     const user = getCurrentUser();
     if (!user) return;
+
+    // Check if we should fetch (after 12 PM or force refresh)
+    if (!forceRefresh) {
+      const cacheKey = getCacheKey('emotional', period, user.uid);
+      const cachedData = localStorage.getItem(cacheKey);
+      let lastFetchTimestamp = null;
+      if (cachedData) {
+        try {
+          const parsed = JSON.parse(cachedData);
+          lastFetchTimestamp = parsed.lastFetchTimestamp || parsed.timestamp;
+        } catch (e) {
+          console.error('Error parsing cache:', e);
+        }
+      }
+      
+      const shouldFetch = shouldFetchFreshData(lastFetchTimestamp, false);
+      if (!shouldFetch) {
+        console.log('⏰ Before 12 PM or already fetched today - skipping fresh fetch');
+        return;
+      }
+    }
 
     const freshData = await loadRealEmotionalDataInternal(period, requestId);
     if (!freshData) return;
@@ -378,13 +439,36 @@ export default function EmotionalWellbeing() {
     saveToCache(cacheKey, {
       weeklyMoodData: freshData.weeklyMoodData,
       emotionalData: freshData.emotionalData,
+      period: period,
+      dataCount: freshData.weeklyMoodData?.length || 0,
       timestamp: new Date().toISOString()
     });
   };
 
-  const loadFreshBalanceData = async (period = balancePeriod) => {
+  const loadFreshBalanceData = async (period = balancePeriod, forceRefresh = false) => {
     const user = getCurrentUser();
     if (!user) return;
+
+    // Check if we should fetch (after 12 PM or force refresh)
+    if (!forceRefresh) {
+      const cacheKey = getCacheKey('balance', period, user.uid);
+      const cachedData = localStorage.getItem(cacheKey);
+      let lastFetchTimestamp = null;
+      if (cachedData) {
+        try {
+          const parsed = JSON.parse(cachedData);
+          lastFetchTimestamp = parsed.lastFetchTimestamp || parsed.timestamp;
+        } catch (e) {
+          console.error('Error parsing cache:', e);
+        }
+      }
+      
+      const shouldFetch = shouldFetchFreshData(lastFetchTimestamp, false);
+      if (!shouldFetch) {
+        console.log('⏰ Before 12 PM or already fetched today - skipping fresh balance fetch');
+        return;
+      }
+    }
 
     const freshData = await loadBalanceDataInternal(period, { updateState: true });
     if (freshData) {
@@ -455,7 +539,7 @@ export default function EmotionalWellbeing() {
     }
   };
 
-  const loadFreshPatternAnalysis = async () => {
+  const loadFreshPatternAnalysis = async (forceRefresh = false) => {
     const user = getCurrentUser();
     if (!user) return;
 
@@ -499,51 +583,29 @@ export default function EmotionalWellbeing() {
     }
   };
 
-  const loadFreshData = async () => {
-    console.log('🔄 Loading fresh data in background...');
+  const loadFreshData = async (forceRefresh = false) => {
+    console.log('🔄 Loading fresh data in background...', forceRefresh ? '(force refresh)' : '');
     setIsLoadingFresh(true);
 
     try {
       const user = getCurrentUser();
       const promises = [
-        loadFreshEmotionalData(),
-        loadFreshBalanceData(balancePeriod)
+        loadFreshEmotionalData(forceRefresh),
+        loadFreshBalanceData(balancePeriod, forceRefresh)
       ];
       
-      // Only load fresh pattern analysis if it's a new day after 12 PM or no cached data exists
-      const patternCacheKey = getCacheKey('pattern', patternPeriod, user.uid);
-      const patternCachedData = loadFromCache(patternCacheKey, 24 * 60);
-      
-      if (!patternCachedData) {
-        console.log('📅 No cached pattern data, including in fresh data load');
-        promises.push(loadFreshPatternAnalysis());
+      // Only load fresh pattern analysis if force refresh or after 12 PM
+      if (forceRefresh || shouldFetchFreshData(null, false)) {
+        promises.push(loadFreshPatternAnalysis(forceRefresh));
       } else {
-        const lastUpdateDate = patternCachedData.lastUpdateDate;
-        
-        if (shouldRefreshForNewDay(lastUpdateDate)) {
-          console.log('📅 New day after 12 PM detected, including pattern analysis in fresh data load');
-          promises.push(loadFreshPatternAnalysis());
-        } else {
-          console.log('📅 Same day or before 12 PM, skipping pattern analysis from fresh data load');
-        }
+        console.log('⏰ Pattern analysis cache is still valid, skipping refresh');
       }
       
-      // Only load fresh highlights if it's a new day after 12 PM or no cached data exists
-      const highlightsCacheKey = getCacheKey('highlights', '3months', user.uid);
-      const highlightsCachedData = loadFromCache(highlightsCacheKey, 24 * 60);
-      
-      if (!highlightsCachedData) {
-        console.log('📅 No cached highlights data, including in fresh data load');
-        promises.push(loadFreshHighlightsData());
+      // Only load fresh highlights if force refresh or after 12 PM
+      if (forceRefresh || shouldFetchFreshData(null, false)) {
+        promises.push(loadFreshHighlightsData(forceRefresh));
       } else {
-        const lastUpdateDate = highlightsCachedData.lastUpdateDate;
-        
-        if (shouldRefreshForNewDay(lastUpdateDate)) {
-          console.log('📅 New day after 12 PM detected, including highlights in fresh data load');
-          promises.push(loadFreshHighlightsData());
-        } else {
-          console.log('📅 Same day or before 12 PM, skipping highlights from fresh data load');
-        }
+        console.log('⏰ Highlights cache is still valid, skipping refresh');
       }
       
       await Promise.all(promises);
@@ -647,16 +709,28 @@ export default function EmotionalWellbeing() {
           }
         }
 
-        // Only fetch fresh data in background if it's a new day after 12 PM
+        // Only fetch fresh data if it's after 12 PM and we haven't fetched today
         // Otherwise, use cached data (refresh button will force update when needed)
-        const shouldRefresh = shouldRefreshForNewDay(lastCacheUpdate ? new Date(lastCacheUpdate).toDateString() : null);
+        const cacheKey = getCacheKey('emotional', 7, user.uid);
+        const cachedData = localStorage.getItem(cacheKey);
+        let lastFetchTimestamp = null;
+        if (cachedData) {
+          try {
+            const parsed = JSON.parse(cachedData);
+            lastFetchTimestamp = parsed.lastFetchTimestamp || parsed.timestamp;
+          } catch (e) {
+            console.error('Error parsing cache:', e);
+          }
+        }
+        
+        const shouldRefresh = shouldFetchFreshData(lastFetchTimestamp, false);
         if (shouldRefresh) {
-          console.log('📅 New day after 12 PM detected on mount, refreshing in background');
+          console.log('⏰ After 12 PM - fetching fresh data in background');
           loadFreshData().catch(error => {
             console.error('❌ Error loading fresh data:', error);
           });
         } else {
-          console.log('📅 Using cached data on mount (same day or before 12 PM)');
+          console.log('⏰ Using cached data on mount (before 12 PM or already fetched today)');
         }
         
         // Set initialization complete after a short delay to ensure UI renders
@@ -670,7 +744,7 @@ export default function EmotionalWellbeing() {
     };
 
     initializeComponent();
-  }, [shouldRefreshForNewDay]); // Run only once on mount
+  }, [shouldFetchFreshData]); // Run only once on mount
 
   // Listen for localStorage changes and custom events to detect when new emotional data is saved
   useEffect(() => {
@@ -743,9 +817,27 @@ export default function EmotionalWellbeing() {
       // Try to load from cache first - ONLY for selectedPeriod
       const hasCache = loadCachedEmotionalData(user.uid, selectedPeriod);
       
-      // Always load fresh data in background to update cache, but show cached data immediately if available
-      if (hasCache) {
-        console.log('⚡ Using cached data for period', selectedPeriod, '- instant switch! Loading fresh in background...');
+      // Only load fresh data if it's after 12 PM or refresh is needed
+      const cacheKey = getCacheKey('emotional', selectedPeriod, user.uid);
+      const cachedData = localStorage.getItem(cacheKey);
+      let lastFetchTimestamp = null;
+      if (cachedData) {
+        try {
+          const parsed = JSON.parse(cachedData);
+          lastFetchTimestamp = parsed.lastFetchTimestamp || parsed.timestamp;
+        } catch (e) {
+          console.error('Error parsing cache:', e);
+        }
+      }
+      
+      const shouldFetch = shouldFetchFreshData(lastFetchTimestamp, false);
+      
+      if (hasCache && !shouldFetch) {
+        console.log('⚡ Using cached data for period', selectedPeriod, '- instant switch! (Before 12 PM or already fetched today)');
+        // Don't fetch in background if before 12 PM or already fetched today
+        return;
+      } else if (hasCache && shouldFetch) {
+        console.log('⚡ Using cached data for period', selectedPeriod, '- instant switch! Loading fresh in background after 12 PM...');
         // Load fresh data in background to update cache
         loadFreshEmotionalData(selectedPeriod, requestId);
       } else {
@@ -902,8 +994,9 @@ export default function EmotionalWellbeing() {
       } else {
         const lastUpdateDate = cachedData.lastUpdateDate;
         
-        if (shouldRefreshForNewDay(lastUpdateDate)) {
-          console.log('📅 New day after 12 PM detected, refreshing pattern data');
+        const lastFetchTimestamp = cachedData.lastFetchTimestamp || cachedData.timestamp;
+        if (shouldFetchFreshData(lastFetchTimestamp, false)) {
+          console.log('⏰ After 12 PM detected, refreshing pattern data');
           loadFreshPatternAnalysis();
         } else {
           console.log('📅 Same day or before 12 PM, using cached pattern data');
@@ -912,7 +1005,7 @@ export default function EmotionalWellbeing() {
       
       loadHabitAnalysis(false); // Don't force refresh on initial load
     }
-  }, [patternPeriod, loadCachedPatternData, shouldRefreshForNewDay]);
+  }, [patternPeriod, loadCachedPatternData, shouldFetchFreshData]);
 
   useEffect(() => {
     const user = getCurrentUser();
@@ -929,15 +1022,16 @@ export default function EmotionalWellbeing() {
       } else {
         const lastUpdateDate = cachedData.lastUpdateDate;
         
-        if (shouldRefreshForNewDay(lastUpdateDate)) {
-          console.log('📅 New day after 12 PM detected, refreshing highlights data');
+        const lastFetchTimestamp = cachedData.lastFetchTimestamp || cachedData.timestamp;
+        if (shouldFetchFreshData(lastFetchTimestamp, false)) {
+          console.log('⏰ After 12 PM detected, refreshing highlights data');
           loadFreshHighlightsData();
         } else {
           console.log('📅 Same day or before 12 PM, using cached highlights data');
         }
       }
     }
-  }, [highlightsPeriod, loadCachedHighlightsData, shouldRefreshForNewDay]);
+  }, [highlightsPeriod, loadCachedHighlightsData, shouldFetchFreshData]);
 
   const loadHabitAnalysis = async (forceRefresh = false) => {
     const user = getCurrentUser();
@@ -2142,19 +2236,8 @@ export default function EmotionalWellbeing() {
     }
 
     try {
-      // Clear ALL cache (everything)
-      console.log('🗑️ Clearing all cache...');
-      const cacheKeys = Object.keys(localStorage).filter(key =>
-        key.includes('emotional_wellbeing') ||
-        key.includes('moodChart') ||
-        key.includes('emotionalBalance') ||
-        key.includes('patterns') ||
-        key.includes('highlights') ||
-        key.includes('emotional_data_refresh') ||
-        key.includes('force_fresh_data_until')
-      );
-      cacheKeys.forEach(key => localStorage.removeItem(key));
-      console.log(`🗑️ Cleared ${cacheKeys.length} cache entries`);
+      // Force refresh - fetch fresh data regardless of 12 PM rule
+      console.log('🔄 Force refresh - fetching fresh data from Firebase...');
 
       // DEBUG: Check if we have any localStorage emotional data
       const emotionalData = localStorage.getItem(`emotional_data_${user.uid}`);
@@ -2189,13 +2272,13 @@ export default function EmotionalWellbeing() {
         console.log('🔍 DEBUG: Result details:', result);
       }
 
-      // Reload all data in background
-      console.log('📥 Loading fresh data from Firestore...');
-      await loadFreshEmotionalData();
-      await loadFreshBalanceData(balancePeriod);
-      await loadFreshPatternAnalysis();
-      await loadFreshHighlightsData();
-      await loadHabitAnalysis();
+      // Reload all data with force refresh flag
+      console.log('📥 Loading fresh data from Firestore (force refresh)...');
+      await loadFreshEmotionalData(true); // Force refresh
+      await loadFreshBalanceData(balancePeriod, true); // Force refresh
+      await loadFreshPatternAnalysis(true); // Force refresh
+      await loadFreshHighlightsData(true); // Force refresh
+      await loadHabitAnalysis(true); // Force refresh
 
       console.log('✅ All data refreshed!');
     } catch (error) {
