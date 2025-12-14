@@ -14,7 +14,7 @@ A Node.js + Express backend server for the Deite AI chat application with integr
 ## Prerequisites
 
 - Node.js (v14 or higher)
-- Ollama running on RunPod (https://ypli6in7mq19s6-11434.proxy.runpod.net/)
+- Ollama running on RunPod (https://rr9rd9oc5khoyk-11434.proxy.runpod.net/)
 - `llama3:70b` model available in Ollama
 - RunPod RTX6000 pod (or similar GPU environment)
 
@@ -27,12 +27,12 @@ A Node.js + Express backend server for the Deite AI chat application with integr
 
 2. **Verify Ollama is running on RunPod**:
    ```bash
-   curl https://ypli6in7mq19s6-11434.proxy.runpod.net/api/tags
+   curl https://rr9rd9oc5khoyk-11434.proxy.runpod.net/api/tags
    ```
 
 3. **Verify mistral:instruct model is available**:
    ```bash
-   curl https://ypli6in7mq19s6-11434.proxy.runpod.net/api/tags
+   curl https://rr9rd9oc5khoyk-11434.proxy.runpod.net/api/tags
    ```
 
 ## Usage
@@ -115,7 +115,7 @@ The warm-up system consists of three main components:
 You can modify these settings in `server.js`:
 
 ```javascript
-const OLLAMA_BASE_URL = 'https://ypli6in7mq19s6-11434.proxy.runpod.net/';  // RunPod Ollama API URL
+const OLLAMA_BASE_URL = 'https://rr9rd9oc5khoyk-11434.proxy.runpod.net/';  // RunPod Ollama API URL
 const MODEL_NAME = 'llama3:70b';              // Model to warm up
 const KEEP_ALIVE_INTERVAL = 4 * 60 * 1000;         // Ping interval (4 minutes)
 ```
@@ -123,9 +123,9 @@ const KEEP_ALIVE_INTERVAL = 4 * 60 * 1000;         // Ping interval (4 minutes)
 ## Troubleshooting
 
 ### Model not warming up
-- Ensure Ollama is running on RunPod: `curl https://ypli6in7mq19s6-11434.proxy.runpod.net/api/tags`
-- Check if model exists: `curl https://ypli6in7mq19s6-11434.proxy.runpod.net/api/tags`
-- Verify RunPod Ollama API is accessible: `curl https://ypli6in7mq19s6-11434.proxy.runpod.net/api/tags`
+- Ensure Ollama is running on RunPod: `curl https://rr9rd9oc5khoyk-11434.proxy.runpod.net/api/tags`
+- Check if model exists: `curl https://rr9rd9oc5khoyk-11434.proxy.runpod.net/api/tags`
+- Verify RunPod Ollama API is accessible: `curl https://rr9rd9oc5khoyk-11434.proxy.runpod.net/api/tags`
 
 ### Keep-alive ping failures
 - Check RunPod Ollama logs for errors

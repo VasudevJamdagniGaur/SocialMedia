@@ -4,7 +4,7 @@ import { getDateId } from '../utils/dateUtils';
 
 class ChatService {
   constructor() {
-    this.baseURL = 'https://ypli6in7mq19s6-11434.proxy.runpod.net/';
+    this.baseURL = 'https://rr9rd9oc5khoyk-11434.proxy.runpod.net/';
     this.modelName = 'llama3:70b';
     this.visionModelName = 'llama3.2-vision:11b';
     // Optional: Add your Serper API key here for better results
