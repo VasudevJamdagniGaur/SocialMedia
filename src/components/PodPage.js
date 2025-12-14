@@ -593,8 +593,7 @@ export default function PodPage() {
                 }}
                 className="cursor-pointer transition-opacity hover:opacity-90 reflection-content"
               >
-                <div className="flex items-start gap-3">
-                  <ChevronRight className={`w-5 h-5 mt-0.5 flex-shrink-0 ${isDarkMode ? 'text-[#8AB4F8]' : 'text-[#87A96B]'}`} strokeWidth={2.5} />
+                <div className="flex items-start">
                   <div className="flex-1">
                     <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-600'} line-clamp-3`}>
                       {podReflection}
