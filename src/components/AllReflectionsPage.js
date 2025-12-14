@@ -4,7 +4,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { ArrowLeft, Sparkles, Check } from 'lucide-react';
 import { getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
-import { formatDateForDisplay } from '../utils/dateUtils';
+import { formatDateForDisplay, getDateId } from '../utils/dateUtils';
 
 export default function AllReflectionsPage() {
   const navigate = useNavigate();
@@ -13,18 +13,32 @@ export default function AllReflectionsPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   // Format date for display (e.g., "8 October 2025 • Wed, 3:54 pm")
-  const formatReflectionDate = (dateString) => {
-    if (!dateString) return '';
+  const formatReflectionDate = (reflectionItem) => {
+    if (!reflectionItem) return '';
     try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) {
-        // Try parsing as dateId (YYYY-MM-DD)
-        const parts = dateString.split('-');
-        if (parts.length === 3) {
-          date.setFullYear(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+      // Use createdAt if available (has actual time), otherwise use dateObj or date
+      let date = reflectionItem.createdAt || reflectionItem.dateObj;
+      
+      if (!date) {
+        // Fallback to parsing date string
+        const dateString = reflectionItem.date;
+        if (dateString && dateString.includes('-')) {
+          const [year, month, day] = dateString.split('-');
+          date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        } else if (dateString) {
+          date = new Date(dateString);
         } else {
-          return dateString;
+          return '';
         }
+      }
+      
+      // Handle Firestore Timestamp
+      if (date && typeof date.toDate === 'function') {
+        date = date.toDate();
+      }
+      
+      if (!date || isNaN(date.getTime())) {
+        return reflectionItem.date || '';
       }
       
       const day = date.getDate();
@@ -40,7 +54,7 @@ export default function AllReflectionsPage() {
       return `${day} ${month} ${year} • ${dayName}, ${time}`;
     } catch (error) {
       console.error('Error formatting date:', error);
-      return dateString;
+      return reflectionItem.date || '';
     }
   };
 
@@ -56,61 +70,106 @@ export default function AllReflectionsPage() {
       try {
         setIsLoading(true);
         
-        // Get all pods with reflections
-        const result = await firestoreService.getAllPods(user.uid);
         const allReflections = [];
         
+        // Get all pod reflections from podReflections collection
+        const podReflectionsResult = await firestoreService.getAllPodReflections(user.uid);
+        if (podReflectionsResult.success && podReflectionsResult.reflections) {
+          podReflectionsResult.reflections.forEach(ref => {
+            let reflectionDate;
+            try {
+              if (ref.dateId && ref.dateId.includes('-')) {
+                const [year, month, day] = ref.dateId.split('-');
+                reflectionDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+              } else {
+                reflectionDate = ref.createdAt || new Date();
+              }
+            } catch (e) {
+              reflectionDate = ref.createdAt || new Date();
+            }
+            
+            allReflections.push({
+              id: ref.id,
+              date: ref.dateId || (ref.createdAt ? getDateId(ref.createdAt) : getDateId(new Date())),
+              dateObj: reflectionDate,
+              reflection: ref.reflection,
+              createdAt: ref.createdAt || reflectionDate
+            });
+          });
+        }
+        
+        // Also get all pods with reflections (as backup/alternative source)
+        const result = await firestoreService.getAllPods(user.uid);
         if (result.success && result.pods) {
           // Process pods with reflections
           result.pods
             .filter(pod => pod.reflection && pod.startDate)
             .forEach(pod => {
-              // Create date object from startDate
-              let reflectionDate;
-              try {
-                if (pod.startDate.includes('-')) {
-                  const [year, month, day] = pod.startDate.split('-');
-                  reflectionDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-                } else {
-                  reflectionDate = new Date(pod.startDate);
+              // Check if this reflection already exists from podReflections
+              const exists = allReflections.some(r => r.date === pod.startDate);
+              if (!exists) {
+                // Create date object from startDate
+                let reflectionDate;
+                try {
+                  if (pod.startDate.includes('-')) {
+                    const [year, month, day] = pod.startDate.split('-');
+                    reflectionDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+                  } else {
+                    reflectionDate = new Date(pod.startDate);
+                  }
+                } catch (e) {
+                  reflectionDate = new Date();
                 }
-              } catch (e) {
-                reflectionDate = new Date();
+                
+                // Handle createdAt timestamp properly
+                let createdAt = pod.createdAt;
+                if (createdAt && typeof createdAt.toDate === 'function') {
+                  createdAt = createdAt.toDate();
+                } else if (!createdAt || !(createdAt instanceof Date)) {
+                  createdAt = reflectionDate;
+                }
+                
+                allReflections.push({
+                  id: pod.id || pod.startDate,
+                  date: pod.startDate,
+                  dateObj: reflectionDate,
+                  reflection: pod.reflection,
+                  createdAt: createdAt
+                });
               }
-              
-              allReflections.push({
-                id: pod.id || pod.startDate,
-                date: pod.startDate,
-                dateObj: reflectionDate,
-                reflection: pod.reflection,
-                createdAt: pod.createdAt || reflectionDate
-              });
             });
+        }
+        
+        // Also get current reflection if it exists and not already in list
+        const currentReflectionResult = await firestoreService.getPodReflection(user.uid);
+        if (currentReflectionResult.success && currentReflectionResult.reflection) {
+          const today = new Date();
+          const todayId = getDateId(today);
           
-          // Also get current reflection if it exists
-          const currentReflectionResult = await firestoreService.getPodReflection(user.uid);
-          if (currentReflectionResult.success && currentReflectionResult.reflection) {
-            const today = new Date();
-            const todayId = today.toISOString().split('T')[0];
-            
-            // Check if today's reflection is already in the list
-            const todayExists = allReflections.some(r => r.date === todayId);
-            if (!todayExists) {
-              allReflections.push({
-                id: 'current',
-                date: todayId,
-                dateObj: today,
-                reflection: currentReflectionResult.reflection,
-                createdAt: today
-              });
+          // Check if today's reflection is already in the list
+          const todayExists = allReflections.some(r => r.date === todayId);
+          if (!todayExists) {
+            let createdAt = currentReflectionResult.createdAt;
+            if (createdAt && typeof createdAt.toDate === 'function') {
+              createdAt = createdAt.toDate();
+            } else if (!createdAt) {
+              createdAt = today;
             }
+            
+            allReflections.push({
+              id: 'current',
+              date: currentReflectionResult.dateId || todayId,
+              dateObj: today,
+              reflection: currentReflectionResult.reflection,
+              createdAt: createdAt
+            });
           }
         }
         
         // Sort by date (newest first)
         allReflections.sort((a, b) => {
-          const dateA = a.dateObj?.getTime() || 0;
-          const dateB = b.dateObj?.getTime() || 0;
+          const dateA = a.createdAt?.getTime() || a.dateObj?.getTime() || 0;
+          const dateB = b.createdAt?.getTime() || b.dateObj?.getTime() || 0;
           return dateB - dateA;
         });
         
@@ -210,10 +269,10 @@ export default function AllReflectionsPage() {
                   <Check className={`w-4 h-4 ${isDarkMode ? 'text-[#81C995]' : 'text-[#87A96B]'}`} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className={`text-xs font-medium mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                    {formatReflectionDate(reflection.date)}
+                  <div className={`text-xs font-medium mb-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                    {formatReflectionDate(reflection)}
                   </div>
-                  <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-700'} line-clamp-3`}>
+                  <p className={`text-sm leading-relaxed whitespace-pre-wrap break-words ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                     {reflection.reflection}
                   </p>
                 </div>

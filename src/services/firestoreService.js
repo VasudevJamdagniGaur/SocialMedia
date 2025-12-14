@@ -1123,13 +1123,54 @@ class FirestoreService {
       
       if (snapshot.exists()) {
         const data = snapshot.data();
-        return { success: true, reflection: data.summary || '' };
+        return { 
+          success: true, 
+          reflection: data.summary || '',
+          createdAt: data.createdAt,
+          dateId: data.dateId
+        };
       } else {
         return { success: true, reflection: '' };
       }
     } catch (error) {
       console.error('Error getting pod reflection:', error);
       return { success: false, error: error.message, reflection: '' };
+    }
+  }
+
+  /**
+   * Get all pod reflections with dates (from podReflections collection)
+   */
+  async getAllPodReflections(uid) {
+    try {
+      const podReflectionsRef = collection(this.db, `users/${uid}/podReflections`);
+      const snapshot = await getDocs(podReflectionsRef);
+      
+      const reflections = [];
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        if (data.summary) {
+          reflections.push({
+            id: doc.id,
+            reflection: data.summary,
+            dateId: data.dateId,
+            createdAt: data.createdAt?.toDate() || (data.dateId ? new Date(data.dateId) : new Date()),
+            updatedAt: data.updatedAt?.toDate() || new Date()
+          });
+        }
+      });
+      
+      // Sort by date (newest first)
+      reflections.sort((a, b) => {
+        const dateA = a.createdAt?.getTime() || 0;
+        const dateB = b.createdAt?.getTime() || 0;
+        return dateB - dateA;
+      });
+      
+      return { success: true, reflections };
+    } catch (error) {
+      console.error('Error getting all pod reflections:', error);
+      return { success: false, error: error.message, reflections: [] };
     }
   }
 
