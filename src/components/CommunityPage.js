@@ -32,6 +32,7 @@ export default function CommunityPage() {
   const [showFAB, setShowFAB] = useState(true);
   const [lastScrollY, setLastScrollY] = useState(0);
   const [activeMembersCount, setActiveMembersCount] = useState(0);
+  const [postsTodayCount, setPostsTodayCount] = useState(0);
 
   // Load profile picture
   useEffect(() => {
@@ -261,6 +262,20 @@ export default function CommunityPage() {
       
       setCommunityPosts(posts);
       
+      // Calculate posts created today (using local timezone)
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+      const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+      
+      const postsToday = posts.filter(post => {
+        if (!post.createdAt) return false;
+        const postDate = post.createdAt instanceof Date ? post.createdAt : new Date(post.createdAt);
+        return postDate >= todayStart && postDate <= todayEnd;
+      });
+      
+      setPostsTodayCount(postsToday.length);
+      console.log(`📊 Posts today: ${postsToday.length} out of ${posts.length} total posts`);
+      
       // Initialize state for each post
       const initialLikes = {};
       const initialComments = {};
@@ -426,22 +441,8 @@ export default function CommunityPage() {
 
       await addDoc(collection(db, 'communityPosts'), postData);
       
-      // Reload posts
-      const postsRef = collection(db, 'communityPosts');
-      const q = query(postsRef, orderBy('createdAt', 'desc'));
-      const querySnapshot = await getDocs(q);
-      
-      const posts = [];
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        posts.push({
-          id: doc.id,
-          ...data,
-          createdAt: data.createdAt?.toDate?.() || new Date()
-        });
-      });
-      
-      setCommunityPosts(posts);
+      // Note: The real-time listener will automatically update the posts and postsTodayCount
+      // No need to manually reload here
       
       // Initialize new post state
       const newPostId = posts[0]?.id;
@@ -692,7 +693,7 @@ export default function CommunityPage() {
                 <div className="flex items-center justify-center gap-2 mb-1">
                   <FileText className={`w-5 h-5 ${isDarkMode ? 'text-white' : 'text-gray-800'}`} strokeWidth={2} />
                   <div className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                    0
+                    {postsTodayCount.toLocaleString()}
                   </div>
                 </div>
                 <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
