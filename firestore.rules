@@ -1,0 +1,155 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users collection - allow authenticated users to read for counting
+    match /users/{userId} {
+      // Allow users to read any user document (for counting active members)
+      allow read: if request.auth != null;
+      // Allow users to create/update their own document
+      allow create, update: if request.auth != null && request.auth.uid == userId;
+      // Allow users to delete their own document
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Users metadata collection
+    match /usersMetadata/{userId} {
+      // Allow users to read any metadata (for crew matching)
+      allow read: if request.auth != null;
+      // Allow users to create/update their own metadata
+      allow create, update: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // User subcollections (days, chats, etc.)
+    match /users/{userId}/days/{dateId} {
+      // Allow users to read/write their own days
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // Allow authenticated users to read days for crew matching (checking active users)
+      allow read: if request.auth != null;
+    }
+    
+    match /users/{userId}/chats/{chatId} {
+      // Allow users to read/write their own chats
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // Allow authenticated users to read chats for crew matching (checking active users)
+      allow read: if request.auth != null;
+    }
+    
+    match /users/{userId}/days/{dateId}/reflection/{document=**} {
+      // Allow users to read/write their own reflections
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // Allow authenticated users to read reflections for crew matching (checking active users)
+      allow read: if request.auth != null;
+    }
+    
+    // Specific path for reflection meta (users/{userId}/days/{dateId}/reflection/meta)
+    match /users/{userId}/days/{dateId}/reflection/meta {
+      // Allow users to read/write their own reflection meta
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // Allow authenticated users to read reflection meta for crew matching
+      allow read: if request.auth != null;
+    }
+    
+    // Old structure: users/{userId}/dayReflections/{dateId}
+    match /users/{userId}/dayReflections/{dateId} {
+      // Allow users to read/write their own day reflections
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // Allow authenticated users to read day reflections for crew matching
+      allow read: if request.auth != null;
+    }
+    
+    // Messages subcollections - allow reading for crew matching
+    match /users/{userId}/days/{dateId}/messages/{messageId} {
+      // Allow users to read their own messages
+      allow read: if request.auth != null && request.auth.uid == userId;
+      // Allow authenticated users to read messages for crew matching (checking if users are active)
+      allow read: if request.auth != null;
+      // Allow users to write their own messages
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    match /users/{userId}/chats/{chatId}/messages/{messageId} {
+      // Allow users to read their own messages
+      allow read: if request.auth != null && request.auth.uid == userId;
+      // Allow authenticated users to read messages for crew matching
+      allow read: if request.auth != null;
+      // Allow users to write their own messages
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Community posts
+    match /communityPosts/{postId} {
+      // Allow authenticated users to read all posts
+      allow read: if request.auth != null;
+      // Allow authenticated users to create posts
+      allow create: if request.auth != null;
+      // Allow users to update/delete their own posts (check both userId and authorId for compatibility)
+      allow update, delete: if request.auth != null && 
+        (resource.data.userId == request.auth.uid || resource.data.authorId == request.auth.uid);
+    }
+    
+    // Crew spheres - shared crew groups
+    match /crewSpheres/{sphereId} {
+      // Allow authenticated users to read spheres they are members of
+      allow read: if request.auth != null && 
+        (request.auth.uid == resource.data.creatorUid ||
+         (resource.data.members != null && 
+          resource.data.members is list &&
+          request.auth.uid in resource.data.members));
+      
+      // FIXED: Simplified create rule
+      allow create: if request.auth != null && 
+        request.auth.uid == request.resource.data.creatorUid;
+      
+      // Allow creators and members to update spheres
+      allow update: if request.auth != null && 
+        (request.auth.uid == resource.data.creatorUid ||
+         (resource.data.members != null && 
+          resource.data.members is list &&
+          request.auth.uid in resource.data.members));
+      
+      // Crew sphere messages - shared group chat
+      match /messages/{messageId} {
+        // Allow members to read all messages in the sphere
+        allow read: if request.auth != null && 
+          (request.auth.uid == get(/databases/$(database)/documents/crewSpheres/$(sphereId)).data.creatorUid ||
+           (request.auth.uid in get(/databases/$(database)/documents/crewSpheres/$(sphereId)).data.members));
+        
+        // Allow members to create messages
+        allow create: if request.auth != null && 
+          request.resource.data.senderUid == request.auth.uid &&
+          (request.auth.uid == get(/databases/$(database)/documents/crewSpheres/$(sphereId)).data.creatorUid ||
+           (request.auth.uid in get(/databases/$(database)/documents/crewSpheres/$(sphereId)).data.members));
+        
+        // Allow users to update/delete only their own messages
+        allow update, delete: if request.auth != null && 
+          resource.data.senderUid == request.auth.uid;
+      }
+    }
+    
+    // User pods - allow access to pods that reference crew spheres
+    // FIXED: Allow creating pod documents if the creator is a member of the referenced sphere
+    match /users/{userId}/pods/{podId} {
+      // Allow users to read/write their own pods
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      // Allow creating pod documents for other users if:
+      // 1. The creator is authenticated
+      // 2. The pod document references a sphere (has sphereId)
+      // 3. The creator is a member of that sphere
+      allow create: if request.auth != null && 
+        request.resource.data.sphereId != null &&
+        (request.auth.uid == get(/databases/$(database)/documents/crewSpheres/$(request.resource.data.sphereId)).data.creatorUid ||
+         (request.auth.uid in get(/databases/$(database)/documents/crewSpheres/$(request.resource.data.sphereId)).data.members));
+      
+      // Allow updating pod documents for other users if the updater is a member of the sphere
+      allow update: if request.auth != null && 
+        (request.auth.uid == userId ||
+         (resource.data.sphereId != null &&
+          (request.auth.uid == get(/databases/$(database)/documents/crewSpheres/$(resource.data.sphereId)).data.creatorUid ||
+           (request.auth.uid in get(/databases/$(database)/documents/crewSpheres/$(resource.data.sphereId)).data.members))));
+    }
+    
+    // Collection group queries (for counting users from subcollections)
+    // These are handled by the parent collection rules above
+  }
+}
