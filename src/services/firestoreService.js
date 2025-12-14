@@ -855,17 +855,23 @@ class FirestoreService {
             console.log(`📊 FIRESTORE NEW: ✅ Raw values - H:${data.happiness} E:${data.energy} A:${data.anxiety} S:${data.stress}`);
             console.log(`📊 FIRESTORE NEW: ✅ Firestore path was: users/${uid}/days/${dateId}/moodChart/daily`);
             
-            const dayData = {
-              date: dateId,
-              day: targetDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-              happiness: data.happiness || 0,
-              anxiety: data.anxiety || 0,
-              stress: data.stress || 0,
-              energy: data.energy || 0
-            };
-            
-            console.log(`📊 FIRESTORE NEW: ✅ Pushing to array:`, dayData);
-            moodData.push(dayData);
+            // Only add data if it has valid values (not all zeros)
+            const total = (data.happiness || 0) + (data.energy || 0) + (data.anxiety || 0) + (data.stress || 0);
+            if (total > 0) {
+              const dayData = {
+                date: dateId,
+                day: targetDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+                happiness: data.happiness || 0,
+                anxiety: data.anxiety || 0,
+                stress: data.stress || 0,
+                energy: data.energy || 0
+              };
+              
+              console.log(`📊 FIRESTORE NEW: ✅ Pushing to array:`, dayData);
+              moodData.push(dayData);
+            } else {
+              console.log(`📊 FIRESTORE NEW: ⚠️ Data exists but all values are zero for ${dateId}, skipping`);
+            }
           } else {
             // No data for this day - skip it instead of adding zeros
             console.log(`📊 FIRESTORE NEW: ❌ No mood data for ${dateId}, skipping`);
@@ -877,24 +883,11 @@ class FirestoreService {
           console.error(`❌ Error getting mood data for ${dateId}:`, dayError);
           // Only add defaults if this is a permissions/network error, not if no data exists
           if (dayError.code === 'permission-denied' || dayError.code === 'unavailable') {
-            moodData.push({
-              date: dateId,
-              day: targetDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-              happiness: 50,
-              anxiety: 25,
-              stress: 25,
-              energy: 50
-            });
+            console.log(`📊 FIRESTORE NEW: ⚠️ Permission/network error for ${dateId}, skipping (not adding defaults)`);
+            // Don't add defaults even for permission errors - let the UI handle it
           } else {
-            // For other errors (like no data), add zeros
-            moodData.push({
-              date: dateId,
-              day: targetDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-              happiness: 0,
-              anxiety: 0,
-              stress: 0,
-              energy: 0
-            });
+            // For other errors (like no data), don't add anything - skip the day
+            console.log(`📊 FIRESTORE NEW: ⚠️ Error for ${dateId}, skipping (not adding zeros)`);
           }
         }
       }

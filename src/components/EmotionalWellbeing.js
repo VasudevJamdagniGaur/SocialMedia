@@ -975,8 +975,15 @@ export default function EmotionalWellbeing() {
       // Wait for all generations to complete (but don't fail if some fail)
       if (generationPromises.length > 0) {
         console.log(`📊 UNIFIED: Generating emotional analysis for ${generationPromises.length} missing days...`);
-        await Promise.allSettled(generationPromises);
-        console.log('📊 UNIFIED: Finished generating missing emotional analysis');
+        const results = await Promise.allSettled(generationPromises);
+        const successful = results.filter(r => r.status === 'fulfilled' && r.value !== null).length;
+        console.log(`📊 UNIFIED: Finished generating missing emotional analysis - ${successful} successful out of ${generationPromises.length}`);
+        
+        // Small delay to ensure Firestore has processed the writes
+        if (successful > 0) {
+          console.log('📊 UNIFIED: Waiting 500ms for Firestore to sync...');
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
       }
 
       // Get AI-generated mood data from new Firebase structure
@@ -1000,6 +1007,15 @@ export default function EmotionalWellbeing() {
         result = await firestoreService.getMoodChartDataNew(user.uid, period);
       }
       console.log('📊 UNIFIED: Mood chart data result:', result);
+      
+      // Filter out any days with all zeros (invalid data)
+      if (result.success && result.moodData) {
+        result.moodData = result.moodData.filter(day => {
+          const total = (day.happiness || 0) + (day.energy || 0) + (day.anxiety || 0) + (day.stress || 0);
+          return total > 0;
+        });
+        console.log(`📊 UNIFIED: After filtering zeros, ${result.moodData.length} days with valid data`);
+      }
 
       if (result.success && result.moodData && result.moodData.length > 0) {
         console.log('📊 UNIFIED: ✅ Processing AI-generated mood data:', result.moodData.length, 'days');
@@ -1049,13 +1065,19 @@ export default function EmotionalWellbeing() {
 
           // Force state update with new reference to trigger re-render
           // Ensure all values are numbers and within valid range (0-100)
-          const newMoodData = processedMoodData.map(day => ({
-            ...day,
-            happiness: typeof day.happiness === 'number' ? Math.max(0, Math.min(100, day.happiness)) : 0,
-            energy: typeof day.energy === 'number' ? Math.max(0, Math.min(100, day.energy)) : 0,
-            anxiety: typeof day.anxiety === 'number' ? Math.max(0, Math.min(100, day.anxiety)) : 0,
-            stress: typeof day.stress === 'number' ? Math.max(0, Math.min(100, day.stress)) : 0
-          }));
+          // Also filter out any days that have all zeros (invalid data)
+          const newMoodData = processedMoodData
+            .filter(day => {
+              const total = (day.happiness || 0) + (day.energy || 0) + (day.anxiety || 0) + (day.stress || 0);
+              return total > 0; // Only include days with actual data
+            })
+            .map(day => ({
+              ...day,
+              happiness: typeof day.happiness === 'number' ? Math.max(0, Math.min(100, day.happiness)) : 0,
+              energy: typeof day.energy === 'number' ? Math.max(0, Math.min(100, day.energy)) : 0,
+              anxiety: typeof day.anxiety === 'number' ? Math.max(0, Math.min(100, day.anxiety)) : 0,
+              stress: typeof day.stress === 'number' ? Math.max(0, Math.min(100, day.stress)) : 0
+            }));
           
           console.log('🔄 CHART: About to update state with:', newMoodData.length, 'days');
           console.log('🔄 CHART: First day data:', newMoodData[0]);
@@ -1758,15 +1780,23 @@ export default function EmotionalWellbeing() {
       const moodSnapshot = await getDoc(moodRef);
       
       if (moodSnapshot.exists()) {
-        console.log(`✅ Mood data already exists for ${dateId}, skipping generation`);
         const data = moodSnapshot.data();
-        return {
-          date: dateId,
-          happiness: data.happiness || 0,
-          energy: data.energy || 0,
-          anxiety: data.anxiety || 0,
-          stress: data.stress || 0
-        };
+        const total = (data.happiness || 0) + (data.energy || 0) + (data.anxiety || 0) + (data.stress || 0);
+        
+        // Only skip if we have valid data (not all zeros)
+        if (total > 0) {
+          console.log(`✅ Mood data already exists for ${dateId} with valid values, skipping generation`);
+          return {
+            date: dateId,
+            happiness: data.happiness || 0,
+            energy: data.energy || 0,
+            anxiety: data.anxiety || 0,
+            stress: data.stress || 0
+          };
+        } else {
+          console.log(`⚠️ Mood data exists for ${dateId} but all values are zero, will regenerate`);
+          // Continue to generate new analysis
+        }
       }
       
       // Check if chat messages exist for this day
