@@ -284,22 +284,32 @@ export default function CommunityPage() {
       posts.forEach(post => {
         // Listen to likes subcollection
         const likesRef = collection(db, `communityPosts/${post.id}/likes`);
-        const unsubscribeLikes = onSnapshot(likesRef, (likesSnapshot) => {
-          const likedUserIds = [];
-          likesSnapshot.forEach((likeDoc) => {
-            likedUserIds.push(likeDoc.id);
-          });
-          
-          setPostLikes(prev => ({
-            ...prev,
-            [post.id]: likedUserIds.length
-          }));
-          
-          setPostLikedBy(prev => ({
-            ...prev,
-            [post.id]: likedUserIds
-          }));
-        });
+        const unsubscribeLikes = onSnapshot(likesRef, 
+          (likesSnapshot) => {
+            console.log(`📊 Likes snapshot for post ${post.id}:`, likesSnapshot.size, 'likes');
+            const likedUserIds = [];
+            likesSnapshot.forEach((likeDoc) => {
+              likedUserIds.push(likeDoc.id);
+              console.log(`  - Like from user: ${likeDoc.id}`);
+            });
+            
+            console.log(`✅ Updating likes for post ${post.id}: ${likedUserIds.length} likes`);
+            
+            setPostLikes(prev => ({
+              ...prev,
+              [post.id]: likedUserIds.length
+            }));
+            
+            setPostLikedBy(prev => ({
+              ...prev,
+              [post.id]: likedUserIds
+            }));
+          },
+          (error) => {
+            console.error(`❌ Error listening to likes for post ${post.id}:`, error);
+            console.error('Error code:', error.code, 'Error message:', error.message);
+          }
+        );
         
         // Listen to comments subcollection
         const commentsRef = collection(db, `communityPosts/${post.id}/comments`);
@@ -466,26 +476,53 @@ export default function CommunityPage() {
     const likedUsers = postLikedBy[postId] || [];
     const isLiked = likedUsers.includes(user.uid);
     
+    console.log(`❤️ Handling like for post ${postId}, isLiked: ${isLiked}, user: ${user.uid}`);
+    
     try {
       const likeRef = doc(db, `communityPosts/${postId}/likes/${user.uid}`);
       
       if (isLiked) {
         // Unlike: remove from subcollection
+        console.log(`👎 Unliking post ${postId}...`);
         await deleteDoc(likeRef);
+        console.log(`✅ Successfully unliked post ${postId}`);
+        
+        // Manually update state as fallback (in case listener is slow)
+        setPostLikes(prev => ({
+          ...prev,
+          [postId]: Math.max(0, (prev[postId] || 0) - 1)
+        }));
+        setPostLikedBy(prev => ({
+          ...prev,
+          [postId]: (prev[postId] || []).filter(uid => uid !== user.uid)
+        }));
       } else {
         // Like: add to subcollection
+        console.log(`👍 Liking post ${postId}...`);
         await setDoc(likeRef, {
           userId: user.uid,
           createdAt: serverTimestamp()
         });
+        console.log(`✅ Successfully liked post ${postId}`);
+        
+        // Manually update state as fallback (in case listener is slow)
+        setPostLikes(prev => ({
+          ...prev,
+          [postId]: (prev[postId] || 0) + 1
+        }));
+        setPostLikedBy(prev => ({
+          ...prev,
+          [postId]: [...(prev[postId] || []), user.uid]
+        }));
       }
       
       // Note: We don't update the main post document's likedBy array anymore
       // The likes subcollection is the source of truth, and real-time listeners
-      // will update the UI automatically
+      // will update the UI automatically. We also update state manually as a fallback.
     } catch (error) {
-      console.error('Error updating like:', error);
-      alert('Failed to update like. Please try again.');
+      console.error('❌ Error updating like:', error);
+      console.error('Error details:', error.code, error.message);
+      alert('Failed to update like: ' + error.message);
     }
   };
 
