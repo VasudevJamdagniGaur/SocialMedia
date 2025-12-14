@@ -595,7 +595,7 @@ export default function PodPage() {
               >
                 <div className="flex items-start">
                   <div className="flex-1">
-                    <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-600'} line-clamp-3`}>
+                    <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-600'} whitespace-pre-wrap break-words`}>
                       {podReflection}
                     </p>
                     <p className={`text-xs mt-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
