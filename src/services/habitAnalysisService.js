@@ -3,10 +3,13 @@ import { getDateIdDaysAgo } from '../utils/dateUtils';
 
 class HabitAnalysisService {
   constructor() {
+    // Use CORS proxy if available, otherwise fallback to direct URL
+    this.proxyURL = 'http://localhost:3001';
     this.baseURL = 'https://rr9rd9oc5khoyk-11434.proxy.runpod.net/';
     this.modelName = 'llama3:70b'; // Preferred model - skip model check
     this.minDaysRequired = 1; // Minimum days needed for meaningful analysis
     this.minMessagesRequired = 1; // Minimum total messages needed
+    this.useProxy = true; // Try proxy first
   }
 
   /**
@@ -153,8 +156,16 @@ IMPORTANT:
 
       console.log('📤 HABIT DEBUG: Sending request to RunPod Ollama...');
 
-      // Use RunPod Ollama API directly
-      const response = await fetch(`${this.baseURL}api/generate`, {
+      // Try proxy first, fallback to direct URL if proxy fails
+      let apiUrl = this.useProxy ? `${this.proxyURL}/api/generate` : `${this.baseURL}api/generate`;
+      console.log('🌐 HABIT API URL:', apiUrl);
+
+      // Create AbortController for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 seconds
+      
+      // Use RunPod Ollama API via proxy or directly
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -167,8 +178,11 @@ IMPORTANT:
             temperature: 0.3,
             max_tokens: 1000
           }
-        })
+        }),
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         throw new Error(`RunPod Ollama API error: ${response.status} ${response.statusText}`);
@@ -187,6 +201,49 @@ IMPORTANT:
 
     } catch (error) {
       console.error('❌ Error in AI habit analysis:', error);
+      
+      // If proxy failed and we were using proxy, try direct URL
+      if (this.useProxy && apiUrl.includes('localhost:3001')) {
+        console.log('🔄 Proxy failed, trying direct URL for habit analysis...');
+        this.useProxy = false;
+        apiUrl = `${this.baseURL}api/generate`;
+        
+        try {
+          const directController = new AbortController();
+          const directTimeoutId = setTimeout(() => directController.abort(), 120000);
+          
+          const directResponse = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: this.modelName,
+              prompt: habitAnalysisPrompt,
+              stream: false,
+              options: {
+                temperature: 0.3,
+                max_tokens: 1000
+              }
+            }),
+            signal: directController.signal
+          });
+          
+          clearTimeout(directTimeoutId);
+          
+          if (directResponse.ok) {
+            const data = await directResponse.json();
+            if (data.response) {
+              const analysisResult = this.parseHabitAnalysisResult(data.response);
+              console.log('✅ Direct URL worked for habit analysis');
+              return analysisResult;
+            }
+          }
+        } catch (directError) {
+          console.error('❌ Direct URL also failed for habit analysis:', directError);
+        }
+      }
+      
       return this.getDefaultHabitAnalysis();
     }
   }

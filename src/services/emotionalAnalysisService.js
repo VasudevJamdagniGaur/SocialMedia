@@ -1,6 +1,9 @@
 class EmotionalAnalysisService {
   constructor() {
+    // Use CORS proxy if available, otherwise fallback to direct URL
+    this.proxyURL = 'http://localhost:3001';
     this.baseURL = 'https://rr9rd9oc5khoyk-11434.proxy.runpod.net/';
+    this.useProxy = true; // Try proxy first
   }
 
   async analyzeEmotionalScores(messages) {
@@ -37,11 +40,17 @@ Respond ONLY with a JSON object in this exact format:
   "stress": <number>
 }`;
 
-      const apiUrl = `${this.baseURL}api/generate`;
+      // Try proxy first, fallback to direct URL if proxy fails
+      let apiUrl = this.useProxy ? `${this.proxyURL}/api/generate` : `${this.baseURL}api/generate`;
       const modelToUse = 'llama3:70b'; // Go directly to preferred model
       
         try {
         console.log('🤖 Using model for emotional analysis:', modelToUse);
+        console.log('🌐 API URL:', apiUrl);
+          
+          // Create AbortController for timeout
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 seconds
           
           const response = await fetch(apiUrl, {
             method: 'POST',
@@ -56,8 +65,11 @@ Respond ONLY with a JSON object in this exact format:
                 temperature: 0.3,
                 num_predict: 300
               }
-            })
+            }),
+            signal: controller.signal
           });
+          
+          clearTimeout(timeoutId);
           
           if (!response.ok) {
           console.error(`❌ Model ${modelToUse} failed:`, response.status, response.statusText);
@@ -89,7 +101,54 @@ Respond ONLY with a JSON object in this exact format:
           }
       } catch (error) {
         console.error(`❌ Error with model ${modelToUse}:`, error);
-      return this.getDefaultScores();
+        
+        // If proxy failed and we were using proxy, try direct URL
+        if (this.useProxy && apiUrl.includes('localhost:3001')) {
+          console.log('🔄 Proxy failed, trying direct URL...');
+          this.useProxy = false;
+          apiUrl = `${this.baseURL}api/generate`;
+          
+          try {
+            const directController = new AbortController();
+            const directTimeoutId = setTimeout(() => directController.abort(), 120000);
+            
+            const directResponse = await fetch(apiUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                model: modelToUse,
+                prompt: prompt,
+                stream: false,
+                options: {
+                  temperature: 0.3,
+                  num_predict: 300
+                }
+              }),
+              signal: directController.signal
+            });
+            
+            clearTimeout(directTimeoutId);
+            
+            if (directResponse.ok) {
+              const data = await directResponse.json();
+              let responseText = data.response || data.text || data.output || '';
+              const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+              if (jsonMatch) {
+                const emotionalData = JSON.parse(jsonMatch[0]);
+                if (this.isValidAnalysisResult(emotionalData)) {
+                  console.log('✅ Direct URL worked, got valid emotional analysis');
+                  return emotionalData;
+                }
+              }
+            }
+          } catch (directError) {
+            console.error('❌ Direct URL also failed:', directError);
+          }
+        }
+        
+        return this.getDefaultScores();
       }
     } catch (error) {
       console.error('❌ EMOTIONAL DEBUG: Error in analyzeEmotionalScores:', error);
