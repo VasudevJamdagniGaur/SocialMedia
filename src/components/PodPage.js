@@ -538,8 +538,15 @@ export default function PodPage() {
 
           {/* Pod Reflection Section - Dropdown Card */}
           <div
-            onClick={() => navigate('/pod/all')}
-            className={`rounded-2xl p-5 relative overflow-hidden cursor-pointer transition-all hover:opacity-90 ${
+            onClick={(e) => {
+              // Only navigate if clicking on the card itself, not on buttons inside
+              if (e.target === e.currentTarget || e.target.closest('.reflection-content')) {
+                navigate('/pod/all');
+              }
+            }}
+            className={`rounded-2xl p-5 relative overflow-hidden transition-all ${
+              !podReflection ? '' : 'cursor-pointer hover:opacity-90'
+            } ${
               isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
             }`}
             style={isDarkMode ? {
@@ -580,8 +587,11 @@ export default function PodPage() {
               </div>
             ) : podReflection ? (
               <div
-                onClick={() => navigate('/pod/reflections')}
-                className="cursor-pointer transition-opacity hover:opacity-90"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate('/pod/reflections');
+                }}
+                className="cursor-pointer transition-opacity hover:opacity-90 reflection-content"
               >
                 <div className="flex items-start gap-3">
                   <ChevronRight className={`w-5 h-5 mt-0.5 flex-shrink-0 ${isDarkMode ? 'text-[#8AB4F8]' : 'text-[#87A96B]'}`} strokeWidth={2.5} />
@@ -596,10 +606,7 @@ export default function PodPage() {
                 </div>
               </div>
             ) : (
-              <div
-                onClick={() => navigate('/pod/reflections')}
-                className="flex flex-col items-center justify-center py-4 cursor-pointer"
-              >
+              <div className="flex flex-col items-center justify-center py-4">
                 <div
                   className={`w-12 h-12 rounded-lg flex items-center justify-center mb-3 ${
                     isDarkMode ? 'backdrop-blur-md' : 'bg-white'
@@ -614,9 +621,41 @@ export default function PodPage() {
                 >
                   <span className="text-2xl">🌿</span>
                 </div>
-                <p className={`text-sm text-center italic ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                  No reflection yet. Tap to view all reflections →
+                <p className={`text-sm text-center mb-4 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                  No reflection yet.
                 </p>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation(); // Prevent navigation when clicking button
+                    handleGeneratePodReflection();
+                  }}
+                  disabled={isLoadingPodReflection}
+                  className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                    isLoadingPodReflection
+                      ? 'opacity-50 cursor-not-allowed'
+                      : 'hover:opacity-90 active:scale-95'
+                  } ${
+                    isDarkMode
+                      ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white'
+                      : 'bg-gradient-to-r from-purple-500 to-pink-500 text-white'
+                  }`}
+                  style={{
+                    boxShadow: isDarkMode 
+                      ? '0 4px 12px rgba(168, 85, 247, 0.3)' 
+                      : '0 2px 8px rgba(168, 85, 247, 0.2)'
+                  }}
+                >
+                  {isLoadingPodReflection ? 'Generating...' : 'Create Reflection'}
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate('/pod/reflections');
+                  }}
+                  className={`mt-2 text-xs ${isDarkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-600'} transition-colors`}
+                >
+                  View all reflections →
+                </button>
               </div>
             )}
           </div>
