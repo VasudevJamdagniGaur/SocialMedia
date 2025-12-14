@@ -1019,11 +1019,19 @@ export default function EmotionalWellbeing() {
           console.log('📊 UNIFIED: Has real data:', hasRealData);
 
           // Force state update with new reference to trigger re-render
-          const newMoodData = [...processedMoodData]; // Create new array reference
+          // Ensure all values are numbers and within valid range (0-100)
+          const newMoodData = processedMoodData.map(day => ({
+            ...day,
+            happiness: typeof day.happiness === 'number' ? Math.max(0, Math.min(100, day.happiness)) : 0,
+            energy: typeof day.energy === 'number' ? Math.max(0, Math.min(100, day.energy)) : 0,
+            anxiety: typeof day.anxiety === 'number' ? Math.max(0, Math.min(100, day.anxiety)) : 0,
+            stress: typeof day.stress === 'number' ? Math.max(0, Math.min(100, day.stress)) : 0
+          }));
           
           console.log('🔄 CHART: About to update state with:', newMoodData.length, 'days');
           console.log('🔄 CHART: First day data:', newMoodData[0]);
           console.log('🔄 CHART: Last day data:', newMoodData[newMoodData.length - 1]);
+          console.log('🔄 CHART: Sample values - H:', newMoodData.map(d => d.happiness).slice(0, 5), 'E:', newMoodData.map(d => d.energy).slice(0, 5));
           console.log('🔄 CHART: Oct 8 data:', newMoodData.find(d => d.day && d.day.includes('Oct 8')));
           
           if (!isLatestPeriodRequest(requestId)) {
@@ -2934,6 +2942,8 @@ Return in this JSON format:
                     tickLine={false}
                     tick={{ fill: isDarkMode ? '#9CA3AF' : '#6B7280', fontSize: 11 }}
                     width={35}
+                    domain={[0, 100]}
+                    allowDecimals={false}
                   />
                   <Tooltip 
                     content={<CustomTooltip />}

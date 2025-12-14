@@ -809,18 +809,11 @@ class FirestoreService {
             console.log(`📊 FIRESTORE NEW: ✅ Pushing to array:`, dayData);
             moodData.push(dayData);
           } else {
-            // No data for this day
-            console.log(`📊 FIRESTORE NEW: ❌ No mood data for ${dateId}, using defaults`);
+            // No data for this day - skip it instead of adding zeros
+            console.log(`📊 FIRESTORE NEW: ❌ No mood data for ${dateId}, skipping`);
             console.log(`📊 FIRESTORE NEW: ❌ Checked path: users/${uid}/days/${dateId}/moodChart/daily`);
             console.log(`📊 FIRESTORE NEW: ❌ This means NO DATA was saved to Firestore for this date`);
-            moodData.push({
-              date: dateId,
-              day: targetDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-              happiness: 0,
-              anxiety: 0,
-              stress: 0,
-              energy: 0
-            });
+            // Don't add zeros - only show days with actual data
           }
         } catch (dayError) {
           console.error(`❌ Error getting mood data for ${dateId}:`, dayError);
