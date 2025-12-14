@@ -43,13 +43,42 @@ class FirestoreService {
 
   /**
    * Get user data from Firestore
+   * Checks both users and usersMetadata collections
    */
   async getUser(uid) {
     try {
+      // First try users collection
       const userRef = doc(this.db, `users/${uid}`);
       const userSnap = await getDoc(userRef);
+      
+      let userData = {};
       if (userSnap.exists()) {
-        return { success: true, data: userSnap.data() };
+        userData = userSnap.data();
+      }
+      
+      // Also check usersMetadata for profile picture and display name
+      try {
+        const metadataRef = doc(this.db, `usersMetadata/${uid}`);
+        const metadataSnap = await getDoc(metadataRef);
+        if (metadataSnap.exists()) {
+          const metadata = metadataSnap.data();
+          // Merge metadata into userData, with metadata taking precedence
+          userData = {
+            ...userData,
+            ...metadata,
+            // Profile picture from metadata takes precedence
+            profilePicture: metadata.profilePicture || userData.profilePicture || null,
+            // Display name from metadata takes precedence
+            displayName: metadata.displayName || userData.displayName || null
+          };
+        }
+      } catch (metadataError) {
+        // If metadata doesn't exist or can't be read, continue with user data only
+        console.log('No metadata found for user:', uid);
+      }
+      
+      if (Object.keys(userData).length > 0) {
+        return { success: true, data: userData };
       }
       return { success: false, error: 'User not found' };
     } catch (error) {

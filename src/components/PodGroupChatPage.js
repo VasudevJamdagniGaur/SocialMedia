@@ -125,14 +125,19 @@ export default function PodGroupChatPage() {
               try {
                 const memberResult = await firestoreService.getUser(memberUid);
                 if (memberResult.success && memberResult.data) {
+                  const profilePicture = memberResult.data.profilePicture || null;
+                  const displayName = memberResult.data.displayName || 'User';
+                  console.log(`✅ Loaded member ${memberUid}:`, { displayName, hasProfilePicture: !!profilePicture });
                   members.push({
                     uid: memberUid,
-                    displayName: memberResult.data.displayName || 'User',
-                    profilePicture: memberResult.data.profilePicture || null
+                    displayName: displayName,
+                    profilePicture: profilePicture
                   });
+                } else {
+                  console.warn(`⚠️ Could not load member ${memberUid}:`, memberResult.error);
                 }
               } catch (err) {
-                console.error(`Error loading member ${memberUid}:`, err);
+                console.error(`❌ Error loading member ${memberUid}:`, err);
               }
             }
             
@@ -475,8 +480,8 @@ export default function PodGroupChatPage() {
               <div
                 className="w-8 h-8 rounded-full flex items-center justify-center text-xs flex-shrink-0 overflow-hidden"
                 style={{
-                  backgroundColor: (msg.sender === 'AI' || (msg.isCurrentUser && profilePicture)) ? "transparent" : (isDarkMode ? msg.color + '30' : msg.color + '20'),
-                  border: (msg.sender === 'AI' || (msg.isCurrentUser && profilePicture)) ? "none" : `2px solid ${msg.color}40`,
+                  backgroundColor: (msg.sender === 'AI' || msg.profilePicture) ? "transparent" : (isDarkMode ? msg.color + '30' : msg.color + '20'),
+                  border: (msg.sender === 'AI' || msg.profilePicture) ? "none" : `2px solid ${msg.color}40`,
                 }}
               >
                 {msg.sender === 'AI' ? (
@@ -485,9 +490,9 @@ export default function PodGroupChatPage() {
                     alt="AI" 
                     className="w-full h-full object-cover"
                   />
-                ) : msg.isCurrentUser && profilePicture ? (
+                ) : msg.profilePicture ? (
                   <img 
-                    src={profilePicture} 
+                    src={msg.profilePicture} 
                     alt={msg.sender} 
                     className="w-full h-full object-cover"
                   />
