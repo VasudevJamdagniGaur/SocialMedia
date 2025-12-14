@@ -950,6 +950,35 @@ export default function EmotionalWellbeing() {
     }
 
     try {
+      // First, check for missing days and generate analysis if needed
+      const daysToCheck = period === 365 ? 30 : period; // For lifetime, check last 30 days
+      const todayDateId = getDateId(new Date());
+      const [todayYear, todayMonth, todayDay] = todayDateId.split('-').map(Number);
+      
+      console.log('📊 UNIFIED: Checking for missing emotional analysis in the period...');
+      const generationPromises = [];
+      
+      for (let i = daysToCheck - 1; i >= 0; i--) {
+        const targetDate = new Date(todayYear, todayMonth - 1, todayDay - i);
+        const dateId = targetDate.toLocaleDateString('en-CA');
+        
+        // Check if mood data exists
+        const moodRef = doc(db, `users/${user.uid}/days/${dateId}/moodChart/daily`);
+        const moodSnapshot = await getDoc(moodRef);
+        
+        if (!moodSnapshot.exists()) {
+          // Try to generate analysis for this day
+          generationPromises.push(generateMissingEmotionalAnalysis(user.uid, dateId));
+        }
+      }
+      
+      // Wait for all generations to complete (but don't fail if some fail)
+      if (generationPromises.length > 0) {
+        console.log(`📊 UNIFIED: Generating emotional analysis for ${generationPromises.length} missing days...`);
+        await Promise.allSettled(generationPromises);
+        console.log('📊 UNIFIED: Finished generating missing emotional analysis');
+      }
+
       // Get AI-generated mood data from new Firebase structure
       let result;
       if (period === 365) {
@@ -1096,6 +1125,35 @@ export default function EmotionalWellbeing() {
     console.log('⚖️ BALANCE PERIOD:', period);
 
     try {
+      // First, check for missing days and generate analysis if needed
+      const daysToCheck = period === 365 ? 30 : period; // For lifetime, check last 30 days
+      const todayDateId = getDateId(new Date());
+      const [todayYear, todayMonth, todayDay] = todayDateId.split('-').map(Number);
+      
+      console.log('⚖️ Checking for missing emotional analysis in the period...');
+      const generationPromises = [];
+      
+      for (let i = daysToCheck - 1; i >= 0; i--) {
+        const targetDate = new Date(todayYear, todayMonth - 1, todayDay - i);
+        const dateId = targetDate.toLocaleDateString('en-CA');
+        
+        // Check if mood data exists
+        const moodRef = doc(db, `users/${user.uid}/days/${dateId}/moodChart/daily`);
+        const moodSnapshot = await getDoc(moodRef);
+        
+        if (!moodSnapshot.exists()) {
+          // Try to generate analysis for this day
+          generationPromises.push(generateMissingEmotionalAnalysis(user.uid, dateId));
+        }
+      }
+      
+      // Wait for all generations to complete (but don't fail if some fail)
+      if (generationPromises.length > 0) {
+        console.log(`⚖️ Generating emotional analysis for ${generationPromises.length} missing days...`);
+        await Promise.allSettled(generationPromises);
+        console.log('⚖️ Finished generating missing emotional analysis');
+      }
+
       // Use the same data source as the mood chart for consistency
       let result;
       if (period === 365) {
@@ -1612,6 +1670,7 @@ export default function EmotionalWellbeing() {
     // If we have data, use it directly (it's already from Firebase with proper date range)
     if (data.length > 0) {
       console.log('🔄 Using Firebase data directly for balance chart');
+      console.log('🔄 Sample data points:', data.slice(0, 3));
       
       const moodBalance = data.map((dayData, index) => {
         const date = new Date(dayData.date);
@@ -1638,10 +1697,9 @@ export default function EmotionalWellbeing() {
           negativeScore = Math.max(0, Math.min(100, negativeScore));
           neutralScore = Math.max(0, Math.min(100, neutralScore));
         } else {
-          // Default values if no data
-          positiveScore = 40;
-          negativeScore = 25;
-          neutralScore = 35;
+          // If total is 0, skip this day (don't use defaults)
+          console.log(`⚠️ Skipping day ${dayData.date} - no valid emotional scores (total: ${total})`);
+          return null;
         }
         
         // Log first few items for debugging
@@ -1656,67 +1714,120 @@ export default function EmotionalWellbeing() {
           neutral: neutralScore,
           negative: negativeScore
         };
-      });
+      }).filter(item => item !== null); // Remove null entries (days with no valid data)
       
       // Calculate top emotions from available data
-      const avgHappiness = data.reduce((sum, item) => sum + item.happiness, 0) / data.length;
-      const avgEnergy = data.reduce((sum, item) => sum + item.energy, 0) / data.length;
-      const avgAnxiety = data.reduce((sum, item) => sum + item.anxiety, 0) / data.length;
-      const avgStress = data.reduce((sum, item) => sum + item.stress, 0) / data.length;
+      const validData = data.filter(day => {
+        const total = day.happiness + day.energy + day.anxiety + day.stress;
+        return total > 0;
+      });
+      
+      if (validData.length > 0) {
+        const avgHappiness = validData.reduce((sum, item) => sum + item.happiness, 0) / validData.length;
+        const avgEnergy = validData.reduce((sum, item) => sum + item.energy, 0) / validData.length;
+        const avgAnxiety = validData.reduce((sum, item) => sum + item.anxiety, 0) / validData.length;
+        const avgStress = validData.reduce((sum, item) => sum + item.stress, 0) / validData.length;
 
-      const topEmotions = [
-        { name: 'Happiness', value: Math.round(avgHappiness), color: '#10B981' },
-        { name: 'Energy', value: Math.round(avgEnergy), color: '#F59E0B' },
-        { name: 'Anxiety', value: Math.round(avgAnxiety), color: '#EF4444' },
-        { name: 'Stress', value: Math.round(avgStress), color: '#8B5CF6' }
-      ].sort((a, b) => b.value - a.value);
+        const topEmotions = [
+          { name: 'Happiness', value: Math.round(avgHappiness), color: '#10B981' },
+          { name: 'Energy', value: Math.round(avgEnergy), color: '#F59E0B' },
+          { name: 'Anxiety', value: Math.round(avgAnxiety), color: '#EF4444' },
+          { name: 'Stress', value: Math.round(avgStress), color: '#8B5CF6' }
+        ].sort((a, b) => b.value - a.value);
 
-      console.log('✅ Balance data processed successfully from Firebase data');
-      return { moodBalance, topEmotions };
+        console.log('✅ Balance data processed successfully from Firebase data');
+        console.log(`✅ Processed ${moodBalance.length} days with valid balance data`);
+        return { moodBalance, topEmotions };
+      }
     }
     
-    // Fallback: Create date range for the balance period when no data
-    const dateRange = [];
-    if (period === 365) {
-      // For lifetime with no data, show last 30 days as fallback
-      for (let i = 29; i >= 0; i--) {
-        const date = new Date();
-        date.setDate(date.getDate() - i);
-        dateRange.push(date.toISOString().split('T')[0]);
-      }
-    } else {
-      // For specific day periods
-      for (let i = period - 1; i >= 0; i--) {
-        const date = new Date();
-        date.setDate(date.getDate() - i);
-        dateRange.push(date.toISOString().split('T')[0]);
-      }
-    }
+    // If no valid data, return empty arrays (don't use defaults)
+    console.log('⚠️ No valid balance data found, returning empty arrays');
+    return { moodBalance: [], topEmotions: [] };
+  };
 
-    // Map balance data to date range with default values
-    const moodBalance = dateRange.map(dateStr => {
-      const date = new Date(dateStr);
+  /**
+   * Helper function to generate missing emotional analysis for days with chat but no mood data
+   */
+  const generateMissingEmotionalAnalysis = async (uid, dateId) => {
+    try {
+      console.log(`🧠 Checking if emotional analysis needed for ${dateId}...`);
       
-      // Default balanced state for days with no data
+      // Check if mood data already exists
+      const moodRef = doc(db, `users/${uid}/days/${dateId}/moodChart/daily`);
+      const moodSnapshot = await getDoc(moodRef);
+      
+      if (moodSnapshot.exists()) {
+        console.log(`✅ Mood data already exists for ${dateId}, skipping generation`);
+        const data = moodSnapshot.data();
+        return {
+          date: dateId,
+          happiness: data.happiness || 0,
+          energy: data.energy || 0,
+          anxiety: data.anxiety || 0,
+          stress: data.stress || 0
+        };
+      }
+      
+      // Check if chat messages exist for this day
+      const messagesResult = await firestoreService.getChatMessagesNew(uid, dateId);
+      if (!messagesResult.success || !messagesResult.messages || messagesResult.messages.length === 0) {
+        console.log(`⚠️ No chat messages found for ${dateId}, cannot generate analysis`);
+        return null;
+      }
+      
+      // Filter out welcome message, whisper session messages, and ensure we have real conversation
+      const realMessages = messagesResult.messages.filter(m => 
+        m.id !== 'welcome' && 
+        m.text && 
+        m.text.length > 0 && 
+        !m.isWhisperSession
+      );
+      
+      if (realMessages.length < 2) {
+        console.log(`⚠️ Not enough non-whisper messages for ${dateId} (${realMessages.length} messages)`);
+        return null;
+      }
+      
+      console.log(`🧠 Generating emotional analysis for ${dateId} using ${realMessages.length} messages via RunPod API...`);
+      
+      // Generate emotional analysis using RunPod API
+      const emotionalScores = await emotionalAnalysisService.analyzeEmotionalScores(realMessages);
+      console.log(`✅ Generated emotional scores for ${dateId}:`, emotionalScores);
+      
+      // Save to Firestore
+      await firestoreService.saveMoodChartNew(uid, dateId, emotionalScores);
+      console.log(`💾 Emotional scores saved to Firestore for ${dateId}`);
+      
+      // Also save emotional balance
+      const total = emotionalScores.happiness + emotionalScores.energy + emotionalScores.stress + emotionalScores.anxiety;
+      let positive = ((emotionalScores.happiness + emotionalScores.energy) / total) * 100;
+      let negative = ((emotionalScores.stress + emotionalScores.anxiety) / total) * 100;
+      let neutral = 100 - positive - negative;
+      
+      // Ensure all values are between 0 and 100
+      positive = Math.max(0, Math.min(100, Math.round(positive)));
+      negative = Math.max(0, Math.min(100, Math.round(negative)));
+      neutral = Math.max(0, Math.min(100, Math.round(neutral)));
+      
+      await firestoreService.saveEmotionalBalanceNew(uid, dateId, {
+        positive: positive,
+        negative: negative,
+        neutral: neutral
+      });
+      console.log(`💾 Emotional balance saved to Firestore for ${dateId}`);
+      
       return {
-        day: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        date: dateStr,
-        positive: 40,
-        neutral: 35,
-        negative: 25
+        date: dateId,
+        happiness: emotionalScores.happiness,
+        energy: emotionalScores.energy,
+        anxiety: emotionalScores.anxiety,
+        stress: emotionalScores.stress
       };
-    });
-
-    // Default emotions when no data
-    const topEmotions = [
-      { name: 'Happiness', value: 0, color: '#10B981' },
-      { name: 'Energy', value: 0, color: '#F59E0B' },
-      { name: 'Anxiety', value: 0, color: '#EF4444' },
-      { name: 'Stress', value: 0, color: '#8B5CF6' }
-    ];
-
-    console.log('✅ Balance data processed successfully with default values');
-    return { moodBalance, topEmotions };
+    } catch (error) {
+      console.error(`❌ Error generating emotional analysis for ${dateId}:`, error);
+      return null;
+    }
   };
 
   const processRealEmotionalData = (data) => {

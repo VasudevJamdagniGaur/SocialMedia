@@ -764,6 +764,64 @@ class FirestoreService {
   }
 
   /**
+   * NEW STRUCTURE: Get emotional balance data for multiple days
+   */
+  async getEmotionalBalanceDataNew(uid, days = 7) {
+    try {
+      console.log(`⚖️ FIRESTORE NEW: Getting emotional balance data for ${days} days...`);
+      
+      const balanceData = [];
+      
+      // Get the current date ID in India timezone
+      const todayDateId = getDateId(new Date());
+      console.log(`⚖️ FIRESTORE NEW: Today's date ID (India timezone): ${todayDateId}`);
+      
+      // Parse today's date to get year, month, day
+      const [todayYear, todayMonth, todayDay] = todayDateId.split('-').map(Number);
+      
+      // Get data for each day in the range
+      for (let i = days - 1; i >= 0; i--) {
+        // Create a date object from today's India timezone date and subtract days
+        // Note: Month is 0-indexed in JavaScript Date
+        const targetDate = new Date(todayYear, todayMonth - 1, todayDay - i);
+        const dateId = targetDate.toLocaleDateString('en-CA'); // Format as YYYY-MM-DD
+        console.log(`⚖️ FIRESTORE NEW: Checking balance data for date: ${dateId} (${i} days ago)`);
+        
+        try {
+          const balanceRef = doc(this.db, `users/${uid}/days/${dateId}/emotionalBalance/daily`);
+          const snapshot = await getDoc(balanceRef);
+          
+          if (snapshot.exists()) {
+            const data = snapshot.data();
+            console.log(`⚖️ FIRESTORE NEW: ✅ Found balance data for ${dateId}:`, data);
+            
+            const dayData = {
+              date: dateId,
+              day: targetDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+              positive: data.positive || 0,
+              negative: data.negative || 0,
+              neutral: data.neutral || 0
+            };
+            
+            console.log(`⚖️ FIRESTORE NEW: ✅ Pushing to array:`, dayData);
+            balanceData.push(dayData);
+          } else {
+            console.log(`⚖️ FIRESTORE NEW: ❌ No balance data for ${dateId}, skipping`);
+          }
+        } catch (dayError) {
+          console.error(`❌ Error getting balance data for ${dateId}:`, dayError);
+        }
+      }
+      
+      console.log(`⚖️ FIRESTORE NEW: ✅ Retrieved balance data for ${balanceData.length} days`);
+      return { success: true, balanceData };
+    } catch (error) {
+      console.error('❌ FIRESTORE NEW: Error getting emotional balance data:', error);
+      return { success: false, error: error.message, balanceData: [] };
+    }
+  }
+
+  /**
    * NEW STRUCTURE: Get mood chart data for multiple days
    */
   async getMoodChartDataNew(uid, days = 7) {
