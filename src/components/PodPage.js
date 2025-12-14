@@ -98,7 +98,7 @@ export default function PodPage() {
     loadPodDays();
   }, []);
 
-  // Load crew members
+  // Load crew members from sphere
   useEffect(() => {
     const loadCrewMembers = async () => {
       const user = getCurrentUser();
@@ -115,18 +115,43 @@ export default function PodPage() {
           crewEnrolled: localStorage.getItem(`user_crew_enrolled_${user.uid}`) === 'true'
         });
 
-        // Get crew members
-        const result = await firestoreService.getCrewMembers(user.uid, 5);
+        // Get user's crew sphere and load members from it
+        const sphereResult = await firestoreService.getUserCrewSphere(user.uid);
         
-        if (result.success && result.members.length > 0) {
-          setCrewMembers(result.members);
+        if (sphereResult.success && sphereResult.sphereId && sphereResult.sphere) {
+          // Get members from the sphere
+          if (sphereResult.sphere.members && Array.isArray(sphereResult.sphere.members)) {
+            const memberUids = sphereResult.sphere.members.filter(uid => uid !== user.uid);
+            
+            // Get member details
+            const members = [];
+            for (const memberUid of memberUids) {
+              try {
+                const memberResult = await firestoreService.getUser(memberUid);
+                if (memberResult.success && memberResult.data) {
+                  members.push({
+                    uid: memberUid,
+                    displayName: memberResult.data.displayName || 'User',
+                    profilePicture: memberResult.data.profilePicture || null
+                  });
+                }
+              } catch (err) {
+                console.error(`Error loading member ${memberUid}:`, err);
+              }
+            }
+            
+            console.log('✅ Loaded crew members from sphere:', members.length);
+            setCrewMembers(members);
+          } else {
+            setCrewMembers([]);
+          }
         } else {
-          // Only show real members, no fallback
+          // No sphere found, show empty
+          console.log('ℹ️ No crew sphere found');
           setCrewMembers([]);
         }
       } catch (error) {
         console.error('Error loading crew members:', error);
-        // Only show real members, no fallback
         setCrewMembers([]);
       }
     };
