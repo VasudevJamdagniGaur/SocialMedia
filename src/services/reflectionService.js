@@ -533,6 +533,222 @@ Write a SHORT, natural diary entry about this day in first person. Write ${sente
       insights: insights.length > 0 ? insights : ['General reflection']
     };
   }
+
+  /**
+   * Generate crew reflection from crew sphere chat messages
+   * Similar to day reflection but analyzes crew sphere group chat instead
+   */
+  async generateCrewReflection(crewMessages) {
+    console.log('🔄 Starting crew reflection generation...');
+    console.log('🔍 CREW REFLECTION DEBUG: messages type:', typeof crewMessages, 'length:', crewMessages?.length);
+    
+    // Safety check and fix for messages
+    if (!crewMessages || !Array.isArray(crewMessages)) {
+      console.error('❌ CREW REFLECTION ERROR: Invalid messages array, using fallback');
+      return "Had a brief chat with the crew today.";
+    }
+    
+    console.log('💬 Total crew messages for reflection:', crewMessages.length);
+    
+    // Filter out simple greetings and get meaningful messages
+    // Crew messages have structure: { sender, message, senderUid, timestamp, etc. }
+    const userMessages = crewMessages
+      .filter(msg => msg.senderUid && msg.sender !== 'AI' && msg.message)
+      .map(msg => msg.message.trim())
+      .filter(text => !this.isSimpleGreeting(text) && text.length > 3);
+
+    const aiMessages = crewMessages
+      .filter(msg => msg.sender === 'AI' && msg.message)
+      .map(msg => msg.message.trim());
+
+    console.log('📝 User messages in crew:', userMessages.length);
+    console.log('🤖 AI messages in crew:', aiMessages.length);
+
+    if (userMessages.length === 0) {
+      return "Had a brief chat with the crew today but didn't share much.";
+    }
+
+    // Generate AI summary with safe fallback
+    try {
+      const aiSummary = await this.generateCrewAISummary(userMessages, aiMessages);
+      return aiSummary;
+    } catch (err) {
+      console.error('⚠️ Crew reflection generation via API failed, using fallback:', err?.message || err);
+      return this.createFallbackCrewSummary(userMessages, aiMessages);
+    }
+  }
+
+  async generateCrewAISummary(userMessages, aiMessages) {
+    console.log('🤖 Starting AI crew summary generation...');
+    
+    // Create a conversation context for the AI
+    const conversationContext = this.buildCrewConversationContext(userMessages, aiMessages);
+    console.log('📋 Crew conversation context created');
+    
+    // Calculate total character count from user messages
+    const userCharacterCount = userMessages.reduce((total, msg) => total + msg.length, 0);
+    const maxReflectionCharacters = userCharacterCount * 2; // Reflection must not exceed 2x user characters
+    
+    console.log(`📊 Users wrote ${userCharacterCount} characters. Reflection limit: ${maxReflectionCharacters} characters (2x user input).`);
+    
+    // Count total meaningful messages for length adjustment
+    const totalMessages = userMessages.length;
+    
+    // Estimate tokens from character count (roughly 1 token = 4 characters for English text)
+    const estimatedMaxTokensFromChars = Math.floor(maxReflectionCharacters / 3); // Conservative: 3 chars per token
+    
+    // Size instructions based on message count - STRICT length control
+    let sizeInstructions, maxTokens;
+    if (totalMessages <= 3) {
+      sizeInstructions = `14. REFLECTION LENGTH - CRITICAL: Write ONLY 2-3 sentences maximum. Keep it very short and concise.`;
+      maxTokens = Math.min(100, estimatedMaxTokensFromChars);
+    } else if (totalMessages <= 7) {
+      sizeInstructions = `14. REFLECTION LENGTH - Write a short reflection (3-4 sentences maximum). Keep it concise.`;
+      maxTokens = Math.min(150, estimatedMaxTokensFromChars);
+    } else if (totalMessages <= 15) {
+      sizeInstructions = `14. REFLECTION LENGTH - Write a medium reflection (4-5 sentences maximum). Still keep it concise.`;
+      maxTokens = Math.min(200, estimatedMaxTokensFromChars);
+    } else {
+      sizeInstructions = `14. REFLECTION LENGTH - Write a slightly longer reflection (5-6 sentences maximum). Keep it concise and focused.`;
+      maxTokens = Math.min(250, estimatedMaxTokensFromChars);
+    }
+    
+    // Ensure we never exceed the character limit
+    const characterLimitInstruction = `16. CHARACTER LIMIT - CRITICAL: The reflection must NEVER exceed ${maxReflectionCharacters} characters (which is 2x the ${userCharacterCount} characters the users wrote). Always stay within this strict limit.`;
+    
+    const reflectionPrompt = `Write a natural, first-person diary entry about this day's crew conversation. Tell the story of what happened in the crew's sphere chat and how it felt.
+
+CRITICAL REQUIREMENTS:
+1. WRITE IN FIRST PERSON - Use "I", "my", "me" - this is a personal diary entry
+2. NO META-COMMENTARY - Do NOT say "Here is a diary entry" or "summarizing the day" or mention "user" or "crew members" - just tell the story directly
+3. FOCUS ON WHAT HAPPENED - Write about the actual events, conversations, and experiences from the crew chat
+4. CAPTURE THE FEELING - Include emotions and how things felt, but naturally woven into the story
+5. BE SPECIFIC - Mention real events, people, or activities that were discussed in the crew
+6. NATURAL STORYTELLING - Write like someone naturally reflecting on their day, not like an analysis or summary
+7. USE AS LITTLE TIME/SPACE AS APPROPRIATE - Keep it concise, focus on what matters most
+8. NO REPEATED "CREW MEMBER SAID..." - Do NOT repeatedly say "someone said..." or "a member told me..." - just mention what was discussed naturally
+9. NO LONG DESCRIPTIONS OF OTHERS' ACTIONS - Do NOT write long descriptions of what others did or how they responded - focus on YOUR experience and reflections
+10. FEEL LIKE A PERSONAL REFLECTION - The diary should feel natural and personal, like you're reflecting on your own day, not describing a group chat
+11. AVOID DRAMATIC LINES - Do NOT use overly dramatic phrases like "It was crazy", "it gave me all the feels", "it was absolutely amazing", etc. UNLESS something truly extraordinary or life-changing happened. Keep the tone grounded and realistic - avoid too much dramatic storytelling for ordinary days.
+12. NO REFLECTIVE CLOSING SENTENCES - Do NOT include reflective or moral closing sentences such as "it lifted my mood", "it made me feel seen", "it reminded me of something", "it was a good day", "it helped me realize", etc. End the diary naturally after describing the events or thoughts of the day, without summarizing emotions or giving life lessons. Just describe what happened and stop - no need to wrap it up with emotional conclusions.
+13. NO POSITIVITY ABOUT TALKING TO CREW - Do NOT add statements like "talking to the crew made me feel better", "chatting with the crew helped", "the crew made me feel", or any positive statements about the conversation itself. ONLY summarize what was expressed and how the day emotionally felt - do NOT comment on the conversation or its effects.
+14. ONLY SUMMARIZE WHAT WAS EXPRESSED - Focus ONLY on summarizing what was expressed in the crew chat and how the day emotionally felt. Do NOT add commentary about the conversation, crew members' responses, or how talking to the crew affected you.
+${sizeInstructions}
+${characterLimitInstruction}
+
+Crew's Sphere Chat:
+${conversationContext}
+
+Write a natural diary entry about this day's crew conversation in first person. Just tell the story of what happened and how it felt. Focus ONLY on summarizing what was expressed in the crew chat and how the day emotionally felt. Do NOT add any statements about talking to the crew, how the crew helped, or how the conversation made you feel. Keep it grounded and realistic, avoiding dramatic language unless something truly extraordinary happened. End naturally after describing events - do NOT add reflective closing sentences about how things made you feel or what you learned.
+
+CRITICAL: The reflection must NEVER exceed ${maxReflectionCharacters} characters (2x the ${userCharacterCount} characters the users wrote). Always stay within this strict character limit.`;
+
+    console.log('🧪 Crew reflection prompt length:', reflectionPrompt.length);
+    console.log('🧪 Crew reflection prompt preview:', reflectionPrompt.slice(0, 200));
+
+    console.log('🌐 Making API call to RunPod for crew reflection...');
+
+    const modelToUse = 'llama3:70b';
+    
+    try {
+      console.log(`🔄 Using model: ${modelToUse} for crew reflection`);
+        
+      const response = await fetch(`${this.baseURL}api/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: modelToUse,
+          prompt: reflectionPrompt,
+          stream: false,
+          options: {
+            temperature: 0.5,  // Lower temperature for more accurate, focused summaries
+            top_p: 0.9,
+            max_tokens: maxTokens  // Dynamic token limit based on message count for concise reflections
+          }
+        })
+      });
+
+      console.log(`📥 Response status for ${modelToUse}:`, response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`❌ RunPod API Error for ${modelToUse}:`, response.status, errorText);
+        throw new Error(`Crew reflection generation failed: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log(`✅ RunPod response received for crew summary with ${modelToUse}`);
+        
+      // Accept multiple possible fields from providers
+      const text = (data && (data.response ?? data.output ?? data.message?.content)) || '';
+      if (typeof text === 'string' && text.trim()) {
+        let summary = text.trim();
+        
+        // Enforce character limit: reflection must not exceed 2x user character count
+        if (summary.length > maxReflectionCharacters) {
+          console.warn(`⚠️ Generated crew reflection (${summary.length} chars) exceeds limit (${maxReflectionCharacters} chars). Truncating...`);
+          // Truncate to the character limit, trying to end at a sentence boundary
+          summary = summary.substring(0, maxReflectionCharacters);
+          // Try to find the last sentence ending (., !, ?) before the limit
+          const lastSentenceEnd = Math.max(
+            summary.lastIndexOf('.'),
+            summary.lastIndexOf('!'),
+            summary.lastIndexOf('?')
+          );
+          if (lastSentenceEnd > maxReflectionCharacters * 0.7) {
+            // If we found a sentence end reasonably close to the limit, use it
+            summary = summary.substring(0, lastSentenceEnd + 1);
+          }
+          console.log(`✅ Truncated crew reflection to ${summary.length} characters (within ${maxReflectionCharacters} limit)`);
+        }
+        
+        console.log(`📖 Generated crew summary: ${summary.length} characters (limit: ${maxReflectionCharacters})`);
+        return summary;
+      } else {
+        console.error(`❌ Invalid response format from ${modelToUse}:`, data);
+        console.log('🔍 Full response data:', JSON.stringify(data, null, 2));
+        throw new Error('Invalid response format from crew reflection API');
+      }
+    } catch (error) {
+      console.error(`💥 Error with model ${modelToUse}:`, error.message);
+      throw error;
+    }
+  }
+
+  buildCrewConversationContext(userMessages, aiMessages) {
+    let context = '';
+    
+    // Build a detailed conversation flow for better crew summaries
+    // Include more context to capture emotional depth and important topics
+    userMessages.forEach((userMsg, index) => {
+      context += `Crew Member: "${userMsg}"\n`;
+      if (aiMessages[index]) {
+        // Include more of the AI response to capture the emotional journey and context
+        const aiResponse = aiMessages[index].substring(0, 300);
+        context += `AI: "${aiResponse}${aiMessages[index].length > 300 ? '...' : ''}"\n\n`;
+      }
+    });
+    
+    // Add a summary note at the end to help the AI identify key themes
+    if (context.length > 0) {
+      context += `\n---\nPlease analyze this crew conversation carefully and identify:\n`;
+      context += `1. Key events or topics discussed (loss, grief, achievements, challenges, etc.)\n`;
+      context += `2. Emotional tone (sad, grieving, happy, stressed, anxious, etc.)\n`;
+      context += `3. Important details that should be reflected in the diary entry\n`;
+    }
+    
+    return context.trim();
+  }
+
+  createFallbackCrewSummary(userMessages, aiMessages) {
+    const lastUser = userMessages[userMessages.length - 1] || '';
+    const firstUser = userMessages[0] || '';
+    const base = (firstUser !== lastUser) ? `${firstUser} ... ${lastUser}` : lastUser;
+    const trimmed = base.slice(0, 220);
+    return `Today I chatted with the crew about: "${trimmed}${base.length > 220 ? '...' : ''}". It was nice to talk through my day with the crew and get some perspective.`;
+  }
 }
 
 export default new ReflectionService();

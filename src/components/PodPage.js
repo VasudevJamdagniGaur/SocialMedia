@@ -263,65 +263,41 @@ export default function PodPage() {
   const handleGeneratePodReflection = async () => {
     const user = getCurrentUser();
     if (!user) {
-      alert('Please sign in to generate pod reflections');
+      alert('Please sign in to generate crew reflections');
       return;
     }
 
     try {
-      console.log('🔄 Generating pod reflection...');
+      console.log('🔄 Generating crew reflection...');
       setIsLoadingPodReflection(true);
 
-      // Get pod messages from Firestore
-      // Try different collection structures for pod messages
-      let podMessages = [];
+      // Get user's crew sphere
+      const sphereResult = await firestoreService.getUserCrewSphere(user.uid);
       
-      // Try: users/{uid}/podChats/messages
-      try {
-        const podChatRef = collection(db, `users/${user.uid}/podChats/messages`);
-        const podChatQuery = query(podChatRef, orderBy('createdAt', 'asc'), limit(100));
-        const podChatSnapshot = await getDocs(podChatQuery);
-        
-        podChatSnapshot.forEach((doc) => {
-          const data = doc.data();
-          podMessages.push({
-            sender: data.senderId === user.uid ? 'user' : (data.sender === 'AI' ? 'ai' : 'user'),
-            text: data.message || data.text || '',
-            timestamp: data.createdAt
-          });
-        });
-      } catch (e) {
-        console.log('No messages in podChats/messages collection');
-      }
-
-      // If no messages found in Firestore, use sample pod messages for demonstration
-      // In a real implementation, these would come from Firestore
-      if (podMessages.length === 0) {
-        // Use sample messages that represent pod conversations
-        podMessages = [
-          { sender: 'user', text: 'Hey everyone! How are you all doing today?' },
-          { sender: 'ai', text: 'Hello! I\'m here to support everyone in their wellness journey. How can I help today?' },
-          { sender: 'user', text: 'I\'ve been practicing mindfulness this week and it\'s been amazing!' },
-          { sender: 'user', text: 'That\'s awesome! I\'ve been struggling with stress lately. Any tips?' },
-          { sender: 'ai', text: 'Great question! Deep breathing exercises and short breaks can help. Would you like me to guide you through a quick 5-minute stress relief exercise?' },
-          { sender: 'user', text: 'I\'d love to join that too!' },
-          { sender: 'user', text: 'Count me in! This pod is so supportive' }
-        ];
-      }
-
-      console.log('📥 Found', podMessages.length, 'pod messages');
-
-      if (podMessages.length === 0) {
-        alert('No pod messages found. Start chatting in your pod to generate a reflection!');
+      if (!sphereResult.success || !sphereResult.sphereId) {
+        alert('No crew sphere found. Create a crew sphere first!');
         setIsLoadingPodReflection(false);
         return;
       }
 
-      // Generate reflection using the reflection service
-      console.log('🤖 Generating pod reflection via AI...');
-      const generatedReflection = await reflectionService.generateReflection(podMessages);
-      console.log('✅ Pod reflection generated:', generatedReflection);
+      // Get crew sphere messages from Firestore
+      console.log('📥 Fetching crew sphere messages...');
+      const messagesResult = await firestoreService.getCrewSphereMessages(sphereResult.sphereId);
+      
+      if (!messagesResult.success || !messagesResult.messages || messagesResult.messages.length === 0) {
+        alert('No messages found in crew sphere. Start chatting in your crew sphere to generate a reflection!');
+        setIsLoadingPodReflection(false);
+        return;
+      }
 
-      // Save pod reflection to Firestore using the service
+      console.log('📥 Found', messagesResult.messages.length, 'crew sphere messages');
+
+      // Generate crew reflection using the reflection service
+      console.log('🤖 Generating crew reflection via RunPod API...');
+      const generatedReflection = await reflectionService.generateCrewReflection(messagesResult.messages);
+      console.log('✅ Crew reflection generated:', generatedReflection);
+
+      // Save crew reflection to Firestore using the service
       await firestoreService.savePodReflection(user.uid, generatedReflection);
 
       // Also save to localStorage as backup
@@ -330,11 +306,11 @@ export default function PodPage() {
       // Update local state
       setPodReflection(generatedReflection);
 
-      console.log('💾 Pod reflection saved!');
-      alert('✅ Pod reflection generated successfully!');
+      console.log('💾 Crew reflection saved!');
+      alert('✅ Crew reflection generated successfully!');
     } catch (error) {
-      console.error('❌ Error generating pod reflection:', error);
-      alert('Failed to generate pod reflection: ' + error.message);
+      console.error('❌ Error generating crew reflection:', error);
+      alert('Failed to generate crew reflection: ' + error.message);
     } finally {
       setIsLoadingPodReflection(false);
     }
