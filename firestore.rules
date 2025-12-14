@@ -92,6 +92,10 @@ service cloud.firestore {
         allow read: if request.auth != null;
         // Allow authenticated users to create likes (only for themselves)
         allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+        // Allow users to update their own likes (needed for setDoc when document exists)
+        allow update: if request.auth != null && 
+          likeId == request.auth.uid && 
+          request.resource.data.userId == request.auth.uid;
         // Allow users to delete their own likes
         allow delete: if request.auth != null && likeId == request.auth.uid;
       }
