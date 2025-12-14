@@ -962,11 +962,28 @@ export default function EmotionalWellbeing() {
         const targetDate = new Date(todayYear, todayMonth - 1, todayDay - i);
         const dateId = targetDate.toLocaleDateString('en-CA');
         
-        // Check if mood data exists
+        // Check if mood data exists and is valid
         const moodRef = doc(db, `users/${user.uid}/days/${dateId}/moodChart/daily`);
         const moodSnapshot = await getDoc(moodRef);
         
+        let shouldGenerate = false;
+        
         if (!moodSnapshot.exists()) {
+          // No data exists, need to generate
+          shouldGenerate = true;
+          console.log(`📊 UNIFIED: No mood data for ${dateId}, will generate`);
+        } else {
+          // Check if existing data is valid (not all zeros)
+          const data = moodSnapshot.data();
+          const total = (data.happiness || 0) + (data.energy || 0) + (data.anxiety || 0) + (data.stress || 0);
+          if (total === 0) {
+            // Data exists but is invalid (all zeros), regenerate
+            shouldGenerate = true;
+            console.log(`📊 UNIFIED: Invalid mood data (all zeros) for ${dateId}, will regenerate`);
+          }
+        }
+        
+        if (shouldGenerate) {
           // Try to generate analysis for this day
           generationPromises.push(generateMissingEmotionalAnalysis(user.uid, dateId));
         }
@@ -1008,13 +1025,19 @@ export default function EmotionalWellbeing() {
       }
       console.log('📊 UNIFIED: Mood chart data result:', result);
       
-      // Filter out any days with all zeros (invalid data)
+      // Filter out any days with all zeros (invalid data) and sort by date
       if (result.success && result.moodData) {
-        result.moodData = result.moodData.filter(day => {
-          const total = (day.happiness || 0) + (day.energy || 0) + (day.anxiety || 0) + (day.stress || 0);
-          return total > 0;
-        });
-        console.log(`📊 UNIFIED: After filtering zeros, ${result.moodData.length} days with valid data`);
+        result.moodData = result.moodData
+          .filter(day => {
+            const total = (day.happiness || 0) + (day.energy || 0) + (day.anxiety || 0) + (day.stress || 0);
+            return total > 0;
+          })
+          .sort((a, b) => {
+            // Sort by date (ascending - oldest first)
+            return new Date(a.date) - new Date(b.date);
+          });
+        console.log(`📊 UNIFIED: After filtering zeros and sorting, ${result.moodData.length} days with valid data`);
+        console.log(`📊 UNIFIED: Date range: ${result.moodData[0]?.date} to ${result.moodData[result.moodData.length - 1]?.date}`);
       }
 
       if (result.success && result.moodData && result.moodData.length > 0) {
@@ -1065,11 +1088,15 @@ export default function EmotionalWellbeing() {
 
           // Force state update with new reference to trigger re-render
           // Ensure all values are numbers and within valid range (0-100)
-          // Also filter out any days that have all zeros (invalid data)
+          // Also filter out any days that have all zeros (invalid data) and sort by date
           const newMoodData = processedMoodData
             .filter(day => {
               const total = (day.happiness || 0) + (day.energy || 0) + (day.anxiety || 0) + (day.stress || 0);
               return total > 0; // Only include days with actual data
+            })
+            .sort((a, b) => {
+              // Sort by date (ascending - oldest first) for proper chart display
+              return new Date(a.date) - new Date(b.date);
             })
             .map(day => ({
               ...day,
@@ -1078,6 +1105,20 @@ export default function EmotionalWellbeing() {
               anxiety: typeof day.anxiety === 'number' ? Math.max(0, Math.min(100, day.anxiety)) : 0,
               stress: typeof day.stress === 'number' ? Math.max(0, Math.min(100, day.stress)) : 0
             }));
+          
+          // Log data variation to help debug flat lines
+          if (newMoodData.length > 0) {
+            const happinessValues = newMoodData.map(d => d.happiness);
+            const energyValues = newMoodData.map(d => d.energy);
+            const anxietyValues = newMoodData.map(d => d.anxiety);
+            const stressValues = newMoodData.map(d => d.stress);
+            
+            console.log('📊 CHART: Data variation check:');
+            console.log(`  Happiness: min=${Math.min(...happinessValues)}, max=${Math.max(...happinessValues)}, unique=${new Set(happinessValues).size}`);
+            console.log(`  Energy: min=${Math.min(...energyValues)}, max=${Math.max(...energyValues)}, unique=${new Set(energyValues).size}`);
+            console.log(`  Anxiety: min=${Math.min(...anxietyValues)}, max=${Math.max(...anxietyValues)}, unique=${new Set(anxietyValues).size}`);
+            console.log(`  Stress: min=${Math.min(...stressValues)}, max=${Math.max(...stressValues)}, unique=${new Set(stressValues).size}`);
+          }
           
           console.log('🔄 CHART: About to update state with:', newMoodData.length, 'days');
           console.log('🔄 CHART: First day data:', newMoodData[0]);
