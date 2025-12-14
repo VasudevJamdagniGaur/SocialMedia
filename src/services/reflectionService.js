@@ -3,7 +3,10 @@ import { getDateId } from '../utils/dateUtils';
 
 class ReflectionService {
   constructor() {
+    // Use CORS proxy if available, otherwise fallback to direct URL
+    this.proxyURL = 'http://localhost:3001';
     this.baseURL = 'https://rr9rd9oc5khoyk-11434.proxy.runpod.net/';
+    this.useProxy = true; // Try proxy first
     this.greetings = ['hey', 'hi', 'hello', 'hii', 'hiii', 'hiiii', 'sup', 'yo', 'what\'s up', 'wassup'];
   }
 
@@ -132,10 +135,18 @@ CRITICAL: The reflection must NEVER exceed ${maxReflectionCharacters} characters
     // Go directly to llama3:70b - skip model check
     const modelToUse = 'llama3:70b';
     
+    // Try proxy first, fallback to direct URL if proxy fails
+    let apiUrl = this.useProxy ? `${this.proxyURL}/api/generate` : `${this.baseURL}api/generate`;
+    
       try {
       console.log(`🔄 Using model: ${modelToUse} for reflection`);
+      console.log(`🌐 Day reflection API URL: ${apiUrl}`);
+      
+      // Create AbortController for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 seconds
         
-        const response = await fetch(`${this.baseURL}api/generate`, {
+        const response = await fetch(apiUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -149,8 +160,11 @@ CRITICAL: The reflection must NEVER exceed ${maxReflectionCharacters} characters
               top_p: 0.9,
               max_tokens: maxTokens  // Dynamic token limit based on message count for concise reflections
             }
-          })
+          }),
+          signal: controller.signal
         });
+        
+        clearTimeout(timeoutId);
 
       console.log(`📥 Response status for ${modelToUse}:`, response.status);
 
@@ -195,6 +209,65 @@ CRITICAL: The reflection must NEVER exceed ${maxReflectionCharacters} characters
         }
     } catch (error) {
       console.error(`💥 Error with model ${modelToUse}:`, error.message);
+      
+      // If proxy failed and we were using proxy, try direct URL
+      if (this.useProxy && apiUrl.includes('localhost:3001')) {
+        console.log('🔄 Proxy failed for day reflection, trying direct URL...');
+        this.useProxy = false;
+        apiUrl = `${this.baseURL}api/generate`;
+        
+        try {
+          const directController = new AbortController();
+          const directTimeoutId = setTimeout(() => directController.abort(), 120000);
+          
+          const directResponse = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: modelToUse,
+              prompt: reflectionPrompt,
+              stream: false,
+              options: {
+                temperature: 0.5,
+                top_p: 0.9,
+                max_tokens: maxTokens
+              }
+            }),
+            signal: directController.signal
+          });
+          
+          clearTimeout(directTimeoutId);
+          
+          if (directResponse.ok) {
+            const data = await directResponse.json();
+            const text = (data && (data.response ?? data.output ?? data.message?.content)) || '';
+            if (typeof text === 'string' && text.trim()) {
+              let summary = text.trim();
+              
+              // Enforce character limit
+              if (summary.length > maxReflectionCharacters) {
+                summary = summary.substring(0, maxReflectionCharacters);
+                const lastSentenceEnd = Math.max(
+                  summary.lastIndexOf('.'),
+                  summary.lastIndexOf('!'),
+                  summary.lastIndexOf('?')
+                );
+                if (lastSentenceEnd > maxReflectionCharacters * 0.7) {
+                  summary = summary.substring(0, lastSentenceEnd + 1);
+                }
+              }
+              
+              console.log('✅ Direct URL worked for day reflection');
+              return summary;
+            }
+          }
+        } catch (directError) {
+          console.error('❌ Direct URL also failed for day reflection:', directError);
+        }
+      }
+      
       throw error;
     }
   }
@@ -343,10 +416,18 @@ Write a SHORT, natural diary entry about this day in first person. Write ${sente
     // Go directly to llama3:70b - skip model check
     const modelToUse = 'llama3:70b';
     
+    // Try proxy first, fallback to direct URL if proxy fails
+    let apiUrl = this.useProxy ? `${this.proxyURL}/api/generate` : `${this.baseURL}api/generate`;
+    
     try {
       console.log(`🔄 Using model: ${modelToUse} for narrative story`);
-        
-      const response = await fetch(`${this.baseURL}api/generate`, {
+      console.log(`🌐 Narrative story API URL: ${apiUrl}`);
+      
+      // Create AbortController for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 seconds
+      
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -360,8 +441,11 @@ Write a SHORT, natural diary entry about this day in first person. Write ${sente
             top_p: 0.9,
             max_tokens: maxTokens  // Dynamic token limit based on message count
           }
-        })
+        }),
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
 
       console.log(`📥 Response status for ${modelToUse}:`, response.status);
 
@@ -387,6 +471,51 @@ Write a SHORT, natural diary entry about this day in first person. Write ${sente
       }
     } catch (error) {
       console.error(`💥 Error with model ${modelToUse}:`, error.message);
+      
+      // If proxy failed and we were using proxy, try direct URL
+      if (this.useProxy && apiUrl.includes('localhost:3001')) {
+        console.log('🔄 Proxy failed for narrative story, trying direct URL...');
+        this.useProxy = false;
+        apiUrl = `${this.baseURL}api/generate`;
+        
+        try {
+          const directController = new AbortController();
+          const directTimeoutId = setTimeout(() => directController.abort(), 120000);
+          
+          const directResponse = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: modelToUse,
+              prompt: narrativePrompt,
+              stream: false,
+              options: {
+                temperature: 0.7,
+                top_p: 0.9,
+                max_tokens: maxTokens
+              }
+            }),
+            signal: directController.signal
+          });
+          
+          clearTimeout(directTimeoutId);
+          
+          if (directResponse.ok) {
+            const data = await directResponse.json();
+            const text = (data && (data.response ?? data.output ?? data.message?.content)) || '';
+            if (typeof text === 'string' && text.trim()) {
+              const story = text.trim();
+              console.log('✅ Direct URL worked for narrative story');
+              return story;
+            }
+          }
+        } catch (directError) {
+          console.error('❌ Direct URL also failed for narrative story:', directError);
+        }
+      }
+      
       throw error;
     }
   }
@@ -650,10 +779,18 @@ CRITICAL: The reflection must NEVER exceed ${maxReflectionCharacters} characters
 
     const modelToUse = 'llama3:70b';
     
+    // Try proxy first, fallback to direct URL if proxy fails
+    let apiUrl = this.useProxy ? `${this.proxyURL}/api/generate` : `${this.baseURL}api/generate`;
+    
     try {
       console.log(`🔄 Using model: ${modelToUse} for crew reflection`);
-        
-      const response = await fetch(`${this.baseURL}api/generate`, {
+      console.log(`🌐 Crew reflection API URL: ${apiUrl}`);
+      
+      // Create AbortController for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 seconds
+      
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -667,8 +804,11 @@ CRITICAL: The reflection must NEVER exceed ${maxReflectionCharacters} characters
             top_p: 0.9,
             max_tokens: maxTokens  // Dynamic token limit based on message count for concise reflections
           }
-        })
+        }),
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
 
       console.log(`📥 Response status for ${modelToUse}:`, response.status);
 
