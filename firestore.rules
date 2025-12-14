@@ -110,6 +110,18 @@ service cloud.firestore {
         // Allow users to update/delete their own comments
         allow update, delete: if request.auth != null && 
           (resource.data.userId == request.auth.uid || resource.data.authorId == request.auth.uid);
+        
+        // Replies subcollection - allow authenticated users to reply to comments
+        match /replies/{replyId} {
+          // Allow authenticated users to read all replies
+          allow read: if request.auth != null;
+          // Allow authenticated users to create replies (only for themselves)
+          allow create: if request.auth != null && 
+            (request.resource.data.userId == request.auth.uid || request.resource.data.authorId == request.auth.uid);
+          // Allow users to update/delete their own replies
+          allow update, delete: if request.auth != null && 
+            (resource.data.userId == request.auth.uid || resource.data.authorId == request.auth.uid);
+        }
       }
     }
     

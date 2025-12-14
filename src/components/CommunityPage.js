@@ -26,6 +26,9 @@ export default function CommunityPage() {
   const [postComments, setPostComments] = useState({});
   const [postLikes, setPostLikes] = useState({});
   const [postLikedBy, setPostLikedBy] = useState({}); // Track which users liked each post
+  const [commentReplies, setCommentReplies] = useState({}); // Track replies for each comment: { [postId-commentId]: [replies] }
+  const [replyingTo, setReplyingTo] = useState(null); // Track which comment is being replied to: { postId, commentId }
+  const [replyText, setReplyText] = useState(''); // Reply input text
   const [postImage, setPostImage] = useState(null);
   const [postImageUrl, setPostImageUrl] = useState('');
   const [uploadOption, setUploadOption] = useState(null); // 'device' or 'url'
@@ -127,8 +130,11 @@ export default function CommunityPage() {
     setShowComments(!showComments);
   };
 
-  const handleAddComment = async (postId) => {
-    const commentText = postId ? (postComments[postId]?.newComment || '') : newComment;
+  const handleAddComment = async (postId, parentCommentId = null) => {
+    const commentText = parentCommentId 
+      ? replyText 
+      : (postId ? (postComments[postId]?.newComment || '') : newComment);
+    
     if (commentText.trim()) {
       const user = getCurrentUser();
       if (!user) {
@@ -138,7 +144,26 @@ export default function CommunityPage() {
       
       const author = user?.displayName || user?.email?.split('@')[0] || 'Anonymous';
       
-      if (postId) {
+      if (parentCommentId) {
+        // Add reply to comment
+        try {
+          const repliesRef = collection(db, `communityPosts/${postId}/comments/${parentCommentId}/replies`);
+          await addDoc(repliesRef, {
+            text: commentText.trim(),
+            author: author,
+            authorName: author,
+            userId: user.uid,
+            createdAt: serverTimestamp()
+          });
+          
+          // Clear reply input and reset replyingTo
+          setReplyText('');
+          setReplyingTo(null);
+        } catch (error) {
+          console.error('Error saving reply:', error);
+          alert('Failed to add reply. Please try again.');
+        }
+      } else if (postId) {
         // Add comment to subcollection
         try {
           const commentsRef = collection(db, `communityPosts/${postId}/comments`);
@@ -341,6 +366,33 @@ export default function CommunityPage() {
               timestamp: commentData.createdAt?.toDate?.() || new Date(),
               userId: commentData.userId || commentData.authorId
             });
+            
+            // Set up listener for replies to this comment
+            const repliesRef = collection(db, `communityPosts/${post.id}/comments/${commentDoc.id}/replies`);
+            const repliesQuery = query(repliesRef, orderBy('createdAt', 'asc'));
+            const unsubscribeReplies = onSnapshot(repliesQuery, (repliesSnapshot) => {
+              const replies = [];
+              repliesSnapshot.forEach((replyDoc) => {
+                const replyData = replyDoc.data();
+                replies.push({
+                  id: replyDoc.id,
+                  author: replyData.author || replyData.authorName || 'Anonymous',
+                  text: replyData.text || replyData.message || '',
+                  time: replyData.createdAt?.toDate ? formatTimeAgo(replyData.createdAt.toDate()) : 'Just now',
+                  timestamp: replyData.createdAt?.toDate?.() || new Date(),
+                  userId: replyData.userId || replyData.authorId
+                });
+              });
+              
+              setCommentReplies(prev => ({
+                ...prev,
+                [`${post.id}-${commentDoc.id}`]: replies
+              }));
+            }, (error) => {
+              console.error(`❌ Error listening to replies for comment ${commentDoc.id}:`, error);
+            });
+            
+            unsubscribeFunctions.push(unsubscribeReplies);
           });
           
           setPostComments(prev => ({
@@ -841,31 +893,123 @@ export default function CommunityPage() {
                       
                       {/* Comments List */}
                       <div className="space-y-3 max-h-48 overflow-y-auto mb-3" style={{ scrollbarWidth: 'thin' }}>
-                        {postCommentsData.comments.map((comment) => (
-                          <div key={comment.id || comment.timestamp} className="flex items-start space-x-2">
-                            <div
-                              className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-xs"
-                              style={{
-                                backgroundColor: isDarkMode ? "#7DD3C0" + '30' : "#E6B3BA" + '20',
-                              }}
-                            >
-                              <span>👤</span>
-                            </div>
-                            <div className="flex-1">
-                              <div className="flex items-center space-x-2 mb-1">
-                                <span className={`text-xs font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                                  {comment.author}
-                                </span>
-                                <span className={`text-[10px] ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
-                                  {comment.time || 'Just now'}
-                                </span>
+                        {postCommentsData.comments.map((comment) => {
+                          const replies = commentReplies[`${post.id}-${comment.id}`] || [];
+                          const isReplying = replyingTo?.postId === post.id && replyingTo?.commentId === comment.id;
+                          
+                          return (
+                            <div key={comment.id || comment.timestamp}>
+                              <div className="flex items-start space-x-2">
+                                <div
+                                  className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-xs"
+                                  style={{
+                                    backgroundColor: isDarkMode ? "#7DD3C0" + '30' : "#E6B3BA" + '20',
+                                  }}
+                                >
+                                  <span>👤</span>
+                                </div>
+                                <div className="flex-1">
+                                  <div className="flex items-center space-x-2 mb-1">
+                                    <span className={`text-xs font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                                      {comment.author}
+                                    </span>
+                                    <span className={`text-[10px] ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+                                      {comment.time || 'Just now'}
+                                    </span>
+                                  </div>
+                                  <p className={`text-xs leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                                    {comment.text}
+                                  </p>
+                                  <div className="flex items-center space-x-3 mt-1">
+                                    <button
+                                      onClick={() => {
+                                        if (isReplying) {
+                                          setReplyingTo(null);
+                                          setReplyText('');
+                                        } else {
+                                          setReplyingTo({ postId: post.id, commentId: comment.id });
+                                        }
+                                      }}
+                                      className={`text-[10px] ${isDarkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'} transition-colors`}
+                                    >
+                                      {isReplying ? 'Cancel' : 'Reply'}
+                                    </button>
+                                    {replies.length > 0 && (
+                                      <span className={`text-[10px] ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+                                        {replies.length} {replies.length === 1 ? 'reply' : 'replies'}
+                                      </span>
+                                    )}
+                                  </div>
+                                  
+                                  {/* Reply Input */}
+                                  {isReplying && (
+                                    <div className="mt-2 flex items-center space-x-2">
+                                      <input
+                                        type="text"
+                                        value={replyText}
+                                        onChange={(e) => setReplyText(e.target.value)}
+                                        onKeyPress={(e) => {
+                                          if (e.key === 'Enter') {
+                                            handleAddComment(post.id, comment.id);
+                                          }
+                                        }}
+                                        placeholder={`Reply to ${comment.author}...`}
+                                        className={`flex-1 rounded-lg px-2 py-1.5 text-xs border-none outline-none ${
+                                          isDarkMode 
+                                            ? 'bg-gray-800/50 text-white placeholder-gray-500' 
+                                            : 'bg-gray-100 text-gray-800 placeholder-gray-500'
+                                        }`}
+                                        autoFocus
+                                      />
+                                      <button
+                                        onClick={() => handleAddComment(post.id, comment.id)}
+                                        disabled={!replyText.trim()}
+                                        className={`px-2 py-1.5 rounded-lg text-xs transition-colors ${
+                                          replyText.trim()
+                                            ? (isDarkMode ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-blue-500 hover:bg-blue-600 text-white')
+                                            : (isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-200 text-gray-400 cursor-not-allowed')
+                                        }`}
+                                      >
+                                        <Send className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  )}
+                                  
+                                  {/* Replies List */}
+                                  {replies.length > 0 && (
+                                    <div className="mt-2 ml-4 space-y-2 pl-3 border-l-2" style={{ borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)' }}>
+                                      {replies.map((reply) => (
+                                        <div key={reply.id} className="flex items-start space-x-2">
+                                          <div
+                                            className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 text-xs"
+                                            style={{
+                                              backgroundColor: isDarkMode ? "#7DD3C0" + '20' : "#E6B3BA" + '15',
+                                            }}
+                                          >
+                                            <span>👤</span>
+                                          </div>
+                                          <div className="flex-1">
+                                            <div className="flex items-center space-x-2 mb-0.5">
+                                              <span className={`text-[10px] font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                                                {reply.author}
+                                              </span>
+                                              <span className={`text-[9px] ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+                                                {reply.time || 'Just now'}
+                                              </span>
+                                            </div>
+                                            <p className={`text-[11px] leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                                              {reply.text}
+                                            </p>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                              <p className={`text-xs leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                                {comment.text}
-                              </p>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
 
                       {/* Add Comment Input */}
