@@ -541,7 +541,7 @@ export default function PodPage() {
             onClick={(e) => {
               // Only navigate if clicking on the card itself, not on buttons inside
               if (e.target === e.currentTarget || e.target.closest('.reflection-content')) {
-                navigate('/pod/all');
+                navigate('/pod/reflections');
               }
             }}
             className={`rounded-2xl p-5 relative overflow-hidden transition-all ${

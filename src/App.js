@@ -18,7 +18,6 @@ import SplashScreen from './components/SplashScreen';
 import CommunityPage from './components/CommunityPage';
 import PodPage from './components/PodPage';
 import PodGroupChatPage from './components/PodGroupChatPage';
-import AllPodsPage from './components/AllPodsPage';
 import AllReflectionsPage from './components/AllReflectionsPage';
 import AllDayReflectionsPage from './components/AllDayReflectionsPage';
 import BottomNavigation from './components/BottomNavigation';
@@ -99,9 +98,9 @@ function AppContent() {
               // Navigate to pod from Pod Group Chat
               console.log('📍 Navigating to pod from Pod Group Chat');
               navigate('/pod', { replace: true });
-            } else if (location.pathname === '/pod/all') {
-              // Navigate to pod from All Pods
-              console.log('📍 Navigating to pod from All Pods');
+            } else if (location.pathname === '/pod/reflections') {
+              // Navigate to pod from All Reflections
+              console.log('📍 Navigating to pod from All Reflections');
               navigate('/pod', { replace: true });
             } else if (location.pathname === '/pod') {
               // Navigate to dashboard from Pod
@@ -170,7 +169,6 @@ function AppContent() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/pod" element={<PodPage />} />
         <Route path="/pod/chat" element={<PodGroupChatPage />} />
-        <Route path="/pod/all" element={<AllPodsPage />} />
         <Route path="/pod/reflections" element={<AllReflectionsPage />} />
         <Route path="/reflections" element={<AllDayReflectionsPage />} />
         <Route path="/community" element={<CommunityPage />} />
