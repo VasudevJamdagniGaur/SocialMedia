@@ -4,7 +4,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { Users, MessageCircle, Heart, TrendingUp, User, Sun, Moon, Send, X, Plus, XCircle, Image, Link, FileText, Layers, Activity, Brain, Sprout, Coffee, Flame } from 'lucide-react';
 import { getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
-import { collection, addDoc, query, orderBy, getDocs, serverTimestamp, doc, setDoc, updateDoc, increment, deleteDoc, onSnapshot, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { collection, addDoc, query, orderBy, getDocs, serverTimestamp, doc, setDoc, updateDoc, increment, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
 export default function CommunityPage() {
@@ -480,17 +480,9 @@ export default function CommunityPage() {
         });
       }
       
-      // Also update the main post document's likedBy array for quick access
-      const postRef = doc(db, 'communityPosts', postId);
-      if (isLiked) {
-        await updateDoc(postRef, {
-          likedBy: arrayRemove(user.uid)
-        });
-      } else {
-        await updateDoc(postRef, {
-          likedBy: arrayUnion(user.uid)
-        });
-      }
+      // Note: We don't update the main post document's likedBy array anymore
+      // The likes subcollection is the source of truth, and real-time listeners
+      // will update the UI automatically
     } catch (error) {
       console.error('Error updating like:', error);
       alert('Failed to update like. Please try again.');
