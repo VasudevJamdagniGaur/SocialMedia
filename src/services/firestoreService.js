@@ -1281,22 +1281,39 @@ class FirestoreService {
       
       const sphereRef = doc(this.db, `crewSpheres/${sphereId}`);
       await setDoc(sphereRef, sphereData);
+      console.log('✅ Crew sphere document created:', sphereId);
       
       // Also create pod reference for each member so they can see it
+      const podCreationResults = [];
       for (const memberUid of allMembers) {
-        const memberPodRef = doc(this.db, `users/${memberUid}/pods/${sphereId}`);
-        await setDoc(memberPodRef, {
-          name: "Crew's Sphere",
-          startDate: dateId,
-          sphereId: sphereId,
-          members: allMembers,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          memberCount: allMembers.length
-        }, { merge: true });
+        try {
+          const memberPodRef = doc(this.db, `users/${memberUid}/pods/${sphereId}`);
+          await setDoc(memberPodRef, {
+            name: "Crew's Sphere",
+            startDate: dateId,
+            sphereId: sphereId,
+            members: allMembers,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            memberCount: allMembers.length
+          }, { merge: true });
+          console.log('✅ Pod document created for member:', memberUid);
+          podCreationResults.push({ uid: memberUid, success: true });
+        } catch (podError) {
+          console.error(`❌ Failed to create pod document for ${memberUid}:`, podError);
+          podCreationResults.push({ uid: memberUid, success: false, error: podError.message });
+          // Continue creating pod documents for other members even if one fails
+        }
       }
       
-      return { success: true, sphereId };
+      // Log summary
+      const successful = podCreationResults.filter(r => r.success).length;
+      const failed = podCreationResults.filter(r => !r.success).length;
+      console.log(`📊 Pod creation summary: ${successful} successful, ${failed} failed`);
+      
+      // Even if some pod documents failed to create, the sphere is still created
+      // The getUserCrewSphere function will find the sphere by checking membership directly
+      return { success: true, sphereId, podCreationResults };
     } catch (error) {
       console.error('Error creating crew sphere:', error);
       return { success: false, error: error.message };
@@ -1481,10 +1498,11 @@ class FirestoreService {
 
   /**
    * Get user's crew sphere ID
+   * First checks pod documents, then checks if user is a member of any sphere directly
    */
   async getUserCrewSphere(uid) {
     try {
-      // Get user's pods to find the crew sphere
+      // Method 1: Get user's pods to find the crew sphere
       const podsRef = collection(this.db, `users/${uid}/pods`);
       const podsSnapshot = await getDocs(podsRef);
       
@@ -1504,10 +1522,103 @@ class FirestoreService {
         }
       }
       
+      // Method 2: If no pod document found, check if user is a member of any sphere directly
+      // This handles the case where Account 2 is added to a sphere but doesn't have a pod document yet
+      try {
+        console.log('🔍 No pod document found, checking sphere membership directly...');
+        const spheresRef = collection(this.db, 'crewSpheres');
+        const spheresSnapshot = await getDocs(spheresRef);
+        
+        for (const sphereDoc of spheresSnapshot.docs) {
+          const sphereData = sphereDoc.data();
+          if (sphereData.members && Array.isArray(sphereData.members) && sphereData.members.includes(uid)) {
+            const sphereId = sphereDoc.id;
+            console.log('✅ Found sphere membership for user:', sphereId);
+            
+            // Create pod document for this user so they can see it in the future
+            try {
+              const podRef = doc(this.db, `users/${uid}/pods/${sphereId}`);
+              const dateId = sphereData.startDate || getDateId(new Date());
+              await setDoc(podRef, {
+                name: "Crew's Sphere",
+                startDate: dateId,
+                sphereId: sphereId,
+                members: sphereData.members,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+                memberCount: sphereData.members ? sphereData.members.length : 0
+              }, { merge: true });
+              console.log('✅ Created pod document for user:', uid);
+            } catch (podError) {
+              console.warn('⚠️ Could not create pod document (may not have permission):', podError);
+              // Continue anyway - we can still return the sphere
+            }
+            
+            return { success: true, sphereId: sphereId, sphere: sphereData };
+          }
+        }
+      } catch (queryError) {
+        console.warn('⚠️ Could not query all spheres (permission issue):', queryError);
+        // This is okay - we'll just return no sphere found
+        // The user will need to wait for the pod document to be created by the sphere creator
+      }
+      
       return { success: false, sphereId: null };
     } catch (error) {
       console.error('Error getting user crew sphere:', error);
       return { success: false, error: error.message, sphereId: null };
+    }
+  }
+
+  /**
+   * Sync pod documents for a user - ensures they have pod documents for all spheres they're a member of
+   * This is useful when Account 2 logs in and needs to see spheres they were added to
+   */
+  async syncUserPodDocuments(uid) {
+    try {
+      console.log('🔄 Syncing pod documents for user:', uid);
+      
+      // Get all spheres and check if user is a member
+      const spheresRef = collection(this.db, 'crewSpheres');
+      const spheresSnapshot = await getDocs(spheresRef);
+      
+      let syncedCount = 0;
+      for (const sphereDoc of spheresSnapshot.docs) {
+        const sphereData = sphereDoc.data();
+        const sphereId = sphereDoc.id;
+        
+        if (sphereData.members && Array.isArray(sphereData.members) && sphereData.members.includes(uid)) {
+          // Check if pod document already exists
+          const podRef = doc(this.db, `users/${uid}/pods/${sphereId}`);
+          const podSnap = await getDoc(podRef);
+          
+          if (!podSnap.exists()) {
+            // Create pod document
+            try {
+              const dateId = sphereData.startDate || getDateId(new Date());
+              await setDoc(podRef, {
+                name: "Crew's Sphere",
+                startDate: dateId,
+                sphereId: sphereId,
+                members: sphereData.members,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+                memberCount: sphereData.members ? sphereData.members.length : 0
+              }, { merge: true });
+              console.log('✅ Created missing pod document for sphere:', sphereId);
+              syncedCount++;
+            } catch (podError) {
+              console.warn(`⚠️ Could not create pod document for sphere ${sphereId}:`, podError);
+            }
+          }
+        }
+      }
+      
+      console.log(`✅ Pod sync complete: ${syncedCount} pod documents created`);
+      return { success: true, syncedCount };
+    } catch (error) {
+      console.error('Error syncing pod documents:', error);
+      return { success: false, error: error.message };
     }
   }
 

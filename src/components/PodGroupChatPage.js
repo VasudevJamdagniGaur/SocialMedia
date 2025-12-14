@@ -99,6 +99,9 @@ export default function PodGroupChatPage() {
         setIsLoadingCrew(true);
         setIsLoadingSphere(true);
         
+        // Sync pod documents first - ensures Account 2 can see spheres they were added to
+        await firestoreService.syncUserPodDocuments(user.uid);
+        
         // Update user metadata to mark as active
         await firestoreService.updateUserMetadata(user.uid, {
           displayName: user.displayName || 'User',
