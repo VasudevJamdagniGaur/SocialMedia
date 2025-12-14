@@ -85,6 +85,28 @@ service cloud.firestore {
       // Allow users to update/delete their own posts (check both userId and authorId for compatibility)
       allow update, delete: if request.auth != null && 
         (resource.data.userId == request.auth.uid || resource.data.authorId == request.auth.uid);
+      
+      // Likes subcollection - allow authenticated users to like/unlike posts
+      match /likes/{likeId} {
+        // Allow authenticated users to read all likes
+        allow read: if request.auth != null;
+        // Allow authenticated users to create likes (only for themselves)
+        allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+        // Allow users to delete their own likes
+        allow delete: if request.auth != null && likeId == request.auth.uid;
+      }
+      
+      // Comments subcollection - allow authenticated users to comment
+      match /comments/{commentId} {
+        // Allow authenticated users to read all comments
+        allow read: if request.auth != null;
+        // Allow authenticated users to create comments (only for themselves)
+        allow create: if request.auth != null && 
+          (request.resource.data.userId == request.auth.uid || request.resource.data.authorId == request.auth.uid);
+        // Allow users to update/delete their own comments
+        allow update, delete: if request.auth != null && 
+          (resource.data.userId == request.auth.uid || resource.data.authorId == request.auth.uid);
+      }
     }
     
     // Crew spheres - shared crew groups

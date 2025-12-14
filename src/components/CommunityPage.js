@@ -4,7 +4,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { Users, MessageCircle, Heart, TrendingUp, User, Sun, Moon, Send, X, Plus, XCircle, Image, Link, FileText, Layers, Activity, Brain, Sprout, Coffee, Flame } from 'lucide-react';
 import { getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
-import { collection, addDoc, query, orderBy, getDocs, serverTimestamp, doc, setDoc } from 'firebase/firestore';
+import { collection, addDoc, query, orderBy, getDocs, serverTimestamp, doc, setDoc, updateDoc, increment, deleteDoc, onSnapshot, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
 export default function CommunityPage() {
@@ -25,6 +25,7 @@ export default function CommunityPage() {
   const [communityPosts, setCommunityPosts] = useState([]);
   const [postComments, setPostComments] = useState({});
   const [postLikes, setPostLikes] = useState({});
+  const [postLikedBy, setPostLikedBy] = useState({}); // Track which users liked each post
   const [postImage, setPostImage] = useState(null);
   const [postImageUrl, setPostImageUrl] = useState('');
   const [uploadOption, setUploadOption] = useState(null); // 'device' or 'url'
@@ -134,38 +135,41 @@ export default function CommunityPage() {
         return;
       }
       
-      const author = user?.displayName || 'You';
-      const newCommentObj = {
-        id: Date.now(),
-        author: author,
-        text: commentText.trim(),
-        time: 'Just now',
-        timestamp: serverTimestamp()
-      };
+      const author = user?.displayName || user?.email?.split('@')[0] || 'Anonymous';
       
       if (postId) {
-        // Update comments for this specific post
-        const currentComments = postComments[postId]?.comments || [];
-        const updatedComments = [...currentComments, newCommentObj];
-        
-        setPostComments({
-          ...postComments,
-          [postId]: {
-            ...postComments[postId],
-            comments: updatedComments,
-            newComment: ''
-          }
-        });
-        
-        // Update in Firestore
+        // Add comment to subcollection
         try {
-          const postRef = doc(db, 'communityPosts', postId);
-          await setDoc(postRef, { comments: updatedComments }, { merge: true });
+          const commentsRef = collection(db, `communityPosts/${postId}/comments`);
+          await addDoc(commentsRef, {
+            text: commentText.trim(),
+            author: author,
+            authorName: author,
+            userId: user.uid,
+            createdAt: serverTimestamp()
+          });
+          
+          // Clear the comment input
+          setPostComments({
+            ...postComments,
+            [postId]: {
+              ...postComments[postId],
+              newComment: ''
+            }
+          });
         } catch (error) {
           console.error('Error saving comment:', error);
+          alert('Failed to add comment. Please try again.');
         }
       } else {
         // Legacy support for old post
+        const newCommentObj = {
+          id: Date.now(),
+          author: author,
+          text: commentText.trim(),
+          time: 'Just now',
+          timestamp: serverTimestamp()
+        };
         setComments([...comments, newCommentObj]);
         setNewComment('');
       }
@@ -231,45 +235,111 @@ export default function CommunityPage() {
     return () => clearInterval(refreshInterval);
   }, []);
 
-  // Load community posts from Firestore
+  // Load community posts from Firestore with real-time listeners
   useEffect(() => {
-    const loadPosts = async () => {
-      try {
-        const postsRef = collection(db, 'communityPosts');
-        const q = query(postsRef, orderBy('createdAt', 'desc'));
-        const querySnapshot = await getDocs(q);
-        
-        const posts = [];
-        querySnapshot.forEach((doc) => {
-          const data = doc.data();
-          posts.push({
-            id: doc.id,
-            ...data,
-            createdAt: data.createdAt?.toDate?.() || new Date()
+    const postsRef = collection(db, 'communityPosts');
+    const q = query(postsRef, orderBy('createdAt', 'desc'));
+    
+    // Store all unsubscribe functions for likes and comments
+    const unsubscribeFunctions = [];
+    
+    // Set up real-time listener for posts
+    const unsubscribePosts = onSnapshot(q, (querySnapshot) => {
+      // Clean up previous listeners
+      unsubscribeFunctions.forEach(unsub => unsub());
+      unsubscribeFunctions.length = 0;
+      
+      const posts = [];
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        posts.push({
+          id: doc.id,
+          ...data,
+          createdAt: data.createdAt?.toDate?.() || new Date()
+        });
+      });
+      
+      setCommunityPosts(posts);
+      
+      // Initialize state for each post
+      const initialLikes = {};
+      const initialComments = {};
+      const initialLikedBy = {};
+      
+      posts.forEach(post => {
+        initialLikes[post.id] = post.likes || 0;
+        initialComments[post.id] = {
+          comments: [],
+          showComments: false,
+          newComment: ''
+        };
+        initialLikedBy[post.id] = post.likedBy || [];
+      });
+      
+      setPostLikes(initialLikes);
+      setPostComments(initialComments);
+      setPostLikedBy(initialLikedBy);
+      
+      // Set up real-time listeners for likes and comments for each post
+      posts.forEach(post => {
+        // Listen to likes subcollection
+        const likesRef = collection(db, `communityPosts/${post.id}/likes`);
+        const unsubscribeLikes = onSnapshot(likesRef, (likesSnapshot) => {
+          const likedUserIds = [];
+          likesSnapshot.forEach((likeDoc) => {
+            likedUserIds.push(likeDoc.id);
           });
+          
+          setPostLikes(prev => ({
+            ...prev,
+            [post.id]: likedUserIds.length
+          }));
+          
+          setPostLikedBy(prev => ({
+            ...prev,
+            [post.id]: likedUserIds
+          }));
         });
         
-        setCommunityPosts(posts);
-        
-        // Initialize likes and comments for each post
-        const initialLikes = {};
-        const initialComments = {};
-        posts.forEach(post => {
-          initialLikes[post.id] = post.likes || 0;
-          initialComments[post.id] = {
-            comments: post.comments || [],
-            showComments: false,
-            newComment: ''
-          };
+        // Listen to comments subcollection
+        const commentsRef = collection(db, `communityPosts/${post.id}/comments`);
+        const commentsQuery = query(commentsRef, orderBy('createdAt', 'asc'));
+        const unsubscribeComments = onSnapshot(commentsQuery, (commentsSnapshot) => {
+          const comments = [];
+          commentsSnapshot.forEach((commentDoc) => {
+            const commentData = commentDoc.data();
+            comments.push({
+              id: commentDoc.id,
+              author: commentData.author || commentData.authorName || 'Anonymous',
+              text: commentData.text || commentData.message || '',
+              time: commentData.createdAt?.toDate ? formatTimeAgo(commentData.createdAt.toDate()) : 'Just now',
+              timestamp: commentData.createdAt?.toDate?.() || new Date(),
+              userId: commentData.userId || commentData.authorId
+            });
+          });
+          
+          setPostComments(prev => ({
+            ...prev,
+            [post.id]: {
+              ...prev[post.id],
+              comments: comments
+            }
+          }));
         });
-        setPostLikes(initialLikes);
-        setPostComments(initialComments);
-      } catch (error) {
-        console.error('Error loading posts:', error);
-      }
-    };
+        
+        // Store unsubscribe functions for cleanup
+        unsubscribeFunctions.push(unsubscribeLikes);
+        unsubscribeFunctions.push(unsubscribeComments);
+      });
+    }, (error) => {
+      console.error('Error loading posts:', error);
+    });
 
-    loadPosts();
+    return () => {
+      unsubscribePosts();
+      // Clean up all like and comment listeners
+      unsubscribeFunctions.forEach(unsub => unsub());
+    };
   }, []);
 
   const handleImageUpload = (e) => {
@@ -393,19 +463,37 @@ export default function CommunityPage() {
       return;
     }
 
-    const currentLikes = postLikes[postId] || 0;
-    const newLikes = currentLikes + 1;
+    const likedUsers = postLikedBy[postId] || [];
+    const isLiked = likedUsers.includes(user.uid);
     
-    setPostLikes({ ...postLikes, [postId]: newLikes });
-    
-    // Update in Firestore
     try {
+      const likeRef = doc(db, `communityPosts/${postId}/likes/${user.uid}`);
+      
+      if (isLiked) {
+        // Unlike: remove from subcollection
+        await deleteDoc(likeRef);
+      } else {
+        // Like: add to subcollection
+        await setDoc(likeRef, {
+          userId: user.uid,
+          createdAt: serverTimestamp()
+        });
+      }
+      
+      // Also update the main post document's likedBy array for quick access
       const postRef = doc(db, 'communityPosts', postId);
-      await setDoc(postRef, { likes: newLikes }, { merge: true });
+      if (isLiked) {
+        await updateDoc(postRef, {
+          likedBy: arrayRemove(user.uid)
+        });
+      } else {
+        await updateDoc(postRef, {
+          likedBy: arrayUnion(user.uid)
+        });
+      }
     } catch (error) {
-      console.error('Error updating likes:', error);
-      // Revert on error
-      setPostLikes({ ...postLikes, [postId]: currentLikes });
+      console.error('Error updating like:', error);
+      alert('Failed to update like. Please try again.');
     }
   };
 
@@ -600,6 +688,9 @@ export default function CommunityPage() {
           {communityPosts.map((post) => {
             const postCommentsData = postComments[post.id] || { comments: post.comments || [], showComments: false, newComment: '' };
             const postLikesCount = postLikes[post.id] || post.likes || 0;
+            const user = getCurrentUser();
+            const likedUsers = postLikedBy[post.id] || [];
+            const isPostLiked = user && likedUsers.includes(user.uid);
             
             return (
               <div
@@ -663,8 +754,11 @@ export default function CommunityPage() {
                   >
                     <Heart 
                       className={`w-4 h-4 transition-colors ${
-                        isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                        isPostLiked 
+                          ? 'text-red-500 fill-red-500' 
+                          : (isDarkMode ? 'text-gray-400' : 'text-gray-500')
                       }`} 
+                      fill={isPostLiked ? 'currentColor' : 'none'}
                     />
                     <span className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                       {postLikesCount}
