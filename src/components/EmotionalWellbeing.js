@@ -192,6 +192,48 @@ export default function EmotionalWellbeing() {
   const getCacheKey = (type, period, userId) => `emotional_wellbeing_${type}_${period}_${userId}`;
 
   // Cache management functions
+  // Helper function to check if we should fetch fresh data (after 12 PM or forced refresh)
+  // Defined early so it can be used by loadFromCache
+  const shouldFetchFreshData = useCallback((lastFetchTimestamp, forceRefresh = false) => {
+    if (forceRefresh) {
+      console.log('🔄 Force refresh requested');
+      return true;
+    }
+    
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentDate = now.toDateString();
+    
+    // If it's before 12 PM, use cached data
+    if (currentHour < 12) {
+      console.log('⏰ Before 12 PM - using cached data');
+      return false;
+    }
+    
+    // If it's after 12 PM, check if we've already fetched today
+    if (currentHour >= 12) {
+      if (!lastFetchTimestamp) {
+        console.log('⏰ After 12 PM - no previous fetch, will fetch');
+        return true;
+      }
+      
+      const lastFetch = new Date(lastFetchTimestamp);
+      const lastFetchDate = lastFetch.toDateString();
+      const lastFetchHour = lastFetch.getHours();
+      
+      // If it's a different day, or same day but last fetch was before 12 PM, fetch again
+      if (lastFetchDate !== currentDate || lastFetchHour < 12) {
+        console.log('⏰ After 12 PM - new day or last fetch was before 12 PM, will fetch');
+        return true;
+      }
+      
+      console.log('⏰ After 12 PM - already fetched today after 12 PM, using cache');
+      return false;
+    }
+    
+    return false;
+  }, []);
+
   const saveToCache = (key, data) => {
     try {
       const now = new Date();
@@ -293,47 +335,6 @@ export default function EmotionalWellbeing() {
     }
     return false; // No cache
   }, [shouldFetchFreshData]);
-
-  // Helper function to check if we should fetch fresh data (after 12 PM or forced refresh)
-  const shouldFetchFreshData = useCallback((lastFetchTimestamp, forceRefresh = false) => {
-    if (forceRefresh) {
-      console.log('🔄 Force refresh requested');
-      return true;
-    }
-    
-    const now = new Date();
-    const currentHour = now.getHours();
-    const currentDate = now.toDateString();
-    
-    // If it's before 12 PM, use cached data
-    if (currentHour < 12) {
-      console.log('⏰ Before 12 PM - using cached data');
-      return false;
-    }
-    
-    // If it's after 12 PM, check if we've already fetched today
-    if (currentHour >= 12) {
-      if (!lastFetchTimestamp) {
-        console.log('⏰ After 12 PM - no previous fetch, will fetch');
-        return true;
-      }
-      
-      const lastFetch = new Date(lastFetchTimestamp);
-      const lastFetchDate = lastFetch.toDateString();
-      const lastFetchHour = lastFetch.getHours();
-      
-      // If it's a different day, or same day but last fetch was before 12 PM, fetch again
-      if (lastFetchDate !== currentDate || lastFetchHour < 12) {
-        console.log('⏰ After 12 PM - new day or last fetch was before 12 PM, will fetch');
-        return true;
-      }
-      
-      console.log('⏰ After 12 PM - already fetched today after 12 PM, using cache');
-      return false;
-    }
-    
-    return false;
-  }, []);
 
   const loadCachedPatternData = useCallback((userId, period) => {
     const cacheKey = getCacheKey('pattern', period, userId);
