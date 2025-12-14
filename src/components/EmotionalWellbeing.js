@@ -208,17 +208,32 @@ export default function EmotionalWellbeing() {
   const loadFromCache = (key, maxAgeMinutes = 30) => {
     try {
       const cached = localStorage.getItem(key);
-      if (!cached) return null;
+      if (!cached) {
+        console.log(`💾 CACHE: No cache found for key: ${key}`);
+        return null;
+      }
 
       const cacheData = JSON.parse(cached);
-      const ageMinutes = (Date.now() - new Date(cacheData.timestamp).getTime()) / (1000 * 60);
+      
+      // Handle both old format (cacheData.data) and new format (cacheData directly)
+      const data = cacheData.data || cacheData;
+      const timestamp = cacheData.timestamp || cacheData.data?.timestamp;
+      
+      if (!timestamp) {
+        console.log(`💾 CACHE: Invalid cache format for key: ${key}`);
+        return null;
+      }
+      
+      const ageMinutes = (Date.now() - new Date(timestamp).getTime()) / (1000 * 60);
       
       if (ageMinutes > maxAgeMinutes) {
+        console.log(`💾 CACHE: Cache expired (${Math.round(ageMinutes)} minutes old, max ${maxAgeMinutes} minutes)`);
         localStorage.removeItem(key);
         return null;
       }
 
-      return cacheData.data;
+      console.log(`💾 CACHE: Using cached data (${Math.round(ageMinutes)} minutes old)`);
+      return data;
     } catch (error) {
       console.error('Error loading from cache:', error);
       return null;
@@ -237,15 +252,17 @@ export default function EmotionalWellbeing() {
   // Data loading functions
   const loadCachedEmotionalData = useCallback((userId, period) => {
     const cacheKey = getCacheKey('emotional', period, userId);
-    const cachedData = loadFromCache(cacheKey, 30); // 30 minutes cache
+    const cachedData = loadFromCache(cacheKey, 60); // 60 minutes cache (increased for better performance)
     
-    if (cachedData) {
-      console.log('⚡ Setting cached emotional data instantly');
+    if (cachedData && cachedData.weeklyMoodData && cachedData.weeklyMoodData.length > 0) {
+      console.log(`⚡ Setting cached emotional data instantly (${cachedData.weeklyMoodData.length} days)`);
+      console.log(`⚡ Cache period: ${cachedData.period}, Data count: ${cachedData.dataCount}`);
       setWeeklyMoodData(cachedData.weeklyMoodData || []);
       setEmotionalData(cachedData.emotionalData || []);
       setLastCacheUpdate(cachedData.timestamp);
       return true; // Cache exists
     }
+    console.log('⚡ No valid cache found for emotional data');
     return false; // No cache
   }, []);
 
@@ -726,13 +743,14 @@ export default function EmotionalWellbeing() {
       // Try to load from cache first - ONLY for selectedPeriod
       const hasCache = loadCachedEmotionalData(user.uid, selectedPeriod);
       
-      // Only load fresh data if cache doesn't exist
-      if (!hasCache) {
-        console.log('⚡ No cache for period', selectedPeriod, '- loading fresh data');
+      // Always load fresh data in background to update cache, but show cached data immediately if available
+      if (hasCache) {
+        console.log('⚡ Using cached data for period', selectedPeriod, '- instant switch! Loading fresh in background...');
+        // Load fresh data in background to update cache
         loadFreshEmotionalData(selectedPeriod, requestId);
       } else {
-        console.log('⚡ Using cached data for period', selectedPeriod, '- instant switch!');
-        // DON'T refresh in background - keep it cached
+        console.log('⚡ No cache for period', selectedPeriod, '- loading fresh data');
+        loadFreshEmotionalData(selectedPeriod, requestId);
       }
     }
   }, [selectedPeriod]); // Only depend on selectedPeriod
@@ -1003,6 +1021,20 @@ export default function EmotionalWellbeing() {
         }
       }
 
+      // Check cache first for faster loading
+      const cacheKey = getCacheKey('emotional', period, user.uid);
+      const cachedData = loadFromCache(cacheKey, 5); // Use cache if less than 5 minutes old
+      
+      if (cachedData && cachedData.weeklyMoodData && cachedData.weeklyMoodData.length > 0) {
+        console.log(`⚡ Using cached data (${cachedData.weeklyMoodData.length} days) - loading fresh in background`);
+        // Set cached data immediately for instant display
+        if (isLatestPeriodRequest(requestId)) {
+          setWeeklyMoodData(cachedData.weeklyMoodData);
+          setEmotionalData(cachedData.emotionalData);
+        }
+        // Continue to load fresh data in background
+      }
+
       // Get AI-generated mood data from new Firebase structure
       let result;
       if (period === 365) {
@@ -1022,6 +1054,12 @@ export default function EmotionalWellbeing() {
         }
       } else {
         result = await firestoreService.getMoodChartDataNew(user.uid, period);
+        console.log(`📊 UNIFIED: Retrieved ${result.moodData?.length || 0} days from Firestore for ${period}-day period`);
+        
+        // If we got fewer days than requested, log it
+        if (result.success && result.moodData && result.moodData.length < period) {
+          console.log(`⚠️ UNIFIED: Only ${result.moodData.length} days with data out of ${period} requested days`);
+        }
       }
       console.log('📊 UNIFIED: Mood chart data result:', result);
       
@@ -1135,7 +1173,12 @@ export default function EmotionalWellbeing() {
           setEmotionalData(newMoodData);
           
           console.log('✅ CHART: State updated successfully!');
-          console.log('✅ CHART: weeklyMoodData should now have', newMoodData.length, 'days');
+          console.log(`✅ CHART: weeklyMoodData should now have ${newMoodData.length} days (requested ${period} days)`);
+          
+          // Warn if we have fewer days than requested
+          if (newMoodData.length < period && period !== 365) {
+            console.warn(`⚠️ CHART: Only showing ${newMoodData.length} days out of ${period} requested days. Missing days may not have chat messages or data generation failed.`);
+          }
           
           // Calculate averages for display using processed data
           const avgHappiness = processedMoodData.reduce((sum, item) => sum + item.happiness, 0) / processedMoodData.length;
@@ -1147,10 +1190,22 @@ export default function EmotionalWellbeing() {
           console.log('📊 UNIFIED: Rule-Applied Averages - H:', Math.round(avgHappiness), 'E:', Math.round(avgEnergy), 'A:', Math.round(avgAnxiety), 'S:', Math.round(avgStress));
           console.log('📊 UNIFIED: Average total:', Math.round(avgTotal));
           
+          // Save to cache immediately for fast loading next time
+          const cacheKey = getCacheKey('emotional', period, user.uid);
+          const cacheData = {
+            weeklyMoodData: newMoodData,
+            emotionalData: newMoodData,
+            timestamp: new Date().toISOString(),
+            period: period,
+            dataCount: newMoodData.length
+          };
+          saveToCache(cacheKey, cacheData);
+          console.log(`💾 CACHE: Saved mood data to cache (${newMoodData.length} days) for period ${period}`);
+          
           // Return data for caching
           return {
-            weeklyMoodData: processedMoodData,
-            emotionalData: processedMoodData
+            weeklyMoodData: newMoodData,
+            emotionalData: newMoodData
           };
         } else {
           console.log('📊 UNIFIED: No real AI scores found, showing empty state');

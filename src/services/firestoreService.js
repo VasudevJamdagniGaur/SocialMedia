@@ -892,9 +892,13 @@ class FirestoreService {
         }
       }
       
-      console.log(`📊 FIRESTORE NEW: ✅ Retrieved mood data for ${moodData.length} days`);
+      console.log(`📊 FIRESTORE NEW: ✅ Retrieved mood data for ${moodData.length} days (requested ${days} days)`);
+      if (moodData.length < days) {
+        console.log(`⚠️ FIRESTORE NEW: Only ${moodData.length} days have data out of ${days} requested days`);
+        console.log(`📊 FIRESTORE NEW: Missing days need to be generated or don't have chat messages`);
+      }
       console.log(`📊 FIRESTORE NEW: ✅ Complete array:`, moodData);
-      console.log(`📊 FIRESTORE NEW: ✅ Oct 8 data in array:`, moodData.find(d => d.day && d.day.includes('Oct 8')));
+      console.log(`📊 FIRESTORE NEW: Date range in data:`, moodData.length > 0 ? `${moodData[0]?.date} to ${moodData[moodData.length - 1]?.date}` : 'No data');
       return { success: true, moodData };
     } catch (error) {
       console.error('❌ FIRESTORE NEW: Error getting mood chart data:', error);
