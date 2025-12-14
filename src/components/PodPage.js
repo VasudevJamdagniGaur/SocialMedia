@@ -19,6 +19,7 @@ export default function PodPage() {
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [podDays, setPodDays] = useState([]);
   const [crewMembers, setCrewMembers] = useState([]);
+  const [isLoadingCrewMembers, setIsLoadingCrewMembers] = useState(true);
 
   // Load profile picture
   useEffect(() => {
@@ -101,9 +102,14 @@ export default function PodPage() {
   useEffect(() => {
     const loadCrewMembers = async () => {
       const user = getCurrentUser();
-      if (!user) return;
+      if (!user) {
+        setIsLoadingCrewMembers(false);
+        return;
+      }
 
       try {
+        setIsLoadingCrewMembers(true);
+        
         // Run sync in background (don't wait for it)
         firestoreService.syncUserPodDocuments(user.uid).catch(err => {
           console.warn('Background sync failed:', err);
@@ -159,6 +165,8 @@ export default function PodPage() {
       } catch (error) {
         console.error('Error loading crew members:', error);
         setCrewMembers([]);
+      } finally {
+        setIsLoadingCrewMembers(false);
       }
     };
 
@@ -503,8 +511,8 @@ export default function PodPage() {
                 );
               })()}
               
-              {/* Other Members */}
-              {[
+              {/* Other Members - Only show when loaded (not during loading) */}
+              {!isLoadingCrewMembers && [
                 ...crewMembers.map((member, index) => ({
                   name: member.displayName || member.name || 'User',
                   emoji: '👤',
@@ -512,6 +520,7 @@ export default function PodPage() {
                   profilePicture: member.profilePicture || null,
                   uid: member.uid
                 })),
+                // Show AI together with other members when loading is complete
                 { name: 'AI', emoji: '🤖', color: '#B19CD9', avatar: '/ai-avatar.png' },
               ].map((member, index) => (
                 <div

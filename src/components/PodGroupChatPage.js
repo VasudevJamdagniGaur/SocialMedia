@@ -165,6 +165,7 @@ export default function PodGroupChatPage() {
     loadCrewSphere();
   }, [user, profilePicture]);
 
+  // Only include AI when crew members are loaded (not during loading)
   const groupMembers = [
     { 
       name: userName, 
@@ -180,7 +181,8 @@ export default function PodGroupChatPage() {
       profilePicture: member.profilePicture || null,
       uid: member.uid
     })),
-    { name: 'AI', emoji: '🤖', color: '#B19CD9', avatar: '/ai-avatar.png' },
+    // Only show AI when loading is complete (show together with other members)
+    ...(!isLoadingCrew ? [{ name: 'AI', emoji: '🤖', color: '#B19CD9', avatar: '/ai-avatar.png' }] : []),
   ];
 
   const [messages, setMessages] = useState([]);
