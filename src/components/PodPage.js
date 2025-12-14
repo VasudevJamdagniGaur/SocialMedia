@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
-import { Users, User, Sun, Moon, ChevronRight, Sparkles, ChevronDown, ChevronUp, Plus } from 'lucide-react';
+import { Users, User, Sun, Moon, ChevronRight, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
 import { getCurrentUser } from '../services/authService';
 import reflectionService from '../services/reflectionService';
 import firestoreService from '../services/firestoreService';
@@ -19,7 +19,6 @@ export default function PodPage() {
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [podDays, setPodDays] = useState([]);
   const [crewMembers, setCrewMembers] = useState([]);
-  const [isCreatingSphere, setIsCreatingSphere] = useState(false);
 
   // Load profile picture
   useEffect(() => {
@@ -245,108 +244,6 @@ export default function PodPage() {
     setIsCalendarOpen(false);
   };
 
-  const handleCreateSphere = async (e) => {
-    e.stopPropagation(); // Prevent the container's onClick from firing
-    const user = getCurrentUser();
-    if (!user) {
-      alert('Please sign in to create a crew sphere');
-      return;
-    }
-
-    setIsCreatingSphere(true);
-    try {
-      console.log('🚀 Starting sphere creation...');
-      
-      // Update user metadata to mark as active and ensure enrolled
-      await firestoreService.updateUserMetadata(user.uid, {
-        displayName: user.displayName || 'User',
-        profilePicture: profilePicture,
-        crewEnrolled: true // Ensure user is enrolled
-      });
-      
-      // Also ensure user document exists
-      await firestoreService.ensureUser(user.uid, {
-        email: user.email,
-        displayName: user.displayName || 'User'
-      });
-
-      console.log('👤 User metadata updated, fetching active users...');
-
-      // Get users who have generated day reflections in the past week
-      const result = await firestoreService.getActiveUsersWithReflections(7);
-      
-      console.log('📊 Active users result:', result);
-      
-      if (!result.success) {
-        alert(`Error finding active users: ${result.error}`);
-        setIsCreatingSphere(false);
-        return;
-      }
-      
-      if (result.users.length === 0) {
-        alert('No active users found who have generated day reflections in the past week. Make sure you and other users have generated at least one day reflection recently.');
-        setIsCreatingSphere(false);
-        return;
-      }
-
-      console.log('✅ Found', result.users.length, 'active users');
-
-      // Filter out the current user and get member UIDs
-      const memberUsers = result.users.filter(u => u.uid !== user.uid);
-      const memberUids = memberUsers.map(member => member.uid).filter(uid => uid);
-
-      console.log('👥 Members to add (excluding self):', memberUids.length, memberUids);
-      console.log('👤 Current user:', user.uid);
-      console.log('📋 All active users:', result.users.map(u => ({ uid: u.uid, name: u.displayName })));
-
-      // If no other users found, check if current user has reflections and create sphere with just them
-      if (memberUids.length === 0) {
-        // Check if current user is in the active users list (has generated reflections)
-        const currentUserHasReflections = result.users.some(u => u.uid === user.uid);
-        
-        if (currentUserHasReflections) {
-          // Create sphere with just the current user (they can add others later)
-          console.log('⚠️ No other users found, creating sphere with just current user');
-          const createResult = await firestoreService.createCrewSphere(user.uid, []);
-          
-          if (createResult.success) {
-            alert('Crew sphere created! You can add more members later when other users generate day reflections.');
-            navigate('/pod/chat');
-          } else {
-            alert(`Error creating crew sphere: ${createResult.error}`);
-          }
-          setIsCreatingSphere(false);
-          return;
-        } else {
-          alert('No active users found. Make sure you have generated at least one day reflection, then try again.');
-          setIsCreatingSphere(false);
-          return;
-        }
-      }
-
-      console.log('🔨 Creating crew sphere with members:', memberUids);
-
-      // Create the crew sphere
-      const createResult = await firestoreService.createCrewSphere(user.uid, memberUids);
-      
-      console.log('📦 Sphere creation result:', createResult);
-      
-      if (createResult.success) {
-        // Update crew members display with the new members
-        setCrewMembers(memberUsers);
-        alert(`Crew sphere created successfully with ${memberUids.length + 1} members (including you)!`);
-        // Navigate to chat
-        navigate('/pod/chat');
-      } else {
-        alert(`Error creating crew sphere: ${createResult.error}`);
-      }
-    } catch (error) {
-      console.error('❌ Error creating crew sphere:', error);
-      alert(`Error creating crew sphere: ${error.message}. Please try again.`);
-    } finally {
-      setIsCreatingSphere(false);
-    }
-  };
 
   const handleGeneratePodReflection = async () => {
     const user = getCurrentUser();
@@ -645,24 +542,6 @@ export default function PodPage() {
               ))}
             </div>
 
-            {/* Create Sphere Button */}
-            <div className="mt-4 flex justify-center">
-              <button
-                onClick={handleCreateSphere}
-                disabled={isCreatingSphere}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-300 hover:opacity-90 disabled:opacity-50 ${
-                  isDarkMode 
-                    ? 'bg-[#1d9bf0] text-white hover:bg-[#1a8cd8]' 
-                    : 'bg-[#1d9bf0] text-white hover:bg-[#1a8cd8]'
-                }`}
-                style={{
-                  boxShadow: "0 2px 8px rgba(29, 155, 240, 0.3)",
-                }}
-              >
-                <Plus className="w-4 h-4" />
-                <span>{isCreatingSphere ? 'Creating...' : 'Create Sphere'}</span>
-              </button>
-            </div>
           </div>
 
           {/* Pod Reflection Section - Dropdown Card */}
