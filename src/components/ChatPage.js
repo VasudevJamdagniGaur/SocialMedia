@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Brain, Send, ArrowLeft, User, AlertTriangle, Image as ImageIcon, X, Eye, ChevronDown, Check } from "lucide-react";
+import { Brain, Send, ArrowLeft, User, AlertTriangle, Image as ImageIcon, X, Eye, ChevronDown, Key, Check } from "lucide-react";
 import { useTheme } from '../contexts/ThemeContext';
 import chatService from '../services/chatService';
 import reflectionService from '../services/reflectionService';
@@ -34,6 +34,9 @@ export default function ChatPage() {
   const [selectedImage, setSelectedImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [showModelDropdown, setShowModelDropdown] = useState(false);
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [apiKeyType, setApiKeyType] = useState(null);
+  const [apiKeyInput, setApiKeyInput] = useState('');
   const messagesEndRef = useRef(null);
   const dropdownRef = useRef(null);
   
@@ -67,6 +70,23 @@ export default function ChatPage() {
     };
   }, [showModelDropdown]);
 
+  const handleApiKeyOption = (type) => {
+    setApiKeyType(type);
+    setShowApiKeyModal(true);
+    setShowModelDropdown(false);
+  };
+
+  const handleSaveApiKey = () => {
+    if (apiKeyInput.trim()) {
+      // Save API key to localStorage
+      const key = `api_key_${apiKeyType.toLowerCase().replace(/\s+/g, '_')}`;
+      localStorage.setItem(key, apiKeyInput.trim());
+      alert(`${apiKeyType} key saved successfully!`);
+      setApiKeyInput('');
+      setShowApiKeyModal(false);
+      setApiKeyType(null);
+    }
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -842,7 +862,45 @@ export default function ChatPage() {
   }, [isLoading, inputMessage, handleSendMessage]);
 
   // Pre-warm the AI model when ChatPage loads (for both regular chat and whisper sessions)
-  // Note: Model warm-up removed - Google Gemini API handles initialization automatically
+  useEffect(() => {
+    const warmUpModel = async () => {
+      try {
+        console.log('🔥 Pre-warming AI model (llama3:70b)...');
+        // Send a minimal request to load model into GPU memory
+        // This reduces first-message delay significantly
+        const warmUpResponse = await fetch(`${chatService.baseURL}api/generate`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'llama3:70b',
+            prompt: 'Hi',
+            stream: false,
+            options: {
+              num_predict: 1, // Minimal response just to load the model
+              temperature: 0.1
+            }
+          })
+        });
+        
+        if (warmUpResponse.ok) {
+          console.log('✅ Model pre-warmed successfully - first message will be faster!');
+        } else {
+          console.log('⚠️ Model warm-up completed (non-critical):', warmUpResponse.status);
+        }
+      } catch (error) {
+        console.log('⚠️ Model warm-up failed (non-critical):', error.message);
+        // Don't throw - this is optional and shouldn't block the UI
+      }
+    };
+    
+    // Warm up after a short delay to not block page render
+    // Works for both regular chat and whisper sessions
+    const warmUpTimeout = setTimeout(warmUpModel, 500);
+    
+    return () => clearTimeout(warmUpTimeout);
+  }, []); // Run once when component mounts
 
   useEffect(() => {
     // Load existing messages or set welcome message
@@ -1199,7 +1257,7 @@ export default function ChatPage() {
                 isDarkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-800'
               }`}
             >
-              <span>Gemini Pro</span>
+              <span>llama 3:70b</span>
               <ChevronDown className={`w-4 h-4 transition-transform ${showModelDropdown ? 'rotate-180' : ''}`} />
             </button>
 
@@ -1221,8 +1279,36 @@ export default function ChatPage() {
                     }`}
                   >
                     <Check className="w-4 h-4" style={{ color: isDarkMode ? "#8AB4F8" : "#87A96B" }} />
-                    <span className="font-medium">Gemini Pro</span>
+                    <span className="font-medium">llama 3:70b</span>
                   </div>
+                  <div className={`h-px my-1 ${isDarkMode ? 'bg-gray-700' : 'bg-gray-200'}`} />
+                  <button
+                    onClick={() => handleApiKeyOption('OpenAI')}
+                    className={`w-full px-4 py-2.5 text-left text-sm flex items-center space-x-2 hover:bg-opacity-50 transition-colors ${
+                      isDarkMode ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    <Key className="w-4 h-4" />
+                    <span>Add your OpenAI key</span>
+                  </button>
+                  <button
+                    onClick={() => handleApiKeyOption('Gemini')}
+                    className={`w-full px-4 py-2.5 text-left text-sm flex items-center space-x-2 hover:bg-opacity-50 transition-colors ${
+                      isDarkMode ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    <Key className="w-4 h-4" />
+                    <span>Gemini API Key</span>
+                  </button>
+                  <button
+                    onClick={() => handleApiKeyOption('Other')}
+                    className={`w-full px-4 py-2.5 text-left text-sm flex items-center space-x-2 hover:bg-opacity-50 transition-colors ${
+                      isDarkMode ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    <Key className="w-4 h-4" />
+                    <span>Add other API keys</span>
+                  </button>
                 </div>
               </div>
             )}
@@ -1577,6 +1663,87 @@ export default function ChatPage() {
         </div>
       )}
 
+      {/* API Key Modal */}
+      {showApiKeyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/70"
+            onClick={() => {
+              setShowApiKeyModal(false);
+              setApiKeyInput('');
+              setApiKeyType(null);
+            }}
+          />
+          <div
+            className="relative z-10 w-full max-w-md rounded-3xl p-6 space-y-6"
+            style={{
+              backgroundColor: "rgba(18, 18, 18, 0.95)",
+              border: "1px solid rgba(255, 255, 255, 0.1)",
+              boxShadow: "0 25px 50px -12px rgba(0,0,0,0.7)",
+            }}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl font-semibold text-white">
+                Add {apiKeyType} API Key
+              </h3>
+              <button
+                onClick={() => {
+                  setShowApiKeyModal(false);
+                  setApiKeyInput('');
+                  setApiKeyType(null);
+                }}
+                className="p-2 rounded-full hover:bg-gray-700/40 transition-all"
+              >
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  API Key
+                </label>
+                <input
+                  type="password"
+                  value={apiKeyInput}
+                  onChange={(e) => setApiKeyInput(e.target.value)}
+                  placeholder={`Enter your ${apiKeyType} API key`}
+                  className="w-full px-4 py-3 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  style={{
+                    backgroundColor: "#262626",
+                    border: "1px solid rgba(255, 255, 255, 0.1)",
+                  }}
+                  autoFocus
+                />
+              </div>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowApiKeyModal(false);
+                    setApiKeyInput('');
+                    setApiKeyType(null);
+                  }}
+                  className="flex-1 py-3 rounded-xl font-semibold text-white border border-gray-600 hover:bg-gray-700/40 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveApiKey}
+                  disabled={!apiKeyInput.trim()}
+                  className="flex-1 py-3 rounded-xl font-semibold text-black disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  style={{
+                    backgroundColor: "#8AB4F8",
+                    boxShadow: "0 10px 20px rgba(138, 180, 248, 0.35)",
+                  }}
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
     </>
   );
