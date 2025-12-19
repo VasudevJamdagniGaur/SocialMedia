@@ -42,7 +42,7 @@ Respond ONLY with a JSON object in this exact format:
       // Use Google Generative AI API
       const apiUrl = `${this.baseURL}/${this.modelName}:generateContent?key=${this.apiKey}`;
       
-      try {
+        try {
         console.log('🤖 Using Google Gemini for emotional analysis');
         console.log('🌐 API URL:', apiUrl);
           
@@ -105,7 +105,7 @@ Respond ONLY with a JSON object in this exact format:
           }
       } catch (error) {
         console.error(`❌ Error with Google API:`, error);
-        return this.getDefaultScores();
+      return this.getDefaultScores();
       }
     } catch (error) {
       console.error('❌ EMOTIONAL DEBUG: Error in analyzeEmotionalScores:', error);

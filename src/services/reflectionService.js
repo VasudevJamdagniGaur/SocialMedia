@@ -134,80 +134,80 @@ CRITICAL: The reflection must NEVER exceed ${maxReflectionCharacters} characters
     // Use Google Generative AI API
     const apiUrl = `${this.baseURL}/${this.modelName}:generateContent?key=${this.apiKey}`;
     
-    try {
+      try {
       console.log(`🔄 Using Google Gemini for reflection`);
       console.log(`🌐 Day reflection API URL: ${apiUrl}`);
       
       // Create AbortController for timeout
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 seconds
-      
+        
       const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
           contents: [{
             parts: [{
               text: reflectionPrompt
             }]
           }],
           generationConfig: {
-            temperature: 0.5,  // Lower temperature for more accurate, focused summaries
+              temperature: 0.5,  // Lower temperature for more accurate, focused summaries
             maxOutputTokens: maxTokens  // Dynamic token limit based on message count for concise reflections
-          }
+            }
         }),
         signal: controller.signal
-      });
-      
+        });
+
       clearTimeout(timeoutId);
 
       console.log(`📥 Response status:`, response.status);
 
-      if (!response.ok) {
-        const errorText = await response.text();
+        if (!response.ok) {
+          const errorText = await response.text();
         console.error(`❌ Google API Error:`, response.status, errorText);
         throw new Error(`Reflection generation failed: ${response.status} ${response.statusText}`);
-      }
+        }
 
-      const data = await response.json();
+        const data = await response.json();
       console.log(`✅ Google API response received for day summary`);
-      
+        
       // Parse Google API response format
       let text = '';
       if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
         text = data.candidates[0].content.parts.map(part => part.text).join('');
       }
       
-      if (typeof text === 'string' && text.trim()) {
-        let summary = text.trim();
-        
-        // Enforce character limit: reflection must not exceed 2x user character count
-        if (summary.length > maxReflectionCharacters) {
-          console.warn(`⚠️ Generated reflection (${summary.length} chars) exceeds limit (${maxReflectionCharacters} chars). Truncating...`);
-          // Truncate to the character limit, trying to end at a sentence boundary
-          summary = summary.substring(0, maxReflectionCharacters);
-          // Try to find the last sentence ending (., !, ?) before the limit
-          const lastSentenceEnd = Math.max(
-            summary.lastIndexOf('.'),
-            summary.lastIndexOf('!'),
-            summary.lastIndexOf('?')
-          );
-          if (lastSentenceEnd > maxReflectionCharacters * 0.7) {
-            // If we found a sentence end reasonably close to the limit, use it
-            summary = summary.substring(0, lastSentenceEnd + 1);
+        if (typeof text === 'string' && text.trim()) {
+          let summary = text.trim();
+          
+          // Enforce character limit: reflection must not exceed 2x user character count
+          if (summary.length > maxReflectionCharacters) {
+            console.warn(`⚠️ Generated reflection (${summary.length} chars) exceeds limit (${maxReflectionCharacters} chars). Truncating...`);
+            // Truncate to the character limit, trying to end at a sentence boundary
+            summary = summary.substring(0, maxReflectionCharacters);
+            // Try to find the last sentence ending (., !, ?) before the limit
+            const lastSentenceEnd = Math.max(
+              summary.lastIndexOf('.'),
+              summary.lastIndexOf('!'),
+              summary.lastIndexOf('?')
+            );
+            if (lastSentenceEnd > maxReflectionCharacters * 0.7) {
+              // If we found a sentence end reasonably close to the limit, use it
+              summary = summary.substring(0, lastSentenceEnd + 1);
+            }
+            console.log(`✅ Truncated reflection to ${summary.length} characters (within ${maxReflectionCharacters} limit)`);
           }
-          console.log(`✅ Truncated reflection to ${summary.length} characters (within ${maxReflectionCharacters} limit)`);
-        }
-        
-        console.log(`📖 Generated day summary: ${summary.length} characters (limit: ${maxReflectionCharacters})`);
-        return summary;
-      } else {
+          
+          console.log(`📖 Generated day summary: ${summary.length} characters (limit: ${maxReflectionCharacters})`);
+          return summary;
+        } else {
         console.error(`❌ Invalid response format:`, data);
-        console.log('🔍 Full response data:', JSON.stringify(data, null, 2));
+          console.log('🔍 Full response data:', JSON.stringify(data, null, 2));
         throw new Error('Invalid response format from reflection API');
-      }
+        }
     } catch (error) {
       console.error(`💥 Error with Google API:`, error.message);
       throw error;
@@ -365,7 +365,7 @@ Write a SHORT, natural diary entry about this day in first person. Write ${sente
       // Create AbortController for timeout
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 seconds
-      
+        
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
@@ -384,7 +384,7 @@ Write a SHORT, natural diary entry about this day in first person. Write ${sente
         }),
         signal: controller.signal
       });
-      
+
       clearTimeout(timeoutId);
 
       console.log(`📥 Response status:`, response.status);
@@ -686,7 +686,7 @@ CRITICAL: The reflection must NEVER exceed ${maxReflectionCharacters} characters
       // Create AbortController for timeout
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 seconds
-      
+        
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
@@ -705,7 +705,7 @@ CRITICAL: The reflection must NEVER exceed ${maxReflectionCharacters} characters
         }),
         signal: controller.signal
       });
-      
+
       clearTimeout(timeoutId);
 
       console.log(`📥 Response status:`, response.status);

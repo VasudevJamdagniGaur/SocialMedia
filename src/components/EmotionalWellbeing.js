@@ -1232,12 +1232,12 @@ export default function EmotionalWellbeing() {
               return new Date(a.date) - new Date(b.date);
             })
             .map(day => ({
-              ...day,
-              happiness: typeof day.happiness === 'number' ? Math.max(0, Math.min(100, day.happiness)) : 0,
-              energy: typeof day.energy === 'number' ? Math.max(0, Math.min(100, day.energy)) : 0,
-              anxiety: typeof day.anxiety === 'number' ? Math.max(0, Math.min(100, day.anxiety)) : 0,
-              stress: typeof day.stress === 'number' ? Math.max(0, Math.min(100, day.stress)) : 0
-            }));
+            ...day,
+            happiness: typeof day.happiness === 'number' ? Math.max(0, Math.min(100, day.happiness)) : 0,
+            energy: typeof day.energy === 'number' ? Math.max(0, Math.min(100, day.energy)) : 0,
+            anxiety: typeof day.anxiety === 'number' ? Math.max(0, Math.min(100, day.anxiety)) : 0,
+            stress: typeof day.stress === 'number' ? Math.max(0, Math.min(100, day.stress)) : 0
+          }));
           
           // Log data variation to help debug flat lines
           if (newMoodData.length > 0) {
@@ -1941,17 +1941,17 @@ export default function EmotionalWellbeing() {
         const avgAnxiety = validData.reduce((sum, item) => sum + item.anxiety, 0) / validData.length;
         const avgStress = validData.reduce((sum, item) => sum + item.stress, 0) / validData.length;
 
-        const topEmotions = [
-          { name: 'Happiness', value: Math.round(avgHappiness), color: '#10B981' },
-          { name: 'Energy', value: Math.round(avgEnergy), color: '#F59E0B' },
-          { name: 'Anxiety', value: Math.round(avgAnxiety), color: '#EF4444' },
-          { name: 'Stress', value: Math.round(avgStress), color: '#8B5CF6' }
-        ].sort((a, b) => b.value - a.value);
+      const topEmotions = [
+        { name: 'Happiness', value: Math.round(avgHappiness), color: '#10B981' },
+        { name: 'Energy', value: Math.round(avgEnergy), color: '#F59E0B' },
+        { name: 'Anxiety', value: Math.round(avgAnxiety), color: '#EF4444' },
+        { name: 'Stress', value: Math.round(avgStress), color: '#8B5CF6' }
+      ].sort((a, b) => b.value - a.value);
 
-        console.log('✅ Balance data processed successfully from Firebase data');
+      console.log('✅ Balance data processed successfully from Firebase data');
         console.log(`✅ Processed ${moodBalance.length} days with valid balance data`);
-        return { moodBalance, topEmotions };
-      }
+      return { moodBalance, topEmotions };
+    }
     }
     
     // If no valid data, return empty arrays (don't use defaults)
@@ -1984,7 +1984,7 @@ export default function EmotionalWellbeing() {
             anxiety: data.anxiety || 0,
             stress: data.stress || 0
           };
-        } else {
+    } else {
           console.log(`⚠️ Mood data exists for ${dateId} but all values are zero, will regenerate`);
           // Continue to generate new analysis
         }
@@ -1995,8 +1995,8 @@ export default function EmotionalWellbeing() {
       if (!messagesResult.success || !messagesResult.messages || messagesResult.messages.length === 0) {
         console.log(`⚠️ No chat messages found for ${dateId}, cannot generate analysis`);
         return null;
-      }
-      
+    }
+
       // Filter out welcome message, whisper session messages, and ensure we have real conversation
       const realMessages = messagesResult.messages.filter(m => 
         m.id !== 'welcome' && 
@@ -2019,7 +2019,7 @@ export default function EmotionalWellbeing() {
       // Save to Firestore
       await firestoreService.saveMoodChartNew(uid, dateId, emotionalScores);
       console.log(`💾 Emotional scores saved to Firestore for ${dateId}`);
-      
+
       // Also save emotional balance
       const total = emotionalScores.happiness + emotionalScores.energy + emotionalScores.stress + emotionalScores.anxiety;
       let positive = ((emotionalScores.happiness + emotionalScores.energy) / total) * 100;
