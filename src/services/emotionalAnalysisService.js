@@ -51,7 +51,11 @@ Respond ONLY with a JSON object in this exact format:
       const modelToUse = 'llama3:70b'; // Go directly to preferred model
       
         try {
+<<<<<<< HEAD
         console.log('🤖 Using model for emotional analysis:', modelToUse);
+=======
+        console.log('🤖 Using Google Gemini for emotional analysis');
+>>>>>>> 31cecffb (Refactor AllReflectionsPage and EmotionalWellbeing components for improved readability and maintainability. Cleaned up date handling logic, enhanced error handling in emotional analysis, and updated API integration for consistency. Adjusted formatting in various service files to ensure clarity and prevent potential issues.)
         console.log('🌐 API URL:', apiUrl);
           
           // Create AbortController for timeout
@@ -106,6 +110,7 @@ Respond ONLY with a JSON object in this exact format:
             return this.getDefaultScores();
           }
       } catch (error) {
+<<<<<<< HEAD
         console.error(`❌ Error with model ${modelToUse}:`, error);
         
         // If proxy failed and we were using proxy, try direct URL
@@ -155,6 +160,10 @@ Respond ONLY with a JSON object in this exact format:
         }
         
         return this.getDefaultScores();
+=======
+        console.error(`❌ Error with Google API:`, error);
+      return this.getDefaultScores();
+>>>>>>> 31cecffb (Refactor AllReflectionsPage and EmotionalWellbeing components for improved readability and maintainability. Cleaned up date handling logic, enhanced error handling in emotional analysis, and updated API integration for consistency. Adjusted formatting in various service files to ensure clarity and prevent potential issues.)
       }
     } catch (error) {
       console.error('❌ EMOTIONAL DEBUG: Error in analyzeEmotionalScores:', error);

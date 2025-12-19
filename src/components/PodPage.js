@@ -581,7 +581,7 @@ export default function PodPage() {
                   isDarkMode ? 'hover:bg-gray-800/50' : 'hover:bg-gray-100'
                 }`}
               >
-                <ChevronRight className={`w-5 h-5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
+              <ChevronRight className={`w-5 h-5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
               </button>
             </div>
             

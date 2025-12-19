@@ -141,23 +141,33 @@ CRITICAL: The reflection must NEVER exceed ${maxReflectionCharacters} characters
     // Go directly to llama3:70b - skip model check
     const modelToUse = 'llama3:70b';
     
+<<<<<<< HEAD
     // Try proxy first, fallback to direct URL if proxy fails
     let apiUrl = this.useProxy ? `${this.proxyURL}/api/generate` : `${this.baseURL}api/generate`;
     
       try {
       console.log(`🔄 Using model: ${modelToUse} for reflection`);
+=======
+      try {
+      console.log(`🔄 Using Google Gemini for reflection`);
+>>>>>>> 31cecffb (Refactor AllReflectionsPage and EmotionalWellbeing components for improved readability and maintainability. Cleaned up date handling logic, enhanced error handling in emotional analysis, and updated API integration for consistency. Adjusted formatting in various service files to ensure clarity and prevent potential issues.)
       console.log(`🌐 Day reflection API URL: ${apiUrl}`);
       
       // Create AbortController for timeout
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 seconds
         
+<<<<<<< HEAD
         const response = await fetch(apiUrl, {
+=======
+      const response = await fetch(apiUrl, {
+>>>>>>> 31cecffb (Refactor AllReflectionsPage and EmotionalWellbeing components for improved readability and maintainability. Cleaned up date handling logic, enhanced error handling in emotional analysis, and updated API integration for consistency. Adjusted formatting in various service files to ensure clarity and prevent potential issues.)
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
+<<<<<<< HEAD
           model: modelToUse,
             prompt: reflectionPrompt,
             stream: false,
@@ -171,20 +181,51 @@ CRITICAL: The reflection must NEVER exceed ${maxReflectionCharacters} characters
         });
         
         clearTimeout(timeoutId);
+=======
+          contents: [{
+            parts: [{
+              text: reflectionPrompt
+            }]
+          }],
+          generationConfig: {
+              temperature: 0.5,  // Lower temperature for more accurate, focused summaries
+            maxOutputTokens: maxTokens  // Dynamic token limit based on message count for concise reflections
+            }
+        }),
+        signal: controller.signal
+        });
+
+      clearTimeout(timeoutId);
+>>>>>>> 31cecffb (Refactor AllReflectionsPage and EmotionalWellbeing components for improved readability and maintainability. Cleaned up date handling logic, enhanced error handling in emotional analysis, and updated API integration for consistency. Adjusted formatting in various service files to ensure clarity and prevent potential issues.)
 
       console.log(`📥 Response status for ${modelToUse}:`, response.status);
 
         if (!response.ok) {
           const errorText = await response.text();
+<<<<<<< HEAD
         console.error(`❌ RunPod API Error for ${modelToUse}:`, response.status, errorText);
+=======
+        console.error(`❌ Google API Error:`, response.status, errorText);
+>>>>>>> 31cecffb (Refactor AllReflectionsPage and EmotionalWellbeing components for improved readability and maintainability. Cleaned up date handling logic, enhanced error handling in emotional analysis, and updated API integration for consistency. Adjusted formatting in various service files to ensure clarity and prevent potential issues.)
         throw new Error(`Reflection generation failed: ${response.status} ${response.statusText}`);
         }
 
         const data = await response.json();
+<<<<<<< HEAD
       console.log(`✅ RunPod response received for day summary with ${modelToUse}`);
         
         // Accept multiple possible fields from providers
         const text = (data && (data.response ?? data.output ?? data.message?.content)) || '';
+=======
+      console.log(`✅ Google API response received for day summary`);
+        
+      // Parse Google API response format
+      let text = '';
+      if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
+        text = data.candidates[0].content.parts.map(part => part.text).join('');
+      }
+      
+>>>>>>> 31cecffb (Refactor AllReflectionsPage and EmotionalWellbeing components for improved readability and maintainability. Cleaned up date handling logic, enhanced error handling in emotional analysis, and updated API integration for consistency. Adjusted formatting in various service files to ensure clarity and prevent potential issues.)
         if (typeof text === 'string' && text.trim()) {
           let summary = text.trim();
           
@@ -209,7 +250,11 @@ CRITICAL: The reflection must NEVER exceed ${maxReflectionCharacters} characters
           console.log(`📖 Generated day summary: ${summary.length} characters (limit: ${maxReflectionCharacters})`);
           return summary;
         } else {
+<<<<<<< HEAD
         console.error(`❌ Invalid response format from ${modelToUse}:`, data);
+=======
+        console.error(`❌ Invalid response format:`, data);
+>>>>>>> 31cecffb (Refactor AllReflectionsPage and EmotionalWellbeing components for improved readability and maintainability. Cleaned up date handling logic, enhanced error handling in emotional analysis, and updated API integration for consistency. Adjusted formatting in various service files to ensure clarity and prevent potential issues.)
           console.log('🔍 Full response data:', JSON.stringify(data, null, 2));
         throw new Error('Invalid response format from reflection API');
         }
@@ -432,7 +477,7 @@ Write a SHORT, natural diary entry about this day in first person. Write ${sente
       // Create AbortController for timeout
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 seconds
-      
+        
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
@@ -450,7 +495,7 @@ Write a SHORT, natural diary entry about this day in first person. Write ${sente
         }),
         signal: controller.signal
       });
-      
+
       clearTimeout(timeoutId);
 
       console.log(`📥 Response status for ${modelToUse}:`, response.status);
@@ -795,7 +840,7 @@ CRITICAL: The reflection must NEVER exceed ${maxReflectionCharacters} characters
       // Create AbortController for timeout
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 seconds
-      
+        
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
@@ -813,7 +858,7 @@ CRITICAL: The reflection must NEVER exceed ${maxReflectionCharacters} characters
         }),
         signal: controller.signal
       });
-      
+
       clearTimeout(timeoutId);
 
       console.log(`📥 Response status for ${modelToUse}:`, response.status);

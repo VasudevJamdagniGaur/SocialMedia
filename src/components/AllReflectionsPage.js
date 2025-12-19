@@ -40,7 +40,7 @@ export default function AllReflectionsPage() {
       // Handle Firestore Timestamp
       if (date && typeof date.toDate === 'function') {
         date = date.toDate();
-      }
+        }
       
       if (!date || isNaN(date.getTime())) {
         return reflectionItem.date || '';
@@ -113,18 +113,18 @@ export default function AllReflectionsPage() {
               // Check if this reflection already exists from podReflections
               const exists = allReflections.some(r => r.date === pod.startDate);
               if (!exists) {
-                // Create date object from startDate
-                let reflectionDate;
-                try {
-                  if (pod.startDate.includes('-')) {
-                    const [year, month, day] = pod.startDate.split('-');
-                    reflectionDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-                  } else {
-                    reflectionDate = new Date(pod.startDate);
-                  }
-                } catch (e) {
-                  reflectionDate = new Date();
+              // Create date object from startDate
+              let reflectionDate;
+              try {
+                if (pod.startDate.includes('-')) {
+                  const [year, month, day] = pod.startDate.split('-');
+                  reflectionDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+                } else {
+                  reflectionDate = new Date(pod.startDate);
                 }
+              } catch (e) {
+                reflectionDate = new Date();
+              }
                 
                 // Handle createdAt timestamp properly
                 let createdAt = pod.createdAt;
@@ -133,27 +133,27 @@ export default function AllReflectionsPage() {
                 } else if (!createdAt || !(createdAt instanceof Date)) {
                   createdAt = reflectionDate;
                 }
-                
-                allReflections.push({
-                  id: pod.id || pod.startDate,
-                  date: pod.startDate,
-                  dateObj: reflectionDate,
-                  reflection: pod.reflection,
+              
+              allReflections.push({
+                id: pod.id || pod.startDate,
+                date: pod.startDate,
+                dateObj: reflectionDate,
+                reflection: pod.reflection,
                   createdAt: createdAt
-                });
+              });
               }
             });
         }
-        
-        // Also get current reflection if it exists and not already in list
-        const currentReflectionResult = await firestoreService.getPodReflection(user.uid);
-        if (currentReflectionResult.success && currentReflectionResult.reflection) {
-          const today = new Date();
-          const todayId = getDateId(today);
           
-          // Check if today's reflection is already in the list
-          const todayExists = allReflections.some(r => r.date === todayId);
-          if (!todayExists) {
+        // Also get current reflection if it exists and not already in list
+          const currentReflectionResult = await firestoreService.getPodReflection(user.uid);
+          if (currentReflectionResult.success && currentReflectionResult.reflection) {
+            const today = new Date();
+          const todayId = getDateId(today);
+            
+            // Check if today's reflection is already in the list
+            const todayExists = allReflections.some(r => r.date === todayId);
+            if (!todayExists) {
             let createdAt = currentReflectionResult.createdAt;
             if (createdAt && typeof createdAt.toDate === 'function') {
               createdAt = createdAt.toDate();
@@ -161,13 +161,13 @@ export default function AllReflectionsPage() {
               createdAt = today;
             }
             
-            allReflections.push({
-              id: 'current',
+              allReflections.push({
+                id: 'current',
               date: currentReflectionResult.dateId || todayId,
-              dateObj: today,
-              reflection: currentReflectionResult.reflection,
+                dateObj: today,
+                reflection: currentReflectionResult.reflection,
               createdAt: createdAt
-            });
+              });
           }
         }
         

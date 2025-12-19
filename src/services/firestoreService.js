@@ -858,17 +858,17 @@ class FirestoreService {
             // Only add data if it has valid values (not all zeros)
             const total = (data.happiness || 0) + (data.energy || 0) + (data.anxiety || 0) + (data.stress || 0);
             if (total > 0) {
-              const dayData = {
-                date: dateId,
-                day: targetDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-                happiness: data.happiness || 0,
-                anxiety: data.anxiety || 0,
-                stress: data.stress || 0,
-                energy: data.energy || 0
-              };
-              
-              console.log(`📊 FIRESTORE NEW: ✅ Pushing to array:`, dayData);
-              moodData.push(dayData);
+            const dayData = {
+              date: dateId,
+              day: targetDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+              happiness: data.happiness || 0,
+              anxiety: data.anxiety || 0,
+              stress: data.stress || 0,
+              energy: data.energy || 0
+            };
+            
+            console.log(`📊 FIRESTORE NEW: ✅ Pushing to array:`, dayData);
+            moodData.push(dayData);
             } else {
               console.log(`📊 FIRESTORE NEW: ⚠️ Data exists but all values are zero for ${dateId}, skipping`);
             }
