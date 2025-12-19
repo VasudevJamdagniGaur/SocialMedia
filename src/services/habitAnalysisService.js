@@ -3,19 +3,11 @@ import { getDateIdDaysAgo } from '../utils/dateUtils';
 
 class HabitAnalysisService {
   constructor() {
-<<<<<<< HEAD
-    // Use CORS proxy if available, otherwise fallback to direct URL
-    this.proxyURL = 'http://localhost:3001';
-    this.baseURL = 'https://rr9rd9oc5khoyk-11434.proxy.runpod.net/';
-    this.modelName = 'llama3:70b'; // Preferred model - skip model check
-=======
     this.apiKey = process.env.REACT_APP_GOOGLE_API_KEY || '';
     this.baseURL = 'https://generativelanguage.googleapis.com/v1beta/models';
     this.modelName = 'gemini-pro';
->>>>>>> 8e6a6ff7 (Refactor API key management across multiple services to utilize environment variables. Updated EmotionalWellbeing, ChatService, EmotionalAnalysisService, HabitAnalysisService, PatternAnalysisService, and ReflectionService to enhance security and maintainability by removing hardcoded API keys.)
     this.minDaysRequired = 1; // Minimum days needed for meaningful analysis
     this.minMessagesRequired = 1; // Minimum total messages needed
-    this.useProxy = true; // Try proxy first
   }
 
   /**
@@ -91,7 +83,7 @@ class HabitAnalysisService {
   }
 
   /**
-   * Perform AI analysis on chat data using RunPod directly
+   * Perform AI analysis on chat data using Google Gemini API
    */
   async performHabitAnalysis(chatData) {
     console.log('🤖 Performing AI habit analysis on 3 months of chat data...');
@@ -160,29 +152,31 @@ IMPORTANT:
 - Be concrete and actionable, not abstract
 - Focus on habits that will have the biggest impact on their most frequent struggles`;
 
-      console.log('📤 HABIT DEBUG: Sending request to RunPod Ollama...');
+      console.log('📤 HABIT DEBUG: Sending request to Google Gemini...');
 
-      // Try proxy first, fallback to direct URL if proxy fails
-      let apiUrl = this.useProxy ? `${this.proxyURL}/api/generate` : `${this.baseURL}api/generate`;
+      // Use Google Generative AI API
+      const apiUrl = `${this.baseURL}/${this.modelName}:generateContent?key=${this.apiKey}`;
       console.log('🌐 HABIT API URL:', apiUrl);
 
       // Create AbortController for timeout
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 seconds
       
-      // Use RunPod Ollama API via proxy or directly
+      // Use Google Generative AI API
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: this.modelName,
-          prompt: habitAnalysisPrompt,
-          stream: false,
-          options: {
+          contents: [{
+            parts: [{
+              text: habitAnalysisPrompt
+            }]
+          }],
+          generationConfig: {
             temperature: 0.3,
-            max_tokens: 1000
+            maxOutputTokens: 1000
           }
         }),
         signal: controller.signal
@@ -191,14 +185,21 @@ IMPORTANT:
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        throw new Error(`RunPod Ollama API error: ${response.status} ${response.statusText}`);
+        const errorText = await response.text();
+        throw new Error(`Google API error: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
       const data = await response.json();
-      console.log('✅ HABIT DEBUG: Received response from RunPod:', data);
+      console.log('✅ HABIT DEBUG: Received response from Google API:', data);
       
-      if (data.response) {
-        const analysisResult = this.parseHabitAnalysisResult(data.response);
+      // Parse Google API response format
+      let responseText = '';
+      if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
+        responseText = data.candidates[0].content.parts.map(part => part.text).join('');
+      }
+      
+      if (responseText) {
+        const analysisResult = this.parseHabitAnalysisResult(responseText);
         console.log('✅ AI habit analysis completed:', analysisResult);
         return analysisResult;
       } else {
@@ -207,49 +208,6 @@ IMPORTANT:
 
     } catch (error) {
       console.error('❌ Error in AI habit analysis:', error);
-      
-      // If proxy failed and we were using proxy, try direct URL
-      if (this.useProxy && apiUrl.includes('localhost:3001')) {
-        console.log('🔄 Proxy failed, trying direct URL for habit analysis...');
-        this.useProxy = false;
-        apiUrl = `${this.baseURL}api/generate`;
-        
-        try {
-          const directController = new AbortController();
-          const directTimeoutId = setTimeout(() => directController.abort(), 120000);
-          
-          const directResponse = await fetch(apiUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              model: this.modelName,
-              prompt: habitAnalysisPrompt,
-              stream: false,
-              options: {
-                temperature: 0.3,
-                max_tokens: 1000
-              }
-            }),
-            signal: directController.signal
-          });
-          
-          clearTimeout(directTimeoutId);
-          
-          if (directResponse.ok) {
-            const data = await directResponse.json();
-            if (data.response) {
-              const analysisResult = this.parseHabitAnalysisResult(data.response);
-              console.log('✅ Direct URL worked for habit analysis');
-              return analysisResult;
-            }
-          }
-        } catch (directError) {
-          console.error('❌ Direct URL also failed for habit analysis:', directError);
-        }
-      }
-      
       return this.getDefaultHabitAnalysis();
     }
   }

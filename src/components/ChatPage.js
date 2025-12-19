@@ -694,12 +694,12 @@ export default function ChatPage() {
           const messagesToProcess = Array.isArray(finalMessagesLocal) ? finalMessagesLocal : [];
           console.log('🔍 CHAT DEBUG: Using messages array with length:', messagesToProcess.length);
           
-          // Generate AI reflection using RunPod llama3:70b
+          // Generate AI reflection using Google Gemini
           let reflection;
           try {
-            console.log('🤖 Generating AI reflection using RunPod llama3:70b...');
+            console.log('🤖 Generating AI reflection using Google Gemini...');
             reflection = await reflectionService.generateReflection(messagesToProcess);
-            console.log('✅ AI Reflection generated via RunPod:', reflection);
+            console.log('✅ AI Reflection generated via Google Gemini:', reflection);
           } catch (apiError) {
             console.log('⚠️ AI reflection failed:', apiError.message);
               return; // Don't save if generation failed
@@ -742,7 +742,7 @@ export default function ChatPage() {
             finalMessagesLocal.filter(m => !m.isWhisperSession) : [];
           console.log('🔍 CHAT DEBUG: Using non-whisper messages array with length:', messagesToProcess.length);
           
-          console.log('🤖 FORCING AI emotional analysis with RunPod...');
+          console.log('🤖 FORCING AI emotional analysis with Google Gemini...');
           console.log('🤖 Messages to analyze:', messagesToProcess.map(m => `${m.sender}: ${m.text.slice(0, 50)}...`));
           
           try {
@@ -754,7 +754,7 @@ export default function ChatPage() {
             const total = (emotionalScores.happiness || 0) + (emotionalScores.energy || 0) + (emotionalScores.anxiety || 0) + (emotionalScores.stress || 0);
             if (total === 0) {
               console.error('❌ CRITICAL: Emotional analysis returned ALL ZEROS - API likely failed');
-              console.error('❌ CRITICAL: This means the RunPod AI server did not generate valid scores');
+              console.error('❌ CRITICAL: This means the Google Gemini API did not generate valid scores');
               console.error('❌ CRITICAL: Check browser console for "All models failed" error above');
             }
             

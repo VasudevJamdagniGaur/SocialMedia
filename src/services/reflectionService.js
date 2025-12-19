@@ -3,16 +3,9 @@ import { getDateId } from '../utils/dateUtils';
 
 class ReflectionService {
   constructor() {
-<<<<<<< HEAD
-    // Use CORS proxy if available, otherwise fallback to direct URL
-    this.proxyURL = 'http://localhost:3001';
-    this.baseURL = 'https://rr9rd9oc5khoyk-11434.proxy.runpod.net/';
-    this.useProxy = true; // Try proxy first
-=======
     this.apiKey = process.env.REACT_APP_GOOGLE_API_KEY || '';
     this.baseURL = 'https://generativelanguage.googleapis.com/v1beta/models';
     this.modelName = 'gemini-pro';
->>>>>>> 8e6a6ff7 (Refactor API key management across multiple services to utilize environment variables. Updated EmotionalWellbeing, ChatService, EmotionalAnalysisService, HabitAnalysisService, PatternAnalysisService, and ReflectionService to enhance security and maintainability by removing hardcoded API keys.)
     this.greetings = ['hey', 'hi', 'hello', 'hii', 'hiii', 'hiiii', 'sup', 'yo', 'what\'s up', 'wassup'];
   }
 
@@ -136,52 +129,25 @@ CRITICAL: The reflection must NEVER exceed ${maxReflectionCharacters} characters
     console.log('🧪 Reflection prompt length:', reflectionPrompt.length);
     console.log('🧪 Reflection prompt preview:', reflectionPrompt.slice(0, 200));
 
-    console.log('🌐 Making API call to RunPod for reflection...');
+    console.log('🌐 Making API call to Google Gemini for reflection...');
 
-    // Go directly to llama3:70b - skip model check
-    const modelToUse = 'llama3:70b';
+    // Use Google Generative AI API
+    const apiUrl = `${this.baseURL}/${this.modelName}:generateContent?key=${this.apiKey}`;
     
-<<<<<<< HEAD
-    // Try proxy first, fallback to direct URL if proxy fails
-    let apiUrl = this.useProxy ? `${this.proxyURL}/api/generate` : `${this.baseURL}api/generate`;
-    
-      try {
-      console.log(`🔄 Using model: ${modelToUse} for reflection`);
-=======
       try {
       console.log(`🔄 Using Google Gemini for reflection`);
->>>>>>> 31cecffb (Refactor AllReflectionsPage and EmotionalWellbeing components for improved readability and maintainability. Cleaned up date handling logic, enhanced error handling in emotional analysis, and updated API integration for consistency. Adjusted formatting in various service files to ensure clarity and prevent potential issues.)
       console.log(`🌐 Day reflection API URL: ${apiUrl}`);
       
       // Create AbortController for timeout
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 seconds
         
-<<<<<<< HEAD
-        const response = await fetch(apiUrl, {
-=======
       const response = await fetch(apiUrl, {
->>>>>>> 31cecffb (Refactor AllReflectionsPage and EmotionalWellbeing components for improved readability and maintainability. Cleaned up date handling logic, enhanced error handling in emotional analysis, and updated API integration for consistency. Adjusted formatting in various service files to ensure clarity and prevent potential issues.)
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-<<<<<<< HEAD
-          model: modelToUse,
-            prompt: reflectionPrompt,
-            stream: false,
-            options: {
-              temperature: 0.5,  // Lower temperature for more accurate, focused summaries
-              top_p: 0.9,
-              max_tokens: maxTokens  // Dynamic token limit based on message count for concise reflections
-            }
-          }),
-          signal: controller.signal
-        });
-        
-        clearTimeout(timeoutId);
-=======
           contents: [{
             parts: [{
               text: reflectionPrompt
@@ -196,27 +162,16 @@ CRITICAL: The reflection must NEVER exceed ${maxReflectionCharacters} characters
         });
 
       clearTimeout(timeoutId);
->>>>>>> 31cecffb (Refactor AllReflectionsPage and EmotionalWellbeing components for improved readability and maintainability. Cleaned up date handling logic, enhanced error handling in emotional analysis, and updated API integration for consistency. Adjusted formatting in various service files to ensure clarity and prevent potential issues.)
 
-      console.log(`📥 Response status for ${modelToUse}:`, response.status);
+      console.log(`📥 Response status:`, response.status);
 
         if (!response.ok) {
           const errorText = await response.text();
-<<<<<<< HEAD
-        console.error(`❌ RunPod API Error for ${modelToUse}:`, response.status, errorText);
-=======
         console.error(`❌ Google API Error:`, response.status, errorText);
->>>>>>> 31cecffb (Refactor AllReflectionsPage and EmotionalWellbeing components for improved readability and maintainability. Cleaned up date handling logic, enhanced error handling in emotional analysis, and updated API integration for consistency. Adjusted formatting in various service files to ensure clarity and prevent potential issues.)
         throw new Error(`Reflection generation failed: ${response.status} ${response.statusText}`);
         }
 
         const data = await response.json();
-<<<<<<< HEAD
-      console.log(`✅ RunPod response received for day summary with ${modelToUse}`);
-        
-        // Accept multiple possible fields from providers
-        const text = (data && (data.response ?? data.output ?? data.message?.content)) || '';
-=======
       console.log(`✅ Google API response received for day summary`);
         
       // Parse Google API response format
@@ -225,7 +180,6 @@ CRITICAL: The reflection must NEVER exceed ${maxReflectionCharacters} characters
         text = data.candidates[0].content.parts.map(part => part.text).join('');
       }
       
->>>>>>> 31cecffb (Refactor AllReflectionsPage and EmotionalWellbeing components for improved readability and maintainability. Cleaned up date handling logic, enhanced error handling in emotional analysis, and updated API integration for consistency. Adjusted formatting in various service files to ensure clarity and prevent potential issues.)
         if (typeof text === 'string' && text.trim()) {
           let summary = text.trim();
           
@@ -250,75 +204,12 @@ CRITICAL: The reflection must NEVER exceed ${maxReflectionCharacters} characters
           console.log(`📖 Generated day summary: ${summary.length} characters (limit: ${maxReflectionCharacters})`);
           return summary;
         } else {
-<<<<<<< HEAD
-        console.error(`❌ Invalid response format from ${modelToUse}:`, data);
-=======
         console.error(`❌ Invalid response format:`, data);
->>>>>>> 31cecffb (Refactor AllReflectionsPage and EmotionalWellbeing components for improved readability and maintainability. Cleaned up date handling logic, enhanced error handling in emotional analysis, and updated API integration for consistency. Adjusted formatting in various service files to ensure clarity and prevent potential issues.)
           console.log('🔍 Full response data:', JSON.stringify(data, null, 2));
         throw new Error('Invalid response format from reflection API');
         }
     } catch (error) {
-      console.error(`💥 Error with model ${modelToUse}:`, error.message);
-      
-      // If proxy failed and we were using proxy, try direct URL
-      if (this.useProxy && apiUrl.includes('localhost:3001')) {
-        console.log('🔄 Proxy failed for day reflection, trying direct URL...');
-        this.useProxy = false;
-        apiUrl = `${this.baseURL}api/generate`;
-        
-        try {
-          const directController = new AbortController();
-          const directTimeoutId = setTimeout(() => directController.abort(), 120000);
-          
-          const directResponse = await fetch(apiUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              model: modelToUse,
-              prompt: reflectionPrompt,
-              stream: false,
-              options: {
-                temperature: 0.5,
-                top_p: 0.9,
-                max_tokens: maxTokens
-              }
-            }),
-            signal: directController.signal
-          });
-          
-          clearTimeout(directTimeoutId);
-          
-          if (directResponse.ok) {
-            const data = await directResponse.json();
-            const text = (data && (data.response ?? data.output ?? data.message?.content)) || '';
-            if (typeof text === 'string' && text.trim()) {
-              let summary = text.trim();
-              
-              // Enforce character limit
-              if (summary.length > maxReflectionCharacters) {
-                summary = summary.substring(0, maxReflectionCharacters);
-                const lastSentenceEnd = Math.max(
-                  summary.lastIndexOf('.'),
-                  summary.lastIndexOf('!'),
-                  summary.lastIndexOf('?')
-                );
-                if (lastSentenceEnd > maxReflectionCharacters * 0.7) {
-                  summary = summary.substring(0, lastSentenceEnd + 1);
-                }
-              }
-              
-              console.log('✅ Direct URL worked for day reflection');
-              return summary;
-            }
-          }
-        } catch (directError) {
-          console.error('❌ Direct URL also failed for day reflection:', directError);
-        }
-      }
-      
+      console.error(`💥 Error with Google API:`, error.message);
       throw error;
     }
   }
@@ -462,16 +353,13 @@ Write a SHORT, natural diary entry about this day in first person. Write ${sente
     console.log('🧪 Narrative prompt length:', narrativePrompt.length);
     console.log('🧪 Narrative prompt preview:', narrativePrompt.slice(0, 200));
 
-    console.log('🌐 Making API call to RunPod for narrative story...');
+    console.log('🌐 Making API call to Google Gemini for narrative story...');
 
-    // Go directly to llama3:70b - skip model check
-    const modelToUse = 'llama3:70b';
-    
-    // Try proxy first, fallback to direct URL if proxy fails
-    let apiUrl = this.useProxy ? `${this.proxyURL}/api/generate` : `${this.baseURL}api/generate`;
+    // Use Google Generative AI API
+    const apiUrl = `${this.baseURL}/${this.modelName}:generateContent?key=${this.apiKey}`;
     
     try {
-      console.log(`🔄 Using model: ${modelToUse} for narrative story`);
+      console.log(`🔄 Using Google Gemini for narrative story`);
       console.log(`🌐 Narrative story API URL: ${apiUrl}`);
       
       // Create AbortController for timeout
@@ -484,13 +372,14 @@ Write a SHORT, natural diary entry about this day in first person. Write ${sente
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: modelToUse,
-          prompt: narrativePrompt,
-          stream: false,
-          options: {
+          contents: [{
+            parts: [{
+              text: narrativePrompt
+            }]
+          }],
+          generationConfig: {
             temperature: 0.7,  // Slightly higher temperature for more natural, creative storytelling
-            top_p: 0.9,
-            max_tokens: maxTokens  // Dynamic token limit based on message count
+            maxOutputTokens: maxTokens  // Dynamic token limit based on message count
           }
         }),
         signal: controller.signal
@@ -498,75 +387,34 @@ Write a SHORT, natural diary entry about this day in first person. Write ${sente
 
       clearTimeout(timeoutId);
 
-      console.log(`📥 Response status for ${modelToUse}:`, response.status);
+      console.log(`📥 Response status:`, response.status);
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`❌ RunPod API Error for ${modelToUse}:`, response.status, errorText);
+        console.error(`❌ Google API Error:`, response.status, errorText);
         throw new Error(`Narrative story generation failed: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json();
-      console.log(`✅ RunPod response received for narrative story with ${modelToUse}`);
+      console.log(`✅ Google API response received for narrative story`);
         
-      // Accept multiple possible fields from providers
-      const text = (data && (data.response ?? data.output ?? data.message?.content)) || '';
+      // Parse Google API response format
+      let text = '';
+      if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
+        text = data.candidates[0].content.parts.map(part => part.text).join('');
+      }
+      
       if (typeof text === 'string' && text.trim()) {
         const story = text.trim();
         console.log('📖 Generated narrative diary story:', story);
         return story;
       } else {
-        console.error(`❌ Invalid response format from ${modelToUse}:`, data);
+        console.error(`❌ Invalid response format:`, data);
         console.log('🔍 Full response data:', JSON.stringify(data, null, 2));
         throw new Error('Invalid response format from narrative story API');
       }
     } catch (error) {
-      console.error(`💥 Error with model ${modelToUse}:`, error.message);
-      
-      // If proxy failed and we were using proxy, try direct URL
-      if (this.useProxy && apiUrl.includes('localhost:3001')) {
-        console.log('🔄 Proxy failed for narrative story, trying direct URL...');
-        this.useProxy = false;
-        apiUrl = `${this.baseURL}api/generate`;
-        
-        try {
-          const directController = new AbortController();
-          const directTimeoutId = setTimeout(() => directController.abort(), 120000);
-          
-          const directResponse = await fetch(apiUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              model: modelToUse,
-              prompt: narrativePrompt,
-              stream: false,
-              options: {
-                temperature: 0.7,
-                top_p: 0.9,
-                max_tokens: maxTokens
-              }
-            }),
-            signal: directController.signal
-          });
-          
-          clearTimeout(directTimeoutId);
-          
-          if (directResponse.ok) {
-            const data = await directResponse.json();
-            const text = (data && (data.response ?? data.output ?? data.message?.content)) || '';
-            if (typeof text === 'string' && text.trim()) {
-              const story = text.trim();
-              console.log('✅ Direct URL worked for narrative story');
-              return story;
-            }
-          }
-        } catch (directError) {
-          console.error('❌ Direct URL also failed for narrative story:', directError);
-        }
-      }
-      
+      console.error(`💥 Error with Google API:`, error.message);
       throw error;
     }
   }
@@ -826,15 +674,13 @@ CRITICAL: The reflection must NEVER exceed ${maxReflectionCharacters} characters
     console.log('🧪 Crew reflection prompt length:', reflectionPrompt.length);
     console.log('🧪 Crew reflection prompt preview:', reflectionPrompt.slice(0, 200));
 
-    console.log('🌐 Making API call to RunPod for crew reflection...');
+    console.log('🌐 Making API call to Google Gemini for crew reflection...');
 
-    const modelToUse = 'llama3:70b';
-    
-    // Try proxy first, fallback to direct URL if proxy fails
-    let apiUrl = this.useProxy ? `${this.proxyURL}/api/generate` : `${this.baseURL}api/generate`;
+    // Use Google Generative AI API
+    const apiUrl = `${this.baseURL}/${this.modelName}:generateContent?key=${this.apiKey}`;
     
     try {
-      console.log(`🔄 Using model: ${modelToUse} for crew reflection`);
+      console.log(`🔄 Using Google Gemini for crew reflection`);
       console.log(`🌐 Crew reflection API URL: ${apiUrl}`);
       
       // Create AbortController for timeout
@@ -847,13 +693,14 @@ CRITICAL: The reflection must NEVER exceed ${maxReflectionCharacters} characters
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: modelToUse,
-          prompt: reflectionPrompt,
-          stream: false,
-          options: {
+          contents: [{
+            parts: [{
+              text: reflectionPrompt
+            }]
+          }],
+          generationConfig: {
             temperature: 0.5,  // Lower temperature for more accurate, focused summaries
-            top_p: 0.9,
-            max_tokens: maxTokens  // Dynamic token limit based on message count for concise reflections
+            maxOutputTokens: maxTokens  // Dynamic token limit based on message count for concise reflections
           }
         }),
         signal: controller.signal
@@ -861,19 +708,23 @@ CRITICAL: The reflection must NEVER exceed ${maxReflectionCharacters} characters
 
       clearTimeout(timeoutId);
 
-      console.log(`📥 Response status for ${modelToUse}:`, response.status);
+      console.log(`📥 Response status:`, response.status);
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`❌ RunPod API Error for ${modelToUse}:`, response.status, errorText);
+        console.error(`❌ Google API Error:`, response.status, errorText);
         throw new Error(`Crew reflection generation failed: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json();
-      console.log(`✅ RunPod response received for crew summary with ${modelToUse}`);
+      console.log(`✅ Google API response received for crew summary`);
         
-      // Accept multiple possible fields from providers
-      const text = (data && (data.response ?? data.output ?? data.message?.content)) || '';
+      // Parse Google API response format
+      let text = '';
+      if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
+        text = data.candidates[0].content.parts.map(part => part.text).join('');
+      }
+      
       if (typeof text === 'string' && text.trim()) {
         let summary = text.trim();
         
@@ -898,12 +749,12 @@ CRITICAL: The reflection must NEVER exceed ${maxReflectionCharacters} characters
         console.log(`📖 Generated crew summary: ${summary.length} characters (limit: ${maxReflectionCharacters})`);
         return summary;
       } else {
-        console.error(`❌ Invalid response format from ${modelToUse}:`, data);
+        console.error(`❌ Invalid response format:`, data);
         console.log('🔍 Full response data:', JSON.stringify(data, null, 2));
         throw new Error('Invalid response format from crew reflection API');
       }
     } catch (error) {
-      console.error(`💥 Error with model ${modelToUse}:`, error.message);
+      console.error(`💥 Error with Google API:`, error.message);
       throw error;
     }
   }

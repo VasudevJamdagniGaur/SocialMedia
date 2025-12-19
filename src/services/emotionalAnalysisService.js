@@ -1,15 +1,8 @@
 class EmotionalAnalysisService {
   constructor() {
-<<<<<<< HEAD
-    // Use CORS proxy if available, otherwise fallback to direct URL
-    this.proxyURL = 'http://localhost:3001';
-    this.baseURL = 'https://rr9rd9oc5khoyk-11434.proxy.runpod.net/';
-    this.useProxy = true; // Try proxy first
-=======
     this.apiKey = process.env.REACT_APP_GOOGLE_API_KEY || '';
     this.baseURL = 'https://generativelanguage.googleapis.com/v1beta/models';
     this.modelName = 'gemini-pro';
->>>>>>> 8e6a6ff7 (Refactor API key management across multiple services to utilize environment variables. Updated EmotionalWellbeing, ChatService, EmotionalAnalysisService, HabitAnalysisService, PatternAnalysisService, and ReflectionService to enhance security and maintainability by removing hardcoded API keys.)
   }
 
   async analyzeEmotionalScores(messages) {
@@ -46,16 +39,11 @@ Respond ONLY with a JSON object in this exact format:
   "stress": <number>
 }`;
 
-      // Try proxy first, fallback to direct URL if proxy fails
-      let apiUrl = this.useProxy ? `${this.proxyURL}/api/generate` : `${this.baseURL}api/generate`;
-      const modelToUse = 'llama3:70b'; // Go directly to preferred model
+      // Use Google Generative AI API
+      const apiUrl = `${this.baseURL}/${this.modelName}:generateContent?key=${this.apiKey}`;
       
         try {
-<<<<<<< HEAD
-        console.log('🤖 Using model for emotional analysis:', modelToUse);
-=======
         console.log('🤖 Using Google Gemini for emotional analysis');
->>>>>>> 31cecffb (Refactor AllReflectionsPage and EmotionalWellbeing components for improved readability and maintainability. Cleaned up date handling logic, enhanced error handling in emotional analysis, and updated API integration for consistency. Adjusted formatting in various service files to ensure clarity and prevent potential issues.)
         console.log('🌐 API URL:', apiUrl);
           
           // Create AbortController for timeout
@@ -68,12 +56,14 @@ Respond ONLY with a JSON object in this exact format:
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-            model: modelToUse,
-              prompt: prompt,
-              stream: false,
-              options: {
+              contents: [{
+                parts: [{
+                  text: prompt
+                }]
+              }],
+              generationConfig: {
                 temperature: 0.3,
-                num_predict: 300
+                maxOutputTokens: 300
               }
             }),
             signal: controller.signal
@@ -82,15 +72,19 @@ Respond ONLY with a JSON object in this exact format:
           clearTimeout(timeoutId);
           
           if (!response.ok) {
-          console.error(`❌ Model ${modelToUse} failed:`, response.status, response.statusText);
+          const errorText = await response.text();
+          console.error(`❌ Google API failed:`, response.status, errorText);
           throw new Error(`Emotional analysis failed: ${response.status} ${response.statusText}`);
           }
           
           const data = await response.json();
           console.log('✅ EMOTIONAL DEBUG: Received response:', data);
           
-          // Parse the response
-          let responseText = data.response || data.text || data.output || '';
+          // Parse Google API response format
+          let responseText = '';
+          if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
+            responseText = data.candidates[0].content.parts.map(part => part.text).join('');
+          }
           
           // Extract JSON from response
           const jsonMatch = responseText.match(/\{[\s\S]*\}/);
@@ -110,60 +104,8 @@ Respond ONLY with a JSON object in this exact format:
             return this.getDefaultScores();
           }
       } catch (error) {
-<<<<<<< HEAD
-        console.error(`❌ Error with model ${modelToUse}:`, error);
-        
-        // If proxy failed and we were using proxy, try direct URL
-        if (this.useProxy && apiUrl.includes('localhost:3001')) {
-          console.log('🔄 Proxy failed, trying direct URL...');
-          this.useProxy = false;
-          apiUrl = `${this.baseURL}api/generate`;
-          
-          try {
-            const directController = new AbortController();
-            const directTimeoutId = setTimeout(() => directController.abort(), 120000);
-            
-            const directResponse = await fetch(apiUrl, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                model: modelToUse,
-                prompt: prompt,
-                stream: false,
-                options: {
-                  temperature: 0.3,
-                  num_predict: 300
-                }
-              }),
-              signal: directController.signal
-            });
-            
-            clearTimeout(directTimeoutId);
-            
-            if (directResponse.ok) {
-              const data = await directResponse.json();
-              let responseText = data.response || data.text || data.output || '';
-              const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-              if (jsonMatch) {
-                const emotionalData = JSON.parse(jsonMatch[0]);
-                if (this.isValidAnalysisResult(emotionalData)) {
-                  console.log('✅ Direct URL worked, got valid emotional analysis');
-                  return emotionalData;
-                }
-              }
-            }
-          } catch (directError) {
-            console.error('❌ Direct URL also failed:', directError);
-          }
-        }
-        
-        return this.getDefaultScores();
-=======
         console.error(`❌ Error with Google API:`, error);
       return this.getDefaultScores();
->>>>>>> 31cecffb (Refactor AllReflectionsPage and EmotionalWellbeing components for improved readability and maintainability. Cleaned up date handling logic, enhanced error handling in emotional analysis, and updated API integration for consistency. Adjusted formatting in various service files to ensure clarity and prevent potential issues.)
       }
     } catch (error) {
       console.error('❌ EMOTIONAL DEBUG: Error in analyzeEmotionalScores:', error);
