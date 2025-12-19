@@ -4,9 +4,10 @@ import { getDateId } from '../utils/dateUtils';
 
 class ChatService {
   constructor() {
-    this.baseURL = 'https://rr9rd9oc5khoyk-11434.proxy.runpod.net/';
-    this.modelName = 'llama3:70b';
-    this.visionModelName = 'llama3.2-vision:11b';
+    this.apiKey = 'AIzaSyAW8afCODXBHVqBmwcNpzzBKHk-yOAiKK0';
+    this.baseURL = 'https://generativelanguage.googleapis.com/v1beta/models';
+    this.modelName = 'gemini-pro';
+    this.visionModelName = 'gemini-pro-vision';
     // Optional: Add your Serper API key here for better results
     // Get free API key at: https://serper.dev (2,500 free searches/month)
     this.serperApiKey = null; // Set this if you want to use Serper API
@@ -718,15 +719,22 @@ class ChatService {
 
 Be thorough and detailed. This description will be used to generate a response.`;
 
-      const apiUrl = `${this.baseURL}api/generate`;
+      const apiUrl = `${this.baseURL}/${this.visionModelName}:generateContent?key=${this.apiKey}`;
       const requestBody = {
-        model: this.visionModelName,
-        prompt: visionPrompt,
-        images: [cleanBase64],
-        stream: false,
-        options: {
+        contents: [{
+          parts: [
+            { text: visionPrompt },
+            {
+              inlineData: {
+                mimeType: 'image/jpeg',
+                data: cleanBase64
+              }
+            }
+          ]
+        }],
+        generationConfig: {
           temperature: 0.3, // Lower temp for more accurate descriptions
-          num_predict: 500 // Longer description
+          maxOutputTokens: 500 // Longer description
         }
       };
 
@@ -975,7 +983,7 @@ Be thorough and detailed. This description will be used to generate a response.`
             console.log('⚠️ Vision analysis returned empty, falling back to regular processing');
             imageDescription = null;
           } else {
-            console.log('✅ Image description received, will send to llama3:70b');
+            console.log('✅ Image description received, will send to Gemini');
           }
         } catch (visionError) {
           console.error('❌ Vision analysis failed:', visionError);
@@ -990,8 +998,8 @@ Be thorough and detailed. This description will be used to generate a response.`
         console.log('📸 Using image description from metadata/vision analysis');
       }
       
-      // Always use llama3:70b for final response
-      const modelToUse = this.modelName; // llama3:70b
+      // Always use Gemini for final response
+      const modelToUse = this.modelName; // gemini-pro
       const hasImageContext = !!imageDescription;
       
       console.log('🚀 CHAT DEBUG: Using model:', modelToUse);
@@ -1174,25 +1182,27 @@ ${conversationContext}Human: ${userMessage}
 Assistant:`;
       }
 
-      // Prepare API request
-      const apiUrl = `${this.baseURL}api/generate`;
+      // Prepare API request - Use Google Generative AI API
+      const apiUrl = `${this.baseURL}/${this.modelName}:generateContent?key=${this.apiKey}`;
       
       console.log('📤 CHAT DEBUG: Full API URL:', apiUrl);
       console.log('📤 CHAT DEBUG: Prompt length:', simplePrompt.length);
-      console.log('📤 CHAT DEBUG: Using model:', modelToUse);
+      console.log('📤 CHAT DEBUG: Using model:', this.modelName);
       console.log('📤 CHAT DEBUG: Has image context:', hasImageContext);
       
       const requestBody = {
-        model: modelToUse,
-        prompt: simplePrompt,
-        stream: !!onToken, // Enable streaming if callback provided
-        options: {
+        contents: [{
+          parts: [{
+            text: simplePrompt
+          }]
+        }],
+        generationConfig: {
           temperature: 0.65, // Calmer tone for therapeutic responses
-          num_predict: 350 // Allow space for multi-sentence supportive replies
+          maxOutputTokens: 350 // Allow space for multi-sentence supportive replies
         }
       };
       
-      // Note: We don't send images to llama3:70b - only the text description from vision model
+      // Note: We don't send images to gemini-pro - only the text description from vision model
       
       console.log('📤 CHAT DEBUG: Sending request to:', apiUrl);
       
@@ -1215,11 +1225,11 @@ Assistant:`;
         clearTimeout(timeoutId);
         if (fetchError.name === 'AbortError') {
           console.error('❌ CHAT DEBUG: Request timed out after 60 seconds');
-          throw new Error('Request timed out. The RunPod server may be slow or unavailable. Please try again.');
+          throw new Error('Request timed out. The AI server may be slow or unavailable. Please try again.');
         }
         // Check for network errors
         if (fetchError.message.includes('Failed to fetch') || fetchError.message.includes('NetworkError')) {
-          console.error('❌ CHAT DEBUG: Network error - RunPod server may be unreachable');
+          console.error('❌ CHAT DEBUG: Network error - AI server may be unreachable');
           throw new Error('Unable to connect to the AI server. Please check your internet connection and try again.');
         }
         throw fetchError;
@@ -1234,92 +1244,20 @@ Assistant:`;
         
         // Provide more specific error messages
         if (response.status === 404) {
-          throw new Error('AI model not found. Please check if the model is available on RunPod.');
+          throw new Error('AI model not found. Please check if the model is available.');
         } else if (response.status === 500 || response.status === 502 || response.status === 503) {
           throw new Error('AI server is temporarily unavailable. Please try again in a moment.');
         } else if (response.status === 504) {
           throw new Error('Request timed out. The AI server is taking too long to respond.');
         }
         
-        throw new Error(`Model ${modelToUse} failed: ${response.status} ${response.statusText}`);
+        throw new Error(`Model ${this.modelName} failed: ${response.status} ${response.statusText}`);
       }
       
-      // Handle streaming response
-      if (onToken && response.body) {
-        console.log('🌊 CHAT DEBUG: Processing streaming response from', modelToUse);
-        
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let fullResponse = '';
-        
-        // Add timeout for streaming (90 seconds total)
-        const streamTimeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => {
-            console.error('❌ CHAT DEBUG: Streaming timeout after 90 seconds');
-            reader.cancel();
-            reject(new Error('Streaming response timed out. The AI server may be slow. Please try again.'));
-          }, 90000);
-        });
-        
-        try {
-          while (true) {
-            const { done, value } = await Promise.race([
-              reader.read(),
-              streamTimeoutPromise
-            ]);
-            
-            if (done) {
-              console.log('🌊 Streaming completed for', modelToUse);
-              break;
-            }
-            
-            const chunk = decoder.decode(value, { stream: true });
-            
-            // Parse JSON lines
-            const lines = chunk.split('\n').filter(line => line.trim());
-            
-            for (const line of lines) {
-              try {
-                const data = JSON.parse(line);
-                
-                if (data.response) {
-                  fullResponse += data.response;
-                  
-                  // Call onToken callback if provided
-                  if (onToken) {
-                    onToken(data.response);
-                  }
-                }
-                
-                if (data.done) {
-                  console.log('🌊 Stream done for', modelToUse, ', full response:', fullResponse);
-                  return fullResponse;
-                }
-              } catch (parseError) {
-                console.log('🌊 Parse error for line:', line);
-              }
-            }
-          }
-          
-          if (fullResponse) {
-            console.log('✅ Streaming response completed from', modelToUse);
-            return fullResponse;
-          } else {
-            throw new Error('Streaming completed but no response received');
-          }
-          
-        } catch (streamError) {
-          console.error('❌ Streaming error for', modelToUse, ':', streamError);
-          
-          // Provide more helpful error messages
-          if (streamError.message.includes('timeout')) {
-            throw streamError;
-          } else if (streamError.name === 'AbortError' || streamError.message.includes('canceled')) {
-            throw new Error('Stream was canceled. The connection may have been interrupted.');
-          }
-          throw streamError;
-        }
-      } else {
+      // Note: Google API doesn't support streaming in the same way
+      // For now, we'll use non-streaming and call onToken with the full response
+      // Handle response
+      {
         // Handle non-streaming response
         const data = await response.json();
         console.log('✅ CHAT DEBUG: Received response from RunPod for', modelToUse);
@@ -1337,7 +1275,7 @@ Assistant:`;
           aiResponse = data;
         } else {
           console.error('❌ CHAT DEBUG: Unexpected response format:', data);
-          throw new Error('Unexpected response format from RunPod API');
+          throw new Error('Unexpected response format from AI API');
         }
         
         if (!aiResponse || aiResponse.trim() === '') {

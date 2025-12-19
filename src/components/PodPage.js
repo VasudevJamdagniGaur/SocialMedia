@@ -293,7 +293,7 @@ export default function PodPage() {
       console.log('📥 Found', messagesResult.messages.length, 'crew sphere messages');
 
       // Generate crew reflection using the reflection service
-      console.log('🤖 Generating crew reflection via RunPod API...');
+      console.log('🤖 Generating crew reflection via Google Gemini API...');
       const generatedReflection = await reflectionService.generateCrewReflection(messagesResult.messages);
       console.log('✅ Crew reflection generated:', generatedReflection);
 

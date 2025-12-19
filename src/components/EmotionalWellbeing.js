@@ -2010,9 +2010,9 @@ export default function EmotionalWellbeing() {
         return null;
       }
       
-      console.log(`🧠 Generating emotional analysis for ${dateId} using ${realMessages.length} messages via RunPod API...`);
+      console.log(`🧠 Generating emotional analysis for ${dateId} using ${realMessages.length} messages via Google Gemini API...`);
       
-      // Generate emotional analysis using RunPod API
+      // Generate emotional analysis using Google Gemini API
       const emotionalScores = await emotionalAnalysisService.analyzeEmotionalScores(realMessages);
       console.log(`✅ Generated emotional scores for ${dateId}:`, emotionalScores);
       
@@ -2944,26 +2944,37 @@ Return in this JSON format:
 }`;
 
     try {
-      const response = await fetch(`https://rr9rd9oc5khoyk-11434.proxy.runpod.net/api/generate`, {
+      const apiKey = 'AIzaSyAW8afCODXBHVqBmwcNpzzBKHk-yOAiKK0';
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`;
+      
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'llama3:70b',
-          prompt: explanationPrompt,
-          stream: false,
-          options: {
+          contents: [{
+            parts: [{
+              text: explanationPrompt
+            }]
+          }],
+          generationConfig: {
             temperature: 0.7,
-            max_tokens: 300
+            maxOutputTokens: 300
           }
         })
       });
 
       if (response.ok) {
         const data = await response.json();
-        if (data.response) {
-          const jsonMatch = data.response.match(/\{[\s\S]*\}/);
+        // Parse Google API response format
+        let responseText = '';
+        if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
+          responseText = data.candidates[0].content.parts.map(part => part.text).join('');
+        }
+        
+        if (responseText) {
+          const jsonMatch = responseText.match(/\{[\s\S]*\}/);
           if (jsonMatch) {
             const explanations = JSON.parse(jsonMatch[0]);
             console.log('✅ AI explanations generated:', explanations);
