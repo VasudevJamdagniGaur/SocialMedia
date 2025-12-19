@@ -2944,7 +2944,14 @@ Return in this JSON format:
 }`;
 
     try {
+<<<<<<< HEAD
       const response = await fetch(`https://rr9rd9oc5khoyk-11434.proxy.runpod.net/api/generate`, {
+=======
+      const apiKey = process.env.REACT_APP_GOOGLE_API_KEY || '';
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`;
+      
+      const response = await fetch(apiUrl, {
+>>>>>>> 8e6a6ff7 (Refactor API key management across multiple services to utilize environment variables. Updated EmotionalWellbeing, ChatService, EmotionalAnalysisService, HabitAnalysisService, PatternAnalysisService, and ReflectionService to enhance security and maintainability by removing hardcoded API keys.)
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

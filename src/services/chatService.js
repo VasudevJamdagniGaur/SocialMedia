@@ -4,9 +4,16 @@ import { getDateId } from '../utils/dateUtils';
 
 class ChatService {
   constructor() {
+<<<<<<< HEAD
     this.baseURL = 'https://rr9rd9oc5khoyk-11434.proxy.runpod.net/';
     this.modelName = 'llama3:70b';
     this.visionModelName = 'llama3.2-vision:11b';
+=======
+    this.apiKey = process.env.REACT_APP_GOOGLE_API_KEY || '';
+    this.baseURL = 'https://generativelanguage.googleapis.com/v1beta/models';
+    this.modelName = 'gemini-pro';
+    this.visionModelName = 'gemini-pro-vision';
+>>>>>>> 8e6a6ff7 (Refactor API key management across multiple services to utilize environment variables. Updated EmotionalWellbeing, ChatService, EmotionalAnalysisService, HabitAnalysisService, PatternAnalysisService, and ReflectionService to enhance security and maintainability by removing hardcoded API keys.)
     // Optional: Add your Serper API key here for better results
     // Get free API key at: https://serper.dev (2,500 free searches/month)
     this.serperApiKey = null; // Set this if you want to use Serper API

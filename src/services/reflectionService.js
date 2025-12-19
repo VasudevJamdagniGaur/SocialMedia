@@ -3,10 +3,16 @@ import { getDateId } from '../utils/dateUtils';
 
 class ReflectionService {
   constructor() {
+<<<<<<< HEAD
     // Use CORS proxy if available, otherwise fallback to direct URL
     this.proxyURL = 'http://localhost:3001';
     this.baseURL = 'https://rr9rd9oc5khoyk-11434.proxy.runpod.net/';
     this.useProxy = true; // Try proxy first
+=======
+    this.apiKey = process.env.REACT_APP_GOOGLE_API_KEY || '';
+    this.baseURL = 'https://generativelanguage.googleapis.com/v1beta/models';
+    this.modelName = 'gemini-pro';
+>>>>>>> 8e6a6ff7 (Refactor API key management across multiple services to utilize environment variables. Updated EmotionalWellbeing, ChatService, EmotionalAnalysisService, HabitAnalysisService, PatternAnalysisService, and ReflectionService to enhance security and maintainability by removing hardcoded API keys.)
     this.greetings = ['hey', 'hi', 'hello', 'hii', 'hiii', 'hiiii', 'sup', 'yo', 'what\'s up', 'wassup'];
   }
 
