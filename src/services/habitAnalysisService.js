@@ -3,7 +3,7 @@ import { getDateIdDaysAgo } from '../utils/dateUtils';
 
 class HabitAnalysisService {
   constructor() {
-    this.apiKey = 'AIzaSyAW8afCODXBHVqBmwcNpzzBKHk-yOAiKK0';
+    this.apiKey = process.env.REACT_APP_GOOGLE_API_KEY || '';
     this.baseURL = 'https://generativelanguage.googleapis.com/v1beta/models';
     this.modelName = 'gemini-pro';
     this.minDaysRequired = 1; // Minimum days needed for meaningful analysis

@@ -3,7 +3,7 @@ import { getDateId } from '../utils/dateUtils';
 
 class ReflectionService {
   constructor() {
-    this.apiKey = 'AIzaSyAW8afCODXBHVqBmwcNpzzBKHk-yOAiKK0';
+    this.apiKey = process.env.REACT_APP_GOOGLE_API_KEY || '';
     this.baseURL = 'https://generativelanguage.googleapis.com/v1beta/models';
     this.modelName = 'gemini-pro';
     this.greetings = ['hey', 'hi', 'hello', 'hii', 'hiii', 'hiiii', 'sup', 'yo', 'what\'s up', 'wassup'];

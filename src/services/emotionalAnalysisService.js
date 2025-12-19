@@ -1,6 +1,6 @@
 class EmotionalAnalysisService {
   constructor() {
-    this.apiKey = 'AIzaSyAW8afCODXBHVqBmwcNpzzBKHk-yOAiKK0';
+    this.apiKey = process.env.REACT_APP_GOOGLE_API_KEY || '';
     this.baseURL = 'https://generativelanguage.googleapis.com/v1beta/models';
     this.modelName = 'gemini-pro';
   }

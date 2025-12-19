@@ -2944,7 +2944,7 @@ Return in this JSON format:
 }`;
 
     try {
-      const apiKey = 'AIzaSyAW8afCODXBHVqBmwcNpzzBKHk-yOAiKK0';
+      const apiKey = process.env.REACT_APP_GOOGLE_API_KEY || '';
       const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`;
       
       const response = await fetch(apiUrl, {
