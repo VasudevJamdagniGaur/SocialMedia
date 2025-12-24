@@ -779,10 +779,29 @@ export default function ChatPage() {
       console.error('❌ Error details:', error.message);
       console.error('❌ Error stack:', error.stack);
       
-      // Add error message with more details in console
+      // Show the actual error message to help debug
+      let userFriendlyError = "I'm sorry, I'm having trouble responding right now. Please try again in a moment.";
+      
+      // Provide more specific error messages based on error type
+      if (error.message) {
+        if (error.message.includes('API key') || error.message.includes('REACT_APP_GOOGLE_API_KEY')) {
+          userFriendlyError = "⚠️ API Key Error: " + error.message + "\n\nPlease check your .env file and make sure REACT_APP_GOOGLE_API_KEY is set correctly, then restart the app.";
+        } else if (error.message.includes('authentication failed') || error.message.includes('Invalid')) {
+          userFriendlyError = "⚠️ Authentication Error: " + error.message + "\n\nPlease verify your Google API key is valid.";
+        } else if (error.message.includes('Unexpected response format')) {
+          userFriendlyError = "⚠️ API Response Error: " + error.message + "\n\nPlease check the browser console for more details.";
+        } else if (error.message.includes('Network') || error.message.includes('fetch')) {
+          userFriendlyError = "⚠️ Network Error: " + error.message + "\n\nPlease check your internet connection.";
+        } else {
+          // Show the actual error message for debugging
+          userFriendlyError = "⚠️ Error: " + error.message + "\n\nCheck the browser console (F12) for more details.";
+        }
+      }
+      
+      // Add error message with actual error details
       const errorMessage = {
         id: Date.now() + 1,
-        text: "I'm sorry, I'm having trouble responding right now. Please try again in a moment.",
+        text: userFriendlyError,
         sender: 'ai',
         timestamp: new Date(),
         isWhisperSession: isWhisperMode

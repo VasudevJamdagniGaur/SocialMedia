@@ -797,6 +797,17 @@ Be thorough and detailed. This description will be used to generate a response.`
     console.log('🚀 CHAT DEBUG: Starting sendMessage with:', userMessage);
     console.log('🚀 CHAT DEBUG: Using URL:', this.baseURL);
     
+    // Validate API key
+    if (!this.apiKey || this.apiKey.trim() === '') {
+      console.error('❌ CHAT DEBUG: API key is missing!');
+      console.error('❌ CHAT DEBUG: process.env.REACT_APP_GOOGLE_API_KEY:', process.env.REACT_APP_GOOGLE_API_KEY ? 'EXISTS (but empty or undefined)' : 'NOT FOUND');
+      throw new Error('Google API key is not configured. Please set REACT_APP_GOOGLE_API_KEY in your .env file and restart the app.');
+    }
+    
+    // Log API key status (first 10 chars only for security)
+    console.log('✅ CHAT DEBUG: API key found (first 10 chars):', this.apiKey.substring(0, 10) + '...');
+    console.log('✅ CHAT DEBUG: API key length:', this.apiKey.length);
+    
     try {
       // Check if we have an image (file or base64) or URL
       let hasImage = false;
@@ -1185,10 +1196,12 @@ Assistant:`;
       // Prepare API request - Use Google Generative AI API
       const apiUrl = `${this.baseURL}/${this.modelName}:generateContent?key=${this.apiKey}`;
       
-      console.log('📤 CHAT DEBUG: Full API URL:', apiUrl);
+      console.log('📤 CHAT DEBUG: Full API URL (first 100 chars):', apiUrl.substring(0, 100) + '...');
+      console.log('📤 CHAT DEBUG: API Base URL:', this.baseURL);
+      console.log('📤 CHAT DEBUG: Model:', this.modelName);
       console.log('📤 CHAT DEBUG: Prompt length:', simplePrompt.length);
-      console.log('📤 CHAT DEBUG: Using model:', this.modelName);
       console.log('📤 CHAT DEBUG: Has image context:', hasImageContext);
+      console.log('📤 CHAT DEBUG: API Key present:', this.apiKey ? 'YES' : 'NO');
       
       const requestBody = {
         contents: [{
@@ -1243,7 +1256,15 @@ Assistant:`;
         console.error('❌ CHAT DEBUG: Error response:', errorText);
         
         // Provide more specific error messages
-        if (response.status === 404) {
+        if (response.status === 400) {
+          // Check if it's an API key error
+          if (errorText.includes('API key') || errorText.includes('invalid') || errorText.includes('permission')) {
+            throw new Error('Invalid or missing Google API key. Please check your REACT_APP_GOOGLE_API_KEY in the .env file and make sure it\'s correct.');
+          }
+          throw new Error(`Bad request: ${errorText.substring(0, 200)}`);
+        } else if (response.status === 401 || response.status === 403) {
+          throw new Error('API key authentication failed. Please check your REACT_APP_GOOGLE_API_KEY in the .env file. Make sure the key is valid and has the necessary permissions.');
+        } else if (response.status === 404) {
           throw new Error('AI model not found. Please check if the model is available.');
         } else if (response.status === 500 || response.status === 502 || response.status === 503) {
           throw new Error('AI server is temporarily unavailable. Please try again in a moment.');
@@ -1251,39 +1272,47 @@ Assistant:`;
           throw new Error('Request timed out. The AI server is taking too long to respond.');
         }
         
-        throw new Error(`Model ${this.modelName} failed: ${response.status} ${response.statusText}`);
+        throw new Error(`Model ${this.modelName} failed: ${response.status} ${response.statusText}. ${errorText.substring(0, 200)}`);
       }
       
       // Note: Google API doesn't support streaming in the same way
       // For now, we'll use non-streaming and call onToken with the full response
       // Handle response
       {
-        // Handle non-streaming response
+        // Handle non-streaming response from Google Gemini API
         const data = await response.json();
-        console.log('✅ CHAT DEBUG: Received response from RunPod for', modelToUse);
+        console.log('✅ CHAT DEBUG: Received response from Google Gemini API');
         console.log('✅ CHAT DEBUG: Response keys:', Object.keys(data));
         
-        // Handle different response formats
+        // Parse Google Gemini API response format
         let aiResponse = '';
-        if (data.response) {
-          aiResponse = data.response;
-        } else if (data.text) {
-          aiResponse = data.text;
-        } else if (data.output) {
-          aiResponse = data.output;
-        } else if (typeof data === 'string') {
-          aiResponse = data;
+        if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
+          aiResponse = data.candidates[0].content.parts.map(part => part.text).join('');
         } else {
-          console.error('❌ CHAT DEBUG: Unexpected response format:', data);
-          throw new Error('Unexpected response format from AI API');
+          console.error('❌ CHAT DEBUG: Unexpected response format from Google Gemini API');
+          console.error('❌ CHAT DEBUG: Full response data:', JSON.stringify(data, null, 2));
+          console.error('❌ CHAT DEBUG: Response structure:', {
+            hasCandidates: !!data.candidates,
+            candidatesLength: data.candidates?.length,
+            firstCandidate: data.candidates?.[0],
+            hasContent: !!data.candidates?.[0]?.content,
+            hasParts: !!data.candidates?.[0]?.content?.parts
+          });
+          
+          // Check for error in response
+          if (data.error) {
+            throw new Error(`Google API Error: ${data.error.message || JSON.stringify(data.error)}`);
+          }
+          
+          throw new Error('Unexpected response format from Google Gemini API. Please check your API key and try again. Check console for full response details.');
         }
         
         if (!aiResponse || aiResponse.trim() === '') {
-          console.error('❌ CHAT DEBUG: Empty response from', modelToUse);
-          throw new Error('Empty response from AI');
+          console.error('❌ CHAT DEBUG: Empty response from Google Gemini API');
+          throw new Error('Empty response from AI. Please check your API key and try again.');
         }
         
-        console.log('✅ CHAT DEBUG: Successfully got response from', modelToUse);
+        console.log('✅ CHAT DEBUG: Successfully got response from Google Gemini API');
         console.log('✅ CHAT DEBUG: AI Response:', aiResponse.substring(0, 100));
         return aiResponse;
       }
