@@ -3,9 +3,9 @@ import { getDateId } from '../utils/dateUtils';
 
 class ReflectionService {
   constructor() {
-    this.apiKey = process.env.REACT_APP_GOOGLE_API_KEY || '';
-    this.baseURL = 'https://generativelanguage.googleapis.com/v1beta/models';
-    this.modelName = 'gemini-1.5-flash'; // Updated to current model
+    this.apiKey = process.env.REACT_APP_OPENAI_API_KEY || '';
+    this.baseURL = 'https://api.openai.com/v1';
+    this.modelName = 'gpt-4o'; // Using OpenAI GPT-4o model
     this.greetings = ['hey', 'hi', 'hello', 'hii', 'hiii', 'hiiii', 'sup', 'yo', 'what\'s up', 'wassup'];
   }
 
@@ -129,13 +129,13 @@ CRITICAL: The reflection must NEVER exceed ${maxReflectionCharacters} characters
     console.log('🧪 Reflection prompt length:', reflectionPrompt.length);
     console.log('🧪 Reflection prompt preview:', reflectionPrompt.slice(0, 200));
 
-    console.log('🌐 Making API call to Google Gemini for reflection...');
+    console.log('🌐 Making API call to OpenAI for reflection...');
 
-    // Use Google Generative AI API
-    const apiUrl = `${this.baseURL}/${this.modelName}:generateContent?key=${this.apiKey}`;
+    // Use OpenAI API
+    const apiUrl = `${this.baseURL}/chat/completions`;
     
       try {
-      console.log(`🔄 Using Google Gemini for reflection`);
+      console.log(`🔄 Using OpenAI for reflection`);
       console.log(`🌐 Day reflection API URL: ${apiUrl}`);
       
       // Create AbortController for timeout
@@ -146,17 +146,16 @@ CRITICAL: The reflection must NEVER exceed ${maxReflectionCharacters} characters
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.apiKey}`
           },
           body: JSON.stringify({
-          contents: [{
-            parts: [{
-              text: reflectionPrompt
-            }]
+          model: this.modelName,
+          messages: [{
+            role: 'user',
+            content: reflectionPrompt
           }],
-          generationConfig: {
-              temperature: 0.5,  // Lower temperature for more accurate, focused summaries
-            maxOutputTokens: maxTokens  // Dynamic token limit based on message count for concise reflections
-            }
+          temperature: 0.5,  // Lower temperature for more accurate, focused summaries
+          max_tokens: maxTokens  // Dynamic token limit based on message count for concise reflections
         }),
         signal: controller.signal
         });
@@ -167,17 +166,17 @@ CRITICAL: The reflection must NEVER exceed ${maxReflectionCharacters} characters
 
         if (!response.ok) {
           const errorText = await response.text();
-        console.error(`❌ Google API Error:`, response.status, errorText);
+        console.error(`❌ OpenAI API Error:`, response.status, errorText);
         throw new Error(`Reflection generation failed: ${response.status} ${response.statusText}`);
         }
 
         const data = await response.json();
-      console.log(`✅ Google API response received for day summary`);
+      console.log(`✅ OpenAI API response received for day summary`);
         
-      // Parse Google API response format
+      // Parse OpenAI API response format
       let text = '';
-      if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
-        text = data.candidates[0].content.parts.map(part => part.text).join('');
+      if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) {
+        text = data.choices[0].message.content;
       }
       
         if (typeof text === 'string' && text.trim()) {
@@ -209,7 +208,7 @@ CRITICAL: The reflection must NEVER exceed ${maxReflectionCharacters} characters
         throw new Error('Invalid response format from reflection API');
         }
     } catch (error) {
-      console.error(`💥 Error with Google API:`, error.message);
+      console.error(`💥 Error with OpenAI API:`, error.message);
       throw error;
     }
   }
@@ -353,13 +352,13 @@ Write a SHORT, natural diary entry about this day in first person. Write ${sente
     console.log('🧪 Narrative prompt length:', narrativePrompt.length);
     console.log('🧪 Narrative prompt preview:', narrativePrompt.slice(0, 200));
 
-    console.log('🌐 Making API call to Google Gemini for narrative story...');
+    console.log('🌐 Making API call to OpenAI for narrative story...');
 
-    // Use Google Generative AI API
-    const apiUrl = `${this.baseURL}/${this.modelName}:generateContent?key=${this.apiKey}`;
+    // Use OpenAI API
+    const apiUrl = `${this.baseURL}/chat/completions`;
     
     try {
-      console.log(`🔄 Using Google Gemini for narrative story`);
+      console.log(`🔄 Using OpenAI for narrative story`);
       console.log(`🌐 Narrative story API URL: ${apiUrl}`);
       
       // Create AbortController for timeout
@@ -370,17 +369,16 @@ Write a SHORT, natural diary entry about this day in first person. Write ${sente
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`
         },
         body: JSON.stringify({
-          contents: [{
-            parts: [{
-              text: narrativePrompt
-            }]
+          model: this.modelName,
+          messages: [{
+            role: 'user',
+            content: narrativePrompt
           }],
-          generationConfig: {
-            temperature: 0.7,  // Slightly higher temperature for more natural, creative storytelling
-            maxOutputTokens: maxTokens  // Dynamic token limit based on message count
-          }
+          temperature: 0.7,  // Slightly higher temperature for more natural, creative storytelling
+          max_tokens: maxTokens  // Dynamic token limit based on message count
         }),
         signal: controller.signal
       });
@@ -391,17 +389,17 @@ Write a SHORT, natural diary entry about this day in first person. Write ${sente
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`❌ Google API Error:`, response.status, errorText);
+        console.error(`❌ OpenAI API Error:`, response.status, errorText);
         throw new Error(`Narrative story generation failed: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json();
-      console.log(`✅ Google API response received for narrative story`);
+      console.log(`✅ OpenAI API response received for narrative story`);
         
-      // Parse Google API response format
+      // Parse OpenAI API response format
       let text = '';
-      if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
-        text = data.candidates[0].content.parts.map(part => part.text).join('');
+      if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) {
+        text = data.choices[0].message.content;
       }
       
       if (typeof text === 'string' && text.trim()) {
@@ -414,7 +412,7 @@ Write a SHORT, natural diary entry about this day in first person. Write ${sente
         throw new Error('Invalid response format from narrative story API');
       }
     } catch (error) {
-      console.error(`💥 Error with Google API:`, error.message);
+      console.error(`💥 Error with OpenAI API:`, error.message);
       throw error;
     }
   }
@@ -674,13 +672,13 @@ CRITICAL: The reflection must NEVER exceed ${maxReflectionCharacters} characters
     console.log('🧪 Crew reflection prompt length:', reflectionPrompt.length);
     console.log('🧪 Crew reflection prompt preview:', reflectionPrompt.slice(0, 200));
 
-    console.log('🌐 Making API call to Google Gemini for crew reflection...');
+    console.log('🌐 Making API call to OpenAI for crew reflection...');
 
-    // Use Google Generative AI API
-    const apiUrl = `${this.baseURL}/${this.modelName}:generateContent?key=${this.apiKey}`;
+    // Use OpenAI API
+    const apiUrl = `${this.baseURL}/chat/completions`;
     
     try {
-      console.log(`🔄 Using Google Gemini for crew reflection`);
+      console.log(`🔄 Using OpenAI for crew reflection`);
       console.log(`🌐 Crew reflection API URL: ${apiUrl}`);
       
       // Create AbortController for timeout
@@ -691,17 +689,16 @@ CRITICAL: The reflection must NEVER exceed ${maxReflectionCharacters} characters
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`
         },
         body: JSON.stringify({
-          contents: [{
-            parts: [{
-              text: reflectionPrompt
-            }]
+          model: this.modelName,
+          messages: [{
+            role: 'user',
+            content: reflectionPrompt
           }],
-          generationConfig: {
-            temperature: 0.5,  // Lower temperature for more accurate, focused summaries
-            maxOutputTokens: maxTokens  // Dynamic token limit based on message count for concise reflections
-          }
+          temperature: 0.5,  // Lower temperature for more accurate, focused summaries
+          max_tokens: maxTokens  // Dynamic token limit based on message count for concise reflections
         }),
         signal: controller.signal
       });
@@ -712,17 +709,17 @@ CRITICAL: The reflection must NEVER exceed ${maxReflectionCharacters} characters
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`❌ Google API Error:`, response.status, errorText);
+        console.error(`❌ OpenAI API Error:`, response.status, errorText);
         throw new Error(`Crew reflection generation failed: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json();
-      console.log(`✅ Google API response received for crew summary`);
+      console.log(`✅ OpenAI API response received for crew summary`);
         
-      // Parse Google API response format
+      // Parse OpenAI API response format
       let text = '';
-      if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
-        text = data.candidates[0].content.parts.map(part => part.text).join('');
+      if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) {
+        text = data.choices[0].message.content;
       }
       
       if (typeof text === 'string' && text.trim()) {
@@ -754,7 +751,7 @@ CRITICAL: The reflection must NEVER exceed ${maxReflectionCharacters} characters
         throw new Error('Invalid response format from crew reflection API');
       }
     } catch (error) {
-      console.error(`💥 Error with Google API:`, error.message);
+      console.error(`💥 Error with OpenAI API:`, error.message);
       throw error;
     }
   }

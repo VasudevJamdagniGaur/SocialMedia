@@ -1,8 +1,8 @@
 class EmotionalAnalysisService {
   constructor() {
-    this.apiKey = process.env.REACT_APP_GOOGLE_API_KEY || '';
-    this.baseURL = 'https://generativelanguage.googleapis.com/v1beta/models';
-    this.modelName = 'gemini-1.5-flash'; // Updated to current model
+    this.apiKey = process.env.REACT_APP_OPENAI_API_KEY || '';
+    this.baseURL = 'https://api.openai.com/v1';
+    this.modelName = 'gpt-4o'; // Using OpenAI GPT-4o model
   }
 
   async analyzeEmotionalScores(messages) {
@@ -39,11 +39,11 @@ Respond ONLY with a JSON object in this exact format:
   "stress": <number>
 }`;
 
-      // Use Google Generative AI API
-      const apiUrl = `${this.baseURL}/${this.modelName}:generateContent?key=${this.apiKey}`;
+      // Use OpenAI API
+      const apiUrl = `${this.baseURL}/chat/completions`;
       
         try {
-        console.log('🤖 Using Google Gemini for emotional analysis');
+        console.log('🤖 Using OpenAI for emotional analysis');
         console.log('🌐 API URL:', apiUrl);
           
           // Create AbortController for timeout
@@ -54,17 +54,16 @@ Respond ONLY with a JSON object in this exact format:
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
+              'Authorization': `Bearer ${this.apiKey}`
             },
             body: JSON.stringify({
-              contents: [{
-                parts: [{
-                  text: prompt
-                }]
+              model: this.modelName,
+              messages: [{
+                role: 'user',
+                content: prompt
               }],
-              generationConfig: {
-                temperature: 0.3,
-                maxOutputTokens: 300
-              }
+              temperature: 0.3,
+              max_tokens: 300
             }),
             signal: controller.signal
           });
@@ -73,17 +72,17 @@ Respond ONLY with a JSON object in this exact format:
           
           if (!response.ok) {
           const errorText = await response.text();
-          console.error(`❌ Google API failed:`, response.status, errorText);
+          console.error(`❌ OpenAI API failed:`, response.status, errorText);
           throw new Error(`Emotional analysis failed: ${response.status} ${response.statusText}`);
           }
           
           const data = await response.json();
           console.log('✅ EMOTIONAL DEBUG: Received response:', data);
           
-          // Parse Google API response format
+          // Parse OpenAI API response format
           let responseText = '';
-          if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
-            responseText = data.candidates[0].content.parts.map(part => part.text).join('');
+          if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) {
+            responseText = data.choices[0].message.content;
           }
           
           // Extract JSON from response
@@ -104,7 +103,7 @@ Respond ONLY with a JSON object in this exact format:
             return this.getDefaultScores();
           }
       } catch (error) {
-        console.error(`❌ Error with Google API:`, error);
+        console.error(`❌ Error with OpenAI API:`, error);
       return this.getDefaultScores();
       }
     } catch (error) {

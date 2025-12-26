@@ -4,10 +4,10 @@ import { getDateId } from '../utils/dateUtils';
 
 class ChatService {
   constructor() {
-    this.apiKey = process.env.REACT_APP_GOOGLE_API_KEY || '';
-    this.baseURL = 'https://generativelanguage.googleapis.com/v1beta/models';
-    this.modelName = 'gemini-1.5-flash'; // Updated to current model
-    this.visionModelName = 'gemini-1.5-flash'; // Updated to current model (supports vision)
+    this.apiKey = process.env.REACT_APP_OPENAI_API_KEY || '';
+    this.baseURL = 'https://api.openai.com/v1';
+    this.modelName = 'gpt-4o'; // Using OpenAI GPT-4o model
+    this.visionModelName = 'gpt-4o'; // GPT-4o supports vision
     // Optional: Add your Serper API key here for better results
     // Get free API key at: https://serper.dev (2,500 free searches/month)
     this.serperApiKey = null; // Set this if you want to use Serper API
@@ -719,23 +719,23 @@ class ChatService {
 
 Be thorough and detailed. This description will be used to generate a response.`;
 
-      const apiUrl = `${this.baseURL}/${this.visionModelName}:generateContent?key=${this.apiKey}`;
+      const apiUrl = `${this.baseURL}/chat/completions`;
       const requestBody = {
-        contents: [{
-          parts: [
-            { text: visionPrompt },
+        model: this.visionModelName,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'text', text: visionPrompt },
             {
-              inlineData: {
-                mimeType: 'image/jpeg',
-                data: cleanBase64
+              type: 'image_url',
+              image_url: {
+                url: `data:image/jpeg;base64,${cleanBase64}`
               }
             }
           ]
         }],
-        generationConfig: {
-          temperature: 0.3, // Lower temp for more accurate descriptions
-          maxOutputTokens: 500 // Longer description
-        }
+        temperature: 0.3, // Lower temp for more accurate descriptions
+        max_tokens: 500 // Longer description
       };
 
       console.log('👁️ VISION: Sending request to:', apiUrl);
@@ -751,6 +751,7 @@ Be thorough and detailed. This description will be used to generate a response.`
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.apiKey}`
           },
           body: JSON.stringify(requestBody),
           signal: controller.signal
@@ -775,7 +776,11 @@ Be thorough and detailed. This description will be used to generate a response.`
       const data = await response.json();
       console.log('👁️ VISION: Response keys:', Object.keys(data));
       
-      const imageDescription = data.response || data.text || data.output || '';
+      // Parse OpenAI vision API response format
+      let imageDescription = '';
+      if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) {
+        imageDescription = data.choices[0].message.content;
+      }
       
       if (!imageDescription || imageDescription.trim().length === 0) {
         throw new Error('Empty description from vision model');
@@ -800,7 +805,7 @@ Be thorough and detailed. This description will be used to generate a response.`
     // Validate API key
     if (!this.apiKey || this.apiKey.trim() === '') {
       console.error('❌ CHAT DEBUG: API key is missing!');
-      throw new Error('Google API key is not configured.');
+      throw new Error('OpenAI API key is not configured.');
     }
     
     // Log API key status (first 10 chars only for security)
@@ -1192,10 +1197,10 @@ ${conversationContext}Human: ${userMessage}
 Assistant:`;
       }
 
-      // Prepare API request - Use Google Generative AI API
-      const apiUrl = `${this.baseURL}/${this.modelName}:generateContent?key=${this.apiKey}`;
+      // Prepare API request - Use OpenAI API
+      const apiUrl = `${this.baseURL}/chat/completions`;
       
-      console.log('📤 CHAT DEBUG: Full API URL (first 100 chars):', apiUrl.substring(0, 100) + '...');
+      console.log('📤 CHAT DEBUG: Full API URL:', apiUrl);
       console.log('📤 CHAT DEBUG: API Base URL:', this.baseURL);
       console.log('📤 CHAT DEBUG: Model:', this.modelName);
       console.log('📤 CHAT DEBUG: Prompt length:', simplePrompt.length);
@@ -1203,18 +1208,14 @@ Assistant:`;
       console.log('📤 CHAT DEBUG: API Key present:', this.apiKey ? 'YES' : 'NO');
       
       const requestBody = {
-        contents: [{
-          parts: [{
-            text: simplePrompt
-          }]
+        model: this.modelName,
+        messages: [{
+          role: 'user',
+          content: simplePrompt
         }],
-        generationConfig: {
-          temperature: 0.65, // Calmer tone for therapeutic responses
-          maxOutputTokens: 350 // Allow space for multi-sentence supportive replies
-        }
+        temperature: 0.65, // Calmer tone for therapeutic responses
+        max_tokens: 500 // Allow space for multi-sentence supportive replies
       };
-      
-      // Note: We don't send images to gemini-pro - only the text description from vision model
       
       console.log('📤 CHAT DEBUG: Sending request to:', apiUrl);
       
@@ -1228,6 +1229,7 @@ Assistant:`;
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.apiKey}`
           },
           body: JSON.stringify(requestBody),
           signal: controller.signal
@@ -1258,11 +1260,11 @@ Assistant:`;
         if (response.status === 400) {
           // Check if it's an API key error
           if (errorText.includes('API key') || errorText.includes('invalid') || errorText.includes('permission')) {
-            throw new Error('Invalid or missing Google API key. Please check your REACT_APP_GOOGLE_API_KEY in the .env file and make sure it\'s correct.');
+            throw new Error('Invalid or missing OpenAI API key. Please check your REACT_APP_OPENAI_API_KEY in the .env file and make sure it\'s correct.');
           }
           throw new Error(`Bad request: ${errorText.substring(0, 200)}`);
         } else if (response.status === 401 || response.status === 403) {
-          throw new Error('API key authentication failed. Please check your REACT_APP_GOOGLE_API_KEY in the .env file. Make sure the key is valid and has the necessary permissions.');
+          throw new Error('API key authentication failed. Please check your REACT_APP_OPENAI_API_KEY in the .env file. Make sure the key is valid and has the necessary permissions.');
         } else if (response.status === 404) {
           throw new Error('AI model not found. Please check if the model is available.');
         } else if (response.status === 500 || response.status === 502 || response.status === 503) {
@@ -1274,44 +1276,34 @@ Assistant:`;
         throw new Error(`Model ${this.modelName} failed: ${response.status} ${response.statusText}. ${errorText.substring(0, 200)}`);
       }
       
-      // Note: Google API doesn't support streaming in the same way
-      // For now, we'll use non-streaming and call onToken with the full response
-      // Handle response
+      // Handle response from OpenAI API
       {
-        // Handle non-streaming response from Google Gemini API
         const data = await response.json();
-        console.log('✅ CHAT DEBUG: Received response from Google Gemini API');
+        console.log('✅ CHAT DEBUG: Received response from OpenAI API');
         console.log('✅ CHAT DEBUG: Response keys:', Object.keys(data));
         
-        // Parse Google Gemini API response format
+        // Parse OpenAI API response format
         let aiResponse = '';
-        if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
-          aiResponse = data.candidates[0].content.parts.map(part => part.text).join('');
+        if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) {
+          aiResponse = data.choices[0].message.content;
         } else {
-          console.error('❌ CHAT DEBUG: Unexpected response format from Google Gemini API');
+          console.error('❌ CHAT DEBUG: Unexpected response format from OpenAI API');
           console.error('❌ CHAT DEBUG: Full response data:', JSON.stringify(data, null, 2));
-          console.error('❌ CHAT DEBUG: Response structure:', {
-            hasCandidates: !!data.candidates,
-            candidatesLength: data.candidates?.length,
-            firstCandidate: data.candidates?.[0],
-            hasContent: !!data.candidates?.[0]?.content,
-            hasParts: !!data.candidates?.[0]?.content?.parts
-          });
           
           // Check for error in response
           if (data.error) {
-            throw new Error(`Google API Error: ${data.error.message || JSON.stringify(data.error)}`);
+            throw new Error(`OpenAI API Error: ${data.error.message || JSON.stringify(data.error)}`);
           }
           
-          throw new Error('Unexpected response format from Google Gemini API. Please check your API key and try again. Check console for full response details.');
+          throw new Error('Unexpected response format from OpenAI API. Please check your API key and try again. Check console for full response details.');
         }
         
         if (!aiResponse || aiResponse.trim() === '') {
-          console.error('❌ CHAT DEBUG: Empty response from Google Gemini API');
+          console.error('❌ CHAT DEBUG: Empty response from OpenAI API');
           throw new Error('Empty response from AI. Please check your API key and try again.');
         }
         
-        console.log('✅ CHAT DEBUG: Successfully got response from Google Gemini API');
+        console.log('✅ CHAT DEBUG: Successfully got response from OpenAI API');
         console.log('✅ CHAT DEBUG: AI Response:', aiResponse.substring(0, 100));
         return aiResponse;
       }

@@ -3,9 +3,9 @@ import { getDateIdDaysAgo } from '../utils/dateUtils';
 
 class HabitAnalysisService {
   constructor() {
-    this.apiKey = process.env.REACT_APP_GOOGLE_API_KEY || '';
-    this.baseURL = 'https://generativelanguage.googleapis.com/v1beta/models';
-    this.modelName = 'gemini-1.5-flash'; // Updated to current model
+    this.apiKey = process.env.REACT_APP_OPENAI_API_KEY || '';
+    this.baseURL = 'https://api.openai.com/v1';
+    this.modelName = 'gpt-4o'; // Using OpenAI GPT-4o model
     this.minDaysRequired = 1; // Minimum days needed for meaningful analysis
     this.minMessagesRequired = 1; // Minimum total messages needed
   }
@@ -152,32 +152,31 @@ IMPORTANT:
 - Be concrete and actionable, not abstract
 - Focus on habits that will have the biggest impact on their most frequent struggles`;
 
-      console.log('📤 HABIT DEBUG: Sending request to Google Gemini...');
+      console.log('📤 HABIT DEBUG: Sending request to OpenAI...');
 
-      // Use Google Generative AI API
-      const apiUrl = `${this.baseURL}/${this.modelName}:generateContent?key=${this.apiKey}`;
+      // Use OpenAI API
+      const apiUrl = `${this.baseURL}/chat/completions`;
       console.log('🌐 HABIT API URL:', apiUrl);
 
       // Create AbortController for timeout
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 seconds
       
-      // Use Google Generative AI API
+      // Use OpenAI API
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`
         },
         body: JSON.stringify({
-          contents: [{
-            parts: [{
-              text: habitAnalysisPrompt
-            }]
+          model: this.modelName,
+          messages: [{
+            role: 'user',
+            content: habitAnalysisPrompt
           }],
-          generationConfig: {
-            temperature: 0.3,
-            maxOutputTokens: 1000
-          }
+          temperature: 0.3,
+          max_tokens: 1000
         }),
         signal: controller.signal
       });
@@ -186,16 +185,16 @@ IMPORTANT:
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Google API error: ${response.status} ${response.statusText} - ${errorText}`);
+        throw new Error(`OpenAI API error: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
       const data = await response.json();
-      console.log('✅ HABIT DEBUG: Received response from Google API:', data);
+      console.log('✅ HABIT DEBUG: Received response from OpenAI API:', data);
       
-      // Parse Google API response format
+      // Parse OpenAI API response format
       let responseText = '';
-      if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
-        responseText = data.candidates[0].content.parts.map(part => part.text).join('');
+      if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) {
+        responseText = data.choices[0].message.content;
       }
       
       if (responseText) {
