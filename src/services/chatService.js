@@ -800,8 +800,7 @@ Be thorough and detailed. This description will be used to generate a response.`
     // Validate API key
     if (!this.apiKey || this.apiKey.trim() === '') {
       console.error('❌ CHAT DEBUG: API key is missing!');
-      console.error('❌ CHAT DEBUG: process.env.REACT_APP_GOOGLE_API_KEY:', process.env.REACT_APP_GOOGLE_API_KEY ? 'EXISTS (but empty or undefined)' : 'NOT FOUND');
-      throw new Error('Google API key is not configured. Please set REACT_APP_GOOGLE_API_KEY in your .env file and restart the app.');
+      throw new Error('Google API key is not configured.');
     }
     
     // Log API key status (first 10 chars only for security)
