@@ -5,7 +5,7 @@ class ReflectionService {
   constructor() {
     this.apiKey = process.env.REACT_APP_GOOGLE_API_KEY || '';
     this.baseURL = 'https://generativelanguage.googleapis.com/v1beta/models';
-    this.modelName = 'gemini-pro';
+    this.modelName = 'gemini-1.5-flash'; // Updated to current model
     this.greetings = ['hey', 'hi', 'hello', 'hii', 'hiii', 'hiiii', 'sup', 'yo', 'what\'s up', 'wassup'];
   }
 

@@ -6,8 +6,8 @@ class ChatService {
   constructor() {
     this.apiKey = process.env.REACT_APP_GOOGLE_API_KEY || '';
     this.baseURL = 'https://generativelanguage.googleapis.com/v1beta/models';
-    this.modelName = 'gemini-pro';
-    this.visionModelName = 'gemini-pro-vision';
+    this.modelName = 'gemini-1.5-flash'; // Updated to current model
+    this.visionModelName = 'gemini-1.5-flash'; // Updated to current model (supports vision)
     // Optional: Add your Serper API key here for better results
     // Get free API key at: https://serper.dev (2,500 free searches/month)
     this.serperApiKey = null; // Set this if you want to use Serper API

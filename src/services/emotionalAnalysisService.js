@@ -2,7 +2,7 @@ class EmotionalAnalysisService {
   constructor() {
     this.apiKey = process.env.REACT_APP_GOOGLE_API_KEY || '';
     this.baseURL = 'https://generativelanguage.googleapis.com/v1beta/models';
-    this.modelName = 'gemini-pro';
+    this.modelName = 'gemini-1.5-flash'; // Updated to current model
   }
 
   async analyzeEmotionalScores(messages) {

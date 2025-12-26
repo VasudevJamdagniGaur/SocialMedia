@@ -5,7 +5,7 @@ class HabitAnalysisService {
   constructor() {
     this.apiKey = process.env.REACT_APP_GOOGLE_API_KEY || '';
     this.baseURL = 'https://generativelanguage.googleapis.com/v1beta/models';
-    this.modelName = 'gemini-pro';
+    this.modelName = 'gemini-1.5-flash'; // Updated to current model
     this.minDaysRequired = 1; // Minimum days needed for meaningful analysis
     this.minMessagesRequired = 1; // Minimum total messages needed
   }
