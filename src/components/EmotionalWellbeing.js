@@ -1158,18 +1158,29 @@ export default function EmotionalWellbeing() {
       }
       console.log('📊 UNIFIED: Mood chart data result:', result);
       
-      // Filter out any days with all zeros (invalid data) and sort by date
+      // For 7 days view, keep all days (including zeros). For other periods, filter zeros
       if (result.success && result.moodData) {
-        result.moodData = result.moodData
-          .filter(day => {
-            const total = (day.happiness || 0) + (day.energy || 0) + (day.anxiety || 0) + (day.stress || 0);
-            return total > 0;
-          })
-          .sort((a, b) => {
-            // Sort by date (ascending - oldest first)
-            return new Date(a.date) - new Date(b.date);
-          });
-        console.log(`📊 UNIFIED: After filtering zeros and sorting, ${result.moodData.length} days with valid data`);
+        if (period === 7) {
+          // For 7 days, keep all days and sort by date
+          result.moodData = result.moodData
+            .sort((a, b) => {
+              // Sort by date (ascending - oldest first)
+              return new Date(a.date) - new Date(b.date);
+            });
+          console.log(`📊 UNIFIED: For 7 days view, keeping all ${result.moodData.length} days (including zeros)`);
+        } else {
+          // For other periods, filter out days with all zeros
+          result.moodData = result.moodData
+            .filter(day => {
+              const total = (day.happiness || 0) + (day.energy || 0) + (day.anxiety || 0) + (day.stress || 0);
+              return total > 0;
+            })
+            .sort((a, b) => {
+              // Sort by date (ascending - oldest first)
+              return new Date(a.date) - new Date(b.date);
+            });
+          console.log(`📊 UNIFIED: After filtering zeros and sorting, ${result.moodData.length} days with valid data`);
+        }
         console.log(`📊 UNIFIED: Date range: ${result.moodData[0]?.date} to ${result.moodData[result.moodData.length - 1]?.date}`);
       }
 
@@ -1221,12 +1232,17 @@ export default function EmotionalWellbeing() {
 
           // Force state update with new reference to trigger re-render
           // Ensure all values are numbers and within valid range (0-100)
-          // Also filter out any days that have all zeros (invalid data) and sort by date
-          const newMoodData = processedMoodData
-            .filter(day => {
+          // For 7 days view, keep all days (including zeros). For other periods, filter zeros
+          let filteredData = processedMoodData;
+          if (period !== 7) {
+            // For non-7-day periods, filter out days with all zeros
+            filteredData = processedMoodData.filter(day => {
               const total = (day.happiness || 0) + (day.energy || 0) + (day.anxiety || 0) + (day.stress || 0);
               return total > 0; // Only include days with actual data
-            })
+            });
+          }
+          
+          const newMoodData = filteredData
             .sort((a, b) => {
               // Sort by date (ascending - oldest first) for proper chart display
               return new Date(a.date) - new Date(b.date);

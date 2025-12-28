@@ -855,9 +855,7 @@ class FirestoreService {
             console.log(`📊 FIRESTORE NEW: ✅ Raw values - H:${data.happiness} E:${data.energy} A:${data.anxiety} S:${data.stress}`);
             console.log(`📊 FIRESTORE NEW: ✅ Firestore path was: users/${uid}/days/${dateId}/moodChart/daily`);
             
-            // Only add data if it has valid values (not all zeros)
-            const total = (data.happiness || 0) + (data.energy || 0) + (data.anxiety || 0) + (data.stress || 0);
-            if (total > 0) {
+            // Always add data, even if all zeros (for 7 days view, we want to show all days)
             const dayData = {
               date: dateId,
               day: targetDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
@@ -869,25 +867,39 @@ class FirestoreService {
             
             console.log(`📊 FIRESTORE NEW: ✅ Pushing to array:`, dayData);
             moodData.push(dayData);
-            } else {
-              console.log(`📊 FIRESTORE NEW: ⚠️ Data exists but all values are zero for ${dateId}, skipping`);
-            }
           } else {
-            // No data for this day - skip it instead of adding zeros
-            console.log(`📊 FIRESTORE NEW: ❌ No mood data for ${dateId}, skipping`);
+            // No data for this day - add zeros for 7 days view to show all days
+            console.log(`📊 FIRESTORE NEW: ❌ No mood data for ${dateId}, adding zeros`);
             console.log(`📊 FIRESTORE NEW: ❌ Checked path: users/${uid}/days/${dateId}/moodChart/daily`);
-            console.log(`📊 FIRESTORE NEW: ❌ This means NO DATA was saved to Firestore for this date`);
-            // Don't add zeros - only show days with actual data
+            
+            // For 7 days view, include all days even with zeros
+            if (days === 7) {
+              const dayData = {
+                date: dateId,
+                day: targetDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+                happiness: 0,
+                anxiety: 0,
+                stress: 0,
+                energy: 0
+              };
+              console.log(`📊 FIRESTORE NEW: ✅ Adding zero data for ${dateId} (7 days view)`);
+              moodData.push(dayData);
+            }
           }
         } catch (dayError) {
           console.error(`❌ Error getting mood data for ${dateId}:`, dayError);
-          // Only add defaults if this is a permissions/network error, not if no data exists
-          if (dayError.code === 'permission-denied' || dayError.code === 'unavailable') {
-            console.log(`📊 FIRESTORE NEW: ⚠️ Permission/network error for ${dateId}, skipping (not adding defaults)`);
-            // Don't add defaults even for permission errors - let the UI handle it
-          } else {
-            // For other errors (like no data), don't add anything - skip the day
-            console.log(`📊 FIRESTORE NEW: ⚠️ Error for ${dateId}, skipping (not adding zeros)`);
+          // For 7 days view, add zeros even on error (except permission errors)
+          if (days === 7 && dayError.code !== 'permission-denied' && dayError.code !== 'unavailable') {
+            const dayData = {
+              date: dateId,
+              day: targetDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+              happiness: 0,
+              anxiety: 0,
+              stress: 0,
+              energy: 0
+            };
+            console.log(`📊 FIRESTORE NEW: ✅ Adding zero data for ${dateId} after error (7 days view)`);
+            moodData.push(dayData);
           }
         }
       }
