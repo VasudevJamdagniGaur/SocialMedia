@@ -6,11 +6,14 @@ class ChatService {
   constructor() {
     this.openaiApiKey = process.env.REACT_APP_OPENAI_API_KEY || '';
     this.geminiApiKey = process.env.REACT_APP_GOOGLE_API_KEY || '';
-    this.apiProvider = 'openai'; // 'openai' or 'gemini'
+    this.grokApiKey = process.env.REACT_APP_GROK_API_KEY || '';
+    this.apiProvider = 'openai'; // 'openai', 'gemini', or 'grok'
     this.openaiBaseURL = 'https://api.openai.com/v1';
     this.geminiBaseURL = 'https://generativelanguage.googleapis.com/v1beta';
+    this.grokBaseURL = 'https://api.x.ai/v1';
     this.openaiModelName = 'gpt-4o';
     this.geminiModelName = 'gemini-1.5-flash';
+    this.grokModelName = 'grok-beta';
     this.visionModelName = 'gpt-4o'; // For OpenAI vision
     // Optional: Add your Serper API key here for better results
     // Get free API key at: https://serper.dev (2,500 free searches/month)
@@ -18,10 +21,10 @@ class ChatService {
   }
 
   /**
-   * Set the API provider (openai or gemini)
+   * Set the API provider (openai, gemini, or grok)
    */
   setApiProvider(provider) {
-    if (provider === 'openai' || provider === 'gemini') {
+    if (provider === 'openai' || provider === 'gemini' || provider === 'grok') {
       this.apiProvider = provider;
       console.log('🔄 API Provider switched to:', provider);
     } else {
@@ -33,21 +36,30 @@ class ChatService {
    * Get current API key based on provider
    */
   getApiKey() {
-    return this.apiProvider === 'openai' ? this.openaiApiKey : this.geminiApiKey;
+    if (this.apiProvider === 'openai') return this.openaiApiKey;
+    if (this.apiProvider === 'gemini') return this.geminiApiKey;
+    if (this.apiProvider === 'grok') return this.grokApiKey;
+    return this.openaiApiKey; // Default fallback
   }
 
   /**
    * Get current base URL based on provider
    */
   getBaseURL() {
-    return this.apiProvider === 'openai' ? this.openaiBaseURL : this.geminiBaseURL;
+    if (this.apiProvider === 'openai') return this.openaiBaseURL;
+    if (this.apiProvider === 'gemini') return this.geminiBaseURL;
+    if (this.apiProvider === 'grok') return this.grokBaseURL;
+    return this.openaiBaseURL; // Default fallback
   }
 
   /**
    * Get current model name based on provider
    */
   getModelName() {
-    return this.apiProvider === 'openai' ? this.openaiModelName : this.geminiModelName;
+    if (this.apiProvider === 'openai') return this.openaiModelName;
+    if (this.apiProvider === 'gemini') return this.geminiModelName;
+    if (this.apiProvider === 'grok') return this.grokModelName;
+    return this.openaiModelName; // Default fallback
   }
 
   /**
@@ -850,7 +862,7 @@ Be thorough and detailed. This description will be used to generate a response.`
     // Validate API key
     const apiKey = this.getApiKey();
     if (!apiKey || apiKey.trim() === '') {
-      const providerName = this.apiProvider === 'openai' ? 'OpenAI' : 'Gemini';
+      const providerName = this.apiProvider === 'openai' ? 'OpenAI' : this.apiProvider === 'gemini' ? 'Gemini' : 'Grok';
       console.error('❌ CHAT DEBUG: API key is missing!');
       throw new Error(`${providerName} API key is not configured.`);
     }
@@ -1264,6 +1276,22 @@ Assistant:`;
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${apiKey}`
         };
+      } else if (this.apiProvider === 'grok') {
+        // Grok API (similar to OpenAI structure)
+        apiUrl = `${this.grokBaseURL}/chat/completions`;
+        requestBody = {
+          model: this.grokModelName,
+          messages: [{
+            role: 'user',
+            content: simplePrompt
+          }],
+          temperature: 0.65,
+          max_tokens: 500
+        };
+        headers = {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        };
       } else {
         // Gemini API
         apiUrl = `${this.geminiBaseURL}/models/${this.geminiModelName}:generateContent?key=${apiKey}`;
@@ -1324,8 +1352,8 @@ Assistant:`;
         const errorText = await response.text();
         console.error('❌ CHAT DEBUG: Error response:', errorText);
         
-        const providerName = this.apiProvider === 'openai' ? 'OpenAI' : 'Gemini';
-        const envKeyName = this.apiProvider === 'openai' ? 'REACT_APP_OPENAI_API_KEY' : 'REACT_APP_GOOGLE_API_KEY';
+        const providerName = this.apiProvider === 'openai' ? 'OpenAI' : this.apiProvider === 'gemini' ? 'Gemini' : 'Grok';
+        const envKeyName = this.apiProvider === 'openai' ? 'REACT_APP_OPENAI_API_KEY' : this.apiProvider === 'gemini' ? 'REACT_APP_GOOGLE_API_KEY' : 'REACT_APP_GROK_API_KEY';
         
         // Provide more specific error messages
         if (response.status === 400) {
@@ -1349,25 +1377,26 @@ Assistant:`;
       
       // Handle response based on provider
       const data = await response.json();
-      console.log(`✅ CHAT DEBUG: Received response from ${this.apiProvider === 'openai' ? 'OpenAI' : 'Gemini'} API`);
+      const providerDisplayName = this.apiProvider === 'openai' ? 'OpenAI' : this.apiProvider === 'gemini' ? 'Gemini' : 'Grok';
+      console.log(`✅ CHAT DEBUG: Received response from ${providerDisplayName} API`);
       console.log('✅ CHAT DEBUG: Response keys:', Object.keys(data));
       
       let aiResponse = '';
       
-      if (this.apiProvider === 'openai') {
-        // Parse OpenAI API response format
+      if (this.apiProvider === 'openai' || this.apiProvider === 'grok') {
+        // Parse OpenAI/Grok API response format (same structure)
         if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) {
           aiResponse = data.choices[0].message.content;
         } else {
-          console.error('❌ CHAT DEBUG: Unexpected response format from OpenAI API');
+          console.error(`❌ CHAT DEBUG: Unexpected response format from ${providerDisplayName} API`);
           console.error('❌ CHAT DEBUG: Full response data:', JSON.stringify(data, null, 2));
           
           // Check for error in response
           if (data.error) {
-            throw new Error(`OpenAI API Error: ${data.error.message || JSON.stringify(data.error)}`);
+            throw new Error(`${providerDisplayName} API Error: ${data.error.message || JSON.stringify(data.error)}`);
           }
           
-          throw new Error('Unexpected response format from OpenAI API. Please check your API key and try again. Check console for full response details.');
+          throw new Error(`Unexpected response format from ${providerDisplayName} API. Please check your API key and try again. Check console for full response details.`);
         }
       } else {
         // Parse Gemini API response format
@@ -1387,11 +1416,11 @@ Assistant:`;
       }
       
       if (!aiResponse || aiResponse.trim() === '') {
-        console.error(`❌ CHAT DEBUG: Empty response from ${this.apiProvider === 'openai' ? 'OpenAI' : 'Gemini'} API`);
+        console.error(`❌ CHAT DEBUG: Empty response from ${providerDisplayName} API`);
         throw new Error('Empty response from AI. Please check your API key and try again.');
       }
       
-      console.log(`✅ CHAT DEBUG: Successfully got response from ${this.apiProvider === 'openai' ? 'OpenAI' : 'Gemini'} API`);
+      console.log(`✅ CHAT DEBUG: Successfully got response from ${providerDisplayName} API`);
       console.log('✅ CHAT DEBUG: AI Response:', aiResponse.substring(0, 100));
       return aiResponse;
       

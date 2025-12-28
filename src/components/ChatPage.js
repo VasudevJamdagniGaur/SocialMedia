@@ -1475,7 +1475,11 @@ export default function ChatPage() {
             type="text"
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
-            placeholder={apiProvider === 'openai' ? 'Ask OpenAI...' : 'Ask Gemini...'}
+            placeholder={
+              apiProvider === 'openai' ? 'Ask OpenAI...' : 
+              apiProvider === 'gemini' ? 'Ask Gemini...' : 
+              'Ask Grok...'
+            }
             disabled={isLoading}
             className="flex-1 px-4 py-3 rounded-2xl focus:outline-none focus:ring-2 text-white placeholder-gray-400 backdrop-blur-md"
             style={{
@@ -1489,7 +1493,8 @@ export default function ChatPage() {
           <button
             type="button"
             onClick={() => {
-              const newProvider = apiProvider === 'openai' ? 'gemini' : 'openai';
+              // Cycle through: openai -> gemini -> grok -> openai
+              const newProvider = apiProvider === 'openai' ? 'gemini' : apiProvider === 'gemini' ? 'grok' : 'openai';
               setApiProvider(newProvider);
               localStorage.setItem('chat_api_provider', newProvider);
               chatService.setApiProvider(newProvider);
@@ -1498,17 +1503,25 @@ export default function ChatPage() {
               isDarkMode 
                 ? apiProvider === 'openai' 
                   ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' 
-                  : 'bg-green-600/20 text-green-400 border border-green-500/30'
+                  : apiProvider === 'gemini'
+                  ? 'bg-green-600/20 text-green-400 border border-green-500/30'
+                  : 'bg-purple-600/20 text-purple-400 border border-purple-500/30'
                 : apiProvider === 'openai'
                   ? 'bg-blue-100 text-blue-700 border border-blue-300'
-                  : 'bg-green-100 text-green-700 border border-green-300'
+                  : apiProvider === 'gemini'
+                  ? 'bg-green-100 text-green-700 border border-green-300'
+                  : 'bg-purple-100 text-purple-700 border border-purple-300'
             }`}
             style={{
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
             }}
-            title={`Switch to ${apiProvider === 'openai' ? 'Gemini' : 'OpenAI'}`}
+            title={`Switch to ${
+              apiProvider === 'openai' ? 'Gemini' : 
+              apiProvider === 'gemini' ? 'Grok' : 
+              'OpenAI'
+            }`}
           >
-            {apiProvider === 'openai' ? 'OpenAI' : 'Gemini'}
+            {apiProvider === 'openai' ? 'OpenAI' : apiProvider === 'gemini' ? 'Gemini' : 'Grok'}
           </button>
           
           <button
