@@ -789,10 +789,18 @@ export default function ChatPage() {
       
       // Provide more specific error messages based on error type
       if (error.message) {
-        if (error.message.includes('API key') || error.message.includes('REACT_APP_GOOGLE_API_KEY')) {
-          userFriendlyError = "⚠️ API Key Error: " + error.message + "\n\nPlease check your .env file and make sure REACT_APP_GOOGLE_API_KEY is set correctly, then restart the app.";
+        // Determine the correct environment variable name based on current provider
+        const envKeyName = apiProvider === 'openai' ? 'REACT_APP_OPENAI_API_KEY' : 
+                          apiProvider === 'gemini' ? 'REACT_APP_GOOGLE_API_KEY' : 
+                          'REACT_APP_GROK_API_KEY';
+        const providerName = apiProvider === 'openai' ? 'OpenAI' : 
+                            apiProvider === 'gemini' ? 'Gemini' : 
+                            'Grok';
+        
+        if (error.message.includes('API key') || error.message.includes('REACT_APP_') || error.message.includes('not configured')) {
+          userFriendlyError = "⚠️ API Key Error: " + error.message + `\n\nPlease check your .env file and make sure ${envKeyName} is set correctly, then restart the app.`;
         } else if (error.message.includes('authentication failed') || error.message.includes('Invalid')) {
-          userFriendlyError = "⚠️ Authentication Error: " + error.message + "\n\nPlease verify your Google API key is valid.";
+          userFriendlyError = `⚠️ Authentication Error: ${error.message}\n\nPlease verify your ${providerName} API key is valid.`;
         } else if (error.message.includes('Unexpected response format')) {
           userFriendlyError = "⚠️ API Response Error: " + error.message + "\n\nPlease check the browser console for more details.";
         } else if (error.message.includes('Network') || error.message.includes('fetch')) {
