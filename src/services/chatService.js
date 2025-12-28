@@ -4,13 +4,50 @@ import { getDateId } from '../utils/dateUtils';
 
 class ChatService {
   constructor() {
-    this.apiKey = process.env.REACT_APP_OPENAI_API_KEY || '';
-    this.baseURL = 'https://api.openai.com/v1';
-    this.modelName = 'gpt-4o'; // Using OpenAI GPT-4o model
-    this.visionModelName = 'gpt-4o'; // GPT-4o supports vision
+    this.openaiApiKey = process.env.REACT_APP_OPENAI_API_KEY || '';
+    this.geminiApiKey = process.env.REACT_APP_GOOGLE_API_KEY || '';
+    this.apiProvider = 'openai'; // 'openai' or 'gemini'
+    this.openaiBaseURL = 'https://api.openai.com/v1';
+    this.geminiBaseURL = 'https://generativelanguage.googleapis.com/v1beta';
+    this.openaiModelName = 'gpt-4o';
+    this.geminiModelName = 'gemini-1.5-flash';
+    this.visionModelName = 'gpt-4o'; // For OpenAI vision
     // Optional: Add your Serper API key here for better results
     // Get free API key at: https://serper.dev (2,500 free searches/month)
     this.serperApiKey = null; // Set this if you want to use Serper API
+  }
+
+  /**
+   * Set the API provider (openai or gemini)
+   */
+  setApiProvider(provider) {
+    if (provider === 'openai' || provider === 'gemini') {
+      this.apiProvider = provider;
+      console.log('🔄 API Provider switched to:', provider);
+    } else {
+      console.warn('⚠️ Invalid API provider:', provider);
+    }
+  }
+
+  /**
+   * Get current API key based on provider
+   */
+  getApiKey() {
+    return this.apiProvider === 'openai' ? this.openaiApiKey : this.geminiApiKey;
+  }
+
+  /**
+   * Get current base URL based on provider
+   */
+  getBaseURL() {
+    return this.apiProvider === 'openai' ? this.openaiBaseURL : this.geminiBaseURL;
+  }
+
+  /**
+   * Get current model name based on provider
+   */
+  getModelName() {
+    return this.apiProvider === 'openai' ? this.openaiModelName : this.geminiModelName;
   }
 
   /**
@@ -719,7 +756,14 @@ class ChatService {
 
 Be thorough and detailed. This description will be used to generate a response.`;
 
-      const apiUrl = `${this.baseURL}/chat/completions`;
+      // Vision analysis currently only supports OpenAI (for now)
+      // Use OpenAI API key for vision analysis
+      const visionApiKey = this.openaiApiKey;
+      if (!visionApiKey || visionApiKey.trim() === '') {
+        throw new Error('OpenAI API key is required for vision analysis.');
+      }
+
+      const apiUrl = `${this.openaiBaseURL}/chat/completions`;
       const requestBody = {
         model: this.visionModelName,
         messages: [{
@@ -751,7 +795,7 @@ Be thorough and detailed. This description will be used to generate a response.`
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.apiKey}`
+            'Authorization': `Bearer ${visionApiKey}`
           },
           body: JSON.stringify(requestBody),
           signal: controller.signal
@@ -800,17 +844,20 @@ Be thorough and detailed. This description will be used to generate a response.`
 
   async sendMessage(userMessage, conversationHistory = [], onToken = null, imageFile = null, imageBase64 = null) {
     console.log('🚀 CHAT DEBUG: Starting sendMessage with:', userMessage);
-    console.log('🚀 CHAT DEBUG: Using URL:', this.baseURL);
+    console.log('🚀 CHAT DEBUG: API Provider:', this.apiProvider);
+    console.log('🚀 CHAT DEBUG: Using URL:', this.getBaseURL());
     
     // Validate API key
-    if (!this.apiKey || this.apiKey.trim() === '') {
+    const apiKey = this.getApiKey();
+    if (!apiKey || apiKey.trim() === '') {
+      const providerName = this.apiProvider === 'openai' ? 'OpenAI' : 'Gemini';
       console.error('❌ CHAT DEBUG: API key is missing!');
-      throw new Error('OpenAI API key is not configured.');
+      throw new Error(`${providerName} API key is not configured.`);
     }
     
     // Log API key status (first 10 chars only for security)
-    console.log('✅ CHAT DEBUG: API key found (first 10 chars):', this.apiKey.substring(0, 10) + '...');
-    console.log('✅ CHAT DEBUG: API key length:', this.apiKey.length);
+    console.log('✅ CHAT DEBUG: API key found (first 10 chars):', apiKey.substring(0, 10) + '...');
+    console.log('✅ CHAT DEBUG: API key length:', apiKey.length);
     
     try {
       // Check if we have an image (file or base64) or URL
@@ -1013,12 +1060,13 @@ Be thorough and detailed. This description will be used to generate a response.`
         console.log('📸 Using image description from metadata/vision analysis');
       }
       
-      // Always use Gemini for final response
-      const modelToUse = this.modelName; // gemini-pro
+      // Get model name based on provider
+      const modelToUse = this.getModelName();
       const hasImageContext = !!imageDescription;
       
       console.log('🚀 CHAT DEBUG: Using model:', modelToUse);
       console.log('🚀 CHAT DEBUG: Has image context:', hasImageContext);
+      console.log('🚀 CHAT DEBUG: API Provider:', this.apiProvider);
       
       // Get user profile context
       const userProfile = this.getUserProfileContext();
@@ -1197,27 +1245,50 @@ ${conversationContext}Human: ${userMessage}
 Assistant:`;
       }
 
-      // Prepare API request - Use OpenAI API
-      const apiUrl = `${this.baseURL}/chat/completions`;
+      // Prepare API request based on provider
+      let apiUrl, requestBody, headers;
+      
+      if (this.apiProvider === 'openai') {
+        // OpenAI API
+        apiUrl = `${this.openaiBaseURL}/chat/completions`;
+        requestBody = {
+          model: this.openaiModelName,
+          messages: [{
+            role: 'user',
+            content: simplePrompt
+          }],
+          temperature: 0.65,
+          max_tokens: 500
+        };
+        headers = {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        };
+      } else {
+        // Gemini API
+        apiUrl = `${this.geminiBaseURL}/models/${this.geminiModelName}:generateContent?key=${apiKey}`;
+        requestBody = {
+          contents: [{
+            parts: [{
+              text: simplePrompt
+            }]
+          }],
+          generationConfig: {
+            temperature: 0.65,
+            maxOutputTokens: 500
+          }
+        };
+        headers = {
+          'Content-Type': 'application/json'
+        };
+      }
       
       console.log('📤 CHAT DEBUG: Full API URL:', apiUrl);
-      console.log('📤 CHAT DEBUG: API Base URL:', this.baseURL);
-      console.log('📤 CHAT DEBUG: Model:', this.modelName);
+      console.log('📤 CHAT DEBUG: API Base URL:', this.getBaseURL());
+      console.log('📤 CHAT DEBUG: Model:', modelToUse);
       console.log('📤 CHAT DEBUG: Prompt length:', simplePrompt.length);
       console.log('📤 CHAT DEBUG: Has image context:', hasImageContext);
-      console.log('📤 CHAT DEBUG: API Key present:', this.apiKey ? 'YES' : 'NO');
-      
-      const requestBody = {
-        model: this.modelName,
-        messages: [{
-          role: 'user',
-          content: simplePrompt
-        }],
-        temperature: 0.65, // Calmer tone for therapeutic responses
-        max_tokens: 500 // Allow space for multi-sentence supportive replies
-      };
-      
-      console.log('📤 CHAT DEBUG: Sending request to:', apiUrl);
+      console.log('📤 CHAT DEBUG: API Key present:', apiKey ? 'YES' : 'NO');
       
       // Add timeout to prevent hanging requests (60 seconds for chat)
       const controller = new AbortController();
@@ -1227,10 +1298,7 @@ Assistant:`;
       try {
         response = await fetch(apiUrl, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.apiKey}`
-          },
+          headers: headers,
           body: JSON.stringify(requestBody),
           signal: controller.signal
         });
@@ -1256,15 +1324,18 @@ Assistant:`;
         const errorText = await response.text();
         console.error('❌ CHAT DEBUG: Error response:', errorText);
         
+        const providerName = this.apiProvider === 'openai' ? 'OpenAI' : 'Gemini';
+        const envKeyName = this.apiProvider === 'openai' ? 'REACT_APP_OPENAI_API_KEY' : 'REACT_APP_GOOGLE_API_KEY';
+        
         // Provide more specific error messages
         if (response.status === 400) {
           // Check if it's an API key error
           if (errorText.includes('API key') || errorText.includes('invalid') || errorText.includes('permission')) {
-            throw new Error('Invalid or missing OpenAI API key. Please check your REACT_APP_OPENAI_API_KEY in the .env file and make sure it\'s correct.');
+            throw new Error(`Invalid or missing ${providerName} API key. Please check your ${envKeyName} in the .env file and make sure it's correct.`);
           }
           throw new Error(`Bad request: ${errorText.substring(0, 200)}`);
         } else if (response.status === 401 || response.status === 403) {
-          throw new Error('API key authentication failed. Please check your REACT_APP_OPENAI_API_KEY in the .env file. Make sure the key is valid and has the necessary permissions.');
+          throw new Error(`API key authentication failed. Please check your ${envKeyName} in the .env file. Make sure the key is valid and has the necessary permissions.`);
         } else if (response.status === 404) {
           throw new Error('AI model not found. Please check if the model is available.');
         } else if (response.status === 500 || response.status === 502 || response.status === 503) {
@@ -1273,17 +1344,18 @@ Assistant:`;
           throw new Error('Request timed out. The AI server is taking too long to respond.');
         }
         
-        throw new Error(`Model ${this.modelName} failed: ${response.status} ${response.statusText}. ${errorText.substring(0, 200)}`);
+        throw new Error(`Model ${modelToUse} failed: ${response.status} ${response.statusText}. ${errorText.substring(0, 200)}`);
       }
       
-      // Handle response from OpenAI API
-      {
-        const data = await response.json();
-        console.log('✅ CHAT DEBUG: Received response from OpenAI API');
-        console.log('✅ CHAT DEBUG: Response keys:', Object.keys(data));
-        
+      // Handle response based on provider
+      const data = await response.json();
+      console.log(`✅ CHAT DEBUG: Received response from ${this.apiProvider === 'openai' ? 'OpenAI' : 'Gemini'} API`);
+      console.log('✅ CHAT DEBUG: Response keys:', Object.keys(data));
+      
+      let aiResponse = '';
+      
+      if (this.apiProvider === 'openai') {
         // Parse OpenAI API response format
-        let aiResponse = '';
         if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) {
           aiResponse = data.choices[0].message.content;
         } else {
@@ -1297,16 +1369,31 @@ Assistant:`;
           
           throw new Error('Unexpected response format from OpenAI API. Please check your API key and try again. Check console for full response details.');
         }
-        
-        if (!aiResponse || aiResponse.trim() === '') {
-          console.error('❌ CHAT DEBUG: Empty response from OpenAI API');
-          throw new Error('Empty response from AI. Please check your API key and try again.');
+      } else {
+        // Parse Gemini API response format
+        if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
+          aiResponse = data.candidates[0].content.parts.map(part => part.text).join('');
+        } else {
+          console.error('❌ CHAT DEBUG: Unexpected response format from Gemini API');
+          console.error('❌ CHAT DEBUG: Full response data:', JSON.stringify(data, null, 2));
+          
+          // Check for error in response
+          if (data.error) {
+            throw new Error(`Gemini API Error: ${data.error.message || JSON.stringify(data.error)}`);
+          }
+          
+          throw new Error('Unexpected response format from Gemini API. Please check your API key and try again. Check console for full response details.');
         }
-        
-        console.log('✅ CHAT DEBUG: Successfully got response from OpenAI API');
-        console.log('✅ CHAT DEBUG: AI Response:', aiResponse.substring(0, 100));
-        return aiResponse;
       }
+      
+      if (!aiResponse || aiResponse.trim() === '') {
+        console.error(`❌ CHAT DEBUG: Empty response from ${this.apiProvider === 'openai' ? 'OpenAI' : 'Gemini'} API`);
+        throw new Error('Empty response from AI. Please check your API key and try again.');
+      }
+      
+      console.log(`✅ CHAT DEBUG: Successfully got response from ${this.apiProvider === 'openai' ? 'OpenAI' : 'Gemini'} API`);
+      console.log('✅ CHAT DEBUG: AI Response:', aiResponse.substring(0, 100));
+      return aiResponse;
       
     } catch (error) {
       console.error('❌ CHAT DEBUG: Error in sendMessage:', error);

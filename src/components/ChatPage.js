@@ -33,6 +33,11 @@ export default function ChatPage() {
   const [profilePicture, setProfilePicture] = useState(null);
   const [selectedImage, setSelectedImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
+  const [apiProvider, setApiProvider] = useState(() => {
+    // Load from localStorage or default to 'openai'
+    const saved = localStorage.getItem('chat_api_provider');
+    return saved || 'openai';
+  });
   const messagesEndRef = useRef(null);
   
   // Debug: Log when imagePreview changes
@@ -1022,6 +1027,13 @@ export default function ChatPage() {
     loadMessages();
   }, [selectedDateId]);
 
+  // Initialize API provider from localStorage on mount
+  useEffect(() => {
+    const savedProvider = localStorage.getItem('chat_api_provider') || 'openai';
+    chatService.setApiProvider(savedProvider);
+    setApiProvider(savedProvider);
+  }, []);
+
   const handleBack = () => {
     // Show custom warning modal if in whisper mode AND there are whisper session messages
     if (isWhisperMode) {
@@ -1463,7 +1475,7 @@ export default function ChatPage() {
             type="text"
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
-            placeholder="Share what's on your mind..."
+            placeholder={apiProvider === 'openai' ? 'Ask OpenAI...' : 'Ask Gemini...'}
             disabled={isLoading}
             className="flex-1 px-4 py-3 rounded-2xl focus:outline-none focus:ring-2 text-white placeholder-gray-400 backdrop-blur-md"
             style={{
@@ -1472,6 +1484,33 @@ export default function ChatPage() {
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
             }}
           />
+          
+          {/* API Provider Toggle Button */}
+          <button
+            type="button"
+            onClick={() => {
+              const newProvider = apiProvider === 'openai' ? 'gemini' : 'openai';
+              setApiProvider(newProvider);
+              localStorage.setItem('chat_api_provider', newProvider);
+              chatService.setApiProvider(newProvider);
+            }}
+            className={`px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 backdrop-blur-lg ${
+              isDarkMode 
+                ? apiProvider === 'openai' 
+                  ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' 
+                  : 'bg-green-600/20 text-green-400 border border-green-500/30'
+                : apiProvider === 'openai'
+                  ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                  : 'bg-green-100 text-green-700 border border-green-300'
+            }`}
+            style={{
+              boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
+            }}
+            title={`Switch to ${apiProvider === 'openai' ? 'Gemini' : 'OpenAI'}`}
+          >
+            {apiProvider === 'openai' ? 'OpenAI' : 'Gemini'}
+          </button>
+          
           <button
             type="submit"
             disabled={(!inputMessage.trim() && !selectedImage) || isLoading}
