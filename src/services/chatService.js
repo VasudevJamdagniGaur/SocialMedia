@@ -18,6 +18,15 @@ class ChatService {
     // Optional: Add your Serper API key here for better results
     // Get free API key at: https://serper.dev (2,500 free searches/month)
     this.serperApiKey = null; // Set this if you want to use Serper API
+    
+    // Debug: Log API key status (first 10 chars only for security)
+    console.log('🔑 API Keys loaded:');
+    console.log('  OpenAI:', this.openaiApiKey ? `${this.openaiApiKey.substring(0, 10)}... (${this.openaiApiKey.length} chars)` : 'NOT SET');
+    console.log('  Gemini:', this.geminiApiKey ? `${this.geminiApiKey.substring(0, 10)}... (${this.geminiApiKey.length} chars)` : 'NOT SET');
+    console.log('  Grok:', this.grokApiKey ? `${this.grokApiKey.substring(0, 10)}... (${this.grokApiKey.length} chars)` : 'NOT SET');
+    console.log('🔍 Environment variables check:');
+    console.log('  REACT_APP_GROK_API_KEY exists:', !!process.env.REACT_APP_GROK_API_KEY);
+    console.log('  REACT_APP_GROK_API_KEY value:', process.env.REACT_APP_GROK_API_KEY ? `${process.env.REACT_APP_GROK_API_KEY.substring(0, 10)}...` : 'undefined');
   }
 
   /**
@@ -859,12 +868,30 @@ Be thorough and detailed. This description will be used to generate a response.`
     console.log('🚀 CHAT DEBUG: API Provider:', this.apiProvider);
     console.log('🚀 CHAT DEBUG: Using URL:', this.getBaseURL());
     
+    // Reload API keys from environment (in case .env was updated)
+    // This allows picking up new keys without restarting the app
+    this.openaiApiKey = process.env.REACT_APP_OPENAI_API_KEY || this.openaiApiKey || '';
+    this.geminiApiKey = process.env.REACT_APP_GOOGLE_API_KEY || this.geminiApiKey || '';
+    this.grokApiKey = process.env.REACT_APP_GROK_API_KEY || this.grokApiKey || '';
+    
     // Validate API key
     const apiKey = this.getApiKey();
     if (!apiKey || apiKey.trim() === '') {
       const providerName = this.apiProvider === 'openai' ? 'OpenAI' : this.apiProvider === 'gemini' ? 'Gemini' : 'Grok';
+      const envKeyName = this.apiProvider === 'openai' ? 'REACT_APP_OPENAI_API_KEY' : this.apiProvider === 'gemini' ? 'REACT_APP_GOOGLE_API_KEY' : 'REACT_APP_GROK_API_KEY';
+      
       console.error('❌ CHAT DEBUG: API key is missing!');
-      throw new Error(`${providerName} API key is not configured.`);
+      console.error(`❌ CHAT DEBUG: Provider: ${providerName}`);
+      console.error(`❌ CHAT DEBUG: Environment variable: ${envKeyName}`);
+      console.error(`❌ CHAT DEBUG: process.env.${envKeyName}:`, process.env[envKeyName] ? `${process.env[envKeyName].substring(0, 10)}...` : 'undefined');
+      console.error(`❌ CHAT DEBUG: this.grokApiKey:`, this.grokApiKey ? `${this.grokApiKey.substring(0, 10)}...` : 'empty');
+      console.error(`❌ CHAT DEBUG: All env vars:`, {
+        'REACT_APP_OPENAI_API_KEY': process.env.REACT_APP_OPENAI_API_KEY ? 'SET' : 'NOT SET',
+        'REACT_APP_GOOGLE_API_KEY': process.env.REACT_APP_GOOGLE_API_KEY ? 'SET' : 'NOT SET',
+        'REACT_APP_GROK_API_KEY': process.env.REACT_APP_GROK_API_KEY ? 'SET' : 'NOT SET'
+      });
+      
+      throw new Error(`${providerName} API key is not configured. Please check your ${envKeyName} in the .env file and restart the React development server.`);
     }
     
     // Log API key status (first 10 chars only for security)
