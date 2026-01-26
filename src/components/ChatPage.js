@@ -1507,10 +1507,11 @@ export default function ChatPage() {
               localStorage.setItem('chat_api_provider', newProvider);
               chatService.setApiProvider(newProvider);
             }}
-            className="px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 backdrop-blur-lg flex items-center justify-center"
+            className="px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 flex items-center justify-center"
             style={{
-              backgroundColor: "#1F1F23",
-              border: "1px solid #2A2A30",
+              backgroundColor: "rgba(255, 255, 255, 0.04)",
+              backdropFilter: "blur(12px)",
+              border: "1px solid rgba(255, 255, 255, 0.08)",
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
             }}
             title={`Switch to ${
@@ -1522,7 +1523,8 @@ export default function ChatPage() {
             <img 
               src={apiProvider === 'openai' ? '/images/openai-icon.png' : apiProvider === 'gemini' ? '/images/gemini-icon.png' : '/images/grok-icon.png'}
               alt={apiProvider === 'openai' ? 'OpenAI' : apiProvider === 'gemini' ? 'Gemini' : 'Grok'}
-              className="w-5 h-5 object-contain"
+              className="w-7 h-7 object-contain"
+              style={(apiProvider === 'openai' || apiProvider === 'grok') ? { filter: 'brightness(0) invert(1)' } : {}}
             />
           </button>
           
