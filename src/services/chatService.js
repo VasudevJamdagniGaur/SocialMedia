@@ -1321,7 +1321,7 @@ Assistant:`;
         };
       } else {
         // Gemini API
-        apiUrl = `${this.geminiBaseURL}/models/${this.geminiModelName}:generateContent?key=${apiKey}`;
+        apiUrl = `${this.geminiBaseURL}/models/${this.geminiModelName}:generateContent`;
         requestBody = {
           contents: [{
             parts: [{
@@ -1334,7 +1334,8 @@ Assistant:`;
           }
         };
         headers = {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey
         };
       }
       
