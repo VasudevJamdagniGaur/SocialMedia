@@ -9,7 +9,7 @@ class ChatService {
     this.grokApiKey = process.env.REACT_APP_GROK_API_KEY || '';
     this.apiProvider = 'openai'; // 'openai', 'gemini', or 'grok'
     this.openaiBaseURL = 'https://api.openai.com/v1';
-    this.geminiBaseURL = 'https://generativelanguage.googleapis.com/v1';
+    this.geminiBaseURL = 'https://generativelanguage.googleapis.com/v1beta';
     this.grokBaseURL = 'https://api.x.ai/v1';
     this.openaiModelName = 'gpt-4o';
     this.geminiModelName = 'gemini-1.5-flash';
