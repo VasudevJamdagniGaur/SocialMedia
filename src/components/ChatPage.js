@@ -1507,7 +1507,7 @@ export default function ChatPage() {
               localStorage.setItem('chat_api_provider', newProvider);
               chatService.setApiProvider(newProvider);
             }}
-            className={`px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 backdrop-blur-lg ${
+            className={`px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 backdrop-blur-lg flex items-center justify-center ${
               isDarkMode 
                 ? apiProvider === 'openai' 
                   ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' 
@@ -1529,7 +1529,11 @@ export default function ChatPage() {
               'OpenAI'
             }`}
           >
-            {apiProvider === 'openai' ? 'OpenAI' : apiProvider === 'gemini' ? 'Gemini' : 'Grok'}
+            <img 
+              src={apiProvider === 'openai' ? '/images/openai-icon.png' : apiProvider === 'gemini' ? '/images/gemini-icon.png' : '/images/grok-icon.png'}
+              alt={apiProvider === 'openai' ? 'OpenAI' : apiProvider === 'gemini' ? 'Gemini' : 'Grok'}
+              className="w-5 h-5 object-contain"
+            />
           </button>
           
           <button
