@@ -13,7 +13,7 @@ class ChatService {
     this.grokBaseURL = 'https://api.x.ai/v1';
     this.openaiModelName = 'gpt-4o';
     this.geminiModelName = 'gemini-1.5-flash';
-    this.grokModelName = 'grok-beta';
+    this.grokModelName = 'grok-3';
     this.visionModelName = 'gpt-4o'; // For OpenAI vision
     // Optional: Add your Serper API key here for better results
     // Get free API key at: https://serper.dev (2,500 free searches/month)
