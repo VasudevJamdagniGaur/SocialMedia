@@ -1523,7 +1523,7 @@ export default function ChatPage() {
             <img 
               src={apiProvider === 'openai' ? '/images/openai-icon.png' : apiProvider === 'gemini' ? '/images/gemini-icon.png' : '/images/grok-icon.png'}
               alt={apiProvider === 'openai' ? 'OpenAI' : apiProvider === 'gemini' ? 'Gemini' : 'Grok'}
-              className="w-7 h-7 object-contain scale-95"
+              className="w-7 h-7 object-contain scale-[0.92]"
               style={(apiProvider === 'openai' || apiProvider === 'grok') ? { filter: 'brightness(0) invert(1)' } : {}}
             />
           </button>
