@@ -1507,20 +1507,10 @@ export default function ChatPage() {
               localStorage.setItem('chat_api_provider', newProvider);
               chatService.setApiProvider(newProvider);
             }}
-            className={`px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 backdrop-blur-lg flex items-center justify-center ${
-              isDarkMode 
-                ? apiProvider === 'openai' 
-                  ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' 
-                  : apiProvider === 'gemini'
-                  ? 'bg-green-600/20 text-green-400 border border-green-500/30'
-                  : 'bg-purple-600/20 text-purple-400 border border-purple-500/30'
-                : apiProvider === 'openai'
-                  ? 'bg-blue-100 text-blue-700 border border-blue-300'
-                  : apiProvider === 'gemini'
-                  ? 'bg-green-100 text-green-700 border border-green-300'
-                  : 'bg-purple-100 text-purple-700 border border-purple-300'
-            }`}
+            className="px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 backdrop-blur-lg flex items-center justify-center"
             style={{
+              backgroundColor: "#1F1F23",
+              border: "1px solid #2A2A30",
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
             }}
             title={`Switch to ${
