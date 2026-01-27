@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { ThemeProvider } from './contexts/ThemeContext';
-import { handleGoogleRedirect } from './services/authService';
 import { Capacitor } from '@capacitor/core';
 import LandingPage from './components/LandingPage';
 import WelcomePage from './components/WelcomePage';
@@ -36,7 +35,7 @@ const getAppPlugin = async () => {
   }
 };
 
-// Component to handle Google Sign-In redirects and route transitions
+// Component for route transitions and Android back-button handling
 function AppContent() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -48,23 +47,6 @@ function AppContent() {
       setTransitionStage('fadeOut');
     }
   }, [location.pathname, displayLocation.pathname]);
-
-  useEffect(() => {
-    // Handle Google Sign-In redirect on app load
-    const handleAuthRedirect = async () => {
-      try {
-        const result = await handleGoogleRedirect();
-        if (result.success && result.user) {
-          navigate('/dashboard', { replace: true });
-        }
-      } catch (error) {
-        console.error('Error handling Google redirect:', error);
-      }
-    };
-    
-    // Check for redirect result after app loads
-    setTimeout(handleAuthRedirect, 500);
-  }, [navigate]);
 
   // Global Android back button handler
   useEffect(() => {
