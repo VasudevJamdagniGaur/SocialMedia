@@ -14,6 +14,7 @@ import {
 } from "firebase/auth";
 import { auth } from "../firebase/config";
 import { Capacitor } from '@capacitor/core';
+import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 
 // Lazy load Capacitor Firebase Auth (only works in native)
 // We'll import it dynamically when needed to avoid errors in web builds
@@ -232,406 +233,48 @@ const isStoragePartitioned = () => {
   }
 };
 
-// Sign in with Google - Uses Capacitor native auth on mobile, web popup/redirect on browser
+// Sign in with Google - Uses native Google Sign-In via @capacitor-firebase/authentication (no web OAuth redirects)
 export const signInWithGoogle = async () => {
   try {
-    // CRITICAL: Check if we're in a Capacitor native environment
-    // This will be true ONLY when running as a native app (APK/IPA)
-    // It will be FALSE when running in a mobile browser (even on Android/iOS)
-    const isNativeApp = Capacitor.isNativePlatform();
-    const isMobileBrowser = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) && !isNativeApp;
-    
-    console.log('🔍 Platform Detection:', {
-      isNativeApp,
-      isMobileBrowser,
-      userAgent: navigator.userAgent,
-      platform: Capacitor.getPlatform(),
-      origin: window.location.origin
-    });
-    
-    // NATIVE APP: Use Firebase's signInWithRedirect with storage workaround
-    // FIX: Address storage-partitioned browser issue by ensuring state persistence
-    if (isNativeApp) {
-      console.log('📱 Detected native platform - using Firebase signInWithRedirect');
-      
-      // Store app info for redirect handling
-      try {
-        localStorage.setItem('appOrigin', window.location.origin);
-        localStorage.setItem('googleSignInPending', 'true');
-        // Store timestamp to help with state recovery
-        localStorage.setItem('googleSignInTimestamp', Date.now().toString());
-        console.log('✅ Stored app origin:', window.location.origin);
-      } catch (e) {
-        console.warn('Could not store app info:', e);
-      }
-      
-      try {
-        // CRITICAL FIX: Check BOTH sessionStorage and localStorage
-        // Some browsers partition sessionStorage but allow localStorage
-        let storageAvailable = false;
-        let sessionStorageAvailable = false;
-        let localStorageAvailable = false;
-        
-        try {
-          sessionStorage.setItem('__firebase_redirect_check__', 'test');
-          const sessionValue = sessionStorage.getItem('__firebase_redirect_check__');
-          sessionStorage.removeItem('__firebase_redirect_check__');
-          if (sessionValue === 'test') {
-            sessionStorageAvailable = true;
-            storageAvailable = true;
-          }
-        } catch (e) {
-          console.warn('⚠️ sessionStorage check failed:', e);
-        }
-        
-        try {
-          localStorage.setItem('__firebase_redirect_check__', 'test');
-          const localValue = localStorage.getItem('__firebase_redirect_check__');
-          localStorage.removeItem('__firebase_redirect_check__');
-          if (localValue === 'test') {
-            localStorageAvailable = true;
-            storageAvailable = true;
-          }
-        } catch (e) {
-          console.warn('⚠️ localStorage check failed:', e);
-        }
-        
-        if (!storageAvailable) {
-          console.error('❌ Both sessionStorage and localStorage are blocked');
-          return {
-            success: false,
-            error: 'Your browser\'s privacy settings are preventing Google sign-in. Please enable cookies and storage for this site, or use the email/password sign-up option.',
-            code: 'storage-partitioned',
-            useEmailInstead: true
-          };
-        }
-        
-        console.log('✅ Storage check passed:', {
-          sessionStorage: sessionStorageAvailable,
-          localStorage: localStorageAvailable
-        });
-        
-        // Get app origin - in Capacitor native apps, this is capacitor://localhost
-        const appOrigin = window.location.origin;
-        
-        console.log('🔄 Using Firebase signInWithRedirect...');
-        console.log('📍 App origin (WebView):', appOrigin);
-        console.log('📍 Firebase will redirect to:', appOrigin);
-        
-        // EXPLANATION:
-        // Firebase signInWithRedirect() redirects back to window.location.origin
-        // In Capacitor apps, that's capacitor://localhost (the app itself!)
-        // 
-        // Flow:
-        // 1. Firebase stores state in sessionStorage
-        // 2. WebView navigates to Google OAuth (accounts.google.com) - stays in WebView
-        // 3. User selects account, Google redirects to Firebase handler - stays in WebView
-        // 4. Firebase handler processes OAuth and redirects back to capacitor://localhost
-        // 5. WebView receives redirect, JavaScript checks auth state
-        // 6. User is authenticated and navigated to dashboard
-        //
-        // SOLUTION: MainActivity keeps all OAuth URLs in WebView, preventing storage partitioning
-        
-        // Use Firebase's proper signInWithRedirect method
-        const provider = new GoogleAuthProvider();
-        
-        // CRITICAL: Set custom parameters to help with state management
-        // This ensures the OAuth flow includes proper state parameters
-        provider.setCustomParameters({
-          prompt: 'select_account'
-        });
-        
-        // Pre-store redirect information in localStorage (persists across redirects)
-        // This helps us recover state if sessionStorage is partitioned
-        try {
-          const redirectState = {
-            timestamp: Date.now(),
-            appOrigin: appOrigin,
-            expectedReturnUrl: `${appOrigin}/__/auth/handler`
-          };
-          localStorage.setItem('firebase_redirect_state_backup', JSON.stringify(redirectState));
-          console.log('✅ Stored redirect state backup in localStorage');
-        } catch (e) {
-          console.warn('⚠️ Could not store redirect state backup:', e);
-        }
-        
-        // Firebase signInWithRedirect() flow:
-        // 1. Stores OAuth state in sessionStorage
-        // 2. Navigates WebView to Google OAuth (MainActivity keeps in WebView)
-        // 3. User selects account, Google redirects to Firebase handler (stays in WebView)
-        // 4. Firebase handler processes OAuth and redirects back to capacitor://localhost
-        // 5. WebView receives redirect, handleGoogleRedirect() processes it
-        // 6. User is authenticated and navigated to dashboard
-        //
-        // IMPORTANT: MainActivity.java keeps all OAuth URLs in WebView
-        // This ensures the ENTIRE flow happens in the SAME WebView context
-        // sessionStorage persists because it's the same WebView (not external browser)
-        await signInWithRedirect(auth, provider);
-        
-        console.log('✅ signInWithRedirect called - redirecting now');
-        console.log('📍 Flow: WebView → Google OAuth → Firebase Handler → capacitor://localhost');
-        console.log('📍 ALL redirects stay in WebView (MainActivity intercepts)');
-        console.log('📍 User will be signed in automatically when redirect completes');
-        
-        // Return immediately - redirect will happen
-        return {
-          success: true,
-          redirecting: true,
-          message: 'Redirecting to Google sign-in...'
-        };
-      } catch (redirectError) {
-        console.error('❌ signInWithRedirect failed:', redirectError);
-        
-        // Clean up stored state on error
-        try {
-          localStorage.removeItem('firebase_redirect_state_backup');
-        } catch (e) {
-          // Ignore cleanup errors
-        }
-        
-        // If redirect fails, provide helpful error
-        if (redirectError.code === 'auth/argument-error' || 
-            redirectError.message?.includes('initial state') ||
-            redirectError.message?.includes('storage') ||
-            redirectError.message?.includes('sessionStorage')) {
-          return {
-            success: false,
-            error: 'Google sign-in encountered a storage issue. This may happen if your browser has strict privacy settings. Please try: 1) Clear app data and retry, 2) Use email/password sign-up instead, or 3) Check that capacitor://localhost is in Firebase Authorized Domains.',
-            code: 'storage-partitioned',
-            useEmailInstead: true
-          };
-        }
-        
-        return {
-          success: false,
-          error: redirectError.message || 'Google sign-in failed. Please try again or use email/password sign-up.',
-          code: redirectError.code || 'unknown-error'
-        };
-      }
-    }
-    
-    // WEB AUTHENTICATION (Browser - desktop OR mobile browser OR native app fallback)
-    console.log('🌐 Using web Firebase Authentication...');
-    const provider = new GoogleAuthProvider();
-    
-    // For mobile browsers OR native apps (WebView): ALWAYS use redirect
-    // Redirect works in both mobile browsers and Capacitor WebView
-    // This ensures user can at least select their Google account
-    if (isMobileBrowser || isNativeApp) {
-      console.log('📱 Mobile/Native device detected - using web redirect');
-      console.log('🔄 Redirecting to Google account selection...');
-      console.log('📍 This will open Google sign-in page');
-      
-      try {
-        // Ensure we can save to sessionStorage before redirect (required by Firebase)
-        try {
-          sessionStorage.setItem('__firebase_redirect_check__', 'test');
-          sessionStorage.removeItem('__firebase_redirect_check__');
-          console.log('✅ Storage check passed - sessionStorage is available');
-        } catch (storageError) {
-          console.error('❌ Storage check failed:', storageError);
-          return {
-            success: false,
-            error: 'Your browser\'s privacy settings are preventing Google sign-in. Please enable cookies and storage for this site, or use the email/password sign-up option.',
-            code: 'storage-partitioned',
-            useEmailInstead: true
-          };
-        }
-        
-        console.log('🔄 Attempting redirect on mobile/native app...');
-        console.log('📍 Current origin:', window.location.origin);
-        console.log('📍 Auth domain:', auth.config?.authDomain || 'not available');
-        console.log('🌐 Redirect URL will be: https://' + (auth.config?.authDomain || 'deitedatabase.firebaseapp.com') + '/__/auth/handler');
-        
-        // CRITICAL: Use signInWithRedirect - this MUST work
-        console.log('🚀 Calling signInWithRedirect NOW...');
-        console.log('⚠️ This should cause page navigation - if nothing happens, check console for errors');
-        
-        try {
-          console.log('🚀 EXECUTING signInWithRedirect() NOW...');
-          console.log('🔵 Auth config:', {
-            apiKey: auth.config?.apiKey ? '***' : 'missing',
-            authDomain: auth.config?.authDomain || 'missing',
-            projectId: auth.config?.projectId || 'missing'
-          });
-          
-          // Call signInWithRedirect
-          const redirectPromise = signInWithRedirect(auth, provider);
-          
-          console.log('⏳ signInWithRedirect() called, waiting for redirect...');
-          
-          // The redirect should happen immediately
-          // We don't await it because it will navigate away
-          redirectPromise.catch((err) => {
-            console.error('❌ signInWithRedirect promise rejected:', err);
-          });
-          
-          // For native apps, check if redirect actually happened
-          if (isNativeApp) {
-            console.log('📱 Native app detected - checking if redirect worked...');
-            // Give it 500ms - if redirect works, page will navigate away
-            await new Promise(resolve => setTimeout(resolve, 500));
-            
-            // Check if we're still on the same page
-            const currentUrl = window.location.href;
-            console.log('📍 Current URL after redirect attempt:', currentUrl);
-            
-            if (currentUrl.includes('signup') || currentUrl.includes('login')) {
-              console.error('❌ Redirect failed - still on signup/login page');
-              console.error('❌ This means signInWithRedirect() did not navigate');
-              console.error('❌ Most likely cause: capacitor://localhost not in Firebase Authorized Domains');
-              console.error('❌ FIX: Add capacitor://localhost to Firebase Console → Authentication → Settings → Authorized domains');
-              
-              return {
-                success: false,
-                error: 'Redirect failed. Please add capacitor://localhost to Firebase Authorized Domains in Firebase Console.',
-                code: 'redirect-failed',
-                redirectFailed: true,
-                fixInstructions: 'Go to Firebase Console → Authentication → Settings → Authorized domains → Add: capacitor://localhost'
-              };
-            }
-          }
-          
-          // Return immediately - redirect should have happened
-          return {
-            success: true,
-            redirecting: true,
-            message: 'Redirecting to Google sign-in...'
-              };
-        } catch (redirectCallError) {
-          console.error('❌ signInWithRedirect threw an error:', redirectCallError);
-          console.error('❌ Error message:', redirectCallError.message);
-          console.error('❌ Error code:', redirectCallError.code);
-          console.error('❌ Full error:', redirectCallError);
-          throw redirectCallError; // Re-throw to be caught by outer catch
-          }
-      } catch (redirectError) {
-        console.error('❌ Redirect failed on mobile:', redirectError);
-        console.error('❌ Error code:', redirectError.code);
-        console.error('❌ Error message:', redirectError.message);
-        console.error('❌ Full error:', redirectError);
-        
-        if (redirectError.code === 'auth/argument-error' || 
-            redirectError.message?.includes('initial state') ||
-            redirectError.message?.includes('storage') ||
-            redirectError.message?.includes('sessionStorage')) {
-          return {
-            success: false,
-            error: 'Your browser\'s privacy settings are preventing Google sign-in. Please enable cookies and storage for this site, or use the email/password sign-up option.',
-            code: 'storage-partitioned',
-            useEmailInstead: true
-          };
-        }
-        
-        // Check if it's a redirect URI issue
-        if (redirectError.message?.includes('redirect_uri') || 
-            redirectError.message?.includes('unauthorized') ||
-            redirectError.code === 'auth/unauthorized-domain') {
-          return {
-            success: false,
-            error: 'Redirect URI not configured. Please add this URL to Firebase Console Authorized Domains: ' + window.location.origin,
-            code: 'redirect-uri-not-configured',
-            useEmailInstead: false
-          };
-        }
-        
-        return {
-          success: false,
-          error: redirectError.message || 'Google sign-in failed. Please try using email/password sign-up instead.',
-          code: redirectError.code || 'unknown-error',
-          details: redirectError.toString()
-        };
-      }
-    }
-    
-    // Desktop browser - try popup first, fallback to redirect
-    console.log('🖥️ Desktop browser detected - attempting popup first...');
-    
-    try {
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-      
-      console.log('✅ Google Sign-In successful via popup:', user);
-      
-      return {
-        success: true,
-        user: {
-          uid: user.uid,
-          email: user.email,
-          displayName: user.displayName,
-          photoURL: user.photoURL
-        },
-        popup: true
-      };
-    } catch (popupError) {
-      console.log('⚠️ Popup failed, error code:', popupError.code);
-      
-      // If popup is blocked or closed, fall back to redirect
-      if (popupError.code === 'auth/popup-blocked' || 
-          popupError.code === 'auth/popup-closed-by-user' ||
-          popupError.code === 'auth/cancelled-popup-request') {
-        console.log('⚠️ Popup blocked or cancelled, falling back to redirect...');
-        
-        try {
-          await signInWithRedirect(auth, provider);
-          console.log('📱 Using signInWithRedirect fallback');
-          return {
-            success: true,
-            redirecting: true,
-            message: 'Redirecting to Google sign-in...'
-          };
-        } catch (redirectError) {
-          console.error('❌ Redirect fallback also failed:', redirectError);
-          
-          if (redirectError.code === 'auth/argument-error' || 
-              redirectError.message?.includes('initial state') ||
-              redirectError.message?.includes('storage')) {
-            return {
-              success: false,
-              error: 'Your browser\'s privacy settings are preventing Google sign-in. Please try using email/password sign-up instead, or enable cookies and storage for this site.',
-              code: 'storage-partitioned',
-              useEmailInstead: true
-            };
-          }
-          
-          return {
-            success: false,
-            error: redirectError.message || 'Google sign-in failed. Please try using email/password sign-up instead.',
-            code: redirectError.code
-          };
-        }
-      }
-      
-      if (popupError.code === 'auth/popup-closed-by-user') {
-        return {
-          success: false,
-          error: 'Google sign-in was cancelled.',
-          code: popupError.code,
-          cancelled: true
-        };
-      }
-      
-      throw popupError;
-    }
-  } catch (error) {
-    console.error("❌ Error signing in with Google:", error);
-    
-    if (error.code === 'auth/argument-error' || 
-        error.message?.includes('initial state') ||
-        error.message?.includes('storage') ||
-        error.message?.includes('sessionStorage')) {
+    console.log('🔐 Signing in with Google via native FirebaseAuthentication...');
+    const result = await FirebaseAuthentication.signInWithGoogle();
+    const user = result?.user;
+    const credential = result?.credential;
+
+    if (!user) {
       return {
         success: false,
-        error: 'Your browser\'s privacy settings are preventing Google sign-in. Please try using email/password sign-up instead, or enable cookies and storage for this site.',
-        code: 'storage-partitioned',
-        useEmailInstead: true
+        error: 'Google sign-in did not return a user.',
+        code: 'no-user'
       };
     }
-    
+
+    // On native, the plugin signs in on the native layer. Sync to Firebase JS SDK so
+    // onAuthStateChange, getCurrentUser, and Firestore work.
+    if (Capacitor.isNativePlatform() && credential?.providerId === 'google.com' && credential?.idToken) {
+      const firebaseCredential = GoogleAuthProvider.credential(
+        credential.idToken,
+        credential.accessToken || null
+      );
+      await signInWithCredential(auth, firebaseCredential);
+    }
+
+    console.log('✅ Google Sign-In successful:', user.uid);
+    return {
+      success: true,
+      user: {
+        uid: user.uid,
+        email: user.email || null,
+        displayName: user.displayName || null,
+        photoURL: user.photoUrl || null
+      }
+    };
+  } catch (error) {
+    console.error('❌ Error signing in with Google:', error);
     return {
       success: false,
-      error: error.message || 'An error occurred during Google sign-in. Please try again.',
-      code: error.code
+      error: error?.message || 'Google sign-in failed. Please try again.',
+      code: error?.code || 'unknown-error'
     };
   }
 };
