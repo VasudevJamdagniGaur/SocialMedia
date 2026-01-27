@@ -27,16 +27,24 @@ const getFirebaseAuthentication = async () => {
 
 export const signInWithGoogle = async () => {
   try {
-    console.log('🔐 Native Google sign-in started');
+    console.log('🔐 [STEP 1] Button pressed');
+
+    console.log('🔐 [STEP 2] Capacitor platform:', Capacitor.getPlatform());
+    console.log('🔐 [STEP 3] isNativePlatform:', Capacitor.isNativePlatform());
 
     const NativeFirebaseAuth = await getFirebaseAuthentication();
 
+    console.log('🔐 [STEP 4] NativeFirebaseAuth =', NativeFirebaseAuth);
+
     if (!NativeFirebaseAuth) {
-      throw new Error('FirebaseAuthentication plugin not available');
+      throw new Error('FirebaseAuthentication plugin not available on this platform.');
     }
 
+    console.log('🔐 [STEP 5] About to call signInWithGoogle()');
+
     const result = await NativeFirebaseAuth.signInWithGoogle();
-    console.log('📦 Native result:', result);
+
+    console.log('🔐 [STEP 6] Native result:', result);
 
     const user = result?.user;
     const credential = result?.credential;
