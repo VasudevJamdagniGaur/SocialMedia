@@ -14,7 +14,6 @@ import {
 } from "firebase/auth";
 import { auth } from "../firebase/config";
 import { Capacitor } from '@capacitor/core';
-import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 
 // Lazy load Capacitor Firebase Auth (only works in native)
 // We'll import it dynamically when needed to avoid errors in web builds
@@ -237,7 +236,19 @@ const isStoragePartitioned = () => {
 export const signInWithGoogle = async () => {
   try {
     console.log('🔐 Signing in with Google via native FirebaseAuthentication...');
-    const result = await FirebaseAuthentication.signInWithGoogle();
+
+    const NativeFirebaseAuth = await getFirebaseAuthentication();
+
+    if (!NativeFirebaseAuth) {
+      throw new Error('FirebaseAuthentication plugin not available on this platform.');
+    }
+
+    console.log('✅ FirebaseAuthentication plugin loaded');
+
+    const result = await NativeFirebaseAuth.signInWithGoogle();
+
+    console.log('📦 Native sign-in result:', result);
+
     const user = result?.user;
     const credential = result?.credential;
 
@@ -249,17 +260,22 @@ export const signInWithGoogle = async () => {
       };
     }
 
-    // On native, the plugin signs in on the native layer. Sync to Firebase JS SDK so
-    // onAuthStateChange, getCurrentUser, and Firestore work.
-    if (Capacitor.isNativePlatform() && credential?.providerId === 'google.com' && credential?.idToken) {
+    // Sync native auth state into Firebase JS SDK
+    if (
+      Capacitor.isNativePlatform() &&
+      credential?.providerId === 'google.com' &&
+      credential?.idToken
+    ) {
       const firebaseCredential = GoogleAuthProvider.credential(
         credential.idToken,
         credential.accessToken || null
       );
+
       await signInWithCredential(auth, firebaseCredential);
     }
 
     console.log('✅ Google Sign-In successful:', user.uid);
+
     return {
       success: true,
       user: {
@@ -271,6 +287,7 @@ export const signInWithGoogle = async () => {
     };
   } catch (error) {
     console.error('❌ Error signing in with Google:', error);
+
     return {
       success: false,
       error: error?.message || 'Google sign-in failed. Please try again.',

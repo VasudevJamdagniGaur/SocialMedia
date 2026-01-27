@@ -145,10 +145,11 @@ const SignupPage = () => {
               backdropFilter: 'blur(10px)',
             }}
             onClick={async () => {
-              try {
-                await signInWithGoogle();
-              } catch (error) {
-                console.error('Google sign-in error:', error);
+              const result = await signInWithGoogle();
+              if (result?.success) {
+                navigate('/dashboard', { replace: true });
+              } else if (result?.error) {
+                alert(result.error);
               }
             }}
           >
