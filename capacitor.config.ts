@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'therapist.deite.app',
+  appId: 'com.deite.app',
   appName: 'Deite : AI Journel',
   webDir: 'build',
   android: {
