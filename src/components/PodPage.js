@@ -377,7 +377,7 @@ export default function PodPage() {
                 }}
               />
               <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                Crew
+                Crew <span className={`font-normal ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>(beta)</span>
               </h1>
             </div>
             <div className="flex space-x-2">
