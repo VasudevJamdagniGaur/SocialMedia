@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "therapist.deite.app"
+    namespace = "com.deite.app"
     compileSdk = rootProject.ext["compileSdkVersion"] as Int
     
     buildFeatures {
@@ -13,7 +13,7 @@ android {
     }
     
     defaultConfig {
-        applicationId = "therapist.deite.app"
+        applicationId = "com.deite.app"
         minSdk = rootProject.ext["minSdkVersion"] as Int
         targetSdk = rootProject.ext["targetSdkVersion"] as Int
         versionCode = 5
