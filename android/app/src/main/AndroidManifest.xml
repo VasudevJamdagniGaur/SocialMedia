@@ -27,7 +27,7 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="therapist.deite.app" />
+                <data android:scheme="com.deite.app" />
             </intent-filter>
 
             <!-- App Links for your domain (HTTPS) -->
@@ -37,7 +37,7 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data
                     android:scheme="https"
-                    android:host="therapist.deite.app" />
+                    android:host="com.deite.app" />
             </intent-filter>
 
         </activity>
