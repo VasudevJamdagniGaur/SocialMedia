@@ -127,7 +127,7 @@ const SignupPage = () => {
           }}
         >
           <div className="space-y-4">
-          {/* Sign in with Google (native flow only — no popup/redirect) */}
+          {/* Continue with Google (native flow only — no popup/redirect) */}
           <button
             type="button"
             className="w-full mobile-button rounded-2xl font-semibold transition-all duration-300 hover:scale-[0.98] active:scale-[0.96] flex items-center justify-center gap-3"
@@ -164,7 +164,7 @@ const SignupPage = () => {
               <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
             </svg>
             )}
-            {googleLoading ? 'Signing in…' : 'Sign in with Google'}
+            {googleLoading ? 'Signing in…' : 'Continue with Google'}
           </button>
 
           {/* Sign up */}
