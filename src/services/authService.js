@@ -12,69 +12,66 @@ import {
 import { auth } from "../firebase/config";
 import { Capacitor } from '@capacitor/core';
 
-// --- Native Google Sign-In for Capacitor ---
+// --- Native Google Sign-In for Capacitor (no web OAuth / popup / redirect) ---
 const getFirebaseAuthentication = async () => {
   if (!Capacitor.isNativePlatform()) return null;
-
   try {
     const { FirebaseAuthentication } = await import('@capacitor-firebase/authentication');
     return FirebaseAuthentication;
   } catch (e) {
-    console.warn('⚠️ FirebaseAuthentication plugin not available:', e);
+    console.warn('FirebaseAuthentication plugin not available:', e);
     return null;
   }
 };
 
+/**
+ * Native Google Sign-In for Android (and iOS) via @capacitor-firebase/authentication.
+ * Opens the native account chooser, retrieves an ID token, and signs in to Firebase Auth.
+ * Do NOT use signInWithPopup or signInWithRedirect — this is the only Google flow for the APK.
+ */
 export const signInWithGoogle = async () => {
   try {
-    console.log('🔐 [STEP 1] Button pressed');
-
-    console.log('🔐 [STEP 2] Capacitor platform:', Capacitor.getPlatform());
-    console.log('🔐 [STEP 3] isNativePlatform:', Capacitor.isNativePlatform());
+    if (!Capacitor.isNativePlatform()) {
+      return {
+        success: false,
+        error: 'Google Sign-In is only available in the native app. Please open the Android app.',
+      };
+    }
 
     const NativeFirebaseAuth = await getFirebaseAuthentication();
-
-    console.log('🔐 [STEP 4] NativeFirebaseAuth =', NativeFirebaseAuth);
-
     if (!NativeFirebaseAuth) {
       throw new Error('FirebaseAuthentication plugin not available on this platform.');
     }
 
-    console.log('🔐 [STEP 5] About to call signInWithGoogle()');
-
     const result = await NativeFirebaseAuth.signInWithGoogle();
-
-    console.log('🔐 [STEP 6] Native result:', result);
-
     const user = result?.user;
     const credential = result?.credential;
 
     if (!user) {
-      throw new Error('No user returned from native Google sign-in');
+      throw new Error('No user returned from native Google sign-in.');
     }
 
-    if (credential?.idToken) {
-      const firebaseCredential = GoogleAuthProvider.credential(
-        credential.idToken,
-        credential.accessToken || null
-      );
-      await signInWithCredential(auth, firebaseCredential);
+    const idToken = credential?.idToken ?? credential?.id_token;
+    if (!idToken) {
+      throw new Error('Google sign-in did not return an ID token. Please try again.');
     }
 
-    console.log('✅ Google Sign-In successful:', user.uid);
+    const accessToken = credential?.accessToken ?? credential?.access_token ?? null;
+    const firebaseCredential = GoogleAuthProvider.credential(idToken, accessToken);
+    await signInWithCredential(auth, firebaseCredential);
 
     return {
       success: true,
       user: {
         uid: user.uid,
-        email: user.email || null,
-        displayName: user.displayName || null,
-        photoURL: user.photoUrl || null
-      }
+        email: user.email ?? null,
+        displayName: user.displayName ?? null,
+        photoURL: user.photoUrl ?? user.photoURL ?? null,
+      },
     };
   } catch (e) {
-    console.error('❌ Native Google sign-in failed:', e);
-    return { success: false, error: e.message };
+    const message = e?.message ?? (typeof e === 'string' ? e : 'Google sign-in failed. Please try again.');
+    return { success: false, error: message };
   }
 };
 

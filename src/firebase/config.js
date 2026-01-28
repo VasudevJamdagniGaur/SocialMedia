@@ -21,18 +21,8 @@ const app = initializeApp(firebaseConfig);
 // Initialize Firebase Authentication and get a reference to the service
 export const auth = getAuth(app);
 
-// CRITICAL FOR MOBILE APP: Firebase redirect configuration
-// Firebase signInWithRedirect() uses window.location.origin as the redirect URL
-// In Capacitor native apps, this is: capacitor://localhost
-// NOT http://localhost - that's why you're seeing localhost errors!
-console.log('📍 Firebase Auth Domain:', firebaseConfig.authDomain);
-console.log('📍 App Origin (redirect target):', window.location.origin);
-console.log('⚠️ Make sure "' + window.location.origin + '" is in Firebase Authorized Domains!');
-
-// IMPORTANT: Firebase Auth persists tokens automatically
-// When user signs in via external browser, Firebase stores token server-side
-// When app checks auth state, Firebase verifies token from server
-// This allows external browser sign-in to work properly
+// Google Sign-In on Android uses native flow via @capacitor-firebase/authentication
+// (no signInWithPopup, signInWithRedirect, or browser OAuth)
 
 // Initialize Firestore and get a reference to the service
 export const db = getFirestore(app);
