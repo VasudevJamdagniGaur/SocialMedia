@@ -96,6 +96,8 @@ Do these in order:
 
 5. **See the real error (Logcat)** – Android Studio → **View** → **Tool Windows** → **Logcat**. Filter by `com.deite.app` or search `Google sign-in`. Tap **Continue with Google** and check the log: *"FirebaseAuthentication plugin not available"* → not running as native; *"No user returned"* or *"did not return an ID token"* → usually missing SHA-1 or Android OAuth client.
 
+6. **"No user is signed in" on app startup** – You may see this once when the app opens (before anyone has signed in). It comes from the plugin’s native `onIdTokenChanged` handler and can be ignored. After a successful **Continue with Google**, native and JS both have the user and this error should not repeat for that session.
+
 ---
 
 ## 7. Troubleshooting (reference)

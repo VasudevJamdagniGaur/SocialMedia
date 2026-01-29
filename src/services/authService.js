@@ -51,9 +51,12 @@ export const signInWithGoogle = async () => {
         ),
       ]);
 
+    // Use skipNativeAuth: false so the plugin signs in natively. That prevents the plugin's
+    // onIdTokenChanged handler from throwing "No user is signed in" (it calls getIdToken()
+    // when auth state changes; with no native user it throws). We still sync to the JS SDK below.
     const result = await withTimeout(
       NativeFirebaseAuth.signInWithGoogle({
-        skipNativeAuth: true,
+        skipNativeAuth: false,
         useCredentialManager: false,
       }),
       60000
