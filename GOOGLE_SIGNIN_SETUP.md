@@ -12,10 +12,7 @@ This app uses **native** Google Sign-In on Android via `@capacitor-firebase/auth
    - Click **Add app** → **Android**.
    - **Android package name** must match your app exactly, e.g. `com.deite.app` (see `android/app/build.gradle.kts` → `applicationId`).
    - Register the app and download **google-services.json**.
-4. Place **google-services.json** in:
-   ```
-   android/app/google-services.json
-   ```
+4. Place **google-services.json** in `android/app/google-services.json`. The file must have **package_name: "com.deite.app"** in `client_info.android_client_info` and in the Android OAuth client’s `android_info`. If your current file has a different package name (e.g. therapist.deite.app), add a new Android app in Firebase with package name **com.deite.app**, add SHA-1, then download the new **google-services.json** and replace the existing one.
 5. Add your **SHA-1** (and optionally SHA-256) for the keystore you use to build the APK:
    - In Project settings → Your apps → your Android app, click **Add fingerprint**.
    - Paste the SHA-1 from step 2 below.
@@ -71,7 +68,9 @@ Use that SHA-1 in Firebase and in the **release** Android OAuth client in Google
 
 ## 5. Flow summary (no code changes needed if setup is done)
 
-1. User taps **Sign in with Google** in the React app.
+**Continue with Google** signs in existing users and creates new accounts automatically (Firebase Auth handles both).
+
+1. User taps **Continue with Google** in the React app.
 2. `signInWithGoogle()` in `authService.js` runs (only on native; on web it returns a clear error).
 3. The Capacitor plugin opens the **native Android** Google account chooser.
 4. User selects an account; the plugin returns an **ID token** (and optional access token).
