@@ -13,11 +13,17 @@ import { auth } from "../firebase/config";
 import { Capacitor } from '@capacitor/core';
 
 // --- Native Google Sign-In for Capacitor (no web OAuth / popup / redirect) ---
+// Do NOT return the raw FirebaseAuthentication plugin: it's a Capacitor proxy that implements
+// every property (including .then). If a Promise ever resolves with it, the engine may call
+// .then() on it and trigger "FirebaseAuthentication.then() is not implemented on android".
+// Return a plain wrapper with only the methods we need so nothing ever calls .then on the plugin.
 const getFirebaseAuthentication = async () => {
   if (!Capacitor.isNativePlatform()) return null;
   try {
     const { FirebaseAuthentication } = await import('@capacitor-firebase/authentication');
-    return FirebaseAuthentication;
+    return {
+      signInWithGoogle: (options) => FirebaseAuthentication.signInWithGoogle(options),
+    };
   } catch (e) {
     console.warn('FirebaseAuthentication plugin not available:', e);
     return null;
