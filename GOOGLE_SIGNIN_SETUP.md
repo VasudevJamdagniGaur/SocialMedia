@@ -82,7 +82,23 @@ No browser, no `signInWithPopup`, no `signInWithRedirect`, no redirect URIs.
 
 ---
 
-## 6. Troubleshooting
+## 6. "Continue with Google" not working? – Checklist
+
+Do these in order:
+
+1. **Run the app as a native APK** – Do **not** open `http://localhost:3000` in Chrome. Build and run: `npm run build` → `npx cap sync android` → open `android/` in Android Studio → Run on device (or `npx cap run android`). In browser you get: *"Google Sign-In is only available in the native app."*
+
+2. **Firebase: Android app + SHA-1** – Firebase Console → Project settings → Your apps → your **Android** app. Package name must be exactly `com.deite.app`. Download **google-services.json** into `android/app/`. Add **SHA-1**: run `cd android && ./gradlew signingReport`, copy SHA-1 under **Variant: debug**, then in Firebase → your Android app → **Add fingerprint** → paste SHA-1.
+
+3. **Google Cloud: Android OAuth client** – Google Cloud Console (same project as Firebase) → **APIs & Services** → **Credentials** → **Create credentials** → **OAuth client ID** → Application type: **Android**. **Package name**: `com.deite.app`. **SHA-1**: same as in Firebase. Create. No Web client needed.
+
+4. **Rebuild and test** – After changing SHA-1 or OAuth: `npx cap sync android`, rebuild APK in Android Studio, install. Tap **Continue with Google**; native account picker should appear.
+
+5. **See the real error (Logcat)** – Android Studio → **View** → **Tool Windows** → **Logcat**. Filter by `com.deite.app` or search `Google sign-in`. Tap **Continue with Google** and check the log: *"FirebaseAuthentication plugin not available"* → not running as native; *"No user returned"* or *"did not return an ID token"* → usually missing SHA-1 or Android OAuth client.
+
+---
+
+## 7. Troubleshooting (reference)
 
 | Symptom | Check |
 |--------|--------|
@@ -93,7 +109,7 @@ No browser, no `signInWithPopup`, no `signInWithRedirect`, no redirect URIs.
 
 ---
 
-## 7. References
+## 8. References
 
 - [Capacitor Firebase Authentication – Google Sign-In](https://github.com/capawesome-team/capacitor-firebase/blob/main/packages/authentication/docs/setup-google.md)
 - [Firebase Auth – Android](https://firebase.google.com/docs/auth/android/start)

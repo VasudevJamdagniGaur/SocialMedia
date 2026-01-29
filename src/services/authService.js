@@ -43,15 +43,6 @@ export const signInWithGoogle = async () => {
       throw new Error('FirebaseAuthentication plugin not available on this platform.');
     }
 
-    // Force account chooser (supports multiple Google accounts) and avoid native/web state mismatch:
-    // - sign out native session so user can pick another account
-    // - use skipNativeAuth so we authenticate ONLY via Firebase JS SDK (signInWithCredential)
-    try {
-      await NativeFirebaseAuth.signOut();
-    } catch (_) {
-      // ignore
-    }
-
     const withTimeout = (promise, ms) =>
       Promise.race([
         promise,
@@ -62,12 +53,10 @@ export const signInWithGoogle = async () => {
 
     const result = await withTimeout(
       NativeFirebaseAuth.signInWithGoogle({
-        // Critical: return tokens without completing native Firebase auth (we sync via JS SDK below)
         skipNativeAuth: true,
-        // Android: disable Credential Manager auto-select; prefer classic chooser UI
         useCredentialManager: false,
       }),
-      45000
+      60000
     );
     const user = result?.user;
     const credential = result?.credential;
@@ -97,7 +86,15 @@ export const signInWithGoogle = async () => {
       },
     };
   } catch (e) {
-    const message = e?.message ?? (typeof e === 'string' ? e : 'Google sign-in failed. Please try again.');
+    const msg = e?.message ?? (typeof e === 'string' ? e : '');
+    const code = e?.code ?? '';
+    if (code === '12501' || /cancel|cancelled|user_cancel/i.test(msg)) {
+      return { success: false, error: 'Sign-in was cancelled.' };
+    }
+    if (/timeout|timed out/i.test(msg)) {
+      return { success: false, error: 'Google sign-in timed out. Please try again.' };
+    }
+    const message = msg || 'Google sign-in failed. Please try again.';
     return { success: false, error: message };
   }
 };
