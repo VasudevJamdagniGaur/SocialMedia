@@ -1,26 +1,44 @@
 {
   "project_info": {
-    "project_number": "348813906964",
-    "project_id": "deite2026",
-    "storage_bucket": "deite2026.firebasestorage.app"
+    "project_number": "300613626896",
+    "project_id": "deitedatabase",
+    "storage_bucket": "deitedatabase.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:348813906964:android:ae04936f8d9486d1c1c301",
+        "mobilesdk_app_id": "1:300613626896:android:96b25a5c6549a45307ae95",
         "android_client_info": {
-          "package_name": "com.deite.app"
+          "package_name": "therapist.deite.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "300613626896-e71ih9kfbflvobebevder3o3l4umpmsh.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "therapist.deite.app",
+            "certificate_hash": "c465ffcb3d988222dc729c487e5fd50b3c9d9f8a"
+          }
+        },
+        {
+          "client_id": "300613626896-afgue1cj09n7mibt6b84t0qgjkc0avqk.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
-          "current_key": "AIzaSyDRPijZkfVkx3OQtT9AEGHwMD7ACgZL-lM"
+          "current_key": "AIzaSyB_w5hWIP5L5Bhg5Iqju4oZq5fJdT5Kkik"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "300613626896-afgue1cj09n7mibt6b84t0qgjkc0avqk.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
