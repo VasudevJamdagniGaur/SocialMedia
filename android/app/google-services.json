@@ -1,44 +1,26 @@
 {
   "project_info": {
-    "project_number": "300613626896",
-    "project_id": "deitedatabase",
-    "storage_bucket": "deitedatabase.firebasestorage.app"
+    "project_number": "348813906964",
+    "project_id": "deite2026",
+    "storage_bucket": "deite2026.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:300613626896:android:9fb71fa796af9e9f07ae95",
+        "mobilesdk_app_id": "1:348813906964:android:ae04936f8d9486d1c1c301",
         "android_client_info": {
           "package_name": "com.deite.app"
         }
       },
-      "oauth_client": [
-        {
-          "client_id": "300613626896-6cnko5g3q19o4ifddr7t1qhppa9rfvv7.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.deite.app",
-            "certificate_hash": "c465ffcb3d988222dc729c487e5fd50b3c9d9f8a"
-          }
-        },
-        {
-          "client_id": "300613626896-afgue1cj09n7mibt6b84t0qgjkc0avqk.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
+      "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyB_w5hWIP5L5Bhg5Iqju4oZq5fJdT5Kkik"
+          "current_key": "AIzaSyDRPijZkfVkx3OQtT9AEGHwMD7ACgZL-lM"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "300613626896-afgue1cj09n7mibt6b84t0qgjkc0avqk.apps.googleusercontent.com",
-              "client_type": 3
-            }
-          ]
+          "other_platform_oauth_client": []
         }
       }
     }
