@@ -16,10 +16,10 @@ if (Test-Path $googleServicesPath) {
         
         # Check package name
         $packageName = $json.client[0].client_info.android_client_info.package_name
-        if ($packageName -eq "jamdagni.deite.app") {
+        if ($packageName -eq "com.deite.app") {
             Write-Host "✅ Package name is correct: $packageName" -ForegroundColor Green
         } else {
-            Write-Host "❌ WRONG package name: $packageName (should be jamdagni.deite.app)" -ForegroundColor Red
+            Write-Host "❌ WRONG package name: $packageName (should be com.deite.app)" -ForegroundColor Red
             Write-Host "   Download the correct google-services.json from Firebase Console" -ForegroundColor Yellow
         }
         
@@ -88,5 +88,5 @@ Write-Host ""
 Write-Host "3. If still not working, check:" -ForegroundColor White
 Write-Host "   - SHA-1 fingerprint is added in Firebase Console" -ForegroundColor Yellow
 Write-Host "   - Google Sign-In is enabled in Firebase Authentication" -ForegroundColor Yellow
-Write-Host "   - Package name matches: jamdagni.deite.app" -ForegroundColor Yellow
+Write-Host "   - Package name matches: com.deite.app" -ForegroundColor Yellow
 

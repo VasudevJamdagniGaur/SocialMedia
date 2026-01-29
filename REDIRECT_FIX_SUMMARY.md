@@ -51,7 +51,7 @@
    - Page navigates to Google account selection
    - Select your Google account
    - Page redirects back to your app
-   - Returns to: `jamdagni.deite.app` or your origin
+   - Returns to: `com.deite.app` or your origin
 
 ## How to Test
 
