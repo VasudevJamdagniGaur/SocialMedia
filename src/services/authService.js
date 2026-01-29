@@ -51,8 +51,7 @@ export const signInWithGoogle = async () => {
         ),
       ]);
 
-    // skipNativeAuth: true = plugin returns credential only; we sign in to Firebase JS below.
-    // Avoids native "No user is signed in" errors. useCredentialManager: false = classic picker (often works better on emulator).
+    // skipNativeAuth: true = plugin returns credential only (no native user); we sign in with Firebase JS.
     const result = await withTimeout(
       NativeFirebaseAuth.signInWithGoogle({
         skipNativeAuth: true,
@@ -60,14 +59,7 @@ export const signInWithGoogle = async () => {
       }),
       60000
     );
-    const user = result?.user;
     const credential = result?.credential;
-    const isNewUser = !!result?.additionalUserInfo?.isNewUser;
-
-    if (!user) {
-      throw new Error('No user returned from native Google sign-in.');
-    }
-
     const idToken = credential?.idToken ?? credential?.id_token;
     if (!idToken) {
       throw new Error('Google sign-in did not return an ID token. Please try again.');
@@ -75,17 +67,18 @@ export const signInWithGoogle = async () => {
 
     const accessToken = credential?.accessToken ?? credential?.access_token ?? null;
     const firebaseCredential = GoogleAuthProvider.credential(idToken, accessToken);
-    await signInWithCredential(auth, firebaseCredential);
+    const userCredential = await signInWithCredential(auth, firebaseCredential);
+    const user = userCredential?.user;
 
     return {
       success: true,
-      isNewUser,
-      user: {
+      isNewUser: !!result?.additionalUserInfo?.isNewUser,
+      user: user ? {
         uid: user.uid,
         email: user.email ?? null,
         displayName: user.displayName ?? null,
-        photoURL: user.photoUrl ?? user.photoURL ?? null,
-      },
+        photoURL: user.photoURL ?? null,
+      } : null,
     };
   } catch (e) {
     const msg = e?.message ?? (typeof e === 'string' ? e : '');
