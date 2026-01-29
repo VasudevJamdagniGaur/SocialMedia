@@ -71,7 +71,12 @@ const Shuffle: React.FC<ShuffleProps> = ({
   useEffect(() => {
     if ('fonts' in document) {
       if (document.fonts.status === 'loaded') setFontsLoaded(true);
-      else document.fonts.ready.then(() => setFontsLoaded(true));
+      else {
+        (async () => {
+          await document.fonts.ready;
+          setFontsLoaded(true);
+        })();
+      }
     } else setFontsLoaded(true);
   }, []);
 

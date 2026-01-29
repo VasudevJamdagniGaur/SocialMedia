@@ -636,19 +636,21 @@ export default function EmotionalWellbeing() {
           const migrated = localStorage.getItem('emotional_data_migrated');
           if (!migrated) {
             console.log('🔄 First time loading - checking for localStorage data to migrate...');
-            emotionalAnalysisService.migrateLocalStorageToFirestore(user.uid).then(result => {
-              if (result.success) {
-                console.log(`✅ Migration complete: ${result.migrated} records migrated`);
-                localStorage.setItem('emotional_data_migrated', 'true');
-                // Clear cache to force reload with new data
-                const cacheKeys = Object.keys(localStorage).filter(key =>
-                  key.includes('emotional_wellbeing') || key.includes('moodChart')
-                );
-                cacheKeys.forEach(key => localStorage.removeItem(key));
+            (async () => {
+              try {
+                const result = await emotionalAnalysisService.migrateLocalStorageToFirestore(user.uid);
+                if (result.success) {
+                  console.log(`✅ Migration complete: ${result.migrated} records migrated`);
+                  localStorage.setItem('emotional_data_migrated', 'true');
+                  const cacheKeys = Object.keys(localStorage).filter(key =>
+                    key.includes('emotional_wellbeing') || key.includes('moodChart')
+                  );
+                  cacheKeys.forEach(key => localStorage.removeItem(key));
+                }
+              } catch (error) {
+                console.error('❌ Migration error:', error);
               }
-            }).catch(error => {
-              console.error('❌ Migration error:', error);
-            });
+            })();
           }
         } catch (error) {
           console.error('❌ Error checking migration status:', error);
@@ -919,15 +921,16 @@ export default function EmotionalWellbeing() {
       const cache7Key = getCacheKey('emotional', 7, user.uid);
       const cache7 = loadFromCache(cache7Key, 30);
       if (!cache7) {
-        firestoreService.getMoodChartDataNew(user.uid, 7)
-          .then(result => {
+        (async () => {
+          try {
+            const result = await firestoreService.getMoodChartDataNew(user.uid, 7);
             if (result.success && result.moodData) {
-              processAndCacheMoodData(7, result.moodData);
+              await processAndCacheMoodData(7, result.moodData);
             }
-          })
-          .catch(error => {
+          } catch (error) {
             console.error('❌ Error pre-caching 7 days:', error);
-          });
+          }
+        })();
       } else {
         console.log('⚡ 7 days already cached');
       }
@@ -936,15 +939,16 @@ export default function EmotionalWellbeing() {
       const cache15Key = getCacheKey('emotional', 15, user.uid);
       const cache15 = loadFromCache(cache15Key, 30);
       if (!cache15) {
-        firestoreService.getMoodChartDataNew(user.uid, 15)
-          .then(result => {
+        (async () => {
+          try {
+            const result = await firestoreService.getMoodChartDataNew(user.uid, 15);
             if (result.success && result.moodData) {
-              processAndCacheMoodData(15, result.moodData);
+              await processAndCacheMoodData(15, result.moodData);
             }
-          })
-          .catch(error => {
+          } catch (error) {
             console.error('❌ Error pre-caching 15 days:', error);
-          });
+          }
+        })();
       } else {
         console.log('⚡ 15 days already cached');
       }
@@ -953,30 +957,33 @@ export default function EmotionalWellbeing() {
       const cacheLifetimeKey = getCacheKey('emotional', 365, user.uid);
       const cacheLifetime = loadFromCache(cacheLifetimeKey, 30);
       if (!cacheLifetime) {
-        firestoreService.getAllMoodChartDataNew(user.uid)
-          .then(result => {
+        (async () => {
+          try {
+            let result = await firestoreService.getAllMoodChartDataNew(user.uid);
             if (result.success && result.moodData) {
-              processAndCacheMoodData(365, result.moodData);
+              await processAndCacheMoodData(365, result.moodData);
             } else {
-              // Fallback to 30 days if no lifetime data
               console.log('📊 LIFETIME: No lifetime data found, pre-caching 30 days as fallback');
-              return firestoreService.getMoodChartDataNew(user.uid, 30);
+              result = await firestoreService.getMoodChartDataNew(user.uid, 30);
+              if (result && result.success && result.moodData) {
+                await processAndCacheMoodData(365, result.moodData);
+              }
             }
-          })
-          .then(result => {
-            if (result && result.success && result.moodData) {
-              processAndCacheMoodData(365, result.moodData);
-            }
-          })
-          .catch(error => {
+          } catch (error) {
             console.error('❌ Error pre-caching lifetime:', error);
-          });
+          }
+        })();
       } else {
         console.log('⚡ Lifetime already cached');
       }
 
-      prefetchAllBalancePeriods()
-        .catch(error => console.error('❌ Error pre-caching balance periods:', error));
+      (async () => {
+        try {
+          await prefetchAllBalancePeriods();
+        } catch (error) {
+          console.error('❌ Error pre-caching balance periods:', error);
+        }
+      })();
     }
   }, [isInitializing]);
 

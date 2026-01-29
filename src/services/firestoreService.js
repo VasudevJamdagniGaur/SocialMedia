@@ -1741,32 +1741,34 @@ class FirestoreService {
           // Check if pod document already exists (in parallel)
           const podRef = doc(this.db, `users/${uid}/pods/${sphereId}`);
           podPromises.push(
-            getDoc(podRef).then(async (podSnap) => {
-              if (!podSnap.exists()) {
-                // Create pod document
-                try {
-                  const dateId = sphereData.startDate || getDateId(new Date());
-                  await setDoc(podRef, {
-                    name: "Crew's Sphere",
-                    startDate: dateId,
-                    sphereId: sphereId,
-                    members: sphereData.members,
-                    createdAt: serverTimestamp(),
-                    updatedAt: serverTimestamp(),
-                    memberCount: sphereData.members ? sphereData.members.length : 0
-                  }, { merge: true });
-                  console.log('✅ Created missing pod document for sphere:', sphereId);
-                  return 1;
-                } catch (podError) {
-                  console.warn(`⚠️ Could not create pod document for sphere ${sphereId}:`, podError);
-                  return 0;
+            (async () => {
+              try {
+                const podSnap = await getDoc(podRef);
+                if (!podSnap.exists()) {
+                  try {
+                    const dateId = sphereData.startDate || getDateId(new Date());
+                    await setDoc(podRef, {
+                      name: "Crew's Sphere",
+                      startDate: dateId,
+                      sphereId: sphereId,
+                      members: sphereData.members,
+                      createdAt: serverTimestamp(),
+                      updatedAt: serverTimestamp(),
+                      memberCount: sphereData.members ? sphereData.members.length : 0
+                    }, { merge: true });
+                    console.log('✅ Created missing pod document for sphere:', sphereId);
+                    return 1;
+                  } catch (podError) {
+                    console.warn(`⚠️ Could not create pod document for sphere ${sphereId}:`, podError);
+                    return 0;
+                  }
                 }
+                return 0;
+              } catch (err) {
+                console.warn(`⚠️ Error checking pod for sphere ${sphereId}:`, err);
+                return 0;
               }
-              return 0;
-            }).catch(err => {
-              console.warn(`⚠️ Error checking pod for sphere ${sphereId}:`, err);
-              return 0;
-            })
+            })()
           );
         }
       }
