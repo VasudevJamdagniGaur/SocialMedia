@@ -51,11 +51,12 @@ export const signInWithGoogle = async () => {
         ),
       ]);
 
-    // skipNativeAuth: false so the plugin signs in natively (avoids "No user is signed in" in plugin).
-    // Firebase Auth handles both sign-in (existing account) and sign-up (new account) automatically.
+    // skipNativeAuth: true = plugin returns credential only; we sign in to Firebase JS below.
+    // Avoids native "No user is signed in" errors. useCredentialManager: false = classic picker (often works better on emulator).
     const result = await withTimeout(
       NativeFirebaseAuth.signInWithGoogle({
-        skipNativeAuth: false,
+        skipNativeAuth: true,
+        useCredentialManager: false,
       }),
       60000
     );
@@ -88,9 +89,15 @@ export const signInWithGoogle = async () => {
     };
   } catch (e) {
     const msg = e?.message ?? (typeof e === 'string' ? e : '');
-    const code = e?.code ?? '';
+    const code = String(e?.code ?? '');
     if (code === '12501' || /cancel|cancelled|user_cancel/i.test(msg)) {
       return { success: false, error: 'Sign-in was cancelled.' };
+    }
+    if (code === '12500' || /12500|developer error|sign_in_failed/i.test(msg)) {
+      return {
+        success: false,
+        error: 'Google Sign-In config error. Add your app’s SHA-1 in Firebase (Project settings → Your Android app → Add fingerprint) and create an Android OAuth client in Google Cloud with the same package name (com.deite.app) and SHA-1. Then download a new google-services.json.',
+      };
     }
     if (/timeout|timed out/i.test(msg)) {
       return { success: false, error: 'Google sign-in timed out. Please try again.' };

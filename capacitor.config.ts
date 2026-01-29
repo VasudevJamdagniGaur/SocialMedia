@@ -4,6 +4,11 @@ const config: CapacitorConfig = {
   appId: 'com.deite.app',
   appName: 'Deite : AI Journel',
   webDir: 'build',
+  plugins: {
+    FirebaseAuthentication: {
+      skipNativeAuth: true,
+    },
+  },
   android: {
     allowNavigation: [
       'https://accounts.google.com',
