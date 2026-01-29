@@ -2,7 +2,7 @@
 
 ## ✅ Changes Completed
 
-The package name has been changed from `jamdagni.deite.app` to `therapist.deite.app` in the following files:
+The package name is `com.deite.app` (aligned with android/app/google-services.json). Changes:
 
 ### Core Configuration Files:
 - ✅ `android/app/build.gradle.kts` - namespace and applicationId
@@ -12,7 +12,7 @@ The package name has been changed from `jamdagni.deite.app` to `therapist.deite.
 - ✅ `assetlinks.json` - package_name
 
 ### Java Source Files:
-- ✅ Created new package directory: `android/app/src/main/java/therapist/deite/app/`
+- ✅ MainActivity in package: `android/app/src/main/java/com/deite/app/`
 - ✅ Created `MainActivity.java` with new package declaration
 - ✅ Removed old package directory: `android/app/src/main/java/jamdagni/`
 
@@ -35,7 +35,7 @@ The package name has been changed from `jamdagni.deite.app` to `therapist.deite.
 2. **Add New Android App:**
    - Go to **Project Settings** → **Your apps**
    - Click **Add app** → Android icon
-   - Package name: `therapist.deite.app`
+   - Package name: `com.deite.app`
    - App nickname: `Deite` (or your preferred name)
    - Click **Register app**
 
@@ -49,7 +49,7 @@ The package name has been changed from `jamdagni.deite.app` to `therapist.deite.
    - Replace the file at: `android/app/google-services.json`
 
 5. **Update Authorized Domains (if needed):**
-   - If you're using deep links, ensure `therapist.deite.app` is in authorized domains
+   - If you're using deep links, ensure `com.deite.app` is in authorized domains
    - Firebase Console → Authentication → Settings → Authorized domains
 
 ---
@@ -71,8 +71,8 @@ The package name has been changed from `jamdagni.deite.app` to `therapist.deite.
 
 3. **Test the app:**
    - Install the new APK
-   - Verify package name: `therapist.deite.app`
-   - Test deep links: `therapist.deite.app://signup`
+   - Verify package name: `com.deite.app`
+   - Test deep links: `com.deite.app://signup`
    - Test Google Sign-In (after Firebase config update)
 
 ---
@@ -80,7 +80,7 @@ The package name has been changed from `jamdagni.deite.app` to `therapist.deite.
 ## 📝 Notes
 
 - The old package `jamdagni.deite.app` is no longer used
-- All deep links now use `therapist.deite.app://`
+- All deep links now use `com.deite.app://`
 - Google Play Store will treat this as a **new app** (different package name)
 - You'll need to create a new app listing in Play Console if publishing
 
@@ -88,11 +88,11 @@ The package name has been changed from `jamdagni.deite.app` to `therapist.deite.
 
 ## ✅ Verification Checklist
 
-- [ ] Firebase project updated with new Android app (`therapist.deite.app`)
+- [ ] Firebase project updated with new Android app (`com.deite.app`)
 - [ ] New `google-services.json` downloaded and placed
 - [ ] SHA-1/SHA-256 fingerprints added to Firebase
 - [ ] `npx cap sync android` completed
 - [ ] App builds successfully
-- [ ] Deep links work (`therapist.deite.app://signup`)
+- [ ] Deep links work (`com.deite.app://signup`)
 - [ ] Google Sign-In works (after Firebase update)
 
