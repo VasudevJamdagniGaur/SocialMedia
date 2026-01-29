@@ -10,9 +10,9 @@ This app uses **native** Google Sign-In on Android via `@capacitor-firebase/auth
 2. Go to **Project settings** (gear) → **Your apps**.
 3. If you don’t have an Android app:
    - Click **Add app** → **Android**.
-   - **Android package name** must match your app exactly, e.g. `com.deite.app` (see `android/app/build.gradle.kts` → `applicationId`).
+   - **Android package name** must match your app exactly, e.g. `therapist.deite.app` (see `android/app/build.gradle.kts` → `applicationId`).
    - Register the app and download **google-services.json**.
-4. Place **google-services.json** in `android/app/google-services.json`. The file must have **package_name: "com.deite.app"** in `client_info.android_client_info` and in the Android OAuth client’s `android_info`. If your current file has a different package name (e.g. therapist.deite.app), add a new Android app in Firebase with package name **com.deite.app**, add SHA-1, then download the new **google-services.json** and replace the existing one.
+4. Place **google-services.json** in `android/app/google-services.json`. The file must have **package_name: "therapist.deite.app"** in `client_info.android_client_info` and in the Android OAuth client’s `android_info`. If your current file has a different package name (e.g. therapist.deite.app), add a new Android app in Firebase with package name **therapist.deite.app**, add SHA-1, then download the new **google-services.json** and replace the existing one.
 5. Add your **SHA-1** (and optionally SHA-256) for the keystore you use to build the APK:
    - In Project settings → Your apps → your Android app, click **Add fingerprint**.
    - Paste the SHA-1 from step 2 below.
@@ -49,7 +49,7 @@ Use that SHA-1 in Firebase and in the **release** Android OAuth client in Google
 3. Click **Create credentials** → **OAuth client ID**.
 4. Application type: **Android**.
 5. **Name**: e.g. "Android client (Web app name)".
-6. **Package name**: same as Firebase and `applicationId`, e.g. `com.deite.app`.
+6. **Package name**: same as Firebase and `applicationId`, e.g. `therapist.deite.app`.
 7. **SHA-1 certificate fingerprint**: paste the SHA-1 from step 2 (debug or release, depending on which build you use).
 8. Create. You do **not** need a Web client or redirect URIs for native Sign-In.
 
@@ -57,7 +57,7 @@ Use that SHA-1 in Firebase and in the **release** Android OAuth client in Google
 
 ## 4. Android project
 
-- **Package name**: `android/app/build.gradle.kts` → `applicationId` (e.g. `com.deite.app`) must match Firebase and the Android OAuth client.
+- **Package name**: `android/app/build.gradle.kts` → `applicationId` (e.g. `therapist.deite.app`) must match Firebase and the Android OAuth client.
 - **google-services.json**: must be in `android/app/`.
 - **Plugins**: `@capacitor-firebase/authentication` is included via `capacitor.settings.gradle` and `capacitor.build.gradle`. After any change:
   ```bash
@@ -87,15 +87,15 @@ Do these in order:
 
 1. **Run the app as a native APK** – Do **not** open `http://localhost:3000` in Chrome. Build and run: `npm run build` → `npx cap sync android` → open `android/` in Android Studio → Run on device (or `npx cap run android`). In browser you get: *"Google Sign-In is only available in the native app."*
 
-2. **Firebase: Android app + SHA-1** – Firebase Console → Project settings → Your apps → your **Android** app. Package name must be exactly `com.deite.app`. Download **google-services.json** into `android/app/`. Add **SHA-1**: run `cd android && ./gradlew signingReport`, copy SHA-1 under **Variant: debug**, then in Firebase → your Android app → **Add fingerprint** → paste SHA-1.
+2. **Firebase: Android app + SHA-1** – Firebase Console → Project settings → Your apps → your **Android** app. Package name must be exactly `therapist.deite.app`. Download **google-services.json** into `android/app/`. Add **SHA-1**: run `cd android && ./gradlew signingReport`, copy SHA-1 under **Variant: debug**, then in Firebase → your Android app → **Add fingerprint** → paste SHA-1.
 
-3. **Google Cloud: Android OAuth client** – Google Cloud Console (same project as Firebase) → **APIs & Services** → **Credentials** → **Create credentials** → **OAuth client ID** → Application type: **Android**. **Package name**: `com.deite.app`. **SHA-1**: same as in Firebase. Create. No Web client needed.
+3. **Google Cloud: Android OAuth client** – Google Cloud Console (same project as Firebase) → **APIs & Services** → **Credentials** → **Create credentials** → **OAuth client ID** → Application type: **Android**. **Package name**: `therapist.deite.app`. **SHA-1**: same as in Firebase. Create. No Web client needed.
 
 4. **Verify SHA-1 matches google-services.json** – Your `android/app/google-services.json` has `certificate_hash`: **c465ffcb3d988222dc729c487e5fd50b3c9d9f8a**. The APK you run must be signed with a keystore whose SHA-1 (no colons, lowercase) equals this. Run `cd android && ./gradlew signingReport` and under **Variant: debug** take the SHA-1, remove colons, lower case (e.g. `A1:B2:C3` → `a1b2c3`). If it does **not** match `c465ffcb3d988222dc729c487e5fd50b3c9d9f8a`, then either: (a) add that SHA-1 in Firebase and in Google Cloud (Android OAuth client), download a new **google-services.json** and replace `android/app/google-services.json`, or (b) build the app with the keystore that has SHA-1 `c465ffcb3d988222dc729c487e5fd50b3c9d9f8a`.
 
 5. **Rebuild and test** – After any SHA-1/OAuth change: `npx cap sync android`, rebuild APK in Android Studio, install. Tap **Continue with Google**; native account picker should appear.
 
-6. **See the real error (Logcat)** – Android Studio → **View** → **Tool Windows** → **Logcat**. Filter by `com.deite.app` or search `Google sign-in`. Tap **Continue with Google** and check the log: *"FirebaseAuthentication plugin not available"* → not running as native; *"No user returned"* or *"did not return an ID token"* → usually missing SHA-1 or Android OAuth client.
+6. **See the real error (Logcat)** – Android Studio → **View** → **Tool Windows** → **Logcat**. Filter by `therapist.deite.app` or search `Google sign-in`. Tap **Continue with Google** and check the log: *"FirebaseAuthentication plugin not available"* → not running as native; *"No user returned"* or *"did not return an ID token"* → usually missing SHA-1 or Android OAuth client.
 
 7. **"No user is signed in" on app startup** – You may see this once when the app opens (before anyone has signed in). It comes from the plugin’s native `onIdTokenChanged` handler and can be ignored. After a successful **Continue with Google**, native and JS both have the user and this error should not repeat for that session.
 

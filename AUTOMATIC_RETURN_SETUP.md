@@ -4,7 +4,7 @@
 
 ### 1. **Deep Link Listener**
 - Added `@capacitor/app` plugin to listen for deep link events
-- App automatically detects when it's opened via deep link (`com.deite.app://signup`)
+- App automatically detects when it's opened via deep link (`therapist.deite.app://signup`)
 - Processes Google Sign-In result automatically when app returns
 
 ### 2. **Enhanced Deep Link Handling**
@@ -24,7 +24,7 @@
 2. **Browser opens** (external Chrome)
 3. **Google sign-in page** appears
 4. **User selects account** and signs in
-5. **Firebase redirects to:** `com.deite.app://signup` (deep link)
+5. **Firebase redirects to:** `therapist.deite.app://signup` (deep link)
 6. **Android detects deep link** → **Automatically opens your app** ✨
 7. **App detects deep link** via `appUrlOpen` listener
 8. **App processes sign-in** automatically
@@ -33,7 +33,7 @@
 ## Configuration
 
 ### Deep Link URL
-Currently using: `com.deite.app://signup`
+Currently using: `therapist.deite.app://signup`
 
 This is configured in:
 - `src/services/authService.js` (line 231)
@@ -41,14 +41,14 @@ This is configured in:
 
 ### Firebase Redirect
 
-**IMPORTANT:** Firebase might not accept `com.deite.app://` as a direct redirect URL because OAuth requires http/https URLs.
+**IMPORTANT:** Firebase might not accept `therapist.deite.app://` as a direct redirect URL because OAuth requires http/https URLs.
 
 **If Firebase rejects the deep link URL:**
 
 #### Option 1: Use HTTPS Redirect (Recommended)
 1. Set up a simple redirect page on your web server
 2. Use that URL as `continueUrl`
-3. That page redirects to `com.deite.app://signup`
+3. That page redirects to `therapist.deite.app://signup`
 4. Android catches the deep link and opens app
 
 #### Option 2: Use http://localhost (Fallback)
@@ -101,7 +101,7 @@ Look for these messages:
 ### If Deep Link Doesn't Work
 
 1. **Check AndroidManifest.xml:**
-   - Ensure intent-filter includes `com.deite.app` scheme
+   - Ensure intent-filter includes `therapist.deite.app` scheme
    - Verify `android:launchMode="singleTask"` (required for deep links)
 
 2. **Check Firebase Console:**
@@ -110,7 +110,7 @@ Look for these messages:
 
 3. **Test Deep Link Manually:**
    ```bash
-   adb shell am start -a android.intent.action.VIEW -d "com.deite.app://signup" com.deite.app
+   adb shell am start -a android.intent.action.VIEW -d "therapist.deite.app://signup" therapist.deite.app
    ```
    This should open your app directly.
 

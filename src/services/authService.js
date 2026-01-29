@@ -90,7 +90,7 @@ export const signInWithGoogle = async () => {
     if (code === '12500' || /12500|developer error|sign_in_failed/i.test(msg)) {
       return {
         success: false,
-        error: 'Google Sign-In config error. Add your app’s SHA-1 in Firebase (Project settings → Your Android app → Add fingerprint) and create an Android OAuth client in Google Cloud with the same package name (com.deite.app) and SHA-1. Then download a new google-services.json.',
+        error: 'Google Sign-In config error. Add your app’s SHA-1 in Firebase (Project settings → Your Android app → Add fingerprint) and create an Android OAuth client in Google Cloud with the same package name (therapist.deite.app) and SHA-1. Then download a new google-services.json.',
       };
     }
     if (/timeout|timed out/i.test(msg)) {
