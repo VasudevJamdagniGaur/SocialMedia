@@ -13,22 +13,10 @@ import { auth } from "../firebase/config";
 import { Capacitor } from '@capacitor/core';
 
 // --- Native Google Sign-In for Capacitor (no web OAuth / popup / redirect) ---
-// Do NOT return the raw FirebaseAuthentication plugin: it's a Capacitor proxy that implements
-// every property (including .then). If a Promise ever resolves with it, the engine may call
-// .then() on it and trigger "FirebaseAuthentication.then() is not implemented on android".
-// Return a plain wrapper with only the methods we need so nothing ever calls .then on the plugin.
-const getFirebaseAuthentication = async () => {
-  if (!Capacitor.isNativePlatform()) return null;
-  try {
-    const { FirebaseAuthentication } = await import('@capacitor-firebase/authentication');
-    return {
-      signInWithGoogle: (options) => FirebaseAuthentication.signInWithGoogle(options),
-    };
-  } catch (e) {
-    console.warn('FirebaseAuthentication plugin not available:', e);
-    return null;
-  }
-};
+// Never store or return the FirebaseAuthentication plugin: it's a Capacitor proxy that implements
+// every property (including .then). If anything awaits it or passes it to Promise.resolve(),
+// the engine calls .then() on it and throws "FirebaseAuthentication.then() is not implemented on android".
+// Only use the plugin in-place: import, then call .signInWithGoogle() in the same scope, never return the plugin.
 
 /**
  * Native Google Sign-In for Android (and iOS) via @capacitor-firebase/authentication.
@@ -44,8 +32,14 @@ export const signInWithGoogle = async () => {
       };
     }
 
-    const NativeFirebaseAuth = await getFirebaseAuthentication();
-    if (!NativeFirebaseAuth) {
+    let mod;
+    try {
+      mod = await import('@capacitor-firebase/authentication');
+    } catch (e) {
+      console.warn('FirebaseAuthentication plugin not available:', e);
+      throw new Error('FirebaseAuthentication plugin not available on this platform.');
+    }
+    if (!mod || !mod.FirebaseAuthentication) {
       throw new Error('FirebaseAuthentication plugin not available on this platform.');
     }
 
@@ -57,9 +51,10 @@ export const signInWithGoogle = async () => {
         ),
       ]);
 
+    // Call plugin in-place; never assign mod.FirebaseAuthentication to a variable that could be awaited.
     // skipNativeAuth: true = plugin returns credential only (no native user); we sign in with Firebase JS.
     const result = await withTimeout(
-      NativeFirebaseAuth.signInWithGoogle({
+      mod.FirebaseAuthentication.signInWithGoogle({
         skipNativeAuth: true,
         useCredentialManager: false,
       }),
