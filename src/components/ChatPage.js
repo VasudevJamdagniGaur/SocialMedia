@@ -9,6 +9,10 @@ import firestoreService from '../services/firestoreService';
 import { getCurrentUser } from '../services/authService';
 import { getDateId } from '../utils/dateUtils';
 import { Capacitor } from '@capacitor/core';
+// Provider logos imported so they resolve correctly on mobile (Capacitor)
+import openaiIcon from '../assets/images/openai-icon.png';
+import geminiIcon from '../assets/images/gemini-icon.png';
+import grokIcon from '../assets/images/grok-icon.png';
 
 export default function ChatPage() {
   const navigate = useNavigate();
@@ -1521,9 +1525,9 @@ export default function ChatPage() {
             }`}
           >
             <img 
-              src={apiProvider === 'openai' ? '/images/openai-icon.png' : apiProvider === 'gemini' ? '/images/gemini-icon.png' : '/images/grok-icon.png'}
+              src={apiProvider === 'openai' ? openaiIcon : apiProvider === 'gemini' ? geminiIcon : grokIcon}
               alt={apiProvider === 'openai' ? 'OpenAI' : apiProvider === 'gemini' ? 'Gemini' : 'Grok'}
-              className="w-7 h-7 object-contain scale-[0.92]"
+              className="w-11 h-11 min-w-[44px] min-h-[44px] object-contain"
               style={(apiProvider === 'openai' || apiProvider === 'grok') ? { filter: 'brightness(0) invert(1)' } : {}}
             />
           </button>
