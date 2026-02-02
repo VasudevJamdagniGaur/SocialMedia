@@ -1382,7 +1382,7 @@ export default function ChatPage() {
           </div>
         )}
         
-        <form onSubmit={handleSendMessage} className="flex space-x-3">
+        <form onSubmit={handleSendMessage} className="flex items-center gap-2 flex-1 min-w-0">
           <input
             ref={fileInputRef}
             type="file"
@@ -1467,7 +1467,7 @@ export default function ChatPage() {
               }
             }}
             disabled={isLoading}
-            className="w-12 h-12 rounded-2xl flex items-center justify-center backdrop-blur-lg transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100"
+            className="shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center backdrop-blur-lg transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100"
             style={{
               backgroundColor: selectedImage ? "rgba(129, 201, 149, 0.3)" : "#262626",
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
@@ -1493,7 +1493,7 @@ export default function ChatPage() {
               'Ask Grok...'
             }
             disabled={isLoading}
-            className="flex-1 px-4 py-3 rounded-2xl focus:outline-none focus:ring-2 text-white placeholder-gray-400 backdrop-blur-md"
+            className="flex-1 min-w-0 px-4 py-3 rounded-2xl focus:outline-none focus:ring-2 text-white placeholder-gray-400 backdrop-blur-md"
             style={{
               backgroundColor: "#262626",
               border: "1px solid rgba(255, 255, 255, 0.08)",
@@ -1511,7 +1511,7 @@ export default function ChatPage() {
               localStorage.setItem('chat_api_provider', newProvider);
               chatService.setApiProvider(newProvider);
             }}
-            className="px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 flex items-center justify-center"
+            className="shrink-0 px-2 py-1 rounded-lg text-xs font-medium transition-all duration-200 flex items-center justify-center"
             style={{
               backgroundColor: "rgba(255, 255, 255, 0.04)",
               backdropFilter: "blur(12px)",
@@ -1535,7 +1535,7 @@ export default function ChatPage() {
           <button
             type="submit"
             disabled={(!inputMessage.trim() && !selectedImage) || isLoading}
-            className="w-12 h-12 rounded-2xl flex items-center justify-center backdrop-blur-lg transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100"
+            className="shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center backdrop-blur-lg transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100"
             style={{
               background: (inputMessage.trim() || selectedImage) && !isLoading
                 ? "#262626"
