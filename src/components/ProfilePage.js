@@ -174,7 +174,7 @@ export default function ProfilePage() {
         setIsCrewEnrolled(savedCrewEnrollment === 'true');
       }
     } else {
-      navigate('/login');
+      navigate('/signup');
     }
   }, [navigate]);
 

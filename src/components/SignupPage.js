@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { signUpUser, onAuthStateChange, getCurrentUser, signInWithGoogle } from '../services/authService';
+import { onAuthStateChange, signInWithGoogle } from '../services/authService';
 import { Brain } from 'lucide-react';
 import LaserFlow from './LaserFlow';
 
@@ -166,34 +166,6 @@ const SignupPage = () => {
             )}
             {googleLoading ? 'Signing in…' : 'Continue with Google'}
           </button>
-
-          {/* Sign up */}
-          <button
-            className="w-full mobile-button rounded-2xl font-semibold transition-all duration-300 hover:scale-[0.98] active:scale-[0.96]"
-              style={{
-              background: 'rgba(255, 255, 255, 0.1)',
-              color: 'rgba(255, 255, 255, 0.9)',
-              border: '1px solid rgba(255, 255, 255, 0.2)',
-              backdropFilter: 'blur(10px)',
-              }}
-              onClick={() => navigate('/signup/email')}
-            >
-              Sign up
-            </button>
-
-          {/* Log in */}
-          <button
-            className="w-full mobile-button rounded-2xl font-semibold transition-all duration-300 hover:scale-[0.98] active:scale-[0.96]"
-            style={{
-              background: 'transparent',
-              color: 'rgba(255, 255, 255, 0.9)',
-              border: '1px solid rgba(255, 255, 255, 0.3)',
-              backdropFilter: 'blur(10px)',
-            }}
-              onClick={() => navigate('/login')}
-            >
-              Log in
-            </button>
           </div>
         </div>
       </div>

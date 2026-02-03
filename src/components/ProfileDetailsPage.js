@@ -24,7 +24,7 @@ const ProfileDetailsPage = () => {
   useEffect(() => {
     // If no email/password, redirect back to signup immediately
     if (!email || !password) {
-      navigate('/signup/email', { replace: true });
+      navigate('/signup', { replace: true });
     }
   }, [email, password, navigate]);
   
@@ -75,7 +75,7 @@ const ProfileDetailsPage = () => {
     // Safety check: ensure email and password are available
     if (!email || !password) {
       setError('Missing email or password. Please go back and try again.');
-      navigate('/signup/email', { replace: true });
+      navigate('/signup', { replace: true });
       return;
     }
     
@@ -365,7 +365,7 @@ const ProfileDetailsPage = () => {
 
             <button
               type="button"
-              onClick={() => navigate('/signup/email')}
+              onClick={() => navigate('/signup')}
               className="mobile-button w-full rounded-2xl font-semibold transition-all duration-300 active:scale-[0.98]"
               style={{ 
                 background: 'transparent', 
