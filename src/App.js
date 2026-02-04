@@ -5,6 +5,7 @@ import { Capacitor } from '@capacitor/core';
 import LandingPage from './components/LandingPage';
 import WelcomePage from './components/WelcomePage';
 import SignupPage from './components/SignupPage';
+import LoginPage from './components/LoginPage';
 import ProfileDetailsPage from './components/ProfileDetailsPage';
 import DashboardPage from './components/DashboardPage';
 import ChatPage from './components/ChatPage';
@@ -97,8 +98,10 @@ function AppContent() {
               // Exit app from landing/splash
               console.log('📍 Exiting app from', location.pathname);
               App.exitApp();
+            } else if (location.pathname === '/login') {
+              navigate('/signup', { replace: true });
             } else {
-              // For other routes (login, signup, etc.), navigate to dashboard
+              // For other routes (signup, etc.), navigate to dashboard
               console.log('📍 Navigating to dashboard from', location.pathname);
               navigate('/dashboard', { replace: true });
             }
@@ -141,6 +144,7 @@ function AppContent() {
         <Route path="/landing" element={<LandingPage />} />
         <Route path="/welcome" element={<WelcomePage />} />
         <Route path="/signup" element={<SignupPage />} />
+        <Route path="/login" element={<LoginPage />} />
         <Route path="/signup/profile-details" element={<ProfileDetailsPage />} />
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/pod" element={<PodPage />} />

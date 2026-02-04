@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { onAuthStateChange, signInWithGoogle } from '../services/authService';
 import { Brain } from 'lucide-react';
 import LaserFlow from './LaserFlow';
@@ -191,6 +191,15 @@ const SignupPage = () => {
             <span style={{ color: '#1f1f1f', fontWeight: 500 }}>Signing in…</span>
           )}
         </button>
+
+        <p className="text-center mt-4">
+          <Link
+            to="/login"
+            className="text-sm text-gray-400 hover:text-white transition-colors"
+          >
+            Log in with email and password
+          </Link>
+        </p>
       </div>
     </div>
   );
