@@ -4220,11 +4220,13 @@ Return in this JSON format:
   return (
     <ErrorBoundary>
       <div
-        className="min-h-screen flex flex-col relative overflow-hidden pb-20"
+        className="min-h-screen flex flex-col relative overflow-hidden"
         style={{
           background: isDarkMode
             ? "#131313"
             : "#FAFAF8",
+          // Dedicated buffer: nav bar (56px) + breathing gap (24px) + safe-area so content never touches the bar
+          paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))',
         }}
       >
       {/* Header: respect status bar and notch */}

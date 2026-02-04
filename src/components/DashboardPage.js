@@ -389,13 +389,14 @@ export default function DashboardPage() {
 
   return (
     <div
-      className="min-h-screen px-6 pb-20 relative overflow-hidden slide-up"
+      className="min-h-screen px-6 relative overflow-hidden slide-up"
       style={{
         background: isDarkMode
           ? "#131313"
           : "#FAFAF8",
         paddingTop: 'max(1.5rem, calc(env(safe-area-inset-top, 0px) + 1rem))',
-        paddingBottom: '5rem',
+        // Dedicated buffer: nav bar (56px) + breathing gap (24px) + safe-area so content never touches the bar
+        paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))',
       }}
     >
       <div className="absolute inset-0 overflow-hidden">
