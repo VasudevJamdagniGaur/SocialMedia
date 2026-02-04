@@ -735,7 +735,7 @@ export default function DashboardPage() {
                   </p>
                   <button
                     type="button"
-                    onClick={handleGenerateReflection}
+                    onClick={handleChatClick}
                     className={`mt-6 w-full rounded-xl py-3.5 px-5 font-medium text-[15px] transition-all duration-200 hover:opacity-92 active:scale-[0.99] ${
                       isDarkMode ? 'text-[#0B0E14]' : 'text-white'
                     }`}
