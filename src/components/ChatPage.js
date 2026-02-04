@@ -1204,14 +1204,19 @@ export default function ChatPage() {
           : "#FAFAF8",
       }}
     >
-      {/* Header */}
-      <div className={`sticky top-0 z-20 flex items-center justify-between p-6 border-b backdrop-blur-lg ${
-        isDarkMode ? 'border-gray-600/20' : 'border-gray-200/50'
-      }`}
+      {/* Header: respect status bar and notch, own zone below system UI */}
+      <div
+        className={`sticky top-0 z-20 flex items-center justify-between border-b backdrop-blur-lg ${
+          isDarkMode ? 'border-gray-600/20' : 'border-gray-200/50'
+        }`}
         style={{
           backgroundColor: isDarkMode
             ? "rgba(19, 19, 19, 0.9)"
             : "rgba(250, 250, 248, 0.9)",
+          paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))',
+          paddingBottom: '1rem',
+          paddingLeft: '1.5rem',
+          paddingRight: '1.5rem',
         }}
       >
         <button

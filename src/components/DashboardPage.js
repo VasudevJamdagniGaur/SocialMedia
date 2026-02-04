@@ -389,11 +389,13 @@ export default function DashboardPage() {
 
   return (
     <div
-      className="min-h-screen px-6 py-8 pb-20 relative overflow-hidden slide-up"
+      className="min-h-screen px-6 pb-20 relative overflow-hidden slide-up"
       style={{
         background: isDarkMode
           ? "#131313"
-          : "#FAFAF8"
+          : "#FAFAF8",
+        paddingTop: 'max(1.5rem, calc(env(safe-area-inset-top, 0px) + 1rem))',
+        paddingBottom: '5rem',
       }}
     >
       <div className="absolute inset-0 overflow-hidden">
@@ -546,7 +548,14 @@ export default function DashboardPage() {
       </div>
 
       <div className="relative z-10 max-w-sm mx-auto">
-        <div className="relative flex items-center justify-between mb-8">
+        {/* App top bar: own zone below status bar, with breathing room so icons don't hug edge or notch */}
+        <div
+          className="relative flex items-center justify-between mb-8"
+          style={{
+            paddingTop: '0.75rem',
+            paddingBottom: '0.75rem',
+          }}
+        >
           {/* Left icon - Theme Toggle */}
           <div
             onClick={toggleTheme}

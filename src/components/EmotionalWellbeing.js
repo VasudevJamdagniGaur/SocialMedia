@@ -4227,14 +4227,17 @@ Return in this JSON format:
             : "#FAFAF8",
         }}
       >
-      {/* Header - Mobile Optimized */}
-      <div className={`sticky top-0 z-20 flex items-center justify-between pl-6 pr-8 py-5 border-b backdrop-blur-lg ${
-        isDarkMode ? 'border-gray-600/20' : 'border-gray-200/50'
-      }`}
+      {/* Header: respect status bar and notch */}
+      <div
+        className={`sticky top-0 z-20 flex items-center justify-between pl-6 pr-8 border-b backdrop-blur-lg ${
+          isDarkMode ? 'border-gray-600/20' : 'border-gray-200/50'
+        }`}
         style={{
           backgroundColor: isDarkMode
             ? "rgba(19, 19, 19, 0.95)"
             : "rgba(250, 250, 248, 0.95)",
+          paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))',
+          paddingBottom: '1.25rem',
         }}
       >
         <div className="flex items-center space-x-2">

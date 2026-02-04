@@ -596,11 +596,12 @@ export default function CommunityPage() {
 
   return (
     <div
-      className="min-h-screen px-6 py-8 pb-20 relative overflow-hidden slide-up"
+      className="min-h-screen px-6 pb-20 relative overflow-hidden slide-up"
       style={{
         background: isDarkMode
           ? "#131313"
-          : "#FAFAF8"
+          : "#FAFAF8",
+        paddingTop: 'max(1.5rem, calc(env(safe-area-inset-top, 0px) + 1rem))',
       }}
     >
       <div className="absolute inset-0 overflow-hidden">

@@ -373,19 +373,22 @@ export default function PodGroupChatPage() {
           : "#FAFAF8"
       }}
     >
-      {/* Header */}
+      {/* Header: respect status bar and notch */}
       <div
-        className={`sticky top-0 z-10 px-4 py-3 flex items-center space-x-3 ${
+        className={`sticky top-0 z-10 px-4 flex items-center space-x-3 ${
           isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
         }`}
-        style={isDarkMode ? {
+        style={Object.assign({
+          paddingTop: 'max(0.75rem, env(safe-area-inset-top, 0px))',
+          paddingBottom: '0.75rem',
+        }, isDarkMode ? {
           backgroundColor: "#262626",
           boxShadow: "0 2px 8px rgba(0, 0, 0, 0.2)",
           borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
         } : {
           boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
           borderBottom: "1px solid rgba(0, 0, 0, 0.05)",
-        }}
+        })}
       >
         <button
           onClick={() => navigate('/pod')}
