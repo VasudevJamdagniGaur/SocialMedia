@@ -769,6 +769,52 @@ export default function CommunityPage() {
             </div>
           </div>
 
+          {/* Trending Topics Card (Hot Tea) */}
+          <div
+            className={`rounded-2xl p-5 relative overflow-hidden ${
+              isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
+            }`}
+            style={isDarkMode ? {
+              backgroundColor: "#262626",
+              boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
+              border: "1px solid rgba(255, 255, 255, 0.08)",
+            } : {
+              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)",
+            }}
+          >
+            <div className="flex items-center space-x-2 mb-4">
+              <TrendingUp className={`w-5 h-5 ${isDarkMode ? 'text-white' : 'text-gray-800'}`} strokeWidth={2} />
+              <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                Hot Tea
+              </h2>
+              <Coffee className={`w-4 h-4 ${isDarkMode ? 'text-white' : 'text-gray-800'}`} strokeWidth={2} />
+              <Flame className={`w-4 h-4 ${isDarkMode ? 'text-white' : 'text-gray-800'}`} strokeWidth={2} />
+            </div>
+            <div className="space-y-2">
+              {[
+                { name: 'Mindfulness Tips', icon: Activity },
+                { name: 'Daily Gratitude', icon: Heart },
+                { name: 'Stress Management', icon: Brain },
+                { name: 'Self-Care Routines', icon: Sprout }
+              ].map((topic, index) => {
+                const IconComponent = topic.icon;
+                return (
+                  <div
+                    key={index}
+                    className={`flex items-center space-x-2 px-3 py-2 rounded-lg cursor-pointer transition-colors ${
+                      isDarkMode ? 'hover:bg-gray-800/30' : 'hover:bg-gray-50'
+                    }`}
+                  >
+                    <IconComponent className={`w-4 h-4 ${isDarkMode ? 'text-white' : 'text-gray-800'}`} strokeWidth={2} />
+                    <span className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                      #{topic.name}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Community Posts */}
           {communityPosts.map((post) => {
             const postCommentsData = postComments[post.id] || { comments: post.comments || [], showComments: false, newComment: '' };
@@ -1059,52 +1105,6 @@ export default function CommunityPage() {
               </div>
             );
           })}
-
-          {/* Trending Topics Card */}
-          <div
-            className={`rounded-2xl p-5 relative overflow-hidden ${
-              isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
-            }`}
-            style={isDarkMode ? {
-              backgroundColor: "#262626",
-              boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
-            } : {
-              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)",
-            }}
-          >
-            <div className="flex items-center space-x-2 mb-4">
-              <TrendingUp className={`w-5 h-5 ${isDarkMode ? 'text-white' : 'text-gray-800'}`} strokeWidth={2} />
-              <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                Hot Tea
-              </h2>
-              <Coffee className={`w-4 h-4 ${isDarkMode ? 'text-white' : 'text-gray-800'}`} strokeWidth={2} />
-              <Flame className={`w-4 h-4 ${isDarkMode ? 'text-white' : 'text-gray-800'}`} strokeWidth={2} />
-            </div>
-            <div className="space-y-2">
-              {[
-                { name: 'Mindfulness Tips', icon: Activity },
-                { name: 'Daily Gratitude', icon: Heart },
-                { name: 'Stress Management', icon: Brain },
-                { name: 'Self-Care Routines', icon: Sprout }
-              ].map((topic, index) => {
-                const IconComponent = topic.icon;
-                return (
-                  <div
-                    key={index}
-                    className={`flex items-center space-x-2 px-3 py-2 rounded-lg cursor-pointer transition-colors ${
-                      isDarkMode ? 'hover:bg-gray-800/30' : 'hover:bg-gray-50'
-                    }`}
-                  >
-                    <IconComponent className={`w-4 h-4 ${isDarkMode ? 'text-white' : 'text-gray-800'}`} strokeWidth={2} />
-                    <span className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      #{topic.name}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
         </div>
       </div>
 
