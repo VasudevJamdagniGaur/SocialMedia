@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
-import { Brain, MessageCircle, Calendar, Heart, Sparkles, User, Sun, Moon, ChevronRight } from "lucide-react";
+import { Brain, MessageCircle, Calendar, Heart, Sparkles, User, Sun, Moon, ChevronRight, Share2 } from "lucide-react";
 import { useTheme } from '../contexts/ThemeContext';
 import CalendarPopup from './CalendarPopup';
 import reflectionService from '../services/reflectionService';
 import firestoreService from '../services/firestoreService';
 import { getCurrentUser } from '../services/authService';
 import { getDateId, formatDateForDisplay, getReflectionFromLocalStorage } from '../utils/dateUtils';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../firebase/config';
 
 export default function DashboardPage() {
   const navigate = useNavigate();
@@ -17,6 +19,8 @@ export default function DashboardPage() {
   const [isLoadingReflection, setIsLoadingReflection] = useState(false);
   const [chatDays, setChatDays] = useState([]);
   const [profilePicture, setProfilePicture] = useState(null);
+  const [showSharePreview, setShowSharePreview] = useState(false);
+  const [isSharingPost, setIsSharingPost] = useState(false);
 
   // Ensure user document exists in Firestore (for counting authenticated users)
   useEffect(() => {
@@ -256,6 +260,33 @@ export default function DashboardPage() {
     navigate('/chat', { state: { selectedDate: new Date().toISOString(), isWhisperMode: true, isFreshSession: true } });
   };
 
+  const handleShareToHub = async () => {
+    const user = getCurrentUser();
+    if (!user || !reflection?.trim()) return;
+    setIsSharingPost(true);
+    try {
+      const postData = {
+        author: user.displayName || 'Anonymous',
+        authorId: user.uid,
+        content: reflection.trim(),
+        createdAt: serverTimestamp(),
+        likes: 0,
+        comments: [],
+        profilePicture: profilePicture || null,
+        image: null,
+        source: 'day_reflect',
+        reflectionDate: selectedDate.toISOString?.() || new Date(selectedDate).toISOString(),
+      };
+      await addDoc(collection(db, 'communityPosts'), postData);
+      setShowSharePreview(false);
+      navigate('/community');
+    } catch (err) {
+      console.error('Error sharing reflection to HUB:', err);
+      alert('Failed to share to HUB. Please try again.');
+    } finally {
+      setIsSharingPost(false);
+    }
+  };
 
   const handleProfileClick = () => {
     navigate('/profile');
@@ -727,6 +758,16 @@ export default function DashboardPage() {
                   <p className={`text-[15px] leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                     {reflection}
                   </p>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setShowSharePreview(true); }}
+                    className={`mt-4 flex items-center justify-center gap-2 rounded-lg py-2.5 px-4 text-sm font-medium transition-all hover:opacity-90 ${
+                      isDarkMode ? 'text-[#7DD3C0] bg-white/5 border border-white/10' : 'text-[#87A96B] bg-black/5 border border-black/10'
+                    }`}
+                  >
+                    <Share2 className="w-4 h-4" strokeWidth={2} />
+                    Share to HUB
+                  </button>
                 </div>
               ) : (
                 <div className="px-6 pt-6 pb-7 flex flex-col items-stretch">
@@ -791,6 +832,95 @@ export default function DashboardPage() {
           </button>
         </div>
       </div>
+
+      {/* Share to HUB – preview modal */}
+      {showSharePreview && reflection && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ backgroundColor: 'rgba(0, 0, 0, 0.6)' }}
+          onClick={() => !isSharingPost && setShowSharePreview(false)}
+        >
+          <div
+            className={`rounded-2xl w-full max-w-sm overflow-hidden ${
+              isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
+            }`}
+            style={isDarkMode ? {
+              backgroundColor: '#262626',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+            } : {
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.15)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-5 border-b" style={{ borderColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' }}>
+              <h3 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                Preview your post
+              </h3>
+              <p className={`text-sm mt-0.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                This is how it will look on the HUB
+              </p>
+            </div>
+            <div className="p-5">
+              {/* Post preview – same style as HUB post card */}
+              <div
+                className={`rounded-2xl p-5 ${
+                  isDarkMode ? 'bg-[#1a1a1a] border border-white/10' : 'bg-gray-50 border border-gray-100'
+                }`}
+              >
+                <div className="flex items-start space-x-3 mb-3">
+                  {profilePicture ? (
+                    <img
+                      src={profilePicture}
+                      alt="You"
+                      className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                    />
+                  ) : (
+                    <div
+                      className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
+                      style={{ backgroundColor: isDarkMode ? '#7DD3C0' : '#E6B3BA' }}
+                    >
+                      <User className="w-5 h-5 text-white" strokeWidth={2} />
+                    </div>
+                  )}
+                  <div className="flex-1">
+                    <div className={`font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                      {getCurrentUser()?.displayName || 'You'}
+                    </div>
+                    <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                      Just now
+                    </div>
+                  </div>
+                </div>
+                <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                  {reflection}
+                </p>
+              </div>
+            </div>
+            <div className="p-5 pt-0 flex gap-3">
+              <button
+                type="button"
+                onClick={() => !isSharingPost && setShowSharePreview(false)}
+                disabled={isSharingPost}
+                className={`flex-1 rounded-xl py-3 font-medium text-sm ${
+                  isDarkMode ? 'bg-white/10 text-white hover:bg-white/15' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
+                } disabled:opacity-50`}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleShareToHub}
+                disabled={isSharingPost}
+                className="flex-1 rounded-xl py-3 font-medium text-sm text-white disabled:opacity-50"
+                style={{ backgroundColor: '#1d9bf0' }}
+              >
+                {isSharingPost ? 'Sharing…' : 'Share to HUB'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Calendar Popup */}
       <CalendarPopup
