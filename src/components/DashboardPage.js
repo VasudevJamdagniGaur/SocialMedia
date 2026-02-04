@@ -664,132 +664,149 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {/* Day's Reflect: tied to selected date, clear hierarchy, primary action, calm tone */}
         <div
-          className={`rounded-2xl p-6 mb-6 relative overflow-hidden ${
+          className={`rounded-2xl relative overflow-hidden ${
             isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
           }`}
           style={isDarkMode ? {
             backgroundColor: "#262626",
-            boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
+            boxShadow: "0 4px 20px rgba(0, 0, 0, 0.12)",
+            border: "1px solid rgba(125, 211, 192, 0.12)",
+            borderLeft: "3px solid rgba(125, 211, 192, 0.35)",
           } : {
-            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)",
-            borderTop: "3px solid #E6B3BA30",
+            boxShadow: "0 4px 16px rgba(0, 0, 0, 0.06)",
+            borderTop: "3px solid rgba(125, 211, 192, 0.25)",
           }}
         >
-          <div 
-            onClick={() => navigate('/reflections')}
-            className="flex items-center justify-between mb-4 cursor-pointer transition-opacity hover:opacity-80"
-          >
-            <div className="flex items-center space-x-3">
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center"
-                style={{
-                  backgroundColor: isDarkMode ? "#FDD663" : "#E6B3BA",
-                  boxShadow: isDarkMode ? "0 4px 16px rgba(0, 0, 0, 0.15)" : "none",
-                }}
-              >
-                <span className={isDarkMode ? "text-black" : "text-white"} style={{ fontSize: '14px' }}>⚡</span>
-              </div>
-              <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>Day's Reflect</h2>
-            </div>
-            <ChevronRight className={`w-5 h-5 ${isDarkMode ? 'text-[#8AB4F8]' : 'text-[#87A96B]'}`} strokeWidth={2.5} />
-          </div>
-          <div
-            onClick={() => navigate('/reflections')}
-            className={`rounded-xl p-5 min-h-24 relative overflow-hidden cursor-pointer transition-opacity hover:opacity-90 ${
-              isDarkMode ? 'backdrop-blur-lg' : ''
-            }`}
-            style={isDarkMode ? {
-              backgroundColor: "#262626",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
-              boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-            } : {
-              backgroundColor: "#F9F9F7",
-            }}
-          >
-            {isLoadingReflection ? (
-              <div className="flex flex-col items-center justify-center h-full">
-                <div className="flex space-x-1 mb-3">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                </div>
-                <p className={`text-sm text-center italic ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Loading reflection...</p>
-              </div>
-            ) : reflection ? (
-              <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>{reflection}</p>
-            ) : (
-              <button
-                onClick={handleGenerateReflection}
-                className="flex flex-col items-center justify-center h-full w-full hover:opacity-80 transition-all duration-300 cursor-pointer"
-              >
-                <div
-                  className={`w-12 h-12 rounded-lg flex items-center justify-center mb-3 ${
-                    isDarkMode ? 'backdrop-blur-md' : 'bg-white'
-                  }`}
-                  style={isDarkMode ? {
-                    backgroundColor: "rgba(28, 31, 46, 0.5)",
-                    boxShadow: "inset 0 0 20px rgba(125, 211, 192, 0.12), 0 8px 32px rgba(125, 211, 192, 0.08)",
-                    border: "1px solid rgba(125, 211, 192, 0.18)",
-                  } : {
-                    boxShadow: "0 2px 6px rgba(0, 0, 0, 0.06)",
-                  }}
+          <div className="p-6 pb-5">
+            {/* Purpose: what this is + link to selected date */}
+            <div 
+              onClick={() => navigate('/reflections')}
+              className="flex items-center justify-between cursor-pointer transition-opacity hover:opacity-85 mb-5"
+            >
+              <div>
+                <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                  Day's Reflect
+                </h2>
+                <p
+                  className="text-sm mt-0.5"
+                  style={{ color: isDarkMode ? '#7DD3C0' : '#87A96B' }}
                 >
-                  <span className="text-2xl">🌿</span>
+                  Reflection for {formatDateForDisplay(selectedDate)}
+                </p>
+              </div>
+              <ChevronRight className={`w-5 h-5 flex-shrink-0 ${isDarkMode ? 'text-[#7DD3C0]' : 'text-[#87A96B]'}`} strokeWidth={2} />
+            </div>
+
+            {/* Content area: state + action or reflection text */}
+            <div
+              className={`rounded-xl relative overflow-hidden ${
+                isDarkMode ? 'backdrop-blur-md' : ''
+              }`}
+              style={isDarkMode ? {
+                backgroundColor: "rgba(255, 255, 255, 0.03)",
+                border: "1px solid rgba(255, 255, 255, 0.06)",
+              } : {
+                backgroundColor: "#F9F9F7",
+              }}
+            >
+              {isLoadingReflection ? (
+                <div className="flex flex-col items-center justify-center py-10">
+                  <div className="flex space-x-1.5 mb-4">
+                    <div className="w-2 h-2 rounded-full animate-bounce bg-[#7DD3C0]" style={{ animationDelay: '0ms' }} />
+                    <div className="w-2 h-2 rounded-full animate-bounce bg-[#7DD3C0]" style={{ animationDelay: '150ms' }} />
+                    <div className="w-2 h-2 rounded-full animate-bounce bg-[#7DD3C0]" style={{ animationDelay: '300ms' }} />
+                  </div>
+                  <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                    Preparing your reflection...
+                  </p>
                 </div>
-                <p className={`text-sm text-center italic ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                  Click to generate reflection 🧘‍♀️
-                </p>
-                <p className={`text-xs text-center mt-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  (Must have chat messages for this date)
-                </p>
-              </button>
-            )}
+              ) : reflection ? (
+                <div onClick={() => navigate('/reflections')} className="p-5 cursor-pointer hover:opacity-95 transition-opacity">
+                  <p className={`text-[15px] leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                    {reflection}
+                  </p>
+                  <p className={`text-xs mt-4 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                    Tap to view in reflections
+                  </p>
+                </div>
+              ) : (
+                <div className="p-6 flex flex-col items-stretch">
+                  {/* State: supportive, not restrictive */}
+                  <div className="flex items-start gap-3 mb-5">
+                    <span className="text-2xl flex-shrink-0 mt-0.5" aria-hidden>🌿</span>
+                    <div>
+                      <p className={`text-sm font-medium ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                        A quiet moment for this day
+                      </p>
+                      <p className={`text-sm mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                        Your reflection is based on your conversations with Deite from this date.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Primary action: clear, valuable, clickable */}
+                  <button
+                    type="button"
+                    onClick={handleGenerateReflection}
+                    className={`w-full rounded-xl py-3.5 px-5 font-medium text-[15px] transition-all duration-200 hover:opacity-92 active:scale-[0.99] ${
+                      isDarkMode ? 'text-[#0B0E14]' : 'text-white'
+                    }`}
+                    style={isDarkMode ? {
+                      background: 'linear-gradient(135deg, rgba(125, 211, 192, 0.95) 0%, rgba(125, 211, 192, 0.85) 100%)',
+                      boxShadow: '0 4px 16px rgba(125, 211, 192, 0.25)',
+                    } : {
+                      background: 'linear-gradient(135deg, #87A96B 0%, #7a9a5c 100%)',
+                      boxShadow: '0 4px 14px rgba(134, 169, 107, 0.3)',
+                    }}
+                  >
+                    Look back at this day
+                  </button>
+
+                  {/* Condition: small, secondary, supportive */}
+                  <p className={`text-xs text-center mt-4 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                    Chat with Deite on this day first if you haven’t yet — then your reflection will be ready here.
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        <div className="flex flex-col space-y-3 justify-center">
+        <div className="flex flex-col space-y-3 justify-center mt-2">
           <button
             onClick={handleChatClick}
-            className={`flex items-center space-x-3 font-medium rounded-2xl px-8 py-4 hover:opacity-90 transition-all duration-300 w-full justify-center relative overflow-hidden ${
-              isDarkMode ? 'backdrop-blur-lg text-white' : 'text-white'
+            className={`flex items-center space-x-3 font-medium rounded-xl px-6 py-3.5 hover:opacity-90 transition-all duration-200 w-full justify-center ${
+              isDarkMode ? 'text-gray-200' : 'text-gray-700'
             }`}
             style={isDarkMode ? {
-              backgroundColor: "#262626",
-              boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
-              color: "#FFFFFF",
+              backgroundColor: "rgba(255, 255, 255, 0.06)",
+              border: "1px solid rgba(255, 255, 255, 0.1)",
             } : {
-              backgroundColor: "rgba(255, 255, 255, 0.8)",
-              boxShadow: "0 4px 12px rgba(134, 169, 107, 0.25)",
-              color: "#0B0E14",
+              backgroundColor: "rgba(0, 0, 0, 0.04)",
+              border: "1px solid rgba(0, 0, 0, 0.08)",
             }}
           >
-            <MessageCircle className="w-5 h-5" />
+            <MessageCircle className="w-5 h-5" style={{ color: isDarkMode ? '#8AB4F8' : '#87A96B' }} />
             <span>Chat with Deite</span>
-            <span className="text-lg">💬</span>
           </button>
 
           <button
             onClick={handleWhisperClick}
-            className={`flex items-center space-x-3 font-medium rounded-2xl px-8 py-4 hover:opacity-90 transition-all duration-300 w-full justify-center relative overflow-hidden ${
-              isDarkMode ? 'backdrop-blur-lg text-white' : 'text-white'
+            className={`flex items-center space-x-3 font-medium rounded-xl px-6 py-3.5 hover:opacity-90 transition-all duration-200 w-full justify-center ${
+              isDarkMode ? 'text-gray-200' : 'text-gray-700'
             }`}
             style={isDarkMode ? {
-              backgroundColor: "#262626",
-              boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
-              color: "#FFFFFF",
+              backgroundColor: "rgba(255, 255, 255, 0.06)",
+              border: "1px solid rgba(255, 255, 255, 0.1)",
             } : {
-              backgroundColor: "rgba(255, 255, 255, 0.8)",
-              boxShadow: "0 4px 12px rgba(134, 169, 107, 0.25)",
-              color: "#0B0E14",
+              backgroundColor: "rgba(0, 0, 0, 0.04)",
+              border: "1px solid rgba(0, 0, 0, 0.08)",
             }}
           >
-            <MessageCircle className="w-5 h-5" />
+            <MessageCircle className="w-5 h-5" style={{ color: isDarkMode ? '#8AB4F8' : '#87A96B' }} />
             <span>Whisper Session</span>
-            <span className="text-lg">🤫</span>
           </button>
         </div>
       </div>
