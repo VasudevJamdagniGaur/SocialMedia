@@ -1024,7 +1024,7 @@ export default function ChatPage() {
       if (isWhisperMode) {
         welcomeText = "Welcome to your Whisper Session. This is a private, fresh space just for you. What would you like to share in confidence today?";
       } else {
-        welcomeText = "Hey there! I'm Deite, and I'm genuinely glad you're here. There's something beautiful about taking a moment to connect with yourself and your feelings. What's been on your heart lately?";
+        welcomeText = "Hi, I'm Deite. How was your day?";
       }
       
       const welcomeMessage = {
