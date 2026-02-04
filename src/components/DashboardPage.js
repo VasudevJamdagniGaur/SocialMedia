@@ -680,10 +680,10 @@ export default function DashboardPage() {
           }}
         >
           <div className="p-6 pb-5">
-            {/* Purpose: what this is + link to selected date */}
+            {/* Title + date only; one line of context, one action. Logic revealed only when needed (e.g. alert on tap). */}
             <div 
               onClick={() => navigate('/reflections')}
-              className="flex items-center justify-between cursor-pointer transition-opacity hover:opacity-85 mb-5"
+              className="flex items-center justify-between cursor-pointer transition-opacity hover:opacity-85 mb-6"
             >
               <div>
                 <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
@@ -693,13 +693,12 @@ export default function DashboardPage() {
                   className="text-sm mt-0.5"
                   style={{ color: isDarkMode ? '#7DD3C0' : '#87A96B' }}
                 >
-                  Reflection for {formatDateForDisplay(selectedDate)}
+                  {formatDateForDisplay(selectedDate)}
                 </p>
               </div>
               <ChevronRight className={`w-5 h-5 flex-shrink-0 ${isDarkMode ? 'text-[#7DD3C0]' : 'text-[#87A96B]'}`} strokeWidth={2} />
             </div>
 
-            {/* Content area: state + action or reflection text */}
             <div
               className={`rounded-xl relative overflow-hidden ${
                 isDarkMode ? 'backdrop-blur-md' : ''
@@ -719,7 +718,7 @@ export default function DashboardPage() {
                     <div className="w-2 h-2 rounded-full animate-bounce bg-[#7DD3C0]" style={{ animationDelay: '300ms' }} />
                   </div>
                   <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                    Preparing your reflection...
+                    Preparing...
                   </p>
                 </div>
               ) : reflection ? (
@@ -727,30 +726,16 @@ export default function DashboardPage() {
                   <p className={`text-[15px] leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                     {reflection}
                   </p>
-                  <p className={`text-xs mt-4 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                    Tap to view in reflections
-                  </p>
                 </div>
               ) : (
-                <div className="p-6 flex flex-col items-stretch">
-                  {/* State: supportive, not restrictive */}
-                  <div className="flex items-start gap-3 mb-5">
-                    <span className="text-2xl flex-shrink-0 mt-0.5" aria-hidden>🌿</span>
-                    <div>
-                      <p className={`text-sm font-medium ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                        A quiet moment for this day
-                      </p>
-                      <p className={`text-sm mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                        Your reflection is based on your conversations with Deite from this date.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Primary action: clear, valuable, clickable */}
+                <div className="px-6 pt-6 pb-7 flex flex-col items-stretch">
+                  <p className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                    A quiet moment for this day
+                  </p>
                   <button
                     type="button"
                     onClick={handleGenerateReflection}
-                    className={`w-full rounded-xl py-3.5 px-5 font-medium text-[15px] transition-all duration-200 hover:opacity-92 active:scale-[0.99] ${
+                    className={`mt-6 w-full rounded-xl py-3.5 px-5 font-medium text-[15px] transition-all duration-200 hover:opacity-92 active:scale-[0.99] ${
                       isDarkMode ? 'text-[#0B0E14]' : 'text-white'
                     }`}
                     style={isDarkMode ? {
@@ -763,11 +748,6 @@ export default function DashboardPage() {
                   >
                     Look back at this day
                   </button>
-
-                  {/* Condition: small, secondary, supportive */}
-                  <p className={`text-xs text-center mt-4 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                    Chat with Deite on this day first if you haven’t yet — then your reflection will be ready here.
-                  </p>
                 </div>
               )}
             </div>
