@@ -585,10 +585,10 @@ export default function DashboardPage() {
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
               border: "1px solid rgba(255, 255, 255, 0.08)",
             } : {
-              boxShadow: "0 0 0 1px #87A96B20, 0 4px 12px rgba(134, 169, 107, 0.2)",
+              boxShadow: "0 0 0 1px rgba(58, 212, 248, 0.15), 0 4px 12px rgba(58, 212, 248, 0.2)",
             }}
           >
-            <Brain className="w-7 h-7" style={{ color: isDarkMode ? "#8AB4F8" : "#87A96B" }} strokeWidth={1.5} />
+            <Brain className="w-7 h-7" style={{ color: isDarkMode ? "#8AB4F8" : "#3AD4F8" }} strokeWidth={1.5} />
           </div>
 
           {/* Right icon - Profile */}
@@ -627,7 +627,7 @@ export default function DashboardPage() {
             border: "1px solid rgba(255, 255, 255, 0.08)",
           } : {
             boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)",
-            borderTop: "3px solid #87A96B30",
+            borderTop: "3px solid rgba(58, 212, 248, 0.2)",
           }}
         >
           <div className={`flex items-center justify-between ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
@@ -646,7 +646,7 @@ export default function DashboardPage() {
               onClick={handleCalendarClick}
             >
               <div className="flex items-center justify-center space-x-2 mb-1">
-                <Calendar className="w-4 h-4" style={{ color: isDarkMode ? "#7DD3C0" : "#87A96B" }} />
+                <Calendar className="w-4 h-4" style={{ color: "#3AD4F8" }} />
                 <span className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Selected Date</span>
               </div>
               <div className={`font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>{formatDateForDisplay(selectedDate)}</div>
@@ -671,8 +671,8 @@ export default function DashboardPage() {
           style={isDarkMode ? {
             backgroundColor: "#262626",
             boxShadow: "0 4px 20px rgba(0, 0, 0, 0.12)",
-            border: "1px solid rgba(125, 211, 192, 0.12)",
-            borderLeft: "3px solid rgba(125, 211, 192, 0.35)",
+            border: "1px solid rgba(58, 212, 248, 0.12)",
+            borderLeft: "3px solid rgba(58, 212, 248, 0.35)",
           } : {
             boxShadow: "0 4px 16px rgba(0, 0, 0, 0.06)",
             borderTop: "3px solid rgba(125, 211, 192, 0.25)",
@@ -690,12 +690,12 @@ export default function DashboardPage() {
                 </h2>
                 <p
                   className="text-sm mt-0.5"
-                  style={{ color: isDarkMode ? '#7DD3C0' : '#87A96B' }}
+                  style={{ color: '#3AD4F8' }}
                 >
                   {formatDateForDisplay(selectedDate)}
                 </p>
               </div>
-              <ChevronRight className={`w-5 h-5 flex-shrink-0 ${isDarkMode ? 'text-[#7DD3C0]' : 'text-[#87A96B]'}`} strokeWidth={2} />
+              <ChevronRight className="w-5 h-5 flex-shrink-0 text-[#3AD4F8]" strokeWidth={2} />
             </div>
 
             <div
@@ -712,9 +712,9 @@ export default function DashboardPage() {
               {isLoadingReflection ? (
                 <div className="flex flex-col items-center justify-center py-10">
                   <div className="flex space-x-1.5 mb-4">
-                    <div className="w-2 h-2 rounded-full animate-bounce bg-[#7DD3C0]" style={{ animationDelay: '0ms' }} />
-                    <div className="w-2 h-2 rounded-full animate-bounce bg-[#7DD3C0]" style={{ animationDelay: '150ms' }} />
-                    <div className="w-2 h-2 rounded-full animate-bounce bg-[#7DD3C0]" style={{ animationDelay: '300ms' }} />
+                    <div className="w-2 h-2 rounded-full animate-bounce bg-[#3AD4F8]" style={{ animationDelay: '0ms' }} />
+                    <div className="w-2 h-2 rounded-full animate-bounce bg-[#3AD4F8]" style={{ animationDelay: '150ms' }} />
+                    <div className="w-2 h-2 rounded-full animate-bounce bg-[#3AD4F8]" style={{ animationDelay: '300ms' }} />
                   </div>
                   <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                     Preparing...
@@ -729,7 +729,7 @@ export default function DashboardPage() {
                     type="button"
                     onClick={(e) => { e.stopPropagation(); navigate('/share-reflection', { state: { reflection, selectedDate } }); }}
                     className={`mt-4 flex items-center justify-center gap-2 rounded-lg py-2.5 px-4 text-sm font-medium transition-all hover:opacity-90 ${
-                      isDarkMode ? 'text-[#7DD3C0] bg-white/5 border border-white/10' : 'text-[#87A96B] bg-black/5 border border-black/10'
+                      isDarkMode ? 'text-[#3AD4F8] bg-white/5 border border-[#3AD4F8]/30' : 'text-[#3AD4F8] bg-black/5 border border-[#3AD4F8]/30'
                     }`}
                   >
                     <Share2 className="w-4 h-4" strokeWidth={2} />
@@ -777,7 +777,7 @@ export default function DashboardPage() {
               border: "1px solid rgba(0, 0, 0, 0.08)",
             }}
           >
-            <MessageCircle className="w-5 h-5" style={{ color: isDarkMode ? '#8AB4F8' : '#87A96B' }} />
+            <MessageCircle className="w-5 h-5" style={{ color: isDarkMode ? '#8AB4F8' : '#3AD4F8' }} />
             <span>Chat with Deite</span>
           </button>
 
@@ -794,7 +794,7 @@ export default function DashboardPage() {
               border: "1px solid rgba(0, 0, 0, 0.08)",
             }}
           >
-            <MessageCircle className="w-5 h-5" style={{ color: isDarkMode ? '#8AB4F8' : '#87A96B' }} />
+            <MessageCircle className="w-5 h-5" style={{ color: isDarkMode ? '#8AB4F8' : '#3AD4F8' }} />
             <span>Whisper Session</span>
           </button>
         </div>

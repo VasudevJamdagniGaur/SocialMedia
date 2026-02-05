@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { User, Pencil, Share2, ArrowLeft } from 'lucide-react';
+import { User, Pencil, Share2, ArrowLeft, Sparkles } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
+import chatService from '../services/chatService';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
@@ -21,6 +22,9 @@ export default function ShareReflectionPage() {
   const [shareEditMode, setShareEditMode] = useState(false);
   const [isSharingPost, setIsSharingPost] = useState(false);
   const [profilePicture, setProfilePicture] = useState(null);
+  const [showAiEditModal, setShowAiEditModal] = useState(false);
+  const [aiEditInstruction, setAiEditInstruction] = useState('');
+  const [isAiEditing, setIsAiEditing] = useState(false);
 
   useEffect(() => {
     if (!initialText) {
@@ -90,6 +94,27 @@ export default function ShareReflectionPage() {
   };
 
   const getSocialShareText = () => sharePreviewText.trim();
+
+  const handleApplyAiEdit = async () => {
+    const instruction = (aiEditInstruction || '').trim();
+    if (!instruction) {
+      alert('Please describe what change to make (e.g. "make it more formal", "fix grammar").');
+      return;
+    }
+    if (!sharePreviewText.trim()) return;
+    setIsAiEditing(true);
+    try {
+      const edited = await chatService.editTextWithAI(sharePreviewText, instruction);
+      if (edited) setSharePreviewText(edited);
+      setShowAiEditModal(false);
+      setAiEditInstruction('');
+    } catch (err) {
+      console.error('AI edit failed:', err);
+      alert(err.message || 'AI edit failed. Check your API key in Chat settings and try again.');
+    } finally {
+      setIsAiEditing(false);
+    }
+  };
 
   const shareToX = () => {
     const text = getSocialShareText();
@@ -195,16 +220,28 @@ export default function ShareReflectionPage() {
                   {' · Just now'}
                 </span>
               </div>
-              <button
-                type="button"
-                onClick={() => setShareEditMode(true)}
-                className={`p-2 rounded-full transition-opacity hover:opacity-90 ${
-                  isDarkMode ? 'text-gray-500 hover:bg-white/5' : 'text-gray-400 hover:bg-black/5'
-                }`}
-                title="Edit post text"
-              >
-                <Pencil className="w-3.5 h-3.5" strokeWidth={2} />
-              </button>
+              <div className="flex items-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => setShareEditMode(true)}
+                  className={`p-2 rounded-full transition-opacity hover:opacity-90 ${
+                    isDarkMode ? 'text-gray-500 hover:bg-white/5' : 'text-gray-400 hover:bg-black/5'
+                  }`}
+                  title="Edit text"
+                >
+                  <Pencil className="w-3.5 h-3.5" strokeWidth={2} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowAiEditModal(true)}
+                  className={`p-2 rounded-full transition-opacity hover:opacity-90 ${
+                    isDarkMode ? 'text-[#7DD3C0]/90 hover:bg-white/5' : 'text-[#87A96B] hover:bg-black/5'
+                  }`}
+                  title="Edit with AI (describe the change)"
+                >
+                  <Sparkles className="w-3.5 h-3.5" strokeWidth={2} />
+                </button>
+              </div>
             </div>
             <div className="p-5 pt-4">
               {shareEditMode ? (
@@ -314,6 +351,70 @@ export default function ShareReflectionPage() {
           </button>
         </div>
       </div>
+
+      {/* AI Edit modal – describe change, uses Gemini/Grok/OpenAI */}
+      {showAiEditModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ backgroundColor: 'rgba(0, 0, 0, 0.6)' }}
+          onClick={() => !isAiEditing && setShowAiEditModal(false)}
+        >
+          <div
+            className={`w-full max-w-sm rounded-2xl p-5 shadow-xl ${
+              isDarkMode ? 'bg-[#262626] border border-white/10' : 'bg-white border border-gray-200'
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2 mb-3">
+              <Sparkles className={`w-5 h-5 flex-shrink-0 ${isDarkMode ? 'text-[#7DD3C0]' : 'text-[#87A96B]'}`} strokeWidth={2} />
+              <h3 className={`text-base font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                Edit with AI
+              </h3>
+            </div>
+            <p className={`text-sm mb-3 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+              Describe the change you want (e.g. &quot;make it more formal&quot;, &quot;fix grammar&quot;, &quot;shorten&quot;). Uses the same AI as Chat (Gemini, Grok, or OpenAI).
+            </p>
+            <input
+              type="text"
+              value={aiEditInstruction}
+              onChange={(e) => setAiEditInstruction(e.target.value)}
+              placeholder="e.g. make it shorter and more positive"
+              className={`w-full rounded-xl px-4 py-3 text-[15px] border focus:outline-none focus:ring-2 ${
+                isDarkMode
+                  ? 'bg-black/20 text-white border-white/15 focus:ring-[#7DD3C0]/40 placeholder-gray-500'
+                  : 'bg-gray-50 text-gray-800 border-gray-200 focus:ring-[#87A96B]/40 placeholder-gray-400'
+              }`}
+              disabled={isAiEditing}
+              onKeyDown={(e) => e.key === 'Enter' && handleApplyAiEdit()}
+            />
+            <div className="flex gap-2 mt-4">
+              <button
+                type="button"
+                onClick={() => !isAiEditing && setShowAiEditModal(false)}
+                disabled={isAiEditing}
+                className={`flex-1 rounded-xl py-2.5 font-medium text-sm ${
+                  isDarkMode ? 'text-gray-400 hover:bg-white/5' : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleApplyAiEdit}
+                disabled={isAiEditing || !aiEditInstruction.trim()}
+                className="flex-1 rounded-xl py-2.5 font-medium text-sm text-white disabled:opacity-50 transition-opacity"
+                style={{
+                  background: isDarkMode
+                    ? 'linear-gradient(135deg, #7DD3C0 0%, #5fb8a8 100%)'
+                    : 'linear-gradient(135deg, #87A96B 0%, #7a9a5c 100%)',
+                }}
+              >
+                {isAiEditing ? 'Applying…' : 'Apply'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

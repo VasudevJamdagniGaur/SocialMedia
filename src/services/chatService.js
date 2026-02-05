@@ -1458,6 +1458,89 @@ Assistant:`;
     }
   }
 
+  /**
+   * Edit text using AI (Gemini, Grok, or OpenAI) based on user instruction.
+   * Uses the same provider as chat (localStorage 'chat_api_provider').
+   * @param {string} text - The text to edit
+   * @param {string} instruction - What change to make (e.g. "make it more formal", "fix grammar")
+   * @returns {Promise<string>} - The edited text only
+   */
+  async editTextWithAI(text, instruction) {
+    const savedProvider = (typeof localStorage !== 'undefined' && localStorage.getItem('chat_api_provider')) || 'openai';
+    this.setApiProvider(savedProvider);
+
+    this.openaiApiKey = process.env.REACT_APP_OPENAI_API_KEY || this.openaiApiKey || '';
+    this.geminiApiKey = process.env.REACT_APP_GOOGLE_API_KEY || this.geminiApiKey || '';
+    this.grokApiKey = process.env.REACT_APP_GROK_API_KEY || this.grokApiKey || '';
+
+    const apiKey = this.getApiKey();
+    if (!apiKey || apiKey.trim() === '') {
+      const providerName = this.apiProvider === 'openai' ? 'OpenAI' : this.apiProvider === 'gemini' ? 'Gemini' : 'Grok';
+      const envKeyName = this.apiProvider === 'openai' ? 'REACT_APP_OPENAI_API_KEY' : this.apiProvider === 'gemini' ? 'REACT_APP_GOOGLE_API_KEY' : 'REACT_APP_GROK_API_KEY';
+      throw new Error(`${providerName} API key is not set. Add ${envKeyName} in .env`);
+    }
+
+    const prompt = `Apply the following edit to the text below. Return ONLY the edited text, no quotes, no explanation, no preamble.
+
+Edit instruction: ${instruction}
+
+Text:
+${text}`;
+
+    let apiUrl, requestBody, headers;
+    if (this.apiProvider === 'openai') {
+      apiUrl = `${this.openaiBaseURL}/chat/completions`;
+      requestBody = {
+        model: this.openaiModelName,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.3,
+        max_tokens: 1000
+      };
+      headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` };
+    } else if (this.apiProvider === 'grok') {
+      apiUrl = `${this.grokBaseURL}/chat/completions`;
+      requestBody = {
+        model: this.grokModelName,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.3,
+        max_tokens: 1000
+      };
+      headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` };
+    } else {
+      apiUrl = `${this.geminiBaseURL}/models/${this.geminiModelName}:generateContent`;
+      requestBody = {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.3, maxOutputTokens: 1000 }
+      };
+      headers = { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey };
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(requestBody),
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`AI edit failed: ${response.status} ${errText.substring(0, 150)}`);
+    }
+
+    const data = await response.json();
+    let edited = '';
+    if (this.apiProvider === 'openai' || this.apiProvider === 'grok') {
+      edited = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) ? data.choices[0].message.content : '';
+    } else {
+      edited = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts)
+        ? data.candidates[0].content.parts.map(p => p.text).join('') : '';
+    }
+    return (edited || '').trim();
+  }
+
   async generateDayDescription(dayData, type, periodText, userCharacterCount = null) {
     try {
       console.log(`🤖 Generating ${type} day description for`, dayData.date);
