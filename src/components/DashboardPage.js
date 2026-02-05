@@ -788,15 +788,15 @@ export default function DashboardPage() {
                   <button
                     type="button"
                     onClick={handleChatClick}
-                    className={`mt-6 w-full rounded-xl py-3.5 px-5 font-medium text-[15px] transition-all duration-200 hover:opacity-92 active:scale-[0.99] ${
-                      isDarkMode ? 'text-[#0B0E14]' : 'text-white'
-                    }`}
+                    className="mt-6 w-full rounded-xl py-3.5 px-5 font-medium text-[15px] transition-all duration-200 hover:opacity-90 active:scale-[0.99] flex items-center justify-center gap-2"
                     style={isDarkMode ? {
-                      background: 'linear-gradient(135deg, rgba(125, 211, 192, 0.95) 0%, rgba(125, 211, 192, 0.85) 100%)',
-                      boxShadow: '0 4px 16px rgba(125, 211, 192, 0.25)',
+                      backgroundColor: '#373D3D',
+                      color: '#6ADFBB',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
                     } : {
-                      background: 'linear-gradient(135deg, #87A96B 0%, #7a9a5c 100%)',
-                      boxShadow: '0 4px 14px rgba(134, 169, 107, 0.3)',
+                      backgroundColor: '#373D3D',
+                      color: '#6ADFBB',
+                      border: '1px solid rgba(0, 0, 0, 0.08)',
                     }}
                   >
                     Look back at this day
