@@ -806,118 +806,137 @@ export default function AllDayReflectionsPage() {
         </div>
       )}
 
-      {/* Share to HUB – preview modal */}
+      {/* Share to HUB – mirror of your day (warm, affirming) */}
       {reflectionToShare && reflectionToShare.reflection && (
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center p-4"
-          style={{ backgroundColor: 'rgba(0, 0, 0, 0.6)' }}
+          style={{ backgroundColor: 'rgba(0, 0, 0, 0.55)' }}
           onClick={() => !isSharingPost && setReflectionToShare(null)}
         >
           <div
-            className={`rounded-2xl w-full max-w-sm overflow-hidden ${
-              isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
+            className={`w-full max-w-sm overflow-hidden backdrop-blur-xl ${
+              isDarkMode ? '' : 'bg-white'
             }`}
             style={isDarkMode ? {
-              backgroundColor: '#262626',
-              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
+              backgroundColor: 'rgba(38, 38, 38, 0.95)',
+              borderRadius: '24px',
+              boxShadow: '0 24px 48px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06), 0 0 80px rgba(125, 211, 192, 0.08)',
             } : {
-              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.15)',
+              borderRadius: '24px',
+              boxShadow: '0 24px 48px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.04), 0 0 60px rgba(125, 211, 192, 0.06)',
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="p-5 border-b" style={{ borderColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' }}>
-              <h3 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                Preview
-              </h3>
+            {/* Deite voice */}
+            <div className="px-6 pt-6 pb-2">
+              <p className={`text-base font-medium ${isDarkMode ? 'text-[#7DD3C0]' : 'text-[#87A96B]'}`}>
+                This is what you lived today.
+              </p>
             </div>
-            <div className="p-5">
+            {/* Inner card: memory / snapshot – breathing room, soft edges, content as hero */}
+            <div className="px-5 pb-5">
               <div
-                className={`rounded-2xl p-5 ${
-                  isDarkMode ? 'bg-[#1a1a1a] border border-white/10' : 'bg-gray-50 border border-gray-100'
+                className={`rounded-2xl overflow-hidden ${
+                  isDarkMode ? 'bg-[#1e1e1e]' : 'bg-gray-50/90'
                 }`}
+                style={isDarkMode ? {
+                  border: '1px solid rgba(255, 255, 255, 0.06)',
+                  boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.02)',
+                } : {
+                  border: '1px solid rgba(0, 0, 0, 0.04)',
+                }}
               >
-                <div className="flex items-start space-x-3 mb-3">
+                {/* Identity strip – quiet support */}
+                <div className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: isDarkMode ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(0,0,0,0.06)' }}>
                   {profilePicture ? (
                     <img
                       src={profilePicture}
                       alt="You"
-                      className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                      className="w-8 h-8 rounded-full object-cover flex-shrink-0"
                     />
                   ) : (
                     <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
-                      style={{ backgroundColor: isDarkMode ? '#7DD3C0' : '#E6B3BA' }}
+                      className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+                      style={{ backgroundColor: isDarkMode ? 'rgba(125, 211, 192, 0.25)' : 'rgba(134, 169, 107, 0.2)' }}
                     >
-                      <User className="w-5 h-5 text-white" strokeWidth={2} />
+                      <User className={`w-4 h-4 ${isDarkMode ? 'text-[#7DD3C0]' : 'text-[#87A96B]'}`} strokeWidth={2} />
                     </div>
                   )}
-                  <div className="flex-1">
-                    <div className={`font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                  <div className="flex-1 min-w-0">
+                    <span className={`text-xs font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                       {getCurrentUser()?.displayName || 'You'}
-                    </div>
-                    <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                      Just now
-                    </div>
+                    </span>
+                    <span className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                      {' · Just now'}
+                    </span>
                   </div>
                   <button
                     type="button"
                     onClick={() => setShareEditMode(true)}
-                    className={`p-1.5 rounded-full flex-shrink-0 transition-opacity hover:opacity-90 ${
-                      isDarkMode ? 'hover:bg-white/10 text-gray-400' : 'hover:bg-black/5 text-gray-500'
+                    className={`p-2 rounded-full transition-opacity hover:opacity-90 ${
+                      isDarkMode ? 'text-gray-500 hover:bg-white/5' : 'text-gray-400 hover:bg-black/5'
                     }`}
                     title="Edit post text"
                   >
-                    <Pencil className="w-4 h-4" strokeWidth={2} />
+                    <Pencil className="w-3.5 h-3.5" strokeWidth={2} />
                   </button>
                 </div>
-                {shareEditMode ? (
-                  <>
-                    <textarea
-                      value={sharePreviewText}
-                      onChange={(e) => setSharePreviewText(e.target.value)}
-                      className={`w-full rounded-lg px-3 py-2 text-sm leading-relaxed border min-h-[100px] resize-y focus:outline-none focus:ring-2 ${
-                        isDarkMode
-                          ? 'bg-gray-800/50 text-white border-white/20 focus:ring-[#7DD3C0]'
-                          : 'bg-white text-gray-800 border-gray-200 focus:ring-[#87A96B]'
-                      }`}
-                      placeholder="Edit what will be posted..."
-                      autoFocus
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShareEditMode(false)}
-                      className={`mt-2 text-xs font-medium ${isDarkMode ? 'text-[#7DD3C0]' : 'text-[#87A96B]'}`}
-                    >
-                      Done editing
-                    </button>
-                  </>
-                ) : (
-                  <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                    {sharePreviewText}
-                  </p>
-                )}
+                {/* Reflection content – hero */}
+                <div className="p-5 pt-4">
+                  {shareEditMode ? (
+                    <>
+                      <textarea
+                        value={sharePreviewText}
+                        onChange={(e) => setSharePreviewText(e.target.value)}
+                        className={`w-full rounded-xl px-4 py-3 text-[15px] leading-relaxed border min-h-[120px] resize-y focus:outline-none focus:ring-2 ${
+                          isDarkMode
+                            ? 'bg-black/20 text-white border-white/15 focus:ring-[#7DD3C0]/40 placeholder-gray-500'
+                            : 'bg-white text-gray-800 border-gray-200/80 focus:ring-[#87A96B]/40 placeholder-gray-400'
+                        }`}
+                        placeholder="Edit what you’ll share..."
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShareEditMode(false)}
+                        className={`mt-3 text-sm font-medium ${isDarkMode ? 'text-[#7DD3C0]' : 'text-[#87A96B]'}`}
+                      >
+                        Done editing
+                      </button>
+                    </>
+                  ) : (
+                    <p className={`text-[15px] leading-[1.6] ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                      {sharePreviewText}
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
-            <div className="p-5 pt-0 flex gap-3">
-              <button
-                type="button"
-                onClick={() => !isSharingPost && setReflectionToShare(null)}
-                disabled={isSharingPost}
-                className={`flex-1 rounded-xl py-3 font-medium text-sm ${
-                  isDarkMode ? 'bg-white/10 text-white hover:bg-white/15' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
-                } disabled:opacity-50`}
-              >
-                Cancel
-              </button>
+            {/* Buttons – affirming primary, safe secondary */}
+            <div className="px-5 pb-6 pt-1 flex flex-col gap-3">
               <button
                 type="button"
                 onClick={handleShareToHub}
                 disabled={isSharingPost}
-                className="flex-1 rounded-xl py-3 font-medium text-sm text-white disabled:opacity-50"
-                style={{ backgroundColor: '#1d9bf0' }}
+                className="w-full rounded-2xl py-3.5 font-medium text-[15px] text-white disabled:opacity-50 transition-all hover:opacity-95 active:scale-[0.99]"
+                style={{
+                  background: isDarkMode
+                    ? 'linear-gradient(135deg, #7DD3C0 0%, #5fb8a8 100%)'
+                    : 'linear-gradient(135deg, #87A96B 0%, #7a9a5c 100%)',
+                  boxShadow: isDarkMode ? '0 4px 20px rgba(125, 211, 192, 0.35)' : '0 4px 16px rgba(134, 169, 107, 0.3)',
+                }}
               >
-                {isSharingPost ? 'Sharing…' : 'Share to HUB'}
+                {isSharingPost ? 'Sharing…' : 'Share this moment'}
+              </button>
+              <button
+                type="button"
+                onClick={() => !isSharingPost && setReflectionToShare(null)}
+                disabled={isSharingPost}
+                className={`w-full rounded-2xl py-3 font-medium text-sm disabled:opacity-50 transition-opacity ${
+                  isDarkMode ? 'text-gray-400 hover:text-gray-300 hover:bg-white/5' : 'text-gray-500 hover:text-gray-700 hover:bg-black/5'
+                }`}
+              >
+                Maybe later
               </button>
             </div>
           </div>
