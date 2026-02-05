@@ -855,11 +855,8 @@ export default function DashboardPage() {
           >
             <div className="p-5 border-b" style={{ borderColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' }}>
               <h3 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                Preview your post
+                Preview
               </h3>
-              <p className={`text-sm mt-0.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                This is how it will look on the HUB
-              </p>
             </div>
             <div className="p-5">
               {/* Post preview – same style as HUB post card */}
