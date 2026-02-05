@@ -225,7 +225,7 @@ export default function ShareReflectionPage() {
                     onClick={() => setShareEditMode(false)}
                     className={`mt-3 text-sm font-medium ${isDarkMode ? 'text-[#7DD3C0]' : 'text-[#87A96B]'}`}
                   >
-                    Done editing
+                    Done
                   </button>
                 </>
               ) : (
