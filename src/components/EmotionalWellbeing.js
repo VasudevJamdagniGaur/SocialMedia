@@ -1933,9 +1933,10 @@ export default function EmotionalWellbeing() {
           negativeScore = Math.max(0, Math.min(100, negativeScore));
           neutralScore = Math.max(0, Math.min(100, neutralScore));
         } else {
-          // If total is 0, skip this day (don't use defaults)
-          console.log(`⚠️ Skipping day ${dayData.date} - no valid emotional scores (total: ${total})`);
-          return null;
+          // Keep day with zeros so the chart has one point per day and lines connect (like Mood Chart)
+          positiveScore = 0;
+          negativeScore = 0;
+          neutralScore = 0;
         }
         
         // Log first few items for debugging
@@ -1950,7 +1951,7 @@ export default function EmotionalWellbeing() {
           neutral: neutralScore,
           negative: negativeScore
         };
-      }).filter(item => item !== null); // Remove null entries (days with no valid data)
+      });
       
       // Calculate top emotions from available data
       const validData = data.filter(day => {
@@ -1972,7 +1973,7 @@ export default function EmotionalWellbeing() {
       ].sort((a, b) => b.value - a.value);
 
       console.log('✅ Balance data processed successfully from Firebase data');
-        console.log(`✅ Processed ${moodBalance.length} days with valid balance data`);
+        console.log(`✅ Processed ${moodBalance.length} days for balance chart (lines will connect)`);
       return { moodBalance, topEmotions };
     }
     }
@@ -3507,6 +3508,7 @@ Return in this JSON format:
                       dataKey="positive"
                       stroke="#81C995"
                       strokeWidth={2}
+                      connectNulls
                       dot={{ fill: '#81C995', strokeWidth: 2, r: 3 }}
                       activeDot={{
                         r: 6,
@@ -3520,6 +3522,7 @@ Return in this JSON format:
                       dataKey="neutral"
                       stroke="#FDD663"
                       strokeWidth={2}
+                      connectNulls
                       dot={{ fill: '#FDD663', strokeWidth: 2, r: 3 }}
                       activeDot={{
                         r: 6,
@@ -3533,6 +3536,7 @@ Return in this JSON format:
                       dataKey="negative"
                       stroke="#F28B82"
                       strokeWidth={2}
+                      connectNulls
                       dot={{ fill: '#F28B82', strokeWidth: 2, r: 3 }}
                       activeDot={{
                         r: 6,
