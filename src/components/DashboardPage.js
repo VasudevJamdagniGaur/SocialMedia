@@ -570,8 +570,8 @@ export default function DashboardPage() {
             }}
           >
             {isDarkMode ?
-              <Sun className="w-5 h-5" style={{ color: "#8AB4F8" }} strokeWidth={1.5} /> :
-              <Moon className="w-5 h-5" style={{ color: "#E6B3BA" }} strokeWidth={1.5} />
+              <Sun className="w-5 h-5" style={{ color: "#3AD4F8" }} strokeWidth={1.5} /> :
+              <Moon className="w-5 h-5" style={{ color: "#3AD4F8" }} strokeWidth={1.5} />
             }
           </div>
 
@@ -588,7 +588,7 @@ export default function DashboardPage() {
               boxShadow: "0 0 0 1px rgba(58, 212, 248, 0.15), 0 4px 12px rgba(58, 212, 248, 0.2)",
             }}
           >
-            <Brain className="w-7 h-7" style={{ color: isDarkMode ? "#8AB4F8" : "#3AD4F8" }} strokeWidth={1.5} />
+            <Brain className="w-7 h-7" style={{ color: "#3AD4F8" }} strokeWidth={1.5} />
           </div>
 
           {/* Right icon - Profile */}
@@ -612,7 +612,7 @@ export default function DashboardPage() {
                 className="w-full h-full object-cover"
               />
             ) : (
-              <User className="w-5 h-5" style={{ color: isDarkMode ? "#81C995" : "#B19CD9" }} strokeWidth={1.5} />
+              <User className="w-5 h-5" style={{ color: "#3AD4F8" }} strokeWidth={1.5} />
             )}
           </div>
         </div>
