@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
-import { Brain, MessageCircle, Calendar, Heart, Sparkles, User, Sun, Moon, ChevronRight, Share2 } from "lucide-react";
+import { Brain, MessageCircle, Calendar, Heart, Sparkles, User, Sun, Moon, ChevronRight, Share2, Pencil } from "lucide-react";
 import { useTheme } from '../contexts/ThemeContext';
 import CalendarPopup from './CalendarPopup';
 import reflectionService from '../services/reflectionService';
@@ -21,6 +21,8 @@ export default function DashboardPage() {
   const [profilePicture, setProfilePicture] = useState(null);
   const [showSharePreview, setShowSharePreview] = useState(false);
   const [isSharingPost, setIsSharingPost] = useState(false);
+  const [sharePreviewText, setSharePreviewText] = useState('');
+  const [shareEditMode, setShareEditMode] = useState(false);
 
   // Ensure user document exists in Firestore (for counting authenticated users)
   useEffect(() => {
@@ -261,14 +263,15 @@ export default function DashboardPage() {
   };
 
   const handleShareToHub = async () => {
+    const contentToShare = (sharePreviewText || reflection || '').trim();
     const user = getCurrentUser();
-    if (!user || !reflection?.trim()) return;
+    if (!user || !contentToShare) return;
     setIsSharingPost(true);
     try {
       const postData = {
         author: user.displayName || 'Anonymous',
         authorId: user.uid,
-        content: reflection.trim(),
+        content: contentToShare,
         createdAt: serverTimestamp(),
         likes: 0,
         comments: [],
@@ -287,6 +290,14 @@ export default function DashboardPage() {
       setIsSharingPost(false);
     }
   };
+
+  // When share preview opens, init editable text from reflection (original is never changed)
+  useEffect(() => {
+    if (showSharePreview && reflection) {
+      setSharePreviewText(reflection);
+      setShareEditMode(false);
+    }
+  }, [showSharePreview, reflection]);
 
   const handleProfileClick = () => {
     navigate('/profile');
@@ -888,10 +899,43 @@ export default function DashboardPage() {
                       Just now
                     </div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setShareEditMode(true)}
+                    className={`p-1.5 rounded-full flex-shrink-0 transition-opacity hover:opacity-90 ${
+                      isDarkMode ? 'hover:bg-white/10 text-gray-400' : 'hover:bg-black/5 text-gray-500'
+                    }`}
+                    title="Edit post text"
+                  >
+                    <Pencil className="w-4 h-4" strokeWidth={2} />
+                  </button>
                 </div>
-                <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  {reflection}
-                </p>
+                {shareEditMode ? (
+                  <>
+                    <textarea
+                      value={sharePreviewText}
+                      onChange={(e) => setSharePreviewText(e.target.value)}
+                      className={`w-full rounded-lg px-3 py-2 text-sm leading-relaxed border min-h-[100px] resize-y focus:outline-none focus:ring-2 ${
+                        isDarkMode
+                          ? 'bg-gray-800/50 text-white border-white/20 focus:ring-[#7DD3C0]'
+                          : 'bg-white text-gray-800 border-gray-200 focus:ring-[#87A96B]'
+                      }`}
+                      placeholder="Edit what will be posted..."
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShareEditMode(false)}
+                      className={`mt-2 text-xs font-medium ${isDarkMode ? 'text-[#7DD3C0]' : 'text-[#87A96B]'}`}
+                    >
+                      Done editing
+                    </button>
+                  </>
+                ) : (
+                  <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    {sharePreviewText}
+                  </p>
+                )}
               </div>
             </div>
             <div className="p-5 pt-0 flex gap-3">
