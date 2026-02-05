@@ -3200,7 +3200,7 @@ Return in this JSON format:
                     border: "1px solid rgba(125, 211, 192, 0.3)",
                   }}
                 >
-                  <BarChart3 className="w-5 h-5" style={{ color: "#7DD3C0" }} />
+                  <BarChart3 className="w-5 h-5" style={{ color: "#3AD4F8" }} />
                 </div>
                 <h3 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
                   Mood Chart
@@ -3406,7 +3406,7 @@ Return in this JSON format:
                       border: "1px solid rgba(212, 175, 55, 0.3)",
                     }}
                   >
-                    <Target className="w-5 h-5" style={{ color: "#D4AF37" }} />
+                    <Target className="w-5 h-5" style={{ color: "#3AD4F8" }} />
                   </div>
                   <h3 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
                     Emotional Balance
@@ -3468,7 +3468,7 @@ Return in this JSON format:
                     border: "1px solid rgba(0, 0, 0, 0.08)",
                   }}
                 >
-                  <Target className="w-6 h-6" style={{ color: isDarkMode ? "#D4AF37" : "#87A96B" }} />
+                  <Target className="w-6 h-6" style={{ color: "#3AD4F8" }} />
                 </div>
                 <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                   No balance data yet
@@ -3736,9 +3736,9 @@ Return in this JSON format:
                   border: "1px solid rgba(0, 0, 0, 0.08)",
                 }}
               >
-                <Lightbulb className="w-5 h-5" style={{ color: isDarkMode ? "#FDD663" : "#87A96B" }} />
+                <Lightbulb className="w-5 h-5" style={{ color: "#3AD4F8" }} />
               </div>
-              <h3 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+              <h3 className="text-lg font-semibold" style={{ color: "#3AD4F8" }}>
                 Triggers & Patterns
               </h3>
             </div>
@@ -3755,7 +3755,7 @@ Return in this JSON format:
                 border: "1px solid rgba(0, 0, 0, 0.08)",
               }}
             >
-              <Lightbulb className="w-6 h-6" style={{ color: isDarkMode ? "#FDD663" : "#87A96B" }} />
+              <Lightbulb className="w-6 h-6" style={{ color: "#3AD4F8" }} />
             </div>
             <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
               Patterns will appear here

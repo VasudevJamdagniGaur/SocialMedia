@@ -150,7 +150,7 @@ export default function LandingPage() {
               border: "1px solid rgba(255, 255, 255, 0.08)",
             }}
           >
-            <Brain className="w-12 h-12 relative z-10" style={{ color: "#81C995" }} strokeWidth={1.5} />
+            <Brain className="w-12 h-12 relative z-10" style={{ color: "#3AD4F8" }} strokeWidth={1.5} />
           </div>
         </div>
 
