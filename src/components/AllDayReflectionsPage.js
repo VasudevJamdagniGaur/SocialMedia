@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
-import { ArrowLeft, Zap, Check, Calendar, X } from 'lucide-react';
+import { ArrowLeft, Zap, Check, Calendar, X, Share2, User } from 'lucide-react';
 import { getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
 import { getDateId, formatDateForDisplay } from '../utils/dateUtils';
-import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import CalendarPopup from './CalendarPopup';
 
@@ -21,6 +21,9 @@ export default function AllDayReflectionsPage() {
   const [selectedReflection, setSelectedReflection] = useState(null);
   const [moodData, setMoodData] = useState(null);
   const [isLoadingMood, setIsLoadingMood] = useState(false);
+  const [reflectionToShare, setReflectionToShare] = useState(null);
+  const [isSharingPost, setIsSharingPost] = useState(false);
+  const [profilePicture, setProfilePicture] = useState(null);
 
   // Format date for display (e.g., "8 October 2025 • Wed, 3:54 pm")
   const formatReflectionDate = (reflectionItem) => {
@@ -392,6 +395,50 @@ export default function AllDayReflectionsPage() {
     setSelectedDate(null);
   };
 
+  // Load profile picture for share preview
+  useEffect(() => {
+    const user = getCurrentUser();
+    if (user) {
+      const saved = localStorage.getItem(`user_profile_picture_${user.uid}`);
+      setProfilePicture(saved || null);
+    }
+  }, []);
+
+  const handleShareToHub = async () => {
+    if (!reflectionToShare?.reflection?.trim()) return;
+    const user = getCurrentUser();
+    if (!user) {
+      alert('Please sign in to share.');
+      return;
+    }
+    setIsSharingPost(true);
+    try {
+      const reflectionDate = reflectionToShare.dateObj || reflectionToShare.createdAt || new Date(reflectionToShare.date);
+      const postData = {
+        author: user.displayName || 'Anonymous',
+        authorId: user.uid,
+        content: reflectionToShare.reflection.trim(),
+        createdAt: serverTimestamp(),
+        likes: 0,
+        comments: [],
+        profilePicture: profilePicture || null,
+        image: null,
+        source: 'day_reflect',
+        reflectionDate: reflectionDate instanceof Date ? reflectionDate.toISOString() : new Date(reflectionDate).toISOString(),
+      };
+      await addDoc(collection(db, 'communityPosts'), postData);
+      setReflectionToShare(null);
+      setSelectedReflection(null);
+      setMoodData(null);
+      navigate('/community');
+    } catch (err) {
+      console.error('Error sharing reflection to HUB:', err);
+      alert('Failed to share to HUB. Please try again.');
+    } finally {
+      setIsSharingPost(false);
+    }
+  };
+
   return (
     <div
       className="min-h-screen px-6 py-8 pb-20 relative overflow-hidden"
@@ -533,6 +580,16 @@ export default function AllDayReflectionsPage() {
                     {reflection.reflection}
                   </p>
                 </div>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setReflectionToShare(reflection); }}
+                  className={`flex-shrink-0 p-2 rounded-full transition-opacity hover:opacity-90 ${
+                    isDarkMode ? 'hover:bg-white/10' : 'hover:bg-black/5'
+                  }`}
+                  title="Share to HUB"
+                >
+                  <Share2 className={`w-4 h-4 ${isDarkMode ? 'text-[#7DD3C0]' : 'text-[#87A96B]'}`} strokeWidth={2} />
+                </button>
               </div>
             </div>
           ))}
@@ -723,6 +780,104 @@ export default function AllDayReflectionsPage() {
                   {selectedReflection.reflection}
                 </p>
               </div>
+              <button
+                type="button"
+                onClick={() => setReflectionToShare(selectedReflection)}
+                className={`mt-3 w-full flex items-center justify-center gap-2 rounded-xl py-3 px-4 text-sm font-medium transition-all hover:opacity-90 ${
+                  isDarkMode ? 'text-[#7DD3C0] bg-white/5 border border-white/10' : 'text-[#87A96B] bg-black/5 border border-black/10'
+                }`}
+              >
+                <Share2 className="w-4 h-4" strokeWidth={2} />
+                Share to HUB
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Share to HUB – preview modal */}
+      {reflectionToShare && reflectionToShare.reflection && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+          style={{ backgroundColor: 'rgba(0, 0, 0, 0.6)' }}
+          onClick={() => !isSharingPost && setReflectionToShare(null)}
+        >
+          <div
+            className={`rounded-2xl w-full max-w-sm overflow-hidden ${
+              isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
+            }`}
+            style={isDarkMode ? {
+              backgroundColor: '#262626',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+            } : {
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.15)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-5 border-b" style={{ borderColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' }}>
+              <h3 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                Preview your post
+              </h3>
+              <p className={`text-sm mt-0.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                This is how it will look on the HUB
+              </p>
+            </div>
+            <div className="p-5">
+              <div
+                className={`rounded-2xl p-5 ${
+                  isDarkMode ? 'bg-[#1a1a1a] border border-white/10' : 'bg-gray-50 border border-gray-100'
+                }`}
+              >
+                <div className="flex items-start space-x-3 mb-3">
+                  {profilePicture ? (
+                    <img
+                      src={profilePicture}
+                      alt="You"
+                      className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                    />
+                  ) : (
+                    <div
+                      className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
+                      style={{ backgroundColor: isDarkMode ? '#7DD3C0' : '#E6B3BA' }}
+                    >
+                      <User className="w-5 h-5 text-white" strokeWidth={2} />
+                    </div>
+                  )}
+                  <div className="flex-1">
+                    <div className={`font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                      {getCurrentUser()?.displayName || 'You'}
+                    </div>
+                    <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                      Just now
+                    </div>
+                  </div>
+                </div>
+                <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                  {reflectionToShare.reflection}
+                </p>
+              </div>
+            </div>
+            <div className="p-5 pt-0 flex gap-3">
+              <button
+                type="button"
+                onClick={() => !isSharingPost && setReflectionToShare(null)}
+                disabled={isSharingPost}
+                className={`flex-1 rounded-xl py-3 font-medium text-sm ${
+                  isDarkMode ? 'bg-white/10 text-white hover:bg-white/15' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
+                } disabled:opacity-50`}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleShareToHub}
+                disabled={isSharingPost}
+                className="flex-1 rounded-xl py-3 font-medium text-sm text-white disabled:opacity-50"
+                style={{ backgroundColor: '#1d9bf0' }}
+              >
+                {isSharingPost ? 'Sharing…' : 'Share to HUB'}
+              </button>
             </div>
           </div>
         </div>
