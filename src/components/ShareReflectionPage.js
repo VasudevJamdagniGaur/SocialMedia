@@ -146,7 +146,7 @@ export default function ShareReflectionPage() {
     return '@' + name.replace(/\s+/g, '').toLowerCase().slice(0, 20);
   };
 
-  /** Draw share card on canvas: white bg, profile picture, name (bold black), handle, reflection text (Times New Roman black). Returns data URL. */
+  /** Draw share card on canvas: white bg, profile picture, name (bold), handle, reflection text (system UI font). Returns data URL. */
   const captureCardAsImage = async () => {
     const nameForCard = getCurrentDisplayName();
     const handle = getHandleFromName(nameForCard);
@@ -155,9 +155,10 @@ export default function ShareReflectionPage() {
     const cardWidth = 420;
     const profileSize = 48;
     const gapBelowProfile = 16;
-    const nameFont = 'bold 15px "Times New Roman", Times, serif';
-    const handleFont = '14px "Times New Roman", Times, serif';
-    const bodyFont = '15px "Times New Roman", Times, serif';
+    const systemFont = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    const nameFont = `bold 15px ${systemFont}`;
+    const handleFont = `14px ${systemFont}`;
+    const bodyFont = `15px ${systemFont}`;
     const lineHeight = 1.4;
     const bodyFontSize = 15;
 
@@ -264,7 +265,7 @@ export default function ShareReflectionPage() {
 
     y = profileY + profileSize + gapBelowProfile;
 
-    // Reflection text, Times New Roman
+    // Reflection text (system font)
     ctx.font = bodyFont;
     ctx.fillStyle = bodyColor;
     const lineHeightPx = bodyFontSize * lineHeight;
@@ -485,7 +486,7 @@ export default function ShareReflectionPage() {
                       fontWeight: 700,
                       color: imageTheme === 'dark' ? '#ffffff' : '#000000',
                       fontSize: 15,
-                      fontFamily: '"Times New Roman", Times, serif',
+                      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
                     }}
                   >
                     {currentName}
@@ -494,7 +495,7 @@ export default function ShareReflectionPage() {
                     style={{
                       color: imageTheme === 'dark' ? '#a1a1a1' : '#536471',
                       fontSize: 14,
-                      fontFamily: '"Times New Roman", Times, serif',
+                      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
                     }}
                   >
                     {handle}
@@ -530,7 +531,7 @@ export default function ShareReflectionPage() {
                     lineHeight: 1.4,
                     whiteSpace: 'pre-wrap',
                     wordBreak: 'break-word',
-                    fontFamily: '"Times New Roman", Times, serif',
+                    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
                   }}
                 >
                   {sharePreviewText}
