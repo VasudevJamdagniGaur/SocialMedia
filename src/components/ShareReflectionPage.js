@@ -885,40 +885,6 @@ export default function ShareReflectionPage() {
               </button>
             </div>
           </div>
-
-          {shareAs === 'image' && (
-            <div className="flex flex-col gap-2">
-              <p className={`text-xs font-medium ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                Image options
-              </p>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={handleDownloadImage}
-                  disabled={isCapturingImage}
-                  className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 px-3 font-medium text-sm transition-all hover:opacity-90 disabled:opacity-50 ${
-                    isDarkMode ? 'bg-[#373D3D] text-[#6ADFBB] border border-white/10' : 'bg-gray-100 text-gray-700 border border-gray-200'
-                  }`}
-                  title="Download image"
-                >
-                  <ImageIcon className="w-4 h-4 flex-shrink-0" strokeWidth={2} />
-                  Download image
-                </button>
-                <button
-                  type="button"
-                  onClick={handleShareAsImage}
-                  disabled={isCapturingImage}
-                  className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 px-3 font-medium text-sm transition-all hover:opacity-90 disabled:opacity-50 ${
-                    isDarkMode ? 'bg-[#373D3D] text-[#6ADFBB] border border-white/10' : 'bg-gray-100 text-gray-700 border border-gray-200'
-                  }`}
-                  title="Share image (native share or save)"
-                >
-                  <Share2 className="w-4 h-4 flex-shrink-0" strokeWidth={2} />
-                  Share image
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
