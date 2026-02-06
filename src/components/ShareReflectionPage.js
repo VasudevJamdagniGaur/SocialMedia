@@ -432,7 +432,7 @@ export default function ShareReflectionPage() {
         {shareAs === 'image' ? (
           <>
             {/* Preview card wrapper: toggle on top-right (preview only, not in download) */}
-            <div className="relative flex-1 w-full max-w-[420px] mx-auto">
+            <div className="relative w-full max-w-[420px] mx-auto">
               <button
                 type="button"
                 onClick={() => setImageTheme((t) => (t === 'light' ? 'dark' : 'light'))}
@@ -539,7 +539,7 @@ export default function ShareReflectionPage() {
               </div>
             </div>
             {/* Edit actions below preview when Image is selected */}
-            <div className="flex items-center justify-center gap-2 mt-3">
+            <div className="flex items-center justify-center gap-2 mt-2">
               <button
                 type="button"
                 onClick={() => setShareEditMode(true)}
@@ -664,7 +664,7 @@ export default function ShareReflectionPage() {
         )}
 
         {/* Share as: Text | Image */}
-        <div className="mt-6 flex flex-col gap-3">
+        <div className="mt-4 flex flex-col gap-3">
           <p className={`text-xs font-medium ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
             Share as
           </p>
