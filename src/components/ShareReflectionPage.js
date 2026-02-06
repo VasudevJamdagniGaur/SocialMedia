@@ -422,105 +422,200 @@ export default function ShareReflectionPage() {
           </p>
         </div>
 
-        {/* Card (ref for image capture) */}
-        <div
-          ref={cardRef}
-          className={`rounded-2xl overflow-hidden flex-1 ${
-            isDarkMode ? 'bg-[#262626]' : 'bg-white'
-          }`}
-          style={isDarkMode ? {
-            border: '1px solid rgba(255, 255, 255, 0.06)',
-            boxShadow: '0 4px 24px rgba(0, 0, 0, 0.2)',
-          } : {
-            border: '1px solid rgba(0, 0, 0, 0.06)',
-            boxShadow: '0 4px 24px rgba(0, 0, 0, 0.06)',
-          }}
-        >
-          <div
-            className={`rounded-2xl overflow-hidden ${isDarkMode ? 'bg-[#1e1e1e]' : 'bg-gray-50/90'}`}
-            style={isDarkMode ? {
-              border: '1px solid rgba(255, 255, 255, 0.06)',
-              boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.02)',
-            } : {
-              border: '1px solid rgba(0, 0, 0, 0.04)',
-            }}
-          >
-            <div className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: isDarkMode ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(0,0,0,0.06)' }}>
-              {profilePicture ? (
-                <img
-                  src={profilePicture}
-                  alt="You"
-                  className="w-8 h-8 rounded-full object-cover flex-shrink-0"
-                />
-              ) : (
-                <div
-                  className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
-                  style={{ backgroundColor: isDarkMode ? 'rgba(125, 211, 192, 0.25)' : 'rgba(134, 169, 107, 0.2)' }}
-                >
-                  <User className={`w-4 h-4 ${isDarkMode ? 'text-[#7DD3C0]' : 'text-[#87A96B]'}`} strokeWidth={2} />
+        {/* When Image: show exact download preview. When Text: show editable card. */}
+        {shareAs === 'image' ? (
+          <>
+            {/* Exact preview of the image that will be downloaded */}
+            <div
+              ref={cardRef}
+              className="rounded-2xl overflow-hidden flex-1 w-full max-w-[420px] mx-auto"
+              style={{
+                background: '#ffffff',
+                padding: 24,
+                boxSizing: 'border-box',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 16 }}>
+                {profilePicture ? (
+                  <img
+                    src={profilePicture}
+                    alt=""
+                    className="flex-shrink-0 rounded-full object-cover"
+                    style={{ width: 48, height: 48 }}
+                  />
+                ) : (
+                  <div
+                    className="flex-shrink-0 rounded-full flex items-center justify-center"
+                    style={{ width: 48, height: 48, background: '#e7e9ea' }}
+                  >
+                    <User style={{ width: 24, height: 24, color: '#536471' }} strokeWidth={2} />
+                  </div>
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, color: '#000000', fontSize: 15, fontFamily: '"Times New Roman", Times, serif' }}>
+                    {currentName}
+                  </div>
+                  <div style={{ color: '#536471', fontSize: 14, fontFamily: '"Times New Roman", Times, serif' }}>
+                    {handle}
+                  </div>
                 </div>
-              )}
-              <div className="flex-1 min-w-0">
-                <span className={`text-xs font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  {currentName}
-                </span>
-                <span className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                  {' · Just now'}
-                </span>
               </div>
-              <div className="flex items-center gap-0.5">
-                <button
-                  type="button"
-                  onClick={() => setShareEditMode(true)}
-                  className={`p-2 rounded-full transition-opacity hover:opacity-90 ${
-                    isDarkMode ? 'text-gray-500 hover:bg-white/5' : 'text-gray-400 hover:bg-black/5'
-                  }`}
-                  title="Edit text"
-                >
-                  <Pencil className="w-3.5 h-3.5" strokeWidth={2} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowAiEditModal(true)}
-                  className={`p-2 rounded-full transition-opacity hover:opacity-90 ${
-                    isDarkMode ? 'text-[#7DD3C0]/90 hover:bg-white/5' : 'text-[#87A96B] hover:bg-black/5'
-                  }`}
-                  title="Edit with AI (describe the change)"
-                >
-                  <Sparkles className="w-3.5 h-3.5" strokeWidth={2} />
-                </button>
-              </div>
-            </div>
-            <div className="p-5 pt-4">
               {shareEditMode ? (
-                <>
+                <div className="mt-2">
                   <textarea
                     value={sharePreviewText}
                     onChange={(e) => setSharePreviewText(e.target.value)}
-                    className={`w-full rounded-xl px-4 py-3 text-[15px] leading-relaxed border min-h-[120px] resize-y focus:outline-none focus:ring-2 ${
-                      isDarkMode
-                        ? 'bg-black/20 text-white border-white/15 focus:ring-[#7DD3C0]/40 placeholder-gray-500'
-                        : 'bg-white text-gray-800 border-gray-200/80 focus:ring-[#87A96B]/40 placeholder-gray-400'
-                    }`}
+                    className="w-full rounded-xl px-4 py-3 text-[15px] leading-relaxed border min-h-[100px] resize-y focus:outline-none focus:ring-2 bg-white text-gray-800 border-gray-200 focus:ring-[#87A96B]/40"
                     placeholder="Edit what you'll share..."
                     autoFocus
                   />
                   <button
                     type="button"
                     onClick={() => setShareEditMode(false)}
-                    className={`mt-3 text-sm font-medium ${isDarkMode ? 'text-[#7DD3C0]' : 'text-[#87A96B]'}`}
+                    className="mt-2 text-sm font-medium text-[#87A96B]"
                   >
                     Done
                   </button>
-                </>
+                </div>
               ) : (
-                <p className={`text-[15px] leading-[1.6] ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                <p
+                  style={{
+                    color: '#000000',
+                    fontSize: 15,
+                    lineHeight: 1.4,
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                    fontFamily: '"Times New Roman", Times, serif',
+                  }}
+                >
                   {sharePreviewText}
                 </p>
               )}
             </div>
+            {/* Edit actions below preview when Image is selected */}
+            <div className="flex items-center justify-center gap-2 mt-3">
+              <button
+                type="button"
+                onClick={() => setShareEditMode(true)}
+                className={`flex items-center gap-1.5 rounded-lg py-2 px-3 text-sm font-medium ${
+                  isDarkMode ? 'text-gray-400 hover:bg-white/5' : 'text-gray-600 hover:bg-black/5'
+                }`}
+              >
+                <Pencil className="w-3.5 h-3.5" strokeWidth={2} />
+                Edit text
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowAiEditModal(true)}
+                className={`flex items-center gap-1.5 rounded-lg py-2 px-3 text-sm font-medium ${
+                  isDarkMode ? 'text-[#7DD3C0] hover:bg-white/5' : 'text-[#87A96B] hover:bg-black/5'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" strokeWidth={2} />
+                Edit with AI
+              </button>
+            </div>
+          </>
+        ) : (
+          <div
+            ref={cardRef}
+            className={`rounded-2xl overflow-hidden flex-1 ${
+              isDarkMode ? 'bg-[#262626]' : 'bg-white'
+            }`}
+            style={isDarkMode ? {
+              border: '1px solid rgba(255, 255, 255, 0.06)',
+              boxShadow: '0 4px 24px rgba(0, 0, 0, 0.2)',
+            } : {
+              border: '1px solid rgba(0, 0, 0, 0.06)',
+              boxShadow: '0 4px 24px rgba(0, 0, 0, 0.06)',
+            }}
+          >
+            <div
+              className={`rounded-2xl overflow-hidden ${isDarkMode ? 'bg-[#1e1e1e]' : 'bg-gray-50/90'}`}
+              style={isDarkMode ? {
+                border: '1px solid rgba(255, 255, 255, 0.06)',
+                boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.02)',
+              } : {
+                border: '1px solid rgba(0, 0, 0, 0.04)',
+              }}
+            >
+              <div className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: isDarkMode ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(0,0,0,0.06)' }}>
+                {profilePicture ? (
+                  <img
+                    src={profilePicture}
+                    alt="You"
+                    className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+                  />
+                ) : (
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+                    style={{ backgroundColor: isDarkMode ? 'rgba(125, 211, 192, 0.25)' : 'rgba(134, 169, 107, 0.2)' }}
+                  >
+                    <User className={`w-4 h-4 ${isDarkMode ? 'text-[#7DD3C0]' : 'text-[#87A96B]'}`} strokeWidth={2} />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <span className={`text-xs font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                    {currentName}
+                  </span>
+                  <span className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                    {' · Just now'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setShareEditMode(true)}
+                    className={`p-2 rounded-full transition-opacity hover:opacity-90 ${
+                      isDarkMode ? 'text-gray-500 hover:bg-white/5' : 'text-gray-400 hover:bg-black/5'
+                    }`}
+                    title="Edit text"
+                  >
+                    <Pencil className="w-3.5 h-3.5" strokeWidth={2} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowAiEditModal(true)}
+                    className={`p-2 rounded-full transition-opacity hover:opacity-90 ${
+                      isDarkMode ? 'text-[#7DD3C0]/90 hover:bg-white/5' : 'text-[#87A96B] hover:bg-black/5'
+                    }`}
+                    title="Edit with AI (describe the change)"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" strokeWidth={2} />
+                  </button>
+                </div>
+              </div>
+              <div className="p-5 pt-4">
+                {shareEditMode ? (
+                  <>
+                    <textarea
+                      value={sharePreviewText}
+                      onChange={(e) => setSharePreviewText(e.target.value)}
+                      className={`w-full rounded-xl px-4 py-3 text-[15px] leading-relaxed border min-h-[120px] resize-y focus:outline-none focus:ring-2 ${
+                        isDarkMode
+                          ? 'bg-black/20 text-white border-white/15 focus:ring-[#7DD3C0]/40 placeholder-gray-500'
+                          : 'bg-white text-gray-800 border-gray-200/80 focus:ring-[#87A96B]/40 placeholder-gray-400'
+                      }`}
+                      placeholder="Edit what you'll share..."
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShareEditMode(false)}
+                      className={`mt-3 text-sm font-medium ${isDarkMode ? 'text-[#7DD3C0]' : 'text-[#87A96B]'}`}
+                    >
+                      Done
+                    </button>
+                  </>
+                ) : (
+                  <p className={`text-[15px] leading-[1.6] ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                    {sharePreviewText}
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Share as: Text | Image */}
         <div className="mt-6 flex flex-col gap-3">
