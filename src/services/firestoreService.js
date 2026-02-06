@@ -88,6 +88,14 @@ class FirestoreService {
   }
 
   /**
+   * Get profile picture URL for a user (from Firestore user/metadata).
+   */
+  async getProfilePictureUrl(uid) {
+    const result = await this.getUser(uid);
+    return result.success && result.data?.profilePicture ? result.data.profilePicture : null;
+  }
+
+  /**
    * Get list of user IDs the current user follows (for Hub "Following" feed).
    * Reads from users/{uid}/following/following (document with followingIds array).
    */

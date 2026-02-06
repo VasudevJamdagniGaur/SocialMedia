@@ -27,7 +27,15 @@ export default function ShareReflectionPage() {
   const [isAiEditing, setIsAiEditing] = useState(false);
   const [shareAs, setShareAs] = useState('text'); // 'text' | 'image'
   const [isCapturingImage, setIsCapturingImage] = useState(false);
+  const [displayName, setDisplayName] = useState('');
   const cardRef = useRef(null);
+
+  // Current profile = what user set in Profile (localStorage) or Firestore/Auth
+  const getCurrentDisplayName = () => {
+    const user = getCurrentUser();
+    if (!user?.uid) return 'You';
+    return localStorage.getItem(`user_display_name_${user.uid}`) || user.displayName || 'You';
+  };
 
   useEffect(() => {
     if (!initialText) {
@@ -38,17 +46,48 @@ export default function ShareReflectionPage() {
   }, [initialText, navigate, state.from]);
 
   useEffect(() => {
+    const user = getCurrentUser();
+    if (user?.uid) setDisplayName(getCurrentDisplayName());
+  }, []);
+
+  useEffect(() => {
     const loadProfilePicture = async () => {
       const user = getCurrentUser();
       if (!user?.uid) return;
+      // Use same "current profile" as rest of app: localStorage first (Profile page saves here), then Firestore
+      const savedPicture = localStorage.getItem(`user_profile_picture_${user.uid}`);
+      if (savedPicture) {
+        setProfilePicture(savedPicture);
+        setDisplayName(getCurrentDisplayName());
+        return;
+      }
       try {
-        const url = await firestoreService.getProfilePictureUrl(user.uid);
-        setProfilePicture(url);
+        const result = await firestoreService.getUser(user.uid);
+        if (result.success && result.data?.profilePicture) {
+          setProfilePicture(result.data.profilePicture);
+        } else {
+          setProfilePicture(null);
+        }
+        setDisplayName(getCurrentDisplayName());
       } catch (e) {
-        // ignore
+        setProfilePicture(null);
+        setDisplayName(getCurrentDisplayName());
       }
     };
     loadProfilePicture();
+    const onUpdate = () => {
+      loadProfilePicture();
+      if (getCurrentUser()?.uid) setDisplayName(getCurrentDisplayName());
+    };
+    const onStorage = (e) => {
+      if (e.key && (e.key.startsWith('user_profile_picture_') || e.key.startsWith('user_display_name_'))) onUpdate();
+    };
+    window.addEventListener('profilePictureUpdated', onUpdate);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener('profilePictureUpdated', onUpdate);
+      window.removeEventListener('storage', onStorage);
+    };
   }, []);
 
   const getReflectionDate = () => {
@@ -75,7 +114,7 @@ export default function ShareReflectionPage() {
     try {
       const reflectionDate = getReflectionDate();
       const postData = {
-        author: user.displayName || 'Anonymous',
+        author: getCurrentDisplayName() || 'Anonymous',
         authorId: user.uid,
         content: contentToShare,
         createdAt: serverTimestamp(),
@@ -108,8 +147,8 @@ export default function ShareReflectionPage() {
 
   /** Draw share card on canvas: white bg, profile picture, name (bold black), handle, reflection text (Times New Roman black). Returns data URL. */
   const captureCardAsImage = async () => {
-    const displayName = getCurrentUser()?.displayName || 'You';
-    const handle = getHandleFromName(displayName);
+    const nameForCard = getCurrentDisplayName();
+    const handle = getHandleFromName(nameForCard);
     const text = (sharePreviewText || '').trim() || ' ';
     const padding = 24;
     const cardWidth = 420;
@@ -201,7 +240,7 @@ export default function ShareReflectionPage() {
     const nameY = profileY + 18;
     ctx.font = nameFont;
     ctx.fillStyle = '#000000';
-    ctx.fillText(displayName, textStartX, nameY);
+    ctx.fillText(nameForCard, textStartX, nameY);
     ctx.font = handleFont;
     ctx.fillStyle = '#536471';
     ctx.fillText(handle, textStartX, nameY + 18);
@@ -347,8 +386,8 @@ export default function ShareReflectionPage() {
 
   if (!initialText) return null;
 
-  const displayName = getCurrentUser()?.displayName || 'You';
-  const handle = getHandleFromName(displayName);
+  const currentName = displayName || getCurrentDisplayName();
+  const handle = getHandleFromName(currentName);
   const tweetDate = formatTweetDate(getReflectionDate());
 
   return (
@@ -412,7 +451,7 @@ export default function ShareReflectionPage() {
               )}
               <div className="flex-1 min-w-0">
                 <span className={`text-xs font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  {getCurrentUser()?.displayName || 'You'}
+                  {currentName}
                 </span>
                 <span className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
                   {' · Just now'}
