@@ -113,18 +113,43 @@ export default function ShareReflectionPage() {
       alert('Could not capture the card. Please try again.');
       return null;
     }
+    const { toPng } = await import('html-to-image');
+    // Save original styles so we can restore after capture
+    const origPosition = node.style.position;
+    const origLeft = node.style.left;
+    const origTop = node.style.top;
+    const origZIndex = node.style.zIndex;
+    const origVisibility = node.style.visibility;
+    const origPointerEvents = node.style.pointerEvents;
     try {
-      const { toPng } = await import('html-to-image');
+      // Move card into viewport so the browser actually paints it (off-screen nodes often render blank)
+      node.style.position = 'fixed';
+      node.style.left = '0';
+      node.style.top = '0';
+      node.style.zIndex = '-1';
+      node.style.visibility = 'hidden';
+      node.style.pointerEvents = 'none';
+      // Allow one frame for layout/paint, then capture
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      await new Promise((r) => setTimeout(r, 50));
       const dataUrl = await toPng(node, {
         backgroundColor: '#ffffff',
         pixelRatio: 2,
         cacheBust: true,
+        fetchRequestInit: { mode: 'cors' },
       });
       return dataUrl;
     } catch (err) {
       console.error('Image capture failed:', err);
       alert('Could not create image. Try sharing as text instead, or run npm install html-to-image.');
       return null;
+    } finally {
+      node.style.position = origPosition;
+      node.style.left = origLeft;
+      node.style.top = origTop;
+      node.style.zIndex = origZIndex;
+      node.style.visibility = origVisibility;
+      node.style.pointerEvents = origPointerEvents;
     }
   };
 
@@ -278,6 +303,7 @@ export default function ShareReflectionPage() {
             <img
               src={profilePicture}
               alt=""
+              crossOrigin="anonymous"
               style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
             />
           ) : (
