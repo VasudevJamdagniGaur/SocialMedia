@@ -28,7 +28,6 @@ export default function ShareReflectionPage() {
   const [shareAs, setShareAs] = useState('text'); // 'text' | 'image'
   const [isCapturingImage, setIsCapturingImage] = useState(false);
   const cardRef = useRef(null);
-  const tweetStyleCardRef = useRef(null);
 
   useEffect(() => {
     if (!initialText) {
@@ -107,49 +106,123 @@ export default function ShareReflectionPage() {
     return '@' + name.replace(/\s+/g, '').toLowerCase().slice(0, 20);
   };
 
+  /** Draw share card on canvas: white bg, profile picture, name (bold black), handle, reflection text (Times New Roman black). Returns data URL. */
   const captureCardAsImage = async () => {
-    const node = tweetStyleCardRef.current;
-    if (!node) {
-      alert('Could not capture the card. Please try again.');
+    const displayName = getCurrentUser()?.displayName || 'You';
+    const handle = getHandleFromName(displayName);
+    const text = (sharePreviewText || '').trim() || ' ';
+    const padding = 24;
+    const cardWidth = 420;
+    const profileSize = 48;
+    const gapBelowProfile = 16;
+    const nameFont = 'bold 15px "Times New Roman", Times, serif';
+    const handleFont = '14px "Times New Roman", Times, serif';
+    const bodyFont = '15px "Times New Roman", Times, serif';
+    const lineHeight = 1.4;
+    const bodyFontSize = 15;
+
+    const canvas = document.createElement('canvas');
+    const scale = 2;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      alert('Could not create image. Please try again.');
       return null;
     }
-    const { toPng } = await import('html-to-image');
-    // Save original styles so we can restore after capture
-    const origPosition = node.style.position;
-    const origLeft = node.style.left;
-    const origTop = node.style.top;
-    const origZIndex = node.style.zIndex;
-    const origVisibility = node.style.visibility;
-    const origPointerEvents = node.style.pointerEvents;
+
+    // Wrap reflection text to fit card width; respect newlines
+    ctx.font = bodyFont;
+    const maxTextWidth = cardWidth - padding * 2;
+    const lines = [];
+    const paragraphs = text.split(/\n/);
+    for (const para of paragraphs) {
+      const words = para.split(/\s+/).filter(Boolean);
+      let currentLine = '';
+      for (let i = 0; i < words.length; i++) {
+        const test = currentLine ? currentLine + ' ' + words[i] : words[i];
+        const m = ctx.measureText(test);
+        if (m.width > maxTextWidth && currentLine) {
+          lines.push(currentLine);
+          currentLine = words[i];
+        } else {
+          currentLine = test;
+        }
+      }
+      if (currentLine) lines.push(currentLine);
+    }
+    if (lines.length === 0) lines.push(' ');
+    const textHeight = lines.length * bodyFontSize * lineHeight;
+    const canvasHeight = padding + profileSize + gapBelowProfile + textHeight + padding;
+
+    canvas.width = cardWidth * scale;
+    canvas.height = canvasHeight * scale;
+    ctx.scale(scale, scale);
+
+    // White background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, cardWidth, canvasHeight);
+
+    let y = padding;
+
+    // Profile picture (circle)
+    const profileX = padding;
+    const profileY = y;
+    if (profilePicture) {
+      try {
+        const img = await new Promise((resolve, reject) => {
+          const el = new Image();
+          el.crossOrigin = 'anonymous';
+          el.onload = () => resolve(el);
+          el.onerror = () => reject(new Error('Image load failed'));
+          el.src = profilePicture;
+        });
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(profileX + profileSize / 2, profileY + profileSize / 2, profileSize / 2, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.clip();
+        ctx.drawImage(img, profileX, profileY, profileSize, profileSize);
+        ctx.restore();
+      } catch (_) {
+        // Fallback circle if image fails to load
+        ctx.fillStyle = '#e7e9ea';
+        ctx.beginPath();
+        ctx.arc(profileX + profileSize / 2, profileY + profileSize / 2, profileSize / 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else {
+      ctx.fillStyle = '#e7e9ea';
+      ctx.beginPath();
+      ctx.arc(profileX + profileSize / 2, profileY + profileSize / 2, profileSize / 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Profile name (bold black) and handle to the right of avatar
+    const textStartX = padding + profileSize + 12;
+    const nameY = profileY + 18;
+    ctx.font = nameFont;
+    ctx.fillStyle = '#000000';
+    ctx.fillText(displayName, textStartX, nameY);
+    ctx.font = handleFont;
+    ctx.fillStyle = '#536471';
+    ctx.fillText(handle, textStartX, nameY + 18);
+
+    y = profileY + profileSize + gapBelowProfile;
+
+    // Reflection text in black, Times New Roman
+    ctx.font = bodyFont;
+    ctx.fillStyle = '#000000';
+    const lineHeightPx = bodyFontSize * lineHeight;
+    lines.forEach((line) => {
+      ctx.fillText(line, padding, y);
+      y += lineHeightPx;
+    });
+
     try {
-      // Move card into viewport so the browser actually paints it (off-screen nodes often render blank)
-      node.style.position = 'fixed';
-      node.style.left = '0';
-      node.style.top = '0';
-      node.style.zIndex = '-1';
-      node.style.visibility = 'hidden';
-      node.style.pointerEvents = 'none';
-      // Allow one frame for layout/paint, then capture
-      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-      await new Promise((r) => setTimeout(r, 50));
-      const dataUrl = await toPng(node, {
-        backgroundColor: '#ffffff',
-        pixelRatio: 2,
-        cacheBust: true,
-        fetchRequestInit: { mode: 'cors' },
-      });
-      return dataUrl;
+      return canvas.toDataURL('image/png');
     } catch (err) {
-      console.error('Image capture failed:', err);
-      alert('Could not create image. Try sharing as text instead, or run npm install html-to-image.');
+      console.error('Canvas to image failed:', err);
+      alert('Could not create image. Please try again.');
       return null;
-    } finally {
-      node.style.position = origPosition;
-      node.style.left = origLeft;
-      node.style.top = origTop;
-      node.style.zIndex = origZIndex;
-      node.style.visibility = origVisibility;
-      node.style.pointerEvents = origPointerEvents;
     }
   };
 
@@ -283,88 +356,6 @@ export default function ShareReflectionPage() {
       className="min-h-screen flex flex-col px-4 py-6 pb-10"
       style={{ background: isDarkMode ? '#131313' : '#FAFAF8' }}
     >
-      {/* Hidden card for share image: white background, profile picture, name, handle, text only */}
-      <div
-        ref={tweetStyleCardRef}
-        style={{
-          position: 'fixed',
-          left: '-9999px',
-          top: 0,
-          width: 420,
-          background: '#ffffff',
-          overflow: 'hidden',
-          padding: 24,
-          boxSizing: 'border-box',
-        }}
-      >
-        {/* Row: profile picture | name + check, handle below */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 16 }}>
-          {profilePicture ? (
-            <img
-              src={profilePicture}
-              alt=""
-              crossOrigin="anonymous"
-              style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
-            />
-          ) : (
-            <div
-              style={{
-                width: 48,
-                height: 48,
-                borderRadius: '50%',
-                background: '#e7e9ea',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-              }}
-            >
-              <User
-                style={{ width: 24, height: 24, color: '#536471' }}
-                strokeWidth={2}
-              />
-            </div>
-          )}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-              <span style={{ fontWeight: 700, color: '#0f1419', fontSize: 15 }}>
-                {displayName}
-              </span>
-              <span
-                style={{
-                  width: 18,
-                  height: 18,
-                  borderRadius: '50%',
-                  background: '#1d9bf0',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <svg width={10} height={10} viewBox="0 0 24 24" stroke="white" strokeWidth="4" fill="none" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M5 13l4 4L19 7" />
-                </svg>
-              </span>
-            </div>
-            <span style={{ color: '#536471', fontSize: 14 }}>
-              {handle}
-            </span>
-          </div>
-        </div>
-        {/* Reflection text */}
-        <div
-          style={{
-            color: '#0f1419',
-            fontSize: 15,
-            lineHeight: 1.4,
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-          }}
-        >
-          {sharePreviewText}
-        </div>
-      </div>
-
       <div className="max-w-md w-full mx-auto flex flex-col flex-1">
         {/* Back + Header */}
         <div className="flex items-center gap-3 pt-2 pb-4">
