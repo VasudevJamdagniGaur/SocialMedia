@@ -432,21 +432,32 @@ export default function ShareReflectionPage() {
         {/* When Image: show exact download preview. When Text: show editable card. */}
         {shareAs === 'image' ? (
           <>
-            {/* Preview card wrapper: toggle on top-right (preview only, not in download) */}
+            {/* Preview card wrapper: edit (pencil) + theme (sun/moon) on top-right, preview only */}
             <div className="relative w-full max-w-[420px] mx-auto">
-              <button
-                type="button"
-                onClick={() => setImageTheme((t) => (t === 'light' ? 'dark' : 'light'))}
-                className="absolute top-2 right-2 z-10 flex items-center justify-center w-9 h-9 rounded-full shadow-md transition-opacity hover:opacity-90 bg-black/20 backdrop-blur-sm"
-                title="Image light/dark"
-                aria-label="Toggle image light or dark"
-              >
-                {imageTheme === 'light' ? (
-                  <span className="text-lg leading-none">☀️</span>
-                ) : (
-                  <span className="text-lg leading-none">🌙</span>
-                )}
-              </button>
+              <div className="absolute top-2 right-2 z-10 flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setShareEditMode(true)}
+                  className={`flex items-center justify-center w-9 h-9 rounded-full shadow-md transition-opacity hover:opacity-90 bg-black/20 backdrop-blur-sm ${imageTheme === 'dark' ? 'text-gray-200' : 'text-gray-700'}`}
+                  title="Edit text"
+                  aria-label="Edit text"
+                >
+                  <Pencil className="w-4 h-4" strokeWidth={2} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setImageTheme((t) => (t === 'light' ? 'dark' : 'light'))}
+                  className="flex items-center justify-center w-9 h-9 rounded-full shadow-md transition-opacity hover:opacity-90 bg-black/20 backdrop-blur-sm"
+                  title="Image light/dark"
+                  aria-label="Toggle image light or dark"
+                >
+                  {imageTheme === 'light' ? (
+                    <span className="text-lg leading-none">☀️</span>
+                  ) : (
+                    <span className="text-lg leading-none">🌙</span>
+                  )}
+                </button>
+              </div>
               {/* Exact preview of the image that will be downloaded (canvas capture uses same layout, no button) */}
               <div
                 ref={cardRef}
@@ -539,18 +550,8 @@ export default function ShareReflectionPage() {
               )}
               </div>
             </div>
-            {/* Edit actions below preview when Image is selected */}
+            {/* Edit with AI below preview when Image is selected */}
             <div className="flex items-center justify-center gap-2 mt-2">
-              <button
-                type="button"
-                onClick={() => setShareEditMode(true)}
-                className={`flex items-center gap-1.5 rounded-lg py-2 px-3 text-sm font-medium ${
-                  isDarkMode ? 'text-gray-400 hover:bg-white/5' : 'text-gray-600 hover:bg-black/5'
-                }`}
-              >
-                <Pencil className="w-3.5 h-3.5" strokeWidth={2} />
-                Edit text
-              </button>
               <button
                 type="button"
                 onClick={() => setShowAiEditModal(true)}
