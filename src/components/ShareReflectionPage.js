@@ -811,17 +811,6 @@ export default function ShareReflectionPage() {
               </div>
             </div>
           )}
-
-          <button
-            type="button"
-            onClick={handleMaybeLater}
-            disabled={isSharingPost}
-            className={`w-full rounded-2xl py-3 font-medium text-sm disabled:opacity-50 transition-opacity ${
-              isDarkMode ? 'text-gray-400 hover:text-gray-300 hover:bg-white/5' : 'text-gray-500 hover:text-gray-700 hover:bg-black/5'
-            }`}
-          >
-            Maybe later
-          </button>
         </div>
       </div>
 
