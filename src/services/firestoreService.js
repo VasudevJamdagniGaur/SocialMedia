@@ -144,24 +144,20 @@ class FirestoreService {
 
   /**
    * Get recent community posts from a list of author UIDs (e.g. crew members).
-   * Used for Crew's Activity on the Pod page.
+   * Used for Crew's Activity on the Pod page and UserProfilePage.
+   * Tries indexed query first; falls back to query without orderBy and sorts in memory
+   * so it works even when the composite index (authorId, createdAt) is not created.
    * @param {string[]} authorIds - Up to 30 author UIDs (Firestore 'in' limit)
    * @param {number} limitCount - Max posts to return (default 20)
    */
   async getCommunityPostsByAuthorIds(authorIds, limitCount = 20) {
-    try {
-      if (!authorIds || authorIds.length === 0) {
-        return { success: true, posts: [] };
-      }
-      const ids = authorIds.slice(0, 30);
-      const postsRef = collection(this.db, 'communityPosts');
-      const q = query(
-        postsRef,
-        where('authorId', 'in', ids),
-        orderBy('createdAt', 'desc'),
-        limit(limitCount)
-      );
-      const snapshot = await getDocs(q);
+    if (!authorIds || authorIds.length === 0) {
+      return { success: true, posts: [] };
+    }
+    const ids = authorIds.slice(0, 30);
+    const postsRef = collection(this.db, 'communityPosts');
+
+    const mapSnapshotToPosts = (snapshot) => {
       const posts = [];
       snapshot.forEach((docSnap) => {
         const data = docSnap.data();
@@ -171,9 +167,38 @@ class FirestoreService {
           createdAt: data.createdAt?.toDate?.() || new Date()
         });
       });
-      return { success: true, posts };
-    } catch (error) {
-      console.error('Error getting community posts by authors:', error);
+      return posts;
+    };
+
+    try {
+      const q = query(
+        postsRef,
+        where('authorId', 'in', ids),
+        orderBy('createdAt', 'desc'),
+        limit(limitCount)
+      );
+      const snapshot = await getDocs(q);
+      return { success: true, posts: mapSnapshotToPosts(snapshot) };
+    } catch (indexError) {
+      const needsIndex = indexError?.code === 'failed-precondition' ||
+        (indexError?.message && indexError.message.toLowerCase().includes('index'));
+      if (needsIndex) {
+        try {
+          const fallbackQ = query(
+            postsRef,
+            where('authorId', 'in', ids),
+            limit(limitCount * 2)
+          );
+          const fallbackSnap = await getDocs(fallbackQ);
+          const posts = mapSnapshotToPosts(fallbackSnap);
+          posts.sort((a, b) => (b.createdAt?.getTime?.() ?? 0) - (a.createdAt?.getTime?.() ?? 0));
+          return { success: true, posts: posts.slice(0, limitCount) };
+        } catch (fallbackError) {
+          console.error('Error getting community posts (fallback):', fallbackError);
+          return { success: false, posts: [] };
+        }
+      }
+      console.error('Error getting community posts by authors:', indexError);
       return { success: false, posts: [] };
     }
   }
