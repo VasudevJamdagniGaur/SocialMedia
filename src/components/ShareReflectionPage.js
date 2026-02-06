@@ -133,6 +133,25 @@ export default function ShareReflectionPage() {
     return new Date();
   };
 
+  const getShareHeaderText = () => {
+    const d = getReflectionDate();
+    const momentDate = d instanceof Date ? d : new Date(d);
+    const today = new Date();
+    const toDateOnly = (date) => {
+      const x = new Date(date);
+      x.setHours(0, 0, 0, 0);
+      return x.getTime();
+    };
+    const momentDay = toDateOnly(momentDate);
+    const todayDay = toDateOnly(today);
+    const oneDayMs = 24 * 60 * 60 * 1000;
+    const yesterdayDay = todayDay - oneDayMs;
+    if (momentDay === todayDay) return 'This is what you lived today.';
+    if (momentDay === yesterdayDay) return 'You opened this moment yesterday.';
+    const formatted = momentDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: momentDate.getFullYear() !== today.getFullYear() ? 'numeric' : undefined });
+    return `You lived this moment on ${formatted}.`;
+  };
+
   const handleShareToHub = async () => {
     const contentToShare = sharePreviewText.trim();
     const user = getCurrentUser();
@@ -454,7 +473,7 @@ export default function ShareReflectionPage() {
             <ArrowLeft className="w-5 h-5" strokeWidth={2} />
           </button>
           <p className={`text-lg font-medium ${isDarkMode ? 'text-[#7DD3C0]' : 'text-[#87A96B]'}`}>
-            This is what you lived today.
+            {getShareHeaderText()}
           </p>
         </div>
 
