@@ -541,35 +541,28 @@ export default function ChatPage() {
         processQueue();
       };
 
-      // Token callback for streaming - IMMEDIATE processing
-      const onToken = (token) => {
-        console.log('📝 TYPEWRITER DEBUG: IMMEDIATE token received:', token);
-        
-        // Add token to queue immediately
-        typewriterQueue.push(token);
-        
-        // Start typewriter effect IMMEDIATELY if not already running
-        if (!isTyping) {
-          console.log('📝 TYPEWRITER DEBUG: Starting IMMEDIATE typewriter effect');
-          typewriterEffect();
-        }
-      };
+      // Call the chat service (API returns full response; we stream it client-side)
+      const aiResponse = await chatService.sendMessage(userMessageText, messages, null, imageToSend, null);
       
-      // Call the chat service with streaming enabled
-      const aiResponse = await chatService.sendMessage(userMessageText, messages, onToken, imageToSend, null);
-      
-      console.log('✅ CHAT PAGE DEBUG: Received final AI response:', aiResponse);
+      console.log('✅ CHAT PAGE DEBUG: Received final AI response:', aiResponse?.substring?.(0, 80));
       
       // Validate response
       if (!aiResponse || typeof aiResponse !== 'string') {
         throw new Error('Invalid AI response format');
       }
 
+      // Feed full response into typewriter queue for streaming effect (chunk by 2 chars for smooth display)
+      const chunkSize = 2;
+      for (let i = 0; i < aiResponse.length; i += chunkSize) {
+        typewriterQueue.push(aiResponse.slice(i, i + chunkSize));
+      }
+      typewriterEffect();
+
       // Wait for typewriter effect to finish with timeout
       const waitForTypewriter = () => {
         return new Promise((resolve) => {
           let timeoutCount = 0;
-          const maxTimeouts = 50; // 5 seconds max wait
+          const maxTimeouts = 150; // 15 seconds max wait for streaming to finish
           
           const checkQueue = () => {
             if (typewriterQueue.length === 0 && !isTyping) {
