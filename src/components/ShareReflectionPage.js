@@ -431,16 +431,31 @@ export default function ShareReflectionPage() {
         {/* When Image: show exact download preview. When Text: show editable card. */}
         {shareAs === 'image' ? (
           <>
-            {/* Exact preview of the image that will be downloaded */}
-            <div
-              ref={cardRef}
-              className="rounded-2xl overflow-hidden flex-1 w-full max-w-[420px] mx-auto"
-              style={{
-                background: imageTheme === 'dark' ? '#1a1a1a' : '#ffffff',
-                padding: 24,
-                boxSizing: 'border-box',
-              }}
-            >
+            {/* Preview card wrapper: toggle on top-right (preview only, not in download) */}
+            <div className="relative flex-1 w-full max-w-[420px] mx-auto">
+              <button
+                type="button"
+                onClick={() => setImageTheme((t) => (t === 'light' ? 'dark' : 'light'))}
+                className="absolute top-2 right-2 z-10 flex items-center justify-center w-9 h-9 rounded-full shadow-md transition-opacity hover:opacity-90 bg-black/20 backdrop-blur-sm"
+                title="Image light/dark"
+                aria-label="Toggle image light or dark"
+              >
+                {imageTheme === 'light' ? (
+                  <span className="text-lg leading-none">☀️</span>
+                ) : (
+                  <span className="text-lg leading-none">🌙</span>
+                )}
+              </button>
+              {/* Exact preview of the image that will be downloaded (canvas capture uses same layout, no button) */}
+              <div
+                ref={cardRef}
+                className="rounded-2xl overflow-hidden w-full"
+                style={{
+                  background: imageTheme === 'dark' ? '#1a1a1a' : '#ffffff',
+                  padding: 24,
+                  boxSizing: 'border-box',
+                }}
+              >
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 16 }}>
                 {profilePicture ? (
                   <img
@@ -521,8 +536,9 @@ export default function ShareReflectionPage() {
                   {sharePreviewText}
                 </p>
               )}
+              </div>
             </div>
-            {/* Edit actions below preview when Image is selected; theme toggle (symbol only) on the right */}
+            {/* Edit actions below preview when Image is selected */}
             <div className="flex items-center justify-center gap-2 mt-3">
               <button
                 type="button"
@@ -543,21 +559,6 @@ export default function ShareReflectionPage() {
               >
                 <Sparkles className="w-3.5 h-3.5" strokeWidth={2} />
                 Edit with AI
-              </button>
-              <button
-                type="button"
-                onClick={() => setImageTheme((t) => (t === 'light' ? 'dark' : 'light'))}
-                className={`flex items-center justify-center rounded-lg p-2 transition-opacity hover:opacity-90 ${
-                  isDarkMode ? 'text-gray-400 hover:bg-white/5' : 'text-gray-600 hover:bg-black/5'
-                }`}
-                title="Image light/dark"
-                aria-label="Toggle image light or dark"
-              >
-                {imageTheme === 'light' ? (
-                  <span className="text-lg leading-none">☀️</span>
-                ) : (
-                  <span className="text-lg leading-none">🌙</span>
-                )}
               </button>
             </div>
           </>
