@@ -807,8 +807,8 @@ export default function ShareReflectionPage() {
               boxShadow: isDarkMode ? '0 4px 20px rgba(125, 211, 192, 0.35)' : '0 4px 16px rgba(134, 169, 107, 0.3)',
             }}
           >
-            {shareAs === 'text' && (isSharingPost ? 'Sharing…' : 'Share this moment')}
-            {shareAs === 'image' && (isCapturingImage ? 'Creating image…' : 'Share this moment')}
+            {shareAs === 'text' && (isSharingPost ? 'Sharing…' : 'Share to HUB')}
+            {shareAs === 'image' && (isCapturingImage ? 'Creating image…' : 'Share to HUB')}
           </button>
 
           <div className="flex flex-col gap-2">
