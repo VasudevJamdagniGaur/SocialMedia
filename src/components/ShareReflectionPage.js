@@ -147,7 +147,7 @@ export default function ShareReflectionPage() {
     const oneDayMs = 24 * 60 * 60 * 1000;
     const yesterdayDay = todayDay - oneDayMs;
     if (momentDay === todayDay) return 'This is what you lived today.';
-    if (momentDay === yesterdayDay) return 'You opened this moment yesterday.';
+    if (momentDay === yesterdayDay) return 'You lived this moment yesterday.';
     const formatted = momentDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: momentDate.getFullYear() !== today.getFullYear() ? 'numeric' : undefined });
     return `You lived this moment on ${formatted}.`;
   };
