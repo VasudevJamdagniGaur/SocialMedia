@@ -215,11 +215,22 @@ export default function ShareReflectionPage() {
           el.src = profilePicture;
         });
         ctx.save();
+        // Clip to a perfect circle
+        const cx = profileX + profileSize / 2;
+        const cy = profileY + profileSize / 2;
+        const r = profileSize / 2;
         ctx.beginPath();
-        ctx.arc(profileX + profileSize / 2, profileY + profileSize / 2, profileSize / 2, 0, Math.PI * 2);
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
         ctx.closePath();
         ctx.clip();
-        ctx.drawImage(img, profileX, profileY, profileSize, profileSize);
+        // Draw image to fill the circle (cover: scale to cover, center crop)
+        const iw = img.naturalWidth || img.width;
+        const ih = img.naturalHeight || img.height;
+        const scaleCover = Math.max(profileSize / iw, profileSize / ih);
+        const sw = iw * scaleCover;
+        const sh = ih * scaleCover;
+        ctx.translate(cx, cy);
+        ctx.drawImage(img, -sw / 2, -sh / 2, sw, sh);
         ctx.restore();
       } catch (_) {
         // Fallback circle if image fails to load
