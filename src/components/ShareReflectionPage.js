@@ -821,21 +821,22 @@ export default function ShareReflectionPage() {
             </button>
           </div>
 
-          <button
-            type="button"
-            onClick={handleMainShare}
-            disabled={shareAs === 'text' ? isSharingPost : isCapturingImage}
-            className="w-full rounded-2xl py-3.5 font-medium text-[15px] text-white disabled:opacity-50 transition-all hover:opacity-95 active:scale-[0.99]"
-            style={{
-              background: isDarkMode
-                ? 'linear-gradient(135deg, #7DD3C0 0%, #5fb8a8 100%)'
-                : 'linear-gradient(135deg, #87A96B 0%, #7a9a5c 100%)',
-              boxShadow: isDarkMode ? '0 4px 20px rgba(125, 211, 192, 0.35)' : '0 4px 16px rgba(134, 169, 107, 0.3)',
-            }}
-          >
-            {shareAs === 'text' && (isSharingPost ? 'Sharing…' : 'Share to HUB')}
-            {shareAs === 'image' && (isCapturingImage ? 'Creating image…' : 'Share to HUB')}
-          </button>
+          {shareAs === 'text' && (
+            <button
+              type="button"
+              onClick={handleMainShare}
+              disabled={isSharingPost}
+              className="w-full rounded-2xl py-3.5 font-medium text-[15px] text-white disabled:opacity-50 transition-all hover:opacity-95 active:scale-[0.99]"
+              style={{
+                background: isDarkMode
+                  ? 'linear-gradient(135deg, #7DD3C0 0%, #5fb8a8 100%)'
+                  : 'linear-gradient(135deg, #87A96B 0%, #7a9a5c 100%)',
+                boxShadow: isDarkMode ? '0 4px 20px rgba(125, 211, 192, 0.35)' : '0 4px 16px rgba(134, 169, 107, 0.3)',
+              }}
+            >
+              {isSharingPost ? 'Sharing…' : 'Share to HUB'}
+            </button>
+          )}
 
           <div className="flex flex-col gap-2">
             <p className={`text-xs font-medium ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
