@@ -106,6 +106,42 @@ class FirestoreService {
   }
 
   /**
+   * Get recent community posts from a list of author UIDs (e.g. crew members).
+   * Used for Crew's Activity on the Pod page.
+   * @param {string[]} authorIds - Up to 30 author UIDs (Firestore 'in' limit)
+   * @param {number} limitCount - Max posts to return (default 20)
+   */
+  async getCommunityPostsByAuthorIds(authorIds, limitCount = 20) {
+    try {
+      if (!authorIds || authorIds.length === 0) {
+        return { success: true, posts: [] };
+      }
+      const ids = authorIds.slice(0, 30);
+      const postsRef = collection(this.db, 'communityPosts');
+      const q = query(
+        postsRef,
+        where('authorId', 'in', ids),
+        orderBy('createdAt', 'desc'),
+        limit(limitCount)
+      );
+      const snapshot = await getDocs(q);
+      const posts = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        posts.push({
+          id: docSnap.id,
+          ...data,
+          createdAt: data.createdAt?.toDate?.() || new Date()
+        });
+      });
+      return { success: true, posts };
+    } catch (error) {
+      console.error('Error getting community posts by authors:', error);
+      return { success: false, posts: [] };
+    }
+  }
+
+  /**
    * Create or update a chat day document
    */
   async ensureChatDay(uid, dateId) {
