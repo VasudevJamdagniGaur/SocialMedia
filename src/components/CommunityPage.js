@@ -859,43 +859,62 @@ export default function CommunityPage() {
                   border: '1px solid rgba(0, 0, 0, 0.04)',
                 }}
               >
-                <div className="flex items-start gap-3">
-                  {post.profilePicture ? (
-                    <img
-                      src={post.profilePicture}
-                      alt=""
-                      className="w-9 h-9 rounded-full object-cover flex-shrink-0"
-                    />
-                  ) : (
-                    <div
-                      className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
-                      style={{
-                        backgroundColor: isDarkMode ? 'rgba(125, 211, 192, 0.25)' : 'rgba(230, 179, 186, 0.3)',
-                      }}
-                    >
-                      <User className={`w-4 h-4 ${isDarkMode ? 'text-[#7DD3C0]' : 'text-[#E6B3BA]'}`} strokeWidth={1.5} />
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-[15px] leading-snug ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`} style={{ fontFamily: 'inherit' }}>
-                      {post.content}
-                    </p>
-                    <div className={`flex items-center gap-2 mt-2 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`} style={{ fontSize: '13px' }}>
-                      <span className="font-medium">{post.author}</span>
-                      <span>·</span>
-                      <span>{formatTimeAgo(post.createdAt)}</span>
-                    </div>
-                    {post.image && (
-                      <div className="mt-3 rounded-xl overflow-hidden">
-                        <img
-                          src={post.image}
-                          alt=""
-                          className="w-full max-h-80 object-cover"
-                          onError={(e) => { e.target.style.display = 'none'; }}
-                        />
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                    {post.profilePicture ? (
+                      <img
+                        src={post.profilePicture}
+                        alt=""
+                        className="w-9 h-9 rounded-full object-cover flex-shrink-0"
+                      />
+                    ) : (
+                      <div
+                        className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
+                        style={{
+                          backgroundColor: isDarkMode ? 'rgba(125, 211, 192, 0.25)' : 'rgba(230, 179, 186, 0.3)',
+                        }}
+                      >
+                        <User className={`w-4 h-4 ${isDarkMode ? 'text-[#7DD3C0]' : 'text-[#E6B3BA]'}`} strokeWidth={1.5} />
                       </div>
                     )}
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-[15px] leading-snug ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`} style={{ fontFamily: 'inherit' }}>
+                        {post.content}
+                      </p>
+                      <div className={`flex items-center gap-2 mt-2 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`} style={{ fontSize: '13px' }}>
+                        <span className="font-medium">{post.author}</span>
+                        <span>·</span>
+                        <span>{formatTimeAgo(post.createdAt)}</span>
+                      </div>
+                      {post.image && (
+                        <div className="mt-3 rounded-xl overflow-hidden">
+                          <img
+                            src={post.image}
+                            alt=""
+                            className="w-full max-h-80 object-cover"
+                            onError={(e) => { e.target.style.display = 'none'; }}
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
+                  {post.authorId && user && post.authorId !== user.uid && (
+                    <button
+                      onClick={() => handleFollowClick(post.authorId)}
+                      disabled={followLoadingUid === post.authorId}
+                      className={`flex-shrink-0 text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
+                        followLoadingUid === post.authorId
+                          ? 'opacity-60 cursor-not-allowed'
+                          : 'hover:opacity-90'
+                      } ${
+                        followingIds.includes(post.authorId)
+                          ? (isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-600')
+                          : (isDarkMode ? 'bg-[#8AB4F8] text-white' : 'bg-[#87A96B] text-white')
+                      }`}
+                    >
+                      {followLoadingUid === post.authorId ? '…' : followingIds.includes(post.authorId) ? 'Following' : 'Follow'}
+                    </button>
+                  )}
                 </div>
                 <div className="flex items-center gap-4 mt-3 pt-3" style={{ borderTop: isDarkMode ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(0,0,0,0.06)' }}>
                   <button 
@@ -931,23 +950,6 @@ export default function CommunityPage() {
                       {postCommentsData.comments.length}
                     </span>
                   </button>
-                  {post.authorId && user && post.authorId !== user.uid && (
-                    <button
-                      onClick={() => handleFollowClick(post.authorId)}
-                      disabled={followLoadingUid === post.authorId}
-                      className={`ml-auto text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
-                        followLoadingUid === post.authorId
-                          ? 'opacity-60 cursor-not-allowed'
-                          : 'hover:opacity-90'
-                      } ${
-                        followingIds.includes(post.authorId)
-                          ? (isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-600')
-                          : (isDarkMode ? 'bg-[#8AB4F8] text-white' : 'bg-[#87A96B] text-white')
-                      }`}
-                    >
-                      {followLoadingUid === post.authorId ? '…' : followingIds.includes(post.authorId) ? 'Following' : 'Follow'}
-                    </button>
-                  )}
                 </div>
 
                 {/* Comments Section */}
