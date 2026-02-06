@@ -41,6 +41,7 @@ export default function CommunityPage() {
   const [tabTransition, setTabTransition] = useState(false);
   const [tabTouchStart, setTabTouchStart] = useState(null);
   const TAB_ORDER = ['mySpace', 'following', 'explore'];
+  const [followLoadingUid, setFollowLoadingUid] = useState(null);
 
   // Load profile picture
   useEffect(() => {
@@ -628,6 +629,25 @@ export default function CommunityPage() {
     }
   };
 
+  const handleFollowClick = async (authorId) => {
+    const currentUser = getCurrentUser();
+    if (!currentUser || !authorId || authorId === currentUser.uid) return;
+    setFollowLoadingUid(authorId);
+    try {
+      const isFollowing = followingIds.includes(authorId);
+      const result = isFollowing
+        ? await firestoreService.unfollowUser(currentUser.uid, authorId)
+        : await firestoreService.followUser(currentUser.uid, authorId);
+      if (result.success && result.followingIds) {
+        setFollowingIds(result.followingIds);
+      }
+    } catch (err) {
+      console.error('Follow/unfollow error:', err);
+    } finally {
+      setFollowLoadingUid(null);
+    }
+  };
+
   const formatTimeAgo = (date) => {
     if (!date) return 'Just now';
     const now = new Date();
@@ -911,6 +931,23 @@ export default function CommunityPage() {
                       {postCommentsData.comments.length}
                     </span>
                   </button>
+                  {post.authorId && user && post.authorId !== user.uid && (
+                    <button
+                      onClick={() => handleFollowClick(post.authorId)}
+                      disabled={followLoadingUid === post.authorId}
+                      className={`ml-auto text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
+                        followLoadingUid === post.authorId
+                          ? 'opacity-60 cursor-not-allowed'
+                          : 'hover:opacity-90'
+                      } ${
+                        followingIds.includes(post.authorId)
+                          ? (isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-600')
+                          : (isDarkMode ? 'bg-[#8AB4F8] text-white' : 'bg-[#87A96B] text-white')
+                      }`}
+                    >
+                      {followLoadingUid === post.authorId ? '…' : followingIds.includes(post.authorId) ? 'Following' : 'Follow'}
+                    </button>
+                  )}
                 </div>
 
                 {/* Comments Section */}

@@ -22,6 +22,8 @@ export default function PodPage() {
   const [isLoadingCrewMembers, setIsLoadingCrewMembers] = useState(true);
   const [crewActivityPosts, setCrewActivityPosts] = useState([]);
   const [isLoadingCrewActivity, setIsLoadingCrewActivity] = useState(false);
+  const [followingIds, setFollowingIds] = useState([]);
+  const [followLoadingUid, setFollowLoadingUid] = useState(null);
 
   // Load profile picture
   useEffect(() => {
@@ -256,6 +258,33 @@ export default function PodPage() {
 
     loadPodReflection();
   }, [selectedDate]);
+
+  // Load following list for Follow button in Crew's Activity
+  useEffect(() => {
+    const u = getCurrentUser();
+    if (!u) return;
+    firestoreService.getFollowing(u.uid).then((res) => {
+      if (res.success && res.followingIds) setFollowingIds(res.followingIds);
+    });
+  }, []);
+
+  const handleFollowClick = async (e, authorId) => {
+    e.stopPropagation();
+    const u = getCurrentUser();
+    if (!u || !authorId || authorId === u.uid) return;
+    setFollowLoadingUid(authorId);
+    try {
+      const isFollowing = followingIds.includes(authorId);
+      const result = isFollowing
+        ? await firestoreService.unfollowUser(u.uid, authorId)
+        : await firestoreService.followUser(u.uid, authorId);
+      if (result.success && result.followingIds) setFollowingIds(result.followingIds);
+    } catch (err) {
+      console.error('Follow/unfollow error:', err);
+    } finally {
+      setFollowLoadingUid(null);
+    }
+  };
 
   const formatTimeAgo = (date) => {
     if (!date) return '';
@@ -763,37 +792,56 @@ export default function PodPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {crewActivityPosts.slice(0, 5).map((post) => (
-                  <div
-                    key={post.id}
-                    onClick={() => navigate('/community')}
-                    className={`rounded-xl p-3 cursor-pointer transition-opacity hover:opacity-90 ${
-                      isDarkMode ? 'bg-black/20' : 'bg-gray-50'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 mb-1">
-                      {post.profilePicture ? (
-                        <img src={post.profilePicture} alt="" className="w-6 h-6 rounded-full object-cover" />
-                      ) : (
-                        <div
-                          className="w-6 h-6 rounded-full flex items-center justify-center"
-                          style={{ backgroundColor: isDarkMode ? '#7DD3C0' + '30' : '#E6B3BA' + '40' }}
-                        >
-                          <User className="w-3 h-3" style={{ color: isDarkMode ? '#7DD3C0' : '#E6B3BA' }} />
-                        </div>
-                      )}
-                      <span className={`text-xs font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                        {post.author || 'Someone'}
-                      </span>
-                      <span className={`text-[10px] ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
-                        {formatTimeAgo(post.createdAt)}
-                      </span>
+                {crewActivityPosts.slice(0, 5).map((post) => {
+                  const currentUser = getCurrentUser();
+                  const showFollow = post.authorId && currentUser && post.authorId !== currentUser.uid;
+                  return (
+                    <div
+                      key={post.id}
+                      onClick={() => navigate('/community')}
+                      className={`rounded-xl p-3 cursor-pointer transition-opacity hover:opacity-90 ${
+                        isDarkMode ? 'bg-black/20' : 'bg-gray-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        {post.profilePicture ? (
+                          <img src={post.profilePicture} alt="" className="w-6 h-6 rounded-full object-cover" />
+                        ) : (
+                          <div
+                            className="w-6 h-6 rounded-full flex items-center justify-center"
+                            style={{ backgroundColor: isDarkMode ? '#7DD3C0' + '30' : '#E6B3BA' + '40' }}
+                          >
+                            <User className="w-3 h-3" style={{ color: isDarkMode ? '#7DD3C0' : '#E6B3BA' }} />
+                          </div>
+                        )}
+                        <span className={`text-xs font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                          {post.author || 'Someone'}
+                        </span>
+                        <span className={`text-[10px] ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+                          {formatTimeAgo(post.createdAt)}
+                        </span>
+                        {showFollow && (
+                          <button
+                            onClick={(e) => handleFollowClick(e, post.authorId)}
+                            disabled={followLoadingUid === post.authorId}
+                            className={`ml-auto text-[10px] font-medium px-2 py-1 rounded-full transition-colors ${
+                              followLoadingUid === post.authorId ? 'opacity-60' : 'hover:opacity-90'
+                            } ${
+                              followingIds.includes(post.authorId)
+                                ? (isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-600')
+                                : (isDarkMode ? 'bg-[#8AB4F8] text-white' : 'bg-[#87A96B] text-white')
+                            }`}
+                          >
+                            {followLoadingUid === post.authorId ? '…' : followingIds.includes(post.authorId) ? 'Following' : 'Follow'}
+                          </button>
+                        )}
+                      </div>
+                      <p className={`text-sm leading-snug line-clamp-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                        {post.content || ''}
+                      </p>
                     </div>
-                    <p className={`text-sm leading-snug line-clamp-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                      {post.content || ''}
-                    </p>
-                  </div>
-                ))}
+                  );
+                })}
                 <button
                   onClick={() => navigate('/community')}
                   className={`w-full mt-2 text-xs ${isDarkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-600'} transition-colors`}

@@ -106,6 +106,43 @@ class FirestoreService {
   }
 
   /**
+   * Follow a user. Adds targetUid to current user's following list.
+   */
+  async followUser(uid, targetUid) {
+    try {
+      if (!uid || !targetUid || uid === targetUid) return { success: false };
+      const followingRef = doc(this.db, `users/${uid}/following/following`);
+      const snap = await getDoc(followingRef);
+      const existing = snap.exists() && Array.isArray(snap.data().followingIds) ? snap.data().followingIds : [];
+      if (existing.includes(targetUid)) return { success: true, followingIds: existing };
+      const next = [...existing, targetUid];
+      await setDoc(followingRef, { followingIds: next }, { merge: true });
+      return { success: true, followingIds: next };
+    } catch (error) {
+      console.error('Error following user:', error);
+      return { success: false };
+    }
+  }
+
+  /**
+   * Unfollow a user. Removes targetUid from current user's following list.
+   */
+  async unfollowUser(uid, targetUid) {
+    try {
+      if (!uid || !targetUid) return { success: false };
+      const followingRef = doc(this.db, `users/${uid}/following/following`);
+      const snap = await getDoc(followingRef);
+      const existing = snap.exists() && Array.isArray(snap.data().followingIds) ? snap.data().followingIds : [];
+      const next = existing.filter((id) => id !== targetUid);
+      await setDoc(followingRef, { followingIds: next }, { merge: true });
+      return { success: true, followingIds: next };
+    } catch (error) {
+      console.error('Error unfollowing user:', error);
+      return { success: false };
+    }
+  }
+
+  /**
    * Get recent community posts from a list of author UIDs (e.g. crew members).
    * Used for Crew's Activity on the Pod page.
    * @param {string[]} authorIds - Up to 30 author UIDs (Firestore 'in' limit)
