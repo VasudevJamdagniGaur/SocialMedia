@@ -431,31 +431,6 @@ export default function ShareReflectionPage() {
         {/* When Image: show exact download preview. When Text: show editable card. */}
         {shareAs === 'image' ? (
           <>
-            {/* Theme toggle: one tap to switch image light/dark */}
-            <div className="flex items-center justify-center mb-3">
-              <button
-                type="button"
-                onClick={() => setImageTheme((t) => (t === 'light' ? 'dark' : 'light'))}
-                className={`flex items-center gap-2 rounded-xl py-2 px-4 text-sm font-medium transition-colors ${
-                  isDarkMode ? 'bg-white/10 text-gray-300 hover:bg-white/15' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-                title="Tap to switch image between light and dark"
-              >
-                {imageTheme === 'light' ? (
-                  <>
-                    <span className="opacity-90">☀️</span>
-                    <span>Light</span>
-                    <span className="text-xs opacity-75">— tap for dark</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="opacity-90">🌙</span>
-                    <span>Dark</span>
-                    <span className="text-xs opacity-75">— tap for light</span>
-                  </>
-                )}
-              </button>
-            </div>
             {/* Exact preview of the image that will be downloaded */}
             <div
               ref={cardRef}
@@ -547,7 +522,7 @@ export default function ShareReflectionPage() {
                 </p>
               )}
             </div>
-            {/* Edit actions below preview when Image is selected */}
+            {/* Edit actions below preview when Image is selected; theme toggle (symbol only) on the right */}
             <div className="flex items-center justify-center gap-2 mt-3">
               <button
                 type="button"
@@ -568,6 +543,21 @@ export default function ShareReflectionPage() {
               >
                 <Sparkles className="w-3.5 h-3.5" strokeWidth={2} />
                 Edit with AI
+              </button>
+              <button
+                type="button"
+                onClick={() => setImageTheme((t) => (t === 'light' ? 'dark' : 'light'))}
+                className={`flex items-center justify-center rounded-lg p-2 transition-opacity hover:opacity-90 ${
+                  isDarkMode ? 'text-gray-400 hover:bg-white/5' : 'text-gray-600 hover:bg-black/5'
+                }`}
+                title="Image light/dark"
+                aria-label="Toggle image light or dark"
+              >
+                {imageTheme === 'light' ? (
+                  <span className="text-lg leading-none">☀️</span>
+                ) : (
+                  <span className="text-lg leading-none">🌙</span>
+                )}
               </button>
             </div>
           </>
