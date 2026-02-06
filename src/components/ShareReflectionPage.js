@@ -26,6 +26,7 @@ export default function ShareReflectionPage() {
   const [aiEditInstruction, setAiEditInstruction] = useState('');
   const [isAiEditing, setIsAiEditing] = useState(false);
   const [shareAs, setShareAs] = useState('text'); // 'text' | 'image'
+  const [imageTheme, setImageTheme] = useState('light'); // 'light' | 'dark' for share image
   const [isCapturingImage, setIsCapturingImage] = useState(false);
   const [displayName, setDisplayName] = useState('');
   const cardRef = useRef(null);
@@ -196,8 +197,14 @@ export default function ShareReflectionPage() {
     canvas.height = canvasHeight * scale;
     ctx.scale(scale, scale);
 
-    // White background
-    ctx.fillStyle = '#ffffff';
+    const isDark = imageTheme === 'dark';
+    const bgColor = isDark ? '#1a1a1a' : '#ffffff';
+    const nameColor = isDark ? '#ffffff' : '#000000';
+    const handleColor = isDark ? '#a1a1a1' : '#536471';
+    const bodyColor = isDark ? '#e7e9ea' : '#000000';
+    const placeholderCircle = isDark ? '#333639' : '#e7e9ea';
+
+    ctx.fillStyle = bgColor;
     ctx.fillRect(0, 0, cardWidth, canvasHeight);
 
     let y = padding;
@@ -233,34 +240,33 @@ export default function ShareReflectionPage() {
         ctx.drawImage(img, -sw / 2, -sh / 2, sw, sh);
         ctx.restore();
       } catch (_) {
-        // Fallback circle if image fails to load
-        ctx.fillStyle = '#e7e9ea';
+        ctx.fillStyle = placeholderCircle;
         ctx.beginPath();
         ctx.arc(profileX + profileSize / 2, profileY + profileSize / 2, profileSize / 2, 0, Math.PI * 2);
         ctx.fill();
       }
     } else {
-      ctx.fillStyle = '#e7e9ea';
+      ctx.fillStyle = placeholderCircle;
       ctx.beginPath();
       ctx.arc(profileX + profileSize / 2, profileY + profileSize / 2, profileSize / 2, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    // Profile name (bold black) and handle to the right of avatar
+    // Profile name and handle to the right of avatar
     const textStartX = padding + profileSize + 12;
     const nameY = profileY + 18;
     ctx.font = nameFont;
-    ctx.fillStyle = '#000000';
+    ctx.fillStyle = nameColor;
     ctx.fillText(nameForCard, textStartX, nameY);
     ctx.font = handleFont;
-    ctx.fillStyle = '#536471';
+    ctx.fillStyle = handleColor;
     ctx.fillText(handle, textStartX, nameY + 18);
 
     y = profileY + profileSize + gapBelowProfile;
 
-    // Reflection text in black, Times New Roman
+    // Reflection text, Times New Roman
     ctx.font = bodyFont;
-    ctx.fillStyle = '#000000';
+    ctx.fillStyle = bodyColor;
     const lineHeightPx = bodyFontSize * lineHeight;
     lines.forEach((line) => {
       ctx.fillText(line, padding, y);
@@ -425,12 +431,37 @@ export default function ShareReflectionPage() {
         {/* When Image: show exact download preview. When Text: show editable card. */}
         {shareAs === 'image' ? (
           <>
+            {/* Theme toggle: one tap to switch image light/dark */}
+            <div className="flex items-center justify-center mb-3">
+              <button
+                type="button"
+                onClick={() => setImageTheme((t) => (t === 'light' ? 'dark' : 'light'))}
+                className={`flex items-center gap-2 rounded-xl py-2 px-4 text-sm font-medium transition-colors ${
+                  isDarkMode ? 'bg-white/10 text-gray-300 hover:bg-white/15' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+                title="Tap to switch image between light and dark"
+              >
+                {imageTheme === 'light' ? (
+                  <>
+                    <span className="opacity-90">☀️</span>
+                    <span>Light</span>
+                    <span className="text-xs opacity-75">— tap for dark</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="opacity-90">🌙</span>
+                    <span>Dark</span>
+                    <span className="text-xs opacity-75">— tap for light</span>
+                  </>
+                )}
+              </button>
+            </div>
             {/* Exact preview of the image that will be downloaded */}
             <div
               ref={cardRef}
               className="rounded-2xl overflow-hidden flex-1 w-full max-w-[420px] mx-auto"
               style={{
-                background: '#ffffff',
+                background: imageTheme === 'dark' ? '#1a1a1a' : '#ffffff',
                 padding: 24,
                 boxSizing: 'border-box',
               }}
@@ -446,16 +477,36 @@ export default function ShareReflectionPage() {
                 ) : (
                   <div
                     className="flex-shrink-0 rounded-full flex items-center justify-center"
-                    style={{ width: 48, height: 48, background: '#e7e9ea' }}
+                    style={{
+                      width: 48,
+                      height: 48,
+                      background: imageTheme === 'dark' ? '#333639' : '#e7e9ea',
+                    }}
                   >
-                    <User style={{ width: 24, height: 24, color: '#536471' }} strokeWidth={2} />
+                    <User
+                      style={{ width: 24, height: 24, color: imageTheme === 'dark' ? '#a1a1a1' : '#536471' }}
+                      strokeWidth={2}
+                    />
                   </div>
                 )}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, color: '#000000', fontSize: 15, fontFamily: '"Times New Roman", Times, serif' }}>
+                  <div
+                    style={{
+                      fontWeight: 700,
+                      color: imageTheme === 'dark' ? '#ffffff' : '#000000',
+                      fontSize: 15,
+                      fontFamily: '"Times New Roman", Times, serif',
+                    }}
+                  >
                     {currentName}
                   </div>
-                  <div style={{ color: '#536471', fontSize: 14, fontFamily: '"Times New Roman", Times, serif' }}>
+                  <div
+                    style={{
+                      color: imageTheme === 'dark' ? '#a1a1a1' : '#536471',
+                      fontSize: 14,
+                      fontFamily: '"Times New Roman", Times, serif',
+                    }}
+                  >
                     {handle}
                   </div>
                 </div>
@@ -465,7 +516,11 @@ export default function ShareReflectionPage() {
                   <textarea
                     value={sharePreviewText}
                     onChange={(e) => setSharePreviewText(e.target.value)}
-                    className="w-full rounded-xl px-4 py-3 text-[15px] leading-relaxed border min-h-[100px] resize-y focus:outline-none focus:ring-2 bg-white text-gray-800 border-gray-200 focus:ring-[#87A96B]/40"
+                    className={`w-full rounded-xl px-4 py-3 text-[15px] leading-relaxed border min-h-[100px] resize-y focus:outline-none focus:ring-2 ${
+                      imageTheme === 'dark'
+                        ? 'bg-black/30 text-white border-white/20 focus:ring-white/30'
+                        : 'bg-white text-gray-800 border-gray-200 focus:ring-[#87A96B]/40'
+                    }`}
                     placeholder="Edit what you'll share..."
                     autoFocus
                   />
@@ -480,7 +535,7 @@ export default function ShareReflectionPage() {
               ) : (
                 <p
                   style={{
-                    color: '#000000',
+                    color: imageTheme === 'dark' ? '#e7e9ea' : '#000000',
                     fontSize: 15,
                     lineHeight: 1.4,
                     whiteSpace: 'pre-wrap',
