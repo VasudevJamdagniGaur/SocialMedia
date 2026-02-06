@@ -48,8 +48,30 @@ export default function ShareReflectionPage() {
   const [displayName, setDisplayName] = useState('');
   const cardRef = useRef(null);
   const fontPickerRef = useRef(null);
+  const touchStartX = useRef(0);
 
   const currentFontOption = SHARE_IMAGE_FONTS.find((f) => f.id === shareImageFont) || SHARE_IMAGE_FONTS[0];
+
+  const cycleFontBySwipe = (direction) => {
+    const idx = SHARE_IMAGE_FONTS.findIndex((f) => f.id === shareImageFont);
+    if (idx === -1) return;
+    if (direction === 'next') {
+      setShareImageFont(SHARE_IMAGE_FONTS[(idx + 1) % SHARE_IMAGE_FONTS.length].id);
+    } else {
+      setShareImageFont(SHARE_IMAGE_FONTS[(idx - 1 + SHARE_IMAGE_FONTS.length) % SHARE_IMAGE_FONTS.length].id);
+    }
+  };
+
+  const handlePreviewTouchStart = (e) => {
+    if (e.touches?.[0]) touchStartX.current = e.touches[0].clientX;
+  };
+  const handlePreviewTouchEnd = (e) => {
+    if (!e.changedTouches?.[0]) return;
+    const delta = e.changedTouches[0].clientX - touchStartX.current;
+    const minSwipe = 50;
+    if (delta > minSwipe) cycleFontBySwipe('next');   // left → right = next font
+    else if (delta < -minSwipe) cycleFontBySwipe('prev'); // right → left = prev font
+  };
 
   // Current profile = what user set in Profile (localStorage) or Firestore/Auth
   const getCurrentDisplayName = () => {
@@ -546,7 +568,7 @@ export default function ShareReflectionPage() {
                   )}
                 </button>
               </div>
-              {/* Exact preview of the image that will be downloaded (canvas capture uses same layout, no button) */}
+              {/* Exact preview of the image that will be downloaded; swipe left↔right on card to change font */}
               <div
                 ref={cardRef}
                 className="rounded-2xl overflow-hidden w-full"
@@ -555,6 +577,10 @@ export default function ShareReflectionPage() {
                   padding: 24,
                   boxSizing: 'border-box',
                 }}
+                onTouchStart={handlePreviewTouchStart}
+                onTouchEnd={handlePreviewTouchEnd}
+                role="region"
+                aria-label="Swipe left or right to change font"
               >
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 16 }}>
                 {profilePicture ? (
