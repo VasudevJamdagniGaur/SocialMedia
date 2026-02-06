@@ -1,12 +1,27 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { User, Pencil, Share2, ArrowLeft, Sparkles, Image as ImageIcon, FileText } from 'lucide-react';
+import { User, Pencil, Share2, ArrowLeft, Sparkles, Image as ImageIcon, FileText, Type } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
 import chatService from '../services/chatService';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
+
+// Instagram-style font options for share image (id, label, CSS font stack, canvas name weight, canvas body style)
+const SHARE_IMAGE_FONTS = [
+  { id: 'modern', label: 'Modern', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', nameWeight: 'bold', bodyStyle: '' },
+  { id: 'classic', label: 'Classic', fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif', nameWeight: 'bold', bodyStyle: '' },
+  { id: 'signature', label: 'Signature', fontFamily: '"Segoe Script", "Brush Script MT", "Comic Sans MS", cursive', nameWeight: 'normal', bodyStyle: '' },
+  { id: 'editor', label: 'Editor', fontFamily: '"Trebuchet MS", "Varela Round", Helvetica, sans-serif', nameWeight: 'bold', bodyStyle: '' },
+  { id: 'bubble', label: 'Bubble', fontFamily: '"Comic Sans MS", "Chalkboard SE", "Comic Neue", cursive', nameWeight: 'bold', bodyStyle: '' },
+  { id: 'typewriter', label: 'Typewriter', fontFamily: '"Courier New", Courier, monospace', nameWeight: 'bold', bodyStyle: '' },
+  { id: 'meme', label: 'Meme', fontFamily: 'Impact, "Haettenschweiler", "Arial Black", sans-serif', nameWeight: 'bold', bodyStyle: 'italic ' },
+  { id: 'strong', label: 'Strong', fontFamily: 'Georgia, "Times New Roman", serif', nameWeight: 'bold', bodyStyle: '' },
+  { id: 'elegant', label: 'Elegant', fontFamily: 'Georgia, "Times New Roman", serif', nameWeight: 'bold', bodyStyle: 'italic ' },
+  { id: 'literature', label: 'Literature', fontFamily: 'Georgia, "Times New Roman", serif', nameWeight: 'bold', bodyStyle: '' },
+  { id: 'directional', label: 'Directional', fontFamily: 'Arial, "Helvetica Neue", sans-serif', nameWeight: 'bold', bodyStyle: '' },
+];
 
 export default function ShareReflectionPage() {
   const navigate = useNavigate();
@@ -27,9 +42,14 @@ export default function ShareReflectionPage() {
   const [isAiEditing, setIsAiEditing] = useState(false);
   const [shareAs, setShareAs] = useState('text'); // 'text' | 'image'
   const [imageTheme, setImageTheme] = useState('light'); // 'light' | 'dark' for share image
+  const [shareImageFont, setShareImageFont] = useState('modern'); // id from SHARE_IMAGE_FONTS
+  const [showFontPicker, setShowFontPicker] = useState(false);
   const [isCapturingImage, setIsCapturingImage] = useState(false);
   const [displayName, setDisplayName] = useState('');
   const cardRef = useRef(null);
+  const fontPickerRef = useRef(null);
+
+  const currentFontOption = SHARE_IMAGE_FONTS.find((f) => f.id === shareImageFont) || SHARE_IMAGE_FONTS[0];
 
   // Current profile = what user set in Profile (localStorage) or Firestore/Auth
   const getCurrentDisplayName = () => {
@@ -90,6 +110,15 @@ export default function ShareReflectionPage() {
       window.removeEventListener('storage', onStorage);
     };
   }, []);
+
+  useEffect(() => {
+    if (!showFontPicker) return;
+    const close = (e) => {
+      if (fontPickerRef.current && !fontPickerRef.current.contains(e.target)) setShowFontPicker(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [showFontPicker]);
 
   const getReflectionDate = () => {
     if (state.selectedDate) {
@@ -155,10 +184,10 @@ export default function ShareReflectionPage() {
     const cardWidth = 420;
     const profileSize = 48;
     const gapBelowProfile = 16;
-    const systemFont = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-    const nameFont = `bold 15px ${systemFont}`;
-    const handleFont = `14px ${systemFont}`;
-    const bodyFont = `15px ${systemFont}`;
+    const fontOpt = SHARE_IMAGE_FONTS.find((f) => f.id === shareImageFont) || SHARE_IMAGE_FONTS[0];
+    const nameFont = `${fontOpt.nameWeight} 15px ${fontOpt.fontFamily}`;
+    const handleFont = `14px ${fontOpt.fontFamily}`;
+    const bodyFont = (fontOpt.bodyStyle || '') + '15px ' + fontOpt.fontFamily;
     const lineHeight = 1.4;
     const bodyFontSize = 15;
 
@@ -432,9 +461,49 @@ export default function ShareReflectionPage() {
         {/* When Image: show exact download preview. When Text: show editable card. */}
         {shareAs === 'image' ? (
           <>
-            {/* Preview card wrapper: edit (pencil) + theme (sun/moon) on top-right, preview only */}
+            {/* Preview card wrapper: font picker (left) + edit (pencil) + theme (sun/moon) on top-right */}
             <div className="relative w-full max-w-[420px] mx-auto">
-              <div className="absolute top-2 right-2 z-10 flex items-center gap-1.5">
+              <div className="absolute top-2 right-2 z-10 flex items-center gap-1.5" ref={fontPickerRef}>
+                {/* Font picker: to the left of pencil */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowFontPicker((v) => !v)}
+                    className={`flex items-center justify-center w-9 h-9 rounded-full shadow-md transition-opacity hover:opacity-90 bg-black/20 backdrop-blur-sm ${imageTheme === 'dark' ? 'text-gray-200' : 'text-gray-700'}`}
+                    title="Change font"
+                    aria-label="Change font"
+                  >
+                    <Type className="w-4 h-4" strokeWidth={2} />
+                  </button>
+                  {showFontPicker && (
+                    <div
+                      className="absolute right-0 top-full mt-1.5 py-1.5 min-w-[180px] max-h-[60vh] overflow-y-auto rounded-xl shadow-lg z-20"
+                      style={{
+                        background: isDarkMode ? '#262626' : '#fff',
+                        border: isDarkMode ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(0,0,0,0.1)',
+                      }}
+                    >
+                      {SHARE_IMAGE_FONTS.map((f) => (
+                        <button
+                          key={f.id}
+                          type="button"
+                          onClick={() => {
+                            setShareImageFont(f.id);
+                            setShowFontPicker(false);
+                          }}
+                          className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                            shareImageFont === f.id
+                              ? isDarkMode ? 'bg-white/15 text-[#7DD3C0]' : 'bg-[#87A96B]/20 text-[#87A96B]'
+                              : isDarkMode ? 'text-gray-200 hover:bg-white/10' : 'text-gray-800 hover:bg-black/5'
+                          }`}
+                          style={{ fontFamily: f.fontFamily }}
+                        >
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <button
                   type="button"
                   onClick={() => setShareEditMode(true)}
@@ -494,10 +563,10 @@ export default function ShareReflectionPage() {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div
                     style={{
-                      fontWeight: 700,
+                      fontWeight: currentFontOption.nameWeight === 'bold' ? 700 : 400,
                       color: imageTheme === 'dark' ? '#ffffff' : '#000000',
                       fontSize: 15,
-                      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                      fontFamily: currentFontOption.fontFamily,
                     }}
                   >
                     {currentName}
@@ -506,7 +575,7 @@ export default function ShareReflectionPage() {
                     style={{
                       color: imageTheme === 'dark' ? '#a1a1a1' : '#536471',
                       fontSize: 14,
-                      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                      fontFamily: currentFontOption.fontFamily,
                     }}
                   >
                     {handle}
@@ -523,6 +592,7 @@ export default function ShareReflectionPage() {
                         ? 'bg-black/30 text-white border-white/20 focus:ring-white/30'
                         : 'bg-white text-gray-800 border-gray-200 focus:ring-[#87A96B]/40'
                     }`}
+                    style={{ fontFamily: currentFontOption.fontFamily, fontStyle: currentFontOption.id === 'meme' || currentFontOption.id === 'elegant' ? 'italic' : 'normal' }}
                     placeholder="Edit what you'll share..."
                     autoFocus
                   />
@@ -542,7 +612,8 @@ export default function ShareReflectionPage() {
                     lineHeight: 1.4,
                     whiteSpace: 'pre-wrap',
                     wordBreak: 'break-word',
-                    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                    fontFamily: currentFontOption.fontFamily,
+                    fontStyle: currentFontOption.id === 'meme' || currentFontOption.id === 'elegant' ? 'italic' : 'normal',
                   }}
                 >
                   {sharePreviewText}
