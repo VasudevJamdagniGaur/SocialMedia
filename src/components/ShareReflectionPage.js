@@ -28,6 +28,7 @@ export default function ShareReflectionPage() {
   const [shareAs, setShareAs] = useState('text'); // 'text' | 'image'
   const [isCapturingImage, setIsCapturingImage] = useState(false);
   const cardRef = useRef(null);
+  const tweetStyleCardRef = useRef(null);
 
   useEffect(() => {
     if (!initialText) {
@@ -96,8 +97,18 @@ export default function ShareReflectionPage() {
     }
   };
 
+  const formatTweetDate = (d) => {
+    const date = d instanceof Date ? d : new Date(d);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  const getHandleFromName = (name) => {
+    if (!name) return 'deite';
+    return '@' + name.replace(/\s+/g, '').toLowerCase().slice(0, 20);
+  };
+
   const captureCardAsImage = async () => {
-    const node = cardRef.current;
+    const node = tweetStyleCardRef.current;
     if (!node) {
       alert('Could not capture the card. Please try again.');
       return null;
@@ -105,7 +116,7 @@ export default function ShareReflectionPage() {
     try {
       const { toPng } = await import('html-to-image');
       const dataUrl = await toPng(node, {
-        backgroundColor: isDarkMode ? '#262626' : '#ffffff',
+        backgroundColor: isDarkMode ? '#000000' : '#ffffff',
         pixelRatio: 2,
         cacheBust: true,
       });
@@ -238,11 +249,145 @@ export default function ShareReflectionPage() {
 
   if (!initialText) return null;
 
+  const displayName = getCurrentUser()?.displayName || 'You';
+  const handle = getHandleFromName(displayName);
+  const tweetDate = formatTweetDate(getReflectionDate());
+
   return (
     <div
       className="min-h-screen flex flex-col px-4 py-6 pb-10"
       style={{ background: isDarkMode ? '#131313' : '#FAFAF8' }}
     >
+      {/* Hidden tweet-style card for image capture only (same UI/structure as reference) */}
+      <div
+        ref={tweetStyleCardRef}
+        style={{
+          position: 'fixed',
+          left: '-9999px',
+          top: 0,
+          width: 420,
+          background: isDarkMode ? '#000000' : '#ffffff',
+          border: `1px solid ${isDarkMode ? '#2f3336' : '#cfd9de'}`,
+          borderRadius: 16,
+          overflow: 'hidden',
+          padding: '12px 16px',
+          boxSizing: 'border-box',
+        }}
+      >
+        {/* Header: avatar | name + check + handle · date | dots */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 12 }}>
+          {profilePicture ? (
+            <img
+              src={profilePicture}
+              alt=""
+              style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+            />
+          ) : (
+            <div
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: '50%',
+                background: isDarkMode ? '#333639' : '#e7e9ea',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              <User
+                style={{ width: 20, height: 20, color: isDarkMode ? '#71767b' : '#536471' }}
+                strokeWidth={2}
+              />
+            </div>
+          )}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+              <span style={{ fontWeight: 700, color: isDarkMode ? '#e7e9ea' : '#0f1419', fontSize: 15 }}>
+                {displayName}
+              </span>
+              <span
+                style={{
+                  width: 18,
+                  height: 18,
+                  borderRadius: '50%',
+                  background: '#1d9bf0',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <svg width={10} height={10} viewBox="0 0 24 24" stroke="white" strokeWidth="4" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M5 13l4 4L19 7" />
+                </svg>
+              </span>
+              <span style={{ color: isDarkMode ? '#71767b' : '#536471', fontSize: 15 }}>
+                {handle} · {tweetDate}
+              </span>
+            </div>
+          </div>
+          <div style={{ color: isDarkMode ? '#71767b' : '#536471', padding: '4px 0 0 0' }}>
+            <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor">
+              <path d="M3 12c0-1.1.9-2 2-2s2 .9 2 2-.9 2-2 2-2-.9-2-2zm9 2c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm7 0c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2z" />
+            </svg>
+          </div>
+        </div>
+        {/* Content */}
+        <div
+          style={{
+            color: isDarkMode ? '#e7e9ea' : '#0f1419',
+            fontSize: 15,
+            lineHeight: 1.35,
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+            marginBottom: 12,
+          }}
+        >
+          {sharePreviewText}
+        </div>
+        {/* Interaction bar: comment, retweet, like, views, share (Twitter/X style) */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            maxWidth: 380,
+            color: isDarkMode ? '#71767b' : '#536471',
+            fontSize: 13,
+          }}
+        >
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor">
+              <path d="M1.751 10c0-4.42 3.584-8 8.005-8h4.366c4.49 0 8.129 3.64 8.129 8.13 0 2.96-1.607 5.68-4.196 7.11l-8.054 4.46v-3.69h-.067c-4.49.1-8.183-3.51-8.183-8.01zm8.005-6c-3.317 0-6.005 2.69-6.005 6 0 3.37 2.77 6.15 6.138 6.183L8.88 14.15v2.65l5.013-2.78c2.387-1.324 3.965-4.02 3.965-6.94 0-3.31-2.69-6-6.002-6z" />
+            </svg>
+            0
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor">
+              <path d="M4.5 3.88l4.432 4.14-1.364 1.46L5.5 7.55V16c0 1.1.896 2 2 2H13v2H7.5c-2.209 0-4-1.79-4-4V7.55L1.432 9.48.068 8.02 4.5 3.88zM16.5 6H11V4h5.5c2.209 0 4 1.79 4 4v8.45l2.068-1.93 1.364 1.46-4.432 4.14-4.432-4.14 1.364-1.46 2.068 1.93V8c0-1.1-.896-2-2-2z" />
+            </svg>
+            0
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor">
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+            </svg>
+            0
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor">
+              <path d="M8.75 21V3h2v18h-2zM18 21V8.5h2V21h-2zM4 21l.004-10h2L6 21H4zm9.248 0v-7.5h2V21h-2z" />
+            </svg>
+            0
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center' }}>
+            <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2.59l5.7 5.7-1.41 1.42L13 6.41V16h-2V6.41l-3.3 3.3-1.41-1.42L12 2.59zM21 15l-.02 3.51c0 1.38-1.12 2.49-2.5 2.49H5.5C4.11 19 3 17.88 3 16.5V15h2v1.5c0 .28.22.5.5.5h12.98c.28 0 .5-.22.5-.5L19 15h2z" />
+            </svg>
+          </span>
+        </div>
+      </div>
+
       <div className="max-w-md w-full mx-auto flex flex-col flex-1">
         {/* Back + Header */}
         <div className="flex items-center gap-3 pt-2 pb-4">
