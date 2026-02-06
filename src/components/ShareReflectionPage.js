@@ -638,7 +638,7 @@ export default function ShareReflectionPage() {
         ) : (
           <div
             ref={cardRef}
-            className={`rounded-2xl overflow-hidden flex-1 ${
+            className={`rounded-2xl overflow-hidden ${
               isDarkMode ? 'bg-[#262626]' : 'bg-white'
             }`}
             style={isDarkMode ? {
