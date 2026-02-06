@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
-import { Users, MessageCircle, Heart, TrendingUp, User, Sun, Moon, Send, X, Plus, XCircle, Image, Link, FileText, Layers, Activity, Brain, Sprout, Coffee, Flame } from 'lucide-react';
+import { MessageCircle, Heart, User, Sun, Moon, Send, X, Plus, XCircle, Image, Link } from 'lucide-react';
 import { getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
 import { collection, addDoc, query, orderBy, getDocs, serverTimestamp, doc, setDoc, updateDoc, increment, deleteDoc, onSnapshot } from 'firebase/firestore';
@@ -36,6 +36,11 @@ export default function CommunityPage() {
   const [lastScrollY, setLastScrollY] = useState(0);
   const [activeMembersCount, setActiveMembersCount] = useState(0);
   const [postsTodayCount, setPostsTodayCount] = useState(0);
+  const [activeTab, setActiveTab] = useState('explore'); // 'mySpace' | 'following' | 'explore'
+  const [followingIds, setFollowingIds] = useState([]);
+  const [tabTransition, setTabTransition] = useState(false);
+  const [tabTouchStart, setTabTouchStart] = useState(null);
+  const TAB_ORDER = ['mySpace', 'following', 'explore'];
 
   // Load profile picture
   useEffect(() => {
@@ -419,6 +424,50 @@ export default function CommunityPage() {
     };
   }, []);
 
+  // Load following list for "Following" tab
+  useEffect(() => {
+    const user = getCurrentUser();
+    if (!user) return;
+    firestoreService.getFollowing(user.uid).then((result) => {
+      if (result.success && result.followingIds) {
+        setFollowingIds(result.followingIds);
+      }
+    });
+  }, []);
+
+  const user = getCurrentUser();
+  const filteredPosts = (() => {
+    if (!communityPosts.length) return [];
+    if (activeTab === 'mySpace') {
+      return user ? communityPosts.filter((p) => p.authorId === user.uid) : [];
+    }
+    if (activeTab === 'following') {
+      if (!user || !followingIds.length) return [];
+      return communityPosts.filter((p) => p.authorId && followingIds.includes(p.authorId));
+    }
+    return communityPosts; // explore: all posts
+  })();
+
+  const switchTab = (tab) => {
+    if (tab === activeTab) return;
+    setTabTransition(true);
+    setTimeout(() => {
+      setActiveTab(tab);
+      setTabTransition(false);
+    }, 150);
+  };
+
+  const handleTabTouchStart = (e) => setTabTouchStart(e.touches?.[0]?.clientX ?? null);
+  const handleTabTouchEnd = (e) => {
+    const x = e.changedTouches?.[0]?.clientX;
+    if (tabTouchStart == null || x == null) return;
+    const delta = x - tabTouchStart;
+    const idx = TAB_ORDER.indexOf(activeTab);
+    if (delta < -40 && idx < TAB_ORDER.length - 1) switchTab(TAB_ORDER[idx + 1]);
+    else if (delta > 40 && idx > 0) switchTab(TAB_ORDER[idx - 1]);
+    setTabTouchStart(null);
+  };
+
   const handleImageUpload = (e) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -644,241 +693,191 @@ export default function CommunityPage() {
       </div>
 
       <div className="relative z-10 max-w-sm mx-auto">
-        {/* Title Section with Profile */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center space-x-3">
-              <img 
-                src="/hub-icon.png" 
-                alt="HUB Logo" 
-                className="object-contain"
-                style={{
-                  width: '64px',
-                  height: '64px',
-                  filter: isDarkMode ? 'brightness(0) invert(1)' : 'brightness(0)',
-                  WebkitFilter: isDarkMode ? 'brightness(0) invert(1)' : 'brightness(0)'
-                }}
-              />
-              <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                HUB <span className={`font-normal ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>(beta)</span>
-              </h1>
+        {/* Minimal Hub header - Twitter-style */}
+        <div className="sticky top-0 z-20 mb-0"
+          style={{
+            paddingTop: 'max(0px, env(safe-area-inset-top, 0px))',
+            background: isDarkMode ? '#131313' : '#FAFAF8',
+            borderBottom: isDarkMode ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(0,0,0,0.06)',
+          }}
+        >
+          <div className="flex items-center justify-between px-1 py-3">
+            <div
+              onClick={handleProfileClick}
+              className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity overflow-hidden flex-shrink-0"
+              style={isDarkMode ? {
+                backgroundColor: profilePicture ? 'transparent' : '#262626',
+                border: '1px solid rgba(255,255,255,0.08)',
+              } : { boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}
+            >
+              {profilePicture ? (
+                <img src={profilePicture} alt="Profile" className="w-full h-full object-cover" />
+              ) : (
+                <User className="w-5 h-5" style={{ color: isDarkMode ? '#81C995' : '#B19CD9' }} strokeWidth={1.5} />
+              )}
             </div>
-            <div className="flex space-x-2">
-              <div
-                onClick={toggleTheme}
-                className={`w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity ${
-                  isDarkMode ? 'backdrop-blur-md' : 'bg-white'
-                }`}
-                style={isDarkMode ? {
-                  backgroundColor: "#262626",
-                  boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-                  border: "1px solid rgba(255, 255, 255, 0.08)",
-                } : {
-                  boxShadow: "0 2px 8px rgba(230, 179, 186, 0.15)",
-                }}
-              >
-                {isDarkMode ?
-                  <Sun className="w-5 h-5" style={{ color: "#8AB4F8" }} strokeWidth={1.5} /> :
-                  <Moon className="w-5 h-5" style={{ color: "#E6B3BA" }} strokeWidth={1.5} />
-              }
-              </div>
-              <div
-                onClick={handleProfileClick}
-                className={`w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity overflow-hidden ${
-                  isDarkMode ? 'backdrop-blur-md' : 'bg-white'
-                }`}
-                style={isDarkMode ? {
-                  backgroundColor: profilePicture ? "transparent" : "#262626",
-                  boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-                  border: profilePicture ? "none" : "1px solid rgba(255, 255, 255, 0.08)",
-                } : {
-                  boxShadow: "0 2px 8px rgba(177, 156, 217, 0.15)",
-                }}
-              >
-                {profilePicture ? (
-                  <img 
-                    src={profilePicture} 
-                    alt="Profile" 
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <User className="w-5 h-5" style={{ color: isDarkMode ? "#81C995" : "#B19CD9" }} strokeWidth={1.5} />
-                )}
-              </div>
+            <img
+              src="/hub-icon.png"
+              alt="Deite Hub"
+              className="object-contain flex-shrink-0"
+              style={{
+                width: 40,
+                height: 40,
+                filter: isDarkMode ? 'brightness(0) invert(1)' : 'brightness(0)',
+              }}
+            />
+            <div
+              onClick={toggleTheme}
+              className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity flex-shrink-0"
+              style={isDarkMode ? {
+                backgroundColor: '#262626',
+                border: '1px solid rgba(255,255,255,0.08)',
+              } : { boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}
+            >
+              {isDarkMode ? <Sun className="w-5 h-5" style={{ color: '#8AB4F8' }} strokeWidth={1.5} /> : <Moon className="w-5 h-5" style={{ color: '#E6B3BA' }} strokeWidth={1.5} />}
             </div>
           </div>
-          <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-            Connect with others on their wellness journey
-          </p>
+
+          {/* Segmented tabs - My Space | Following | Explore (swipeable) */}
+          <div
+            className="flex items-center justify-around overflow-x-auto no-scrollbar touch-pan-y"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}
+            onTouchStart={handleTabTouchStart}
+            onTouchEnd={handleTabTouchEnd}
+          >
+            {[
+              { id: 'mySpace', label: 'My Space' },
+              { id: 'following', label: 'Following' },
+              { id: 'explore', label: 'Explore' },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => switchTab(tab.id)}
+                className="flex-1 min-w-0 py-3 px-2 text-center transition-colors duration-200 relative"
+              >
+                <span
+                  className={`text-[15px] font-medium transition-colors ${
+                    activeTab === tab.id
+                      ? (isDarkMode ? 'text-white' : 'text-gray-900')
+                      : (isDarkMode ? 'text-gray-500' : 'text-gray-500')
+                  }`}
+                >
+                  {tab.label}
+                </span>
+                {activeTab === tab.id && (
+                  <span
+                    className="absolute bottom-0 left-1/2 -translate-x-1/2 w-12 h-0.5 rounded-full"
+                    style={{ backgroundColor: isDarkMode ? '#8AB4F8' : '#87A96B' }}
+                  />
+                )}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Community Cards */}
-        <div className="space-y-4">
-          {/* Community Stats Card */}
-          <div
-            className={`rounded-2xl p-5 relative overflow-hidden ${
-              isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
-            }`}
-            style={isDarkMode ? {
-              backgroundColor: "#262626",
-              boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
-            } : {
-              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)",
-            }}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                Community Stats
-              </h2>
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center gap-2 mb-1">
-                  <Users className={`w-5 h-5 ${isDarkMode ? 'text-white' : 'text-gray-800'}`} strokeWidth={2} />
-                  <div className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                    {activeMembersCount.toLocaleString()}
-                  </div>
-                </div>
-                <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                  Active Members
-                </div>
-              </div>
-              <div className="text-center">
-                <div className="flex items-center justify-center gap-2 mb-1">
-                  <FileText className={`w-5 h-5 ${isDarkMode ? 'text-white' : 'text-gray-800'}`} strokeWidth={2} />
-                  <div className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                    {postsTodayCount.toLocaleString()}
-                  </div>
-                </div>
-                <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                  Posts Today
-                </div>
-              </div>
-              <div className="text-center">
-                <div className="flex items-center justify-center gap-2 mb-1">
-                  <Layers className={`w-5 h-5 ${isDarkMode ? 'text-white' : 'text-gray-800'}`} strokeWidth={2} />
-                  <div className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                    1
-                  </div>
-                </div>
-                <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                  Existing Spheres
-                </div>
-              </div>
-            </div>
-          </div>
+        {/* Subtle stats line - minimal, one row */}
+        <div className={`px-2 py-2 flex items-center justify-center gap-4 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`} style={{ fontSize: '12px' }}>
+          <span>{activeMembersCount.toLocaleString()} members</span>
+          <span>{postsTodayCount} today</span>
+        </div>
 
-          {/* Trending Topics Card (Hot Tea) */}
-          <div
-            className={`rounded-2xl p-5 relative overflow-hidden ${
-              isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
-            }`}
-            style={isDarkMode ? {
-              backgroundColor: "#262626",
-              boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
-            } : {
-              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)",
-            }}
-          >
-            <div className="flex items-center space-x-2 mb-4">
-              <TrendingUp className={`w-5 h-5 ${isDarkMode ? 'text-white' : 'text-gray-800'}`} strokeWidth={2} />
-              <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                Hot Tea
-              </h2>
-              <Coffee className={`w-4 h-4 ${isDarkMode ? 'text-white' : 'text-gray-800'}`} strokeWidth={2} />
-              <Flame className={`w-4 h-4 ${isDarkMode ? 'text-white' : 'text-gray-800'}`} strokeWidth={2} />
+        {/* Feed - vertical list with smooth transition */}
+        <div
+          className="pb-2"
+          style={{
+            opacity: tabTransition ? 0.7 : 1,
+            transform: tabTransition ? 'translateY(4px)' : 'translateY(0)',
+            transition: 'opacity 0.15s ease, transform 0.15s ease',
+          }}
+        >
+          {activeTab === 'mySpace' && filteredPosts.length === 0 && (
+            <div className="py-12 px-6 text-center">
+              <p className={`text-base leading-relaxed ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                Your reflections will appear here when you share them with the community.
+              </p>
+              <p className={`mt-2 text-sm ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+                A quiet space just for what you’ve shared.
+              </p>
             </div>
-            <div className="space-y-2">
-              {[
-                { name: 'Mindfulness Tips', icon: Activity },
-                { name: 'Daily Gratitude', icon: Heart },
-                { name: 'Stress Management', icon: Brain },
-                { name: 'Self-Care Routines', icon: Sprout }
-              ].map((topic, index) => {
-                const IconComponent = topic.icon;
-                return (
-                  <div
-                    key={index}
-                    className={`flex items-center space-x-2 px-3 py-2 rounded-lg cursor-pointer transition-colors ${
-                      isDarkMode ? 'hover:bg-gray-800/30' : 'hover:bg-gray-50'
-                    }`}
-                  >
-                    <IconComponent className={`w-4 h-4 ${isDarkMode ? 'text-white' : 'text-gray-800'}`} strokeWidth={2} />
-                    <span className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      #{topic.name}
-                    </span>
-                  </div>
-                );
-              })}
+          )}
+          {activeTab === 'following' && filteredPosts.length === 0 && (
+            <div className="py-12 px-6 text-center">
+              <p className={`text-base leading-relaxed ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                {followingIds.length === 0
+                  ? 'Follow people to see their reflections here. Familiar faces, calm feed.'
+                  : 'No posts from people you follow yet.'}
+              </p>
             </div>
-          </div>
+          )}
+          {activeTab === 'explore' && filteredPosts.length === 0 && (
+            <div className="py-12 px-6 text-center">
+              <p className={`text-base leading-relaxed ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                No reflections in the community yet. Be the first to share.
+              </p>
+            </div>
+          )}
 
-          {/* Community Posts */}
-          {communityPosts.map((post) => {
+          <div className="space-y-4 px-2">
+          {filteredPosts.map((post) => {
             const postCommentsData = postComments[post.id] || { comments: post.comments || [], showComments: false, newComment: '' };
             const postLikesCount = postLikes[post.id] || post.likes || 0;
-            const user = getCurrentUser();
             const likedUsers = postLikedBy[post.id] || [];
             const isPostLiked = user && likedUsers.includes(user.uid);
             
             return (
               <div
                 key={post.id}
-                className={`rounded-2xl p-5 relative overflow-hidden ${
+                className={`rounded-2xl p-4 relative overflow-hidden ${
                   isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
                 }`}
                 style={isDarkMode ? {
-                  backgroundColor: "#262626",
-                  boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                  backgroundColor: 'rgba(38, 38, 38, 0.6)',
+                  boxShadow: '0 2px 12px rgba(0, 0, 0, 0.2)',
+                  border: '1px solid rgba(255, 255, 255, 0.06)',
                 } : {
-                  boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)",
+                  boxShadow: '0 2px 12px rgba(0, 0, 0, 0.06)',
+                  border: '1px solid rgba(0, 0, 0, 0.04)',
                 }}
               >
-                <div className="flex items-start space-x-3 mb-3">
+                <div className="flex items-start gap-3">
                   {post.profilePicture ? (
-                    <img 
-                      src={post.profilePicture} 
-                      alt={post.author}
-                      className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                    <img
+                      src={post.profilePicture}
+                      alt=""
+                      className="w-9 h-9 rounded-full object-cover flex-shrink-0"
                     />
                   ) : (
                     <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
+                      className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
                       style={{
-                        backgroundColor: isDarkMode ? "#7DD3C0" : "#E6B3BA",
+                        backgroundColor: isDarkMode ? 'rgba(125, 211, 192, 0.25)' : 'rgba(230, 179, 186, 0.3)',
                       }}
                     >
-                      <span className="text-lg">👤</span>
+                      <User className={`w-4 h-4 ${isDarkMode ? 'text-[#7DD3C0]' : 'text-[#E6B3BA]'}`} strokeWidth={1.5} />
                     </div>
                   )}
-                  <div className="flex-1">
-                    <div className={`font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                      {post.author}
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-[15px] leading-snug ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`} style={{ fontFamily: 'inherit' }}>
+                      {post.content}
+                    </p>
+                    <div className={`flex items-center gap-2 mt-2 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`} style={{ fontSize: '13px' }}>
+                      <span className="font-medium">{post.author}</span>
+                      <span>·</span>
+                      <span>{formatTimeAgo(post.createdAt)}</span>
                     </div>
-                    <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                      {formatTimeAgo(post.createdAt)}
-                    </div>
+                    {post.image && (
+                      <div className="mt-3 rounded-xl overflow-hidden">
+                        <img
+                          src={post.image}
+                          alt=""
+                          className="w-full max-h-80 object-cover"
+                          onError={(e) => { e.target.style.display = 'none'; }}
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
-                <p className={`text-sm leading-relaxed mb-4 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  {post.content}
-                </p>
-                {post.image && (
-                  <div className="mb-4 rounded-lg overflow-hidden">
-                    <img 
-                      src={post.image} 
-                      alt="Post" 
-                      className="w-full max-h-96 object-cover"
-                      onError={(e) => {
-                        e.target.style.display = 'none';
-                      }}
-                    />
-                  </div>
-                )}
-                <div className="flex items-center space-x-4">
+                <div className="flex items-center gap-4 mt-3 pt-3" style={{ borderTop: isDarkMode ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(0,0,0,0.06)' }}>
                   <button 
                     onClick={() => handlePostLike(post.id)}
                     className="flex items-center space-x-1 transition-colors hover:opacity-80"
@@ -1105,6 +1104,7 @@ export default function CommunityPage() {
               </div>
             );
           })}
+          </div>
         </div>
       </div>
 

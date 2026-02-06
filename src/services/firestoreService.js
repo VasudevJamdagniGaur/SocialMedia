@@ -88,6 +88,24 @@ class FirestoreService {
   }
 
   /**
+   * Get list of user IDs the current user follows (for Hub "Following" feed).
+   * Reads from users/{uid}/following/following (document with followingIds array).
+   */
+  async getFollowing(uid) {
+    try {
+      const followingRef = doc(this.db, `users/${uid}/following/following`);
+      const snap = await getDoc(followingRef);
+      if (snap.exists() && Array.isArray(snap.data().followingIds)) {
+        return { success: true, followingIds: snap.data().followingIds };
+      }
+      return { success: true, followingIds: [] };
+    } catch (error) {
+      console.error('Error getting following list:', error);
+      return { success: false, followingIds: [] };
+    }
+  }
+
+  /**
    * Create or update a chat day document
    */
   async ensureChatDay(uid, dateId) {

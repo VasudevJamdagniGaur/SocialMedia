@@ -110,6 +110,14 @@ code {
   background: rgba(125, 211, 192, 0.5);
 }
 
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* Input focus styles */
 input:focus {
   outline: none;
