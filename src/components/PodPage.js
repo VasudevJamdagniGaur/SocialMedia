@@ -268,6 +268,13 @@ export default function PodPage() {
     });
   }, []);
 
+  const openUserProfile = (authorId) => {
+    if (!authorId) return;
+    const u = getCurrentUser();
+    if (u && authorId === u.uid) navigate('/profile');
+    else navigate(`/user/${authorId}`);
+  };
+
   const handleFollowClick = async (e, authorId) => {
     e.stopPropagation();
     const u = getCurrentUser();
@@ -804,22 +811,28 @@ export default function PodPage() {
                       }`}
                     >
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        {post.profilePicture ? (
-                          <img src={post.profilePicture} alt="" className="w-6 h-6 rounded-full object-cover" />
-                        ) : (
-                          <div
-                            className="w-6 h-6 rounded-full flex items-center justify-center"
-                            style={{ backgroundColor: isDarkMode ? '#7DD3C0' + '30' : '#E6B3BA' + '40' }}
-                          >
-                            <User className="w-3 h-3" style={{ color: isDarkMode ? '#7DD3C0' : '#E6B3BA' }} />
-                          </div>
-                        )}
-                        <span className={`text-xs font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                          {post.author || 'Someone'}
-                        </span>
-                        <span className={`text-[10px] ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
-                          {formatTimeAgo(post.createdAt)}
-                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); openUserProfile(post.authorId); }}
+                          className="flex items-center gap-2 flex-shrink-0 cursor-pointer rounded-full focus:outline-none"
+                        >
+                          {post.profilePicture ? (
+                            <img src={post.profilePicture} alt="" className="w-6 h-6 rounded-full object-cover" />
+                          ) : (
+                            <div
+                              className="w-6 h-6 rounded-full flex items-center justify-center"
+                              style={{ backgroundColor: isDarkMode ? '#7DD3C0' + '30' : '#E6B3BA' + '40' }}
+                            >
+                              <User className="w-3 h-3" style={{ color: isDarkMode ? '#7DD3C0' : '#E6B3BA' }} />
+                            </div>
+                          )}
+                          <span className={`text-xs font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                            {post.author || 'Someone'}
+                          </span>
+                          <span className={`text-[10px] ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+                            {formatTimeAgo(post.createdAt)}
+                          </span>
+                        </button>
                         {showFollow && (
                           <button
                             onClick={(e) => handleFollowClick(e, post.authorId)}

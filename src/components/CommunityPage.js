@@ -629,6 +629,15 @@ export default function CommunityPage() {
     }
   };
 
+  const openUserProfile = (authorId) => {
+    if (!authorId) return;
+    if (user && authorId === user.uid) {
+      navigate('/profile');
+    } else {
+      navigate(`/user/${authorId}`);
+    }
+  };
+
   const handleFollowClick = async (authorId) => {
     const currentUser = getCurrentUser();
     if (!currentUser || !authorId || authorId === currentUser.uid) return;
@@ -861,31 +870,42 @@ export default function CommunityPage() {
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-start gap-3 flex-1 min-w-0">
-                    {post.profilePicture ? (
-                      <img
-                        src={post.profilePicture}
-                        alt=""
-                        className="w-9 h-9 rounded-full object-cover flex-shrink-0"
-                      />
-                    ) : (
-                      <div
-                        className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
-                        style={{
-                          backgroundColor: isDarkMode ? 'rgba(125, 211, 192, 0.25)' : 'rgba(230, 179, 186, 0.3)',
-                        }}
-                      >
-                        <User className={`w-4 h-4 ${isDarkMode ? 'text-[#7DD3C0]' : 'text-[#E6B3BA]'}`} strokeWidth={1.5} />
-                      </div>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => post.authorId && openUserProfile(post.authorId)}
+                      className="flex-shrink-0 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-0 focus:ring-[#8AB4F8]/50 cursor-pointer"
+                    >
+                      {post.profilePicture ? (
+                        <img
+                          src={post.profilePicture}
+                          alt=""
+                          className="w-9 h-9 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div
+                          className="w-9 h-9 rounded-full flex items-center justify-center"
+                          style={{
+                            backgroundColor: isDarkMode ? 'rgba(125, 211, 192, 0.25)' : 'rgba(230, 179, 186, 0.3)',
+                          }}
+                        >
+                          <User className={`w-4 h-4 ${isDarkMode ? 'text-[#7DD3C0]' : 'text-[#E6B3BA]'}`} strokeWidth={1.5} />
+                        </div>
+                      )}
+                    </button>
                     <div className="flex-1 min-w-0">
                       <p className={`text-[15px] leading-snug ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`} style={{ fontFamily: 'inherit' }}>
                         {post.content}
                       </p>
-                      <div className={`flex items-center gap-2 mt-2 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`} style={{ fontSize: '13px' }}>
+                      <button
+                        type="button"
+                        onClick={() => post.authorId && openUserProfile(post.authorId)}
+                        className={`flex items-center gap-2 mt-2 text-left ${isDarkMode ? 'text-gray-500' : 'text-gray-500'} focus:outline-none focus:ring-0 cursor-pointer hover:opacity-80`}
+                        style={{ fontSize: '13px' }}
+                      >
                         <span className="font-medium">{post.author}</span>
                         <span>·</span>
                         <span>{formatTimeAgo(post.createdAt)}</span>
-                      </div>
+                      </button>
                       {post.image && (
                         <div className="mt-3 rounded-xl overflow-hidden">
                           <img

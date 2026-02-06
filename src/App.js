@@ -11,6 +11,7 @@ import DashboardPage from './components/DashboardPage';
 import ChatPage from './components/ChatPage';
 import EmotionalWellbeing from './components/EmotionalWellbeing';
 import ProfilePage from './components/ProfilePage';
+import UserProfilePage from './components/UserProfilePage';
 import SplashScreen from './components/SplashScreen';
 import CommunityPage from './components/CommunityPage';
 import PodPage from './components/PodPage';
@@ -75,6 +76,9 @@ function AppContent() {
               // Navigate to dashboard from Profile
               console.log('📍 Navigating to dashboard from Profile');
               navigate('/dashboard', { replace: true });
+            } else if (location.pathname.startsWith('/user/')) {
+              console.log('📍 Navigating back from User Profile');
+              navigate(-1);
             } else if (location.pathname === '/pod/chat') {
               // Navigate to pod from Pod Group Chat
               console.log('📍 Navigating to pod from Pod Group Chat');
@@ -157,6 +161,7 @@ function AppContent() {
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/wellbeing" element={<EmotionalWellbeing />} />
         <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/user/:userId" element={<UserProfilePage />} />
       </Routes>
       
       {/* Show bottom navigation only on main app pages */}
