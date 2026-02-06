@@ -749,24 +749,22 @@ export default function EmotionalWellbeing() {
     initializeComponent();
   }, [shouldFetchFreshData]); // Run only once on mount
 
-  // Listen for localStorage changes and custom events to detect when new emotional data is saved
+  // Listen for localStorage changes and custom events - only run API refresh at 12 PM
   useEffect(() => {
     const handleStorageChange = (e) => {
       if (e.key === 'emotional_data_refresh' && e.newValue) {
         console.log('🔄 STORAGE CHANGE: New emotional data detected!');
-        // Force immediate refresh
         const user = getCurrentUser();
         if (user) {
-          console.log('🔄 STORAGE CHANGE: Clearing cache and reloading...');
-          // Clear all caches
-          const cacheKeys = Object.keys(localStorage).filter(key =>
-            key.includes('emotional_wellbeing') || key.includes('moodChart') || key.includes('emotionalBalance')
-          );
-          cacheKeys.forEach(key => localStorage.removeItem(key));
-
-          // Force reload
+          // Reload from cache so UI shows current cached data (no API call)
           loadCachedData(user.uid);
-          loadFreshData();
+          // Only call API at 12 PM - do not refresh every time
+          if (shouldFetchFreshData(null, false)) {
+            console.log('⏰ STORAGE CHANGE: After 12 PM - refreshing from API');
+            loadFreshData();
+          } else {
+            console.log('⏰ STORAGE CHANGE: Before 12 PM or already fetched today - using cache only');
+          }
         }
       }
     };
@@ -793,13 +791,8 @@ export default function EmotionalWellbeing() {
         setEmotionalData(freshMoodData);
         setChartKey(prev => prev + 1); // Force chart re-render
 
-        console.log('✅ CUSTOM EVENT: Mood data updated immediately:', freshMoodData);
-
-        // Also clear caches to ensure consistency
-        const cacheKeys = Object.keys(localStorage).filter(key =>
-          key.includes('emotional_wellbeing') || key.includes('moodChart') || key.includes('emotionalBalance')
-        );
-        cacheKeys.forEach(key => localStorage.removeItem(key));
+        console.log('✅ CUSTOM EVENT: Mood data updated immediately (cache updates at 12 PM):', freshMoodData);
+        // Do not clear caches here - list updates only at 12 PM via API
       }
     };
 
@@ -810,7 +803,7 @@ export default function EmotionalWellbeing() {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('emotionalDataUpdated', handleCustomEvent);
     };
-  }, []); // No dependencies - set up event listeners once
+  }, [shouldFetchFreshData]); // Only run API refresh at 12 PM on storage change
 
   useEffect(() => {
     const user = getCurrentUser();
@@ -837,15 +830,16 @@ export default function EmotionalWellbeing() {
       
       if (hasCache && !shouldFetch) {
         console.log('⚡ Using cached data for period', selectedPeriod, '- instant switch! (Before 12 PM or already fetched today)');
-        // Don't fetch in background if before 12 PM or already fetched today
         return;
       } else if (hasCache && shouldFetch) {
         console.log('⚡ Using cached data for period', selectedPeriod, '- instant switch! Loading fresh in background after 12 PM...');
-        // Load fresh data in background to update cache
+        loadFreshEmotionalData(selectedPeriod, requestId);
+      } else if (shouldFetch) {
+        console.log('⚡ No cache for period', selectedPeriod, '- loading fresh data (after 12 PM)');
         loadFreshEmotionalData(selectedPeriod, requestId);
       } else {
-        console.log('⚡ No cache for period', selectedPeriod, '- loading fresh data');
-        loadFreshEmotionalData(selectedPeriod, requestId);
+        console.log('⚡ No cache for period', selectedPeriod, '- before 12 PM: list updates at 12 PM via API');
+        // Before 12 PM with no cache: show cached data from other period if any, or empty; do not call API
       }
     }
   }, [selectedPeriod]); // Only depend on selectedPeriod
@@ -854,21 +848,19 @@ export default function EmotionalWellbeing() {
     const user = getCurrentUser();
     if (user) {
       console.log('🔄 BALANCE CHART: Period changed to', balancePeriod);
-      
-      // For lifetime, always load fresh data to ensure we get all data from first chat
-      if (balancePeriod === 365) {
-        console.log('⚖️ LIFETIME selected - loading fresh data from first chat date');
+      const hasBalanceCache = loadCachedBalanceData(user.uid, balancePeriod);
+      const shouldFetch = shouldFetchFreshData(null, false);
+      // Only call API at 12 PM; otherwise use cache only
+      if (balancePeriod === 365 && shouldFetch) {
+        console.log('⚖️ LIFETIME selected - loading fresh data (after 12 PM)');
         loadFreshBalanceData(balancePeriod);
+      } else if (!hasBalanceCache && shouldFetch) {
+        console.log('⚖️ No balance cache for period', balancePeriod, '- loading fresh data (after 12 PM)');
+        loadFreshBalanceData(balancePeriod);
+      } else if (hasBalanceCache) {
+        console.log('⚖️ Using cached balance data for period', balancePeriod);
       } else {
-        // For 7 or 30 days, try cache first
-        const hasBalanceCache = loadCachedBalanceData(user.uid, balancePeriod);
-        
-        if (!hasBalanceCache) {
-          console.log('⚖️ No balance cache for period', balancePeriod, '- loading fresh data');
-          loadFreshBalanceData(balancePeriod);
-        } else {
-          console.log('⚖️ Using cached balance data for period', balancePeriod, '- instant switch!');
-        }
+        console.log('⚖️ Before 12 PM or already fetched today - list updates at 12 PM via API');
       }
     }
   }, [balancePeriod]); // Only depend on balancePeriod
