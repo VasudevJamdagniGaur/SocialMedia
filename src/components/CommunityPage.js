@@ -738,7 +738,7 @@ export default function CommunityPage() {
             </div>
           </div>
 
-          {/* Segmented tabs - My Space | Following | Explore (swipeable) */}
+          {/* Segmented tabs - My Presence | Following | Explore (swipeable) */}
           <div
             className="flex items-center justify-around overflow-x-auto no-scrollbar touch-pan-y"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}
@@ -746,7 +746,7 @@ export default function CommunityPage() {
             onTouchEnd={handleTabTouchEnd}
           >
             {[
-              { id: 'mySpace', label: 'My Space' },
+              { id: 'mySpace', label: 'My Presence' },
               { id: 'following', label: 'Following' },
               { id: 'explore', label: 'Explore' },
             ].map((tab) => (
