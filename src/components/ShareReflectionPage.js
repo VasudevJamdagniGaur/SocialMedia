@@ -7,6 +7,7 @@ import firestoreService from '../services/firestoreService';
 import chatService from '../services/chatService';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
+import { getDateId } from '../utils/dateUtils';
 
 // Instagram-style font options for share image (id, label, CSS font stack, canvas name weight, canvas body style)
 const SHARE_IMAGE_FONTS = [
@@ -374,12 +375,14 @@ export default function ShareReflectionPage() {
           title: 'This is what I lived today.',
           files: [file],
         });
+        recordSocialShare('image');
       } else {
         const a = document.createElement('a');
         a.href = dataUrl;
         a.download = 'my-reflection.png';
         a.click();
         alert('Image saved. Share it from your photos or files.');
+        recordSocialShare('image');
       }
     } catch (err) {
       if (err.name !== 'AbortError') {
@@ -436,16 +439,30 @@ export default function ShareReflectionPage() {
     }
   };
 
+  const recordSocialShare = (platform) => {
+    const user = getCurrentUser();
+    if (!user?.uid) return;
+    const reflectionDate = getReflectionDate();
+    const dateStr = reflectionDate instanceof Date ? getDateId(reflectionDate) : getDateId(new Date(reflectionDate));
+    firestoreService.saveSocialShare(user.uid, {
+      platform,
+      reflectionDate: dateStr,
+      reflectionSnippet: (sharePreviewText || '').trim().slice(0, 200) || undefined,
+    });
+  };
+
   const shareToX = () => {
     const text = getSocialShareText();
     if (!text) return;
     window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
+    recordSocialShare('x');
   };
 
   const shareToWhatsApp = () => {
     const text = getSocialShareText();
     if (!text) return;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
+    recordSocialShare('whatsapp');
   };
 
   const shareWithNative = async () => {
@@ -454,6 +471,7 @@ export default function ShareReflectionPage() {
     if (typeof navigator !== 'undefined' && navigator.share) {
       try {
         await navigator.share({ title: 'My day reflection', text });
+        recordSocialShare('native');
       } catch (err) {
         if (err.name !== 'AbortError') console.error('Native share failed:', err);
       }
@@ -461,6 +479,7 @@ export default function ShareReflectionPage() {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(text);
         alert('Copied to clipboard! Paste it anywhere to share.');
+        recordSocialShare('native');
       } else {
         alert('Sharing not supported in this browser. Try X or WhatsApp.');
       }

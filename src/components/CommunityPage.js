@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
-import { MessageCircle, Heart, User, Sun, Moon, Send, X, Plus, XCircle, Image, Link } from 'lucide-react';
+import { MessageCircle, Heart, User, Sun, Moon, Send, X, Plus, XCircle, Image, Link, Share2 } from 'lucide-react';
 import { getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
 import { collection, addDoc, query, orderBy, getDocs, serverTimestamp, doc, setDoc, updateDoc, increment, deleteDoc, onSnapshot } from 'firebase/firestore';
@@ -42,6 +42,7 @@ export default function CommunityPage() {
   const [tabTouchStart, setTabTouchStart] = useState(null);
   const TAB_ORDER = ['mySpace', 'following', 'explore'];
   const [followLoadingUid, setFollowLoadingUid] = useState(null);
+  const [socialShares, setSocialShares] = useState([]);
 
   // Load profile picture
   useEffect(() => {
@@ -436,7 +437,41 @@ export default function CommunityPage() {
     });
   }, []);
 
+  // Load social shares for My Presence (shared to X, WhatsApp, More, image)
+  useEffect(() => {
+    const user = getCurrentUser();
+    if (!user) return;
+    firestoreService.getSocialSharesByUser(user.uid).then((result) => {
+      if (result.success && result.shares) {
+        setSocialShares(result.shares);
+      }
+    });
+  }, []);
+
   const user = getCurrentUser();
+
+  const normalizeReflectionDate = (val) => {
+    if (!val) return '';
+    if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}/.test(val)) return val.slice(0, 10);
+    try {
+      const d = val instanceof Date ? val : new Date(val);
+      return d.toISOString().slice(0, 10);
+    } catch {
+      return '';
+    }
+  };
+
+  const socialSharesByDate = (() => {
+    const map = {};
+    socialShares.forEach((s) => {
+      const d = s.reflectionDate || '';
+      if (!d) return;
+      if (!map[d]) map[d] = [];
+      if (!map[d].includes(s.platform)) map[d].push(s.platform);
+    });
+    return map;
+  })();
+
   const filteredPosts = (() => {
     if (!communityPosts.length) return [];
     if (activeTab === 'mySpace') {
@@ -448,6 +483,28 @@ export default function CommunityPage() {
     }
     return communityPosts; // explore: all posts
   })();
+
+  const mySpacePostDates = new Set(
+    (activeTab === 'mySpace' && user ? filteredPosts : [])
+      .map((p) => normalizeReflectionDate(p.reflectionDate))
+      .filter(Boolean)
+  );
+  const socialOnlyDates = activeTab === 'mySpace'
+    ? Object.keys(socialSharesByDate).filter((d) => !mySpacePostDates.has(d)).sort().reverse()
+    : [];
+
+  const formatSocialDate = (dateStr) => {
+    if (!dateStr) return '';
+    try {
+      const [y, m, d] = dateStr.split('-').map(Number);
+      const date = new Date(y, m - 1, d);
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: date.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const socialPlatformLabels = { x: 'X', whatsapp: 'WhatsApp', native: 'More', image: 'Image' };
 
   const switchTab = (tab) => {
     if (tab === activeTab) return;
@@ -819,7 +876,7 @@ export default function CommunityPage() {
             transition: 'opacity 0.15s ease, transform 0.15s ease',
           }}
         >
-          {activeTab === 'mySpace' && filteredPosts.length === 0 && (
+          {activeTab === 'mySpace' && filteredPosts.length === 0 && socialOnlyDates.length === 0 && (
             <div className="py-12 px-6 text-center">
               <p className={`text-base leading-relaxed ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                 Your reflections will appear here when you share them with the community.
@@ -906,6 +963,17 @@ export default function CommunityPage() {
                         <span>·</span>
                         <span>{formatTimeAgo(post.createdAt)}</span>
                       </button>
+                      {activeTab === 'mySpace' && user && post.authorId === user.uid && (() => {
+                        const normDate = normalizeReflectionDate(post.reflectionDate);
+                        const platforms = normDate ? (socialSharesByDate[normDate] || []) : [];
+                        if (platforms.length === 0) return null;
+                        const text = platforms.map((p) => socialPlatformLabels[p] || p).join(', ');
+                        return (
+                          <p className={`mt-1.5 text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                            Shared to social: {text}
+                          </p>
+                        );
+                      })()}
                       {post.image && (
                         <div className="mt-3 rounded-xl overflow-hidden">
                           <img
@@ -1160,6 +1228,31 @@ export default function CommunityPage() {
                     </div>
                   </div>
                 )}
+              </div>
+            );
+          })}
+          {activeTab === 'mySpace' && socialOnlyDates.map((dateStr) => {
+            const platforms = socialSharesByDate[dateStr] || [];
+            const text = platforms.map((p) => socialPlatformLabels[p] || p).join(', ');
+            return (
+              <div
+                key={`social-${dateStr}`}
+                className={`rounded-2xl p-4 ${isDarkMode ? 'backdrop-blur-lg' : 'bg-white'}`}
+                style={isDarkMode ? {
+                  backgroundColor: 'rgba(38, 38, 38, 0.6)',
+                  boxShadow: '0 2px 12px rgba(0, 0, 0, 0.2)',
+                  border: '1px solid rgba(255, 255, 255, 0.06)',
+                } : {
+                  boxShadow: '0 2px 12px rgba(0, 0, 0, 0.06)',
+                  border: '1px solid rgba(0, 0, 0, 0.04)',
+                }}
+              >
+                <div className="flex items-center gap-2">
+                  <Share2 className={`w-4 h-4 flex-shrink-0 ${isDarkMode ? 'text-[#7DD3C0]' : 'text-[#87A96B]'}`} />
+                  <p className={`text-sm ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                    Shared to {text} on {formatSocialDate(dateStr)}
+                  </p>
+                </div>
               </div>
             );
           })}

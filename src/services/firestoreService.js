@@ -212,6 +212,85 @@ class FirestoreService {
   }
 
   /**
+   * Record that the user shared their day reflection to a social platform (X, WhatsApp, More, or as image).
+   * @param {string} uid - User ID
+   * @param {{ platform: 'x'|'whatsapp'|'native'|'image', reflectionDate: string, reflectionSnippet?: string }} data
+   * @returns {Promise<{ success: boolean, error?: string }>}
+   */
+  async saveSocialShare(uid, data) {
+    if (!uid || !data?.platform) return { success: false, error: 'Missing uid or platform' };
+    try {
+      const reflectionDate = data.reflectionDate || getDateId(new Date());
+      const dateStr = typeof reflectionDate === 'string'
+        ? reflectionDate
+        : (reflectionDate instanceof Date ? getDateId(reflectionDate) : getDateId(new Date()));
+      const ref = collection(this.db, 'socialShares');
+      await addDoc(ref, {
+        userId: uid,
+        platform: data.platform,
+        reflectionDate: dateStr,
+        reflectionSnippet: (data.reflectionSnippet || '').slice(0, 200) || null,
+        createdAt: serverTimestamp(),
+      });
+      return { success: true };
+    } catch (error) {
+      console.error('Error saving social share:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Get all social shares for a user (for My Presence feed).
+   * @param {string} uid - User ID
+   * @returns {Promise<{ success: boolean, shares?: Array<{ id: string, platform: string, reflectionDate: string, reflectionSnippet?: string, createdAt: Date }> }>}
+   */
+  async getSocialSharesByUser(uid) {
+    if (!uid) return { success: true, shares: [] };
+    const ref = collection(this.db, 'socialShares');
+    const mapSnapshot = (snapshot) => {
+      const shares = [];
+      snapshot.forEach((docSnap) => {
+        const d = docSnap.data();
+        shares.push({
+          id: docSnap.id,
+          platform: d.platform || 'native',
+          reflectionDate: d.reflectionDate || '',
+          reflectionSnippet: d.reflectionSnippet || null,
+          createdAt: d.createdAt?.toDate?.() || new Date(),
+        });
+      });
+      return shares;
+    };
+    try {
+      const q = query(
+        ref,
+        where('userId', '==', uid),
+        orderBy('createdAt', 'desc'),
+        limit(100)
+      );
+      const snapshot = await getDocs(q);
+      return { success: true, shares: mapSnapshot(snapshot) };
+    } catch (indexError) {
+      const needsIndex = indexError?.code === 'failed-precondition' ||
+        (indexError?.message && indexError.message.toLowerCase().includes('index'));
+      if (needsIndex) {
+        try {
+          const fallbackQ = query(ref, where('userId', '==', uid), limit(150));
+          const fallbackSnap = await getDocs(fallbackQ);
+          const shares = mapSnapshot(fallbackSnap);
+          shares.sort((a, b) => (b.createdAt?.getTime?.() ?? 0) - (a.createdAt?.getTime?.() ?? 0));
+          return { success: true, shares: shares.slice(0, 100) };
+        } catch (e) {
+          console.error('Error getting social shares (fallback):', e);
+        }
+      } else {
+        console.error('Error getting social shares:', indexError);
+      }
+      return { success: true, shares: [] };
+    }
+  }
+
+  /**
    * Create or update a chat day document
    */
   async ensureChatDay(uid, dateId) {
