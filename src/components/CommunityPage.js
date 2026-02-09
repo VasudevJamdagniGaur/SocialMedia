@@ -149,7 +149,8 @@ export default function CommunityPage() {
         return;
       }
       
-      const author = user?.displayName || user?.email?.split('@')[0] || 'Anonymous';
+      const author = localStorage.getItem(`user_display_name_${user.uid}`) || user?.displayName || user?.email?.split('@')[0] || 'Anonymous';
+      const commenterProfilePicture = localStorage.getItem(`user_profile_picture_${user.uid}`) || profilePicture || null;
       
       if (parentCommentId) {
         // Add reply to comment
@@ -160,6 +161,7 @@ export default function CommunityPage() {
             author: author,
             authorName: author,
             userId: user.uid,
+            profilePicture: commenterProfilePicture || null,
             createdAt: serverTimestamp()
           });
           
@@ -179,6 +181,7 @@ export default function CommunityPage() {
             author: author,
             authorName: author,
             userId: user.uid,
+            profilePicture: commenterProfilePicture || null,
             createdAt: serverTimestamp()
           });
           
@@ -371,7 +374,8 @@ export default function CommunityPage() {
               text: commentData.text || commentData.message || '',
               time: commentData.createdAt?.toDate ? formatTimeAgo(commentData.createdAt.toDate()) : 'Just now',
               timestamp: commentData.createdAt?.toDate?.() || new Date(),
-              userId: commentData.userId || commentData.authorId
+              userId: commentData.userId || commentData.authorId,
+              profilePicture: commentData.profilePicture || null
             });
             
             // Set up listener for replies to this comment
@@ -387,7 +391,8 @@ export default function CommunityPage() {
                   text: replyData.text || replyData.message || '',
                   time: replyData.createdAt?.toDate ? formatTimeAgo(replyData.createdAt.toDate()) : 'Just now',
                   timestamp: replyData.createdAt?.toDate?.() || new Date(),
-                  userId: replyData.userId || replyData.authorId
+                  userId: replyData.userId || replyData.authorId,
+                  profilePicture: replyData.profilePicture || null
                 });
               });
               
@@ -1072,16 +1077,18 @@ export default function CommunityPage() {
                           const replies = commentReplies[`${post.id}-${comment.id}`] || [];
                           const isReplying = replyingTo?.postId === post.id && replyingTo?.commentId === comment.id;
                           
+                          const commentAvatar = comment.profilePicture || (comment.userId === user?.uid ? (localStorage.getItem(`user_profile_picture_${user?.uid}`) || profilePicture) : null);
                           return (
                             <div key={comment.id || comment.timestamp}>
                               <div className="flex items-start space-x-2">
                                 <div
-                                  className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-xs"
+                                  className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-xs bg-cover bg-center"
                                   style={{
                                     backgroundColor: isDarkMode ? "#7DD3C0" + '30' : "#E6B3BA" + '20',
+                                    ...(commentAvatar ? { backgroundImage: `url(${commentAvatar})` } : {}),
                                   }}
                                 >
-                                  <span>👤</span>
+                                  {!commentAvatar && <span>👤</span>}
                                 </div>
                                 <div className="flex-1">
                                   <div className="flex items-center space-x-2 mb-1">
@@ -1153,15 +1160,18 @@ export default function CommunityPage() {
                                   {/* Replies List */}
                                   {replies.length > 0 && (
                                     <div className="mt-2 ml-4 space-y-2 pl-3 border-l-2" style={{ borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)' }}>
-                                      {replies.map((reply) => (
+                                      {replies.map((reply) => {
+                                        const replyAvatar = reply.profilePicture || (reply.userId === user?.uid ? (localStorage.getItem(`user_profile_picture_${user?.uid}`) || profilePicture) : null);
+                                        return (
                                         <div key={reply.id} className="flex items-start space-x-2">
                                           <div
-                                            className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 text-xs"
+                                            className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 text-xs bg-cover bg-center"
                                             style={{
                                               backgroundColor: isDarkMode ? "#7DD3C0" + '20' : "#E6B3BA" + '15',
+                                              ...(replyAvatar ? { backgroundImage: `url(${replyAvatar})` } : {}),
                                             }}
                                           >
-                                            <span>👤</span>
+                                            {!replyAvatar && <span>👤</span>}
                                           </div>
                                           <div className="flex-1">
                                             <div className="flex items-center space-x-2 mb-0.5">
@@ -1177,7 +1187,8 @@ export default function CommunityPage() {
                                             </p>
                                           </div>
                                         </div>
-                                      ))}
+                                        );
+                                      })}
                                     </div>
                                   )}
                                 </div>
