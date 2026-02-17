@@ -973,7 +973,7 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
       className="min-h-screen relative overflow-hidden"
       style={{
         background: isDarkMode
-          ? "#131313"
+          ? "#131314"
           : "#FAFAF8",
       }}
     >

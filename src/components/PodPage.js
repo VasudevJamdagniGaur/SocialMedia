@@ -400,7 +400,7 @@ export default function PodPage() {
       className="min-h-screen px-6 relative overflow-hidden slide-up"
       style={{
         background: isDarkMode
-          ? "#131313"
+          ? "#131314"
           : "#FAFAF8",
         paddingTop: 'max(1.5rem, calc(env(safe-area-inset-top, 0px) + 1rem))',
         // Dedicated buffer: nav bar (56px) + breathing gap (24px) + safe-area so content never touches the bar

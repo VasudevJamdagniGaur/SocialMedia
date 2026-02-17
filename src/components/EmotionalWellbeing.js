@@ -4187,7 +4187,7 @@ Return in this JSON format:
           className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden"
           style={{
             background: isDarkMode
-              ? "#131313"
+              ? "#131314"
               : "#FAFAF8",
           }}
         >
@@ -4219,7 +4219,7 @@ Return in this JSON format:
         className="min-h-screen flex flex-col relative overflow-hidden"
         style={{
           background: isDarkMode
-            ? "#131313"
+            ? "#131314"
             : "#FAFAF8",
           // Dedicated buffer: nav bar (56px) + breathing gap (24px) + safe-area so content never touches the bar
           paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))',

@@ -176,7 +176,7 @@ function App() {
   return (
     <ThemeProvider>
       <Router>
-        <div className="App" style={{ backgroundColor: '#131313', minHeight: '100vh' }}>
+        <div className="App" style={{ backgroundColor: '#131314', minHeight: '100vh' }}>
           <AppContent />
         </div>
       </Router>

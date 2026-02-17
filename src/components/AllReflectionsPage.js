@@ -262,7 +262,7 @@ export default function AllReflectionsPage() {
       className="min-h-screen px-6 py-8 pb-20 relative overflow-hidden"
       style={{
         background: isDarkMode
-          ? "#131313"
+          ? "#131314"
           : "#FAFAF8"
       }}
     >
