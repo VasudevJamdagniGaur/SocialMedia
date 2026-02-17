@@ -4221,6 +4221,8 @@ Return in this JSON format:
           background: isDarkMode
             ? "#131314"
             : "#B5C4AE",
+          // Top safe area so header/buttons never overlap status bar/notch
+          paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))',
           // Dedicated buffer: nav bar (56px) + breathing gap (24px) + safe-area so content never touches the bar
           paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))',
         }}
@@ -4234,7 +4236,7 @@ Return in this JSON format:
           backgroundColor: isDarkMode
             ? "rgba(19, 19, 19, 0.95)"
             : "rgba(250, 250, 248, 0.95)",
-          paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))',
+          paddingTop: '0.75rem',
           paddingBottom: '1.25rem',
         }}
       >
