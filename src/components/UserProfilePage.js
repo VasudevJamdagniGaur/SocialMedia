@@ -96,7 +96,7 @@ export default function UserProfilePage() {
     return (
       <div
         className="min-h-screen flex items-center justify-center"
-        style={{ background: isDarkMode ? '#131314' : '#FAFAF8' }}
+        style={{ background: isDarkMode ? '#131314' : '#CFDCCA' }}
       >
         <div className="flex flex-col items-center gap-3">
           <div className="flex space-x-1">
@@ -114,7 +114,7 @@ export default function UserProfilePage() {
     return (
       <div
         className="min-h-screen flex flex-col items-center justify-center p-6"
-        style={{ background: isDarkMode ? '#131314' : '#FAFAF8' }}
+        style={{ background: isDarkMode ? '#131314' : '#CFDCCA' }}
       >
         <p className={isDarkMode ? 'text-gray-400' : 'text-gray-600'} style={{ marginBottom: 16 }}>User not found.</p>
         <button
@@ -134,7 +134,7 @@ export default function UserProfilePage() {
     <div
       className="min-h-screen"
       style={{
-        background: isDarkMode ? '#131314' : '#FAFAF8',
+        background: isDarkMode ? '#131314' : '#CFDCCA',
         paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))',
         paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom, 0px))',
       }}

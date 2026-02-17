@@ -500,7 +500,7 @@ export default function ShareReflectionPage() {
   return (
     <div
       className="min-h-screen flex flex-col px-4 py-6 pb-10"
-      style={{ background: isDarkMode ? '#131314' : '#FAFAF8' }}
+      style={{ background: isDarkMode ? '#131314' : '#CFDCCA' }}
     >
       <div className="max-w-md w-full mx-auto flex flex-col flex-1">
         {/* Back + Header */}

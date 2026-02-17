@@ -409,7 +409,7 @@ export default function AllDayReflectionsPage() {
       style={{
         background: isDarkMode
           ? "#131314"
-          : "#FAFAF8"
+          : "#CFDCCA"
       }}
     >
       {/* Header */}

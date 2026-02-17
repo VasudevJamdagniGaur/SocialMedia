@@ -263,7 +263,7 @@ export default function AllReflectionsPage() {
       style={{
         background: isDarkMode
           ? "#131314"
-          : "#FAFAF8"
+          : "#CFDCCA"
       }}
     >
       {/* Header */}

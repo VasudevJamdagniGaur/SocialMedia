@@ -370,7 +370,7 @@ export default function PodGroupChatPage() {
       style={{
         background: isDarkMode
           ? "#131314"
-          : "#FAFAF8"
+          : "#CFDCCA"
       }}
     >
       {/* Header: respect status bar and notch */}

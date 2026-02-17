@@ -740,7 +740,7 @@ export default function CommunityPage() {
       style={{
         background: isDarkMode
           ? "#131314"
-          : "#FAFAF8",
+          : "#CFDCCA",
         paddingTop: 'max(1.5rem, calc(env(safe-area-inset-top, 0px) + 1rem))',
         // Dedicated buffer: nav bar (56px) + breathing gap (24px) + safe-area so content never touches the bar
         paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))',
@@ -788,7 +788,7 @@ export default function CommunityPage() {
         <div className="sticky top-0 z-20 mb-0"
           style={{
             paddingTop: 'max(0px, env(safe-area-inset-top, 0px))',
-            background: isDarkMode ? '#131314' : '#FAFAF8',
+            background: isDarkMode ? '#131314' : '#CFDCCA',
             borderBottom: isDarkMode ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(0,0,0,0.06)',
           }}
         >

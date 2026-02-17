@@ -391,7 +391,7 @@ export default function DashboardPage() {
       style={{
         background: isDarkMode
           ? "#131314"
-          : "#FAFAF8",
+          : "#CFDCCA",
         paddingTop: 'max(1.5rem, calc(env(safe-area-inset-top, 0px) + 1rem))',
         // Dedicated buffer: nav bar (56px) + breathing gap (24px) + safe-area so content never touches the bar
         paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))',
