@@ -14,10 +14,13 @@ export default function BottomNavigation() {
   const isWellbeingActive = location.pathname === '/wellbeing';
 
   return (
-    <div
-      className="fixed bottom-0 left-0 right-0 z-50"
+    <nav
+      role="navigation"
+      aria-label="Main navigation"
+      className="fixed left-0 right-0 z-50"
       style={{
-        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        bottom: 0,
+        paddingBottom: 'max(12px, env(safe-area-inset-bottom, 0px))',
       }}
     >
       <div
@@ -139,7 +142,7 @@ export default function BottomNavigation() {
           />
         </button>
       </div>
-    </div>
+    </nav>
   );
 }
 
