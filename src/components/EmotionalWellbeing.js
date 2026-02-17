@@ -4235,7 +4235,7 @@ Return in this JSON format:
         style={{
           backgroundColor: isDarkMode
             ? "rgba(19, 19, 19, 0.95)"
-            : "rgba(250, 250, 248, 0.95)",
+            : "rgba(181, 196, 174, 0.96)", // match light green app chrome instead of white
           paddingTop: '0.75rem',
           paddingBottom: '1.25rem',
         }}
