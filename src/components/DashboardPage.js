@@ -620,9 +620,9 @@ export default function DashboardPage() {
         <div
           className="rounded-2xl p-4 mb-6 relative overflow-hidden"
           style={{
-            backgroundColor: "#C6AEE2",
-            boxShadow: "0 4px 16px rgba(0, 0, 0, 0.12)",
-            border: "1px solid rgba(0, 0, 0, 0.08)",
+            backgroundColor: "#ECF1EA",
+            boxShadow: "0 4px 16px rgba(0, 0, 0, 0.08)",
+            border: "1px solid rgba(0, 0, 0, 0.06)",
           }}
         >
           <div className="flex items-center justify-between" style={{ color: '#2D2D2D' }}>
@@ -637,7 +637,7 @@ export default function DashboardPage() {
               onClick={handleCalendarClick}
             >
               <div className="flex items-center justify-center space-x-2 mb-1">
-                <Calendar className="w-4 h-4" style={{ color: "#6B4C7A" }} />
+                <Calendar className="w-4 h-4" style={{ color: "#5A7A52" }} />
                 <span className="text-sm" style={{ color: '#4A4A4A' }}>Selected Date</span>
               </div>
               <div className="font-semibold" style={{ color: '#2D2D2D' }}>{formatDateForDisplay(selectedDate)}</div>
@@ -656,9 +656,9 @@ export default function DashboardPage() {
         <div
           className="rounded-2xl relative overflow-hidden"
           style={{
-            backgroundColor: "#C6AEE2",
-            boxShadow: "0 4px 20px rgba(0, 0, 0, 0.12)",
-            border: "1px solid rgba(0, 0, 0, 0.08)",
+            backgroundColor: "#ECF1EA",
+            boxShadow: "0 4px 20px rgba(0, 0, 0, 0.08)",
+            border: "1px solid rgba(0, 0, 0, 0.06)",
           }}
         >
           <div className="p-6 pb-5">
@@ -673,27 +673,27 @@ export default function DashboardPage() {
                 </h2>
                 <p
                   className="text-sm mt-0.5"
-                  style={{ color: '#6B4C7A' }}
+                  style={{ color: '#5A7A52' }}
                 >
                   {formatDateForDisplay(selectedDate)}
                 </p>
               </div>
-              <ChevronRight className="w-5 h-5 flex-shrink-0" style={{ color: '#6B4C7A' }} strokeWidth={2} />
+              <ChevronRight className="w-5 h-5 flex-shrink-0" style={{ color: '#5A7A52' }} strokeWidth={2} />
             </div>
 
             <div
               className="rounded-xl relative overflow-hidden"
               style={{
-                backgroundColor: "rgba(255, 255, 255, 0.5)",
+                backgroundColor: "rgba(255, 255, 255, 0.6)",
                 border: "1px solid rgba(0, 0, 0, 0.06)",
               }}
             >
               {isLoadingReflection ? (
                 <div className="flex flex-col items-center justify-center py-10">
                   <div className="flex space-x-1.5 mb-4">
-                    <div className="w-2 h-2 rounded-full animate-bounce bg-[#6B4C7A]" style={{ animationDelay: '0ms' }} />
-                    <div className="w-2 h-2 rounded-full animate-bounce bg-[#6B4C7A]" style={{ animationDelay: '150ms' }} />
-                    <div className="w-2 h-2 rounded-full animate-bounce bg-[#6B4C7A]" style={{ animationDelay: '300ms' }} />
+                    <div className="w-2 h-2 rounded-full animate-bounce bg-[#5A7A52]" style={{ animationDelay: '0ms' }} />
+                    <div className="w-2 h-2 rounded-full animate-bounce bg-[#5A7A52]" style={{ animationDelay: '150ms' }} />
+                    <div className="w-2 h-2 rounded-full animate-bounce bg-[#5A7A52]" style={{ animationDelay: '300ms' }} />
                   </div>
                   <p className="text-sm" style={{ color: '#5A5A5A' }}>
                     Preparing...
@@ -707,7 +707,7 @@ export default function DashboardPage() {
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); navigate('/share-reflection', { state: { reflection, selectedDate } }); }}
-                    className="mt-4 flex items-center justify-center gap-2 rounded-lg py-2.5 px-4 text-sm font-medium transition-all hover:opacity-90 text-[#6B4C7A] bg-white/60 border border-[#6B4C7A]/40"
+                    className="mt-4 flex items-center justify-center gap-2 rounded-lg py-2.5 px-4 text-sm font-medium transition-all hover:opacity-90 text-[#5A7A52] bg-white/70 border border-[#5A7A52]/50"
                   >
                     <Share2 className="w-4 h-4" strokeWidth={2} />
                     Share to HUB
@@ -723,9 +723,9 @@ export default function DashboardPage() {
                     onClick={handleChatClick}
                     className="mt-6 w-full rounded-xl py-3.5 px-5 font-medium text-[15px] transition-all duration-200 hover:opacity-90 active:scale-[0.99] flex items-center justify-center gap-2"
                     style={{
-                      backgroundColor: 'rgba(107, 76, 122, 0.4)',
+                      backgroundColor: 'rgba(90, 122, 82, 0.35)',
                       color: '#2D2D2D',
-                      border: '1px solid rgba(107, 76, 122, 0.5)',
+                      border: '1px solid rgba(90, 122, 82, 0.5)',
                     }}
                   >
                     Look back at this day
@@ -741,12 +741,12 @@ export default function DashboardPage() {
             onClick={handleChatClick}
             className="flex items-center space-x-3 font-medium rounded-xl px-6 py-3.5 hover:opacity-90 transition-all duration-200 w-full justify-center"
             style={{
-              backgroundColor: "#C6AEE2",
+              backgroundColor: "#ECF1EA",
               color: "#2D2D2D",
-              border: "1px solid rgba(0, 0, 0, 0.08)",
+              border: "1px solid rgba(0, 0, 0, 0.06)",
             }}
           >
-            <MessageCircle className="w-5 h-5" style={{ color: '#6B4C7A' }} />
+            <MessageCircle className="w-5 h-5" style={{ color: '#5A7A52' }} />
             <span>Chat with Deite</span>
           </button>
 
@@ -754,12 +754,12 @@ export default function DashboardPage() {
             onClick={handleWhisperClick}
             className="flex items-center space-x-3 font-medium rounded-xl px-6 py-3.5 hover:opacity-90 transition-all duration-200 w-full justify-center"
             style={{
-              backgroundColor: "#C6AEE2",
+              backgroundColor: "#ECF1EA",
               color: "#2D2D2D",
-              border: "1px solid rgba(0, 0, 0, 0.08)",
+              border: "1px solid rgba(0, 0, 0, 0.06)",
             }}
           >
-            <MessageCircle className="w-5 h-5" style={{ color: '#6B4C7A' }} />
+            <MessageCircle className="w-5 h-5" style={{ color: '#5A7A52' }} />
             <span>Whisper Session</span>
           </button>
         </div>
