@@ -618,64 +618,47 @@ export default function DashboardPage() {
         </div>
 
         <div
-          className={`rounded-2xl p-4 mb-6 relative overflow-hidden ${
-            isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
-          }`}
-          style={isDarkMode ? {
-            backgroundColor: "#262626",
-            boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
-          } : {
-            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)",
-            borderTop: "3px solid rgba(58, 212, 248, 0.2)",
+          className="rounded-2xl p-4 mb-6 relative overflow-hidden"
+          style={{
+            backgroundColor: "#C6AEE2",
+            boxShadow: "0 4px 16px rgba(0, 0, 0, 0.12)",
+            border: "1px solid rgba(0, 0, 0, 0.08)",
           }}
         >
-          <div className={`flex items-center justify-between ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+          <div className="flex items-center justify-between" style={{ color: '#2D2D2D' }}>
             <button 
               onClick={handlePreviousDay}
-              className={`p-1 rounded transition-colors ${
-                isDarkMode ? 'hover:bg-gray-800/30' : 'hover:bg-green-50'
-              }`}
+              className="p-1 rounded transition-colors hover:bg-black/10"
             >
-              <span className={`text-lg ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>‹</span>
+              <span className="text-lg" style={{ color: '#4A4A4A' }}>‹</span>
             </button>
             <div 
-              className={`text-center cursor-pointer rounded-xl p-2 transition-colors ${
-                isDarkMode ? 'hover:bg-gray-800/20' : 'hover:bg-green-50'
-              }`}
+              className="text-center cursor-pointer rounded-xl p-2 transition-colors hover:bg-black/10"
               onClick={handleCalendarClick}
             >
               <div className="flex items-center justify-center space-x-2 mb-1">
-                <Calendar className="w-4 h-4" style={{ color: "#3AD4F8" }} />
-                <span className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Selected Date</span>
+                <Calendar className="w-4 h-4" style={{ color: "#6B4C7A" }} />
+                <span className="text-sm" style={{ color: '#4A4A4A' }}>Selected Date</span>
               </div>
-              <div className={`font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>{formatDateForDisplay(selectedDate)}</div>
-              <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Click to open calendar</div>
+              <div className="font-semibold" style={{ color: '#2D2D2D' }}>{formatDateForDisplay(selectedDate)}</div>
+              <div className="text-xs" style={{ color: '#5A5A5A' }}>Click to open calendar</div>
             </div>
             <button 
               onClick={handleNextDay}
-              className={`p-1 rounded transition-colors ${
-                isDarkMode ? 'hover:bg-gray-800/30' : 'hover:bg-green-50'
-              }`}
+              className="p-1 rounded transition-colors hover:bg-black/10"
             >
-              <span className={`text-lg ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>›</span>
+              <span className="text-lg" style={{ color: '#4A4A4A' }}>›</span>
             </button>
           </div>
         </div>
 
         {/* Day's Reflect: tied to selected date, clear hierarchy, primary action, calm tone */}
         <div
-          className={`rounded-2xl relative overflow-hidden ${
-            isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
-          }`}
-          style={isDarkMode ? {
-            backgroundColor: "#262626",
+          className="rounded-2xl relative overflow-hidden"
+          style={{
+            backgroundColor: "#C6AEE2",
             boxShadow: "0 4px 20px rgba(0, 0, 0, 0.12)",
-            border: "1px solid rgba(58, 212, 248, 0.12)",
-            borderLeft: "3px solid rgba(58, 212, 248, 0.35)",
-          } : {
-            boxShadow: "0 4px 16px rgba(0, 0, 0, 0.06)",
-            borderTop: "3px solid rgba(125, 211, 192, 0.25)",
+            border: "1px solid rgba(0, 0, 0, 0.08)",
           }}
         >
           <div className="p-6 pb-5">
@@ -685,52 +668,46 @@ export default function DashboardPage() {
               className="flex items-center justify-between cursor-pointer transition-opacity hover:opacity-85 mb-6"
             >
               <div>
-                <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                <h2 className="text-lg font-semibold" style={{ color: '#2D2D2D' }}>
                   Day's Reflect
                 </h2>
                 <p
                   className="text-sm mt-0.5"
-                  style={{ color: '#3AD4F8' }}
+                  style={{ color: '#6B4C7A' }}
                 >
                   {formatDateForDisplay(selectedDate)}
                 </p>
               </div>
-              <ChevronRight className="w-5 h-5 flex-shrink-0 text-[#3AD4F8]" strokeWidth={2} />
+              <ChevronRight className="w-5 h-5 flex-shrink-0" style={{ color: '#6B4C7A' }} strokeWidth={2} />
             </div>
 
             <div
-              className={`rounded-xl relative overflow-hidden ${
-                isDarkMode ? 'backdrop-blur-md' : ''
-              }`}
-              style={isDarkMode ? {
-                backgroundColor: "rgba(255, 255, 255, 0.03)",
-                border: "1px solid rgba(255, 255, 255, 0.06)",
-              } : {
-                backgroundColor: "#F9F9F7",
+              className="rounded-xl relative overflow-hidden"
+              style={{
+                backgroundColor: "rgba(255, 255, 255, 0.5)",
+                border: "1px solid rgba(0, 0, 0, 0.06)",
               }}
             >
               {isLoadingReflection ? (
                 <div className="flex flex-col items-center justify-center py-10">
                   <div className="flex space-x-1.5 mb-4">
-                    <div className="w-2 h-2 rounded-full animate-bounce bg-[#3AD4F8]" style={{ animationDelay: '0ms' }} />
-                    <div className="w-2 h-2 rounded-full animate-bounce bg-[#3AD4F8]" style={{ animationDelay: '150ms' }} />
-                    <div className="w-2 h-2 rounded-full animate-bounce bg-[#3AD4F8]" style={{ animationDelay: '300ms' }} />
+                    <div className="w-2 h-2 rounded-full animate-bounce bg-[#6B4C7A]" style={{ animationDelay: '0ms' }} />
+                    <div className="w-2 h-2 rounded-full animate-bounce bg-[#6B4C7A]" style={{ animationDelay: '150ms' }} />
+                    <div className="w-2 h-2 rounded-full animate-bounce bg-[#6B4C7A]" style={{ animationDelay: '300ms' }} />
                   </div>
-                  <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  <p className="text-sm" style={{ color: '#5A5A5A' }}>
                     Preparing...
                   </p>
                 </div>
               ) : reflection ? (
                 <div onClick={() => navigate('/reflections')} className="p-5 cursor-pointer hover:opacity-95 transition-opacity">
-                  <p className={`text-[15px] leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                  <p className="text-[15px] leading-relaxed" style={{ color: '#2D2D2D' }}>
                     {reflection}
                   </p>
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); navigate('/share-reflection', { state: { reflection, selectedDate } }); }}
-                    className={`mt-4 flex items-center justify-center gap-2 rounded-lg py-2.5 px-4 text-sm font-medium transition-all hover:opacity-90 ${
-                      isDarkMode ? 'text-[#3AD4F8] bg-white/5 border border-[#3AD4F8]/30' : 'text-[#3AD4F8] bg-black/5 border border-[#3AD4F8]/30'
-                    }`}
+                    className="mt-4 flex items-center justify-center gap-2 rounded-lg py-2.5 px-4 text-sm font-medium transition-all hover:opacity-90 text-[#6B4C7A] bg-white/60 border border-[#6B4C7A]/40"
                   >
                     <Share2 className="w-4 h-4" strokeWidth={2} />
                     Share to HUB
@@ -738,21 +715,17 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <div className="px-6 pt-6 pb-7 flex flex-col items-stretch">
-                  <p className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                  <p className="text-sm" style={{ color: '#4A4A4A' }}>
                     A quiet moment for this day
                   </p>
                   <button
                     type="button"
                     onClick={handleChatClick}
                     className="mt-6 w-full rounded-xl py-3.5 px-5 font-medium text-[15px] transition-all duration-200 hover:opacity-90 active:scale-[0.99] flex items-center justify-center gap-2"
-                    style={isDarkMode ? {
-                      backgroundColor: '#373D3D',
-                      color: '#6ADFBB',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                    } : {
-                      backgroundColor: '#373D3D',
-                      color: '#6ADFBB',
-                      border: '1px solid rgba(0, 0, 0, 0.08)',
+                    style={{
+                      backgroundColor: 'rgba(107, 76, 122, 0.4)',
+                      color: '#2D2D2D',
+                      border: '1px solid rgba(107, 76, 122, 0.5)',
                     }}
                   >
                     Look back at this day
@@ -766,35 +739,27 @@ export default function DashboardPage() {
         <div className="flex flex-col space-y-3 justify-center mt-2">
           <button
             onClick={handleChatClick}
-            className={`flex items-center space-x-3 font-medium rounded-xl px-6 py-3.5 hover:opacity-90 transition-all duration-200 w-full justify-center ${
-              isDarkMode ? 'text-gray-200' : 'text-gray-700'
-            }`}
-            style={isDarkMode ? {
-              backgroundColor: "rgba(255, 255, 255, 0.06)",
-              border: "1px solid rgba(255, 255, 255, 0.1)",
-            } : {
-              backgroundColor: "rgba(0, 0, 0, 0.04)",
+            className="flex items-center space-x-3 font-medium rounded-xl px-6 py-3.5 hover:opacity-90 transition-all duration-200 w-full justify-center"
+            style={{
+              backgroundColor: "#C6AEE2",
+              color: "#2D2D2D",
               border: "1px solid rgba(0, 0, 0, 0.08)",
             }}
           >
-            <MessageCircle className="w-5 h-5" style={{ color: isDarkMode ? '#8AB4F8' : '#3AD4F8' }} />
+            <MessageCircle className="w-5 h-5" style={{ color: '#6B4C7A' }} />
             <span>Chat with Deite</span>
           </button>
 
           <button
             onClick={handleWhisperClick}
-            className={`flex items-center space-x-3 font-medium rounded-xl px-6 py-3.5 hover:opacity-90 transition-all duration-200 w-full justify-center ${
-              isDarkMode ? 'text-gray-200' : 'text-gray-700'
-            }`}
-            style={isDarkMode ? {
-              backgroundColor: "rgba(255, 255, 255, 0.06)",
-              border: "1px solid rgba(255, 255, 255, 0.1)",
-            } : {
-              backgroundColor: "rgba(0, 0, 0, 0.04)",
+            className="flex items-center space-x-3 font-medium rounded-xl px-6 py-3.5 hover:opacity-90 transition-all duration-200 w-full justify-center"
+            style={{
+              backgroundColor: "#C6AEE2",
+              color: "#2D2D2D",
               border: "1px solid rgba(0, 0, 0, 0.08)",
             }}
           >
-            <MessageCircle className="w-5 h-5" style={{ color: isDarkMode ? '#8AB4F8' : '#3AD4F8' }} />
+            <MessageCircle className="w-5 h-5" style={{ color: '#6B4C7A' }} />
             <span>Whisper Session</span>
           </button>
         </div>
