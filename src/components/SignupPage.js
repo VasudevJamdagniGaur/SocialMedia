@@ -145,7 +145,7 @@ const SignupPage = () => {
           style={{
             height: '56px',
             borderRadius: '14px',
-            background: '#CFDCCA',
+            background: '#B5C4AE',
             color: '#1f1f1f',
             border: '1px solid rgba(0, 0, 0, 0.06)',
             boxShadow: '0 4px 24px rgba(0, 0, 0, 0.12), 0 0 1px rgba(255, 255, 255, 0.08)',

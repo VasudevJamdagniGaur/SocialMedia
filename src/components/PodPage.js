@@ -401,7 +401,7 @@ export default function PodPage() {
       style={{
         background: isDarkMode
           ? "#131314"
-          : "#CFDCCA",
+          : "#B5C4AE",
         paddingTop: 'max(1.5rem, calc(env(safe-area-inset-top, 0px) + 1rem))',
         // Dedicated buffer: nav bar (56px) + breathing gap (24px) + safe-area so content never touches the bar
         paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))',

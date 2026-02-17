@@ -974,7 +974,7 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
       style={{
         background: isDarkMode
           ? "#131314"
-          : "#CFDCCA",
+          : "#B5C4AE",
       }}
     >
       {/* Floating decorative elements */}

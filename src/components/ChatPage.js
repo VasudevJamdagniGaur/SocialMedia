@@ -1194,7 +1194,7 @@ export default function ChatPage() {
       style={{
         background: isDarkMode
           ? "#131314"
-          : "#CFDCCA",
+          : "#B5C4AE",
       }}
     >
       {/* Header: respect status bar and notch, own zone below system UI */}

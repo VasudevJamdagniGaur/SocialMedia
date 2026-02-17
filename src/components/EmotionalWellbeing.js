@@ -4188,7 +4188,7 @@ Return in this JSON format:
           style={{
             background: isDarkMode
               ? "#131314"
-              : "#CFDCCA",
+              : "#B5C4AE",
           }}
         >
           <div className="flex flex-col items-center space-y-4">
@@ -4220,7 +4220,7 @@ Return in this JSON format:
         style={{
           background: isDarkMode
             ? "#131314"
-            : "#CFDCCA",
+            : "#B5C4AE",
           // Dedicated buffer: nav bar (56px) + breathing gap (24px) + safe-area so content never touches the bar
           paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))',
         }}
