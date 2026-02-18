@@ -805,7 +805,7 @@ export default function CommunityPage() {
               {profilePicture ? (
                 <img src={profilePicture} alt="Profile" className="w-full h-full object-cover" />
               ) : (
-                <User className="w-5 h-5" style={{ color: isDarkMode ? '#81C995' : '#B19CD9' }} strokeWidth={1.5} />
+                <User className="w-5 h-5" style={{ color: '#3AD4F8' }} strokeWidth={1.5} />
               )}
             </div>
             <img
@@ -826,7 +826,7 @@ export default function CommunityPage() {
                 border: '1px solid rgba(255,255,255,0.08)',
               } : { boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}
             >
-              {isDarkMode ? <Sun className="w-5 h-5" style={{ color: '#8AB4F8' }} strokeWidth={1.5} /> : <Moon className="w-5 h-5" style={{ color: '#E6B3BA' }} strokeWidth={1.5} />}
+              {isDarkMode ? <Moon className="w-5 h-5" style={{ color: '#3AD4F8' }} strokeWidth={1.5} /> : <Sun className="w-5 h-5" style={{ color: '#3AD4F8' }} strokeWidth={1.5} />}
             </div>
           </div>
 
