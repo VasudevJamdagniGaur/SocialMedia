@@ -741,7 +741,7 @@ export default function CommunityPage() {
         background: isDarkMode
           ? "#131314"
           : "#B5C4AE",
-        paddingTop: 'max(1.5rem, calc(env(safe-area-inset-top, 0px) + 1rem))',
+        paddingTop: 0,
         // Dedicated buffer: nav bar (56px) + breathing gap (24px) + safe-area so content never touches the bar
         paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))',
       }}
@@ -787,12 +787,13 @@ export default function CommunityPage() {
         {/* Minimal Hub header - Twitter-style */}
         <div className="sticky top-0 z-20 mb-0"
           style={{
-            paddingTop: 'max(0px, env(safe-area-inset-top, 0px))',
+            paddingTop: 'max(0.5rem, env(safe-area-inset-top, 0px))',
+            paddingBottom: '0.125rem',
             background: isDarkMode ? '#131314' : '#B5C4AE',
             borderBottom: isDarkMode ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(0,0,0,0.06)',
           }}
         >
-          <div className="flex items-center justify-between px-1 py-3">
+          <div className="flex items-center justify-between px-1 py-2 min-h-[2.75rem]">
             <div
               onClick={handleProfileClick}
               className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity overflow-hidden flex-shrink-0"
@@ -831,7 +832,7 @@ export default function CommunityPage() {
 
           {/* Segmented tabs - My Presence | Following | Explore (swipeable) */}
           <div
-            className="flex items-center justify-around overflow-x-auto no-scrollbar touch-pan-y"
+            className="flex items-center justify-around overflow-x-auto overflow-y-visible no-scrollbar touch-pan-y"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}
             onTouchStart={handleTabTouchStart}
             onTouchEnd={handleTabTouchEnd}
@@ -844,7 +845,7 @@ export default function CommunityPage() {
               <button
                 key={tab.id}
                 onClick={() => switchTab(tab.id)}
-                className="flex-1 min-w-0 py-3 px-2 text-center transition-colors duration-200 relative"
+                className="flex-1 min-w-0 py-2.5 px-2 text-center transition-colors duration-200 relative flex flex-col items-center gap-0.5"
               >
                 <span
                   className={`text-[15px] font-medium transition-colors ${
