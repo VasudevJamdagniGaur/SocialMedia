@@ -795,18 +795,14 @@ export default function CommunityPage() {
         >
           <div className="flex items-center justify-between px-1 py-2 min-h-[2.75rem]">
             <div
-              onClick={handleProfileClick}
-              className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity overflow-hidden flex-shrink-0"
+              onClick={toggleTheme}
+              className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity flex-shrink-0"
               style={isDarkMode ? {
-                backgroundColor: profilePicture ? 'transparent' : '#262626',
+                backgroundColor: '#262626',
                 border: '1px solid rgba(255,255,255,0.08)',
               } : { boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}
             >
-              {profilePicture ? (
-                <img src={profilePicture} alt="Profile" className="w-full h-full object-cover" />
-              ) : (
-                <User className="w-5 h-5" style={{ color: '#3AD4F8' }} strokeWidth={1.5} />
-              )}
+              {isDarkMode ? <Moon className="w-5 h-5" style={{ color: '#3AD4F8' }} strokeWidth={1.5} /> : <Sun className="w-5 h-5" style={{ color: '#3AD4F8' }} strokeWidth={1.5} />}
             </div>
             <img
               src="/hub-icon.png"
@@ -819,14 +815,18 @@ export default function CommunityPage() {
               }}
             />
             <div
-              onClick={toggleTheme}
-              className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity flex-shrink-0"
+              onClick={handleProfileClick}
+              className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity overflow-hidden flex-shrink-0"
               style={isDarkMode ? {
-                backgroundColor: '#262626',
+                backgroundColor: profilePicture ? 'transparent' : '#262626',
                 border: '1px solid rgba(255,255,255,0.08)',
               } : { boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}
             >
-              {isDarkMode ? <Moon className="w-5 h-5" style={{ color: '#3AD4F8' }} strokeWidth={1.5} /> : <Sun className="w-5 h-5" style={{ color: '#3AD4F8' }} strokeWidth={1.5} />}
+              {profilePicture ? (
+                <img src={profilePicture} alt="Profile" className="w-full h-full object-cover" />
+              ) : (
+                <User className="w-5 h-5" style={{ color: '#3AD4F8' }} strokeWidth={1.5} />
+              )}
             </div>
           </div>
 
