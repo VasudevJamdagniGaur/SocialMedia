@@ -445,65 +445,57 @@ export default function PodPage() {
       </div>
 
       <div className="relative z-10 max-w-sm mx-auto">
-        {/* Title Section with Profile */}
+        {/* Title Section: theme left, Crew (beta) center, profile right - match dashboard */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center space-x-3">
-              <img
-                src="/crew-icon.png"
-                alt="Crew"
-                className="w-16 h-16 object-contain"
-                style={{
-                  filter: isDarkMode ? 'brightness(0) invert(1)' : 'brightness(0)',
-                  WebkitFilter: isDarkMode ? 'brightness(0) invert(1)' : 'brightness(0)'
-                }}
-              />
-              <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+            {/* Left: Day/night toggle - same as dashboard */}
+            <div
+              onClick={toggleTheme}
+              className={`w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity flex-shrink-0 ${
+                isDarkMode ? 'backdrop-blur-md' : 'bg-white'
+              }`}
+              style={isDarkMode ? {
+                backgroundColor: "#262626",
+                boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+              } : {
+                boxShadow: "0 2px 8px rgba(230, 179, 186, 0.15)",
+              }}
+            >
+              {isDarkMode ?
+                <Moon className="w-5 h-5" style={{ color: "#3AD4F8" }} strokeWidth={1.5} /> :
+                <Sun className="w-5 h-5" style={{ color: "#3AD4F8" }} strokeWidth={1.5} />
+              }
+            </div>
+            {/* Center: Crew (beta) */}
+            <div className="flex items-center justify-center flex-1 min-w-0 mx-2">
+              <h1 className={`text-xl font-bold whitespace-nowrap ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
                 Crew <span className={`font-normal ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>(beta)</span>
               </h1>
             </div>
-            <div className="flex space-x-2">
-              <div
-                onClick={toggleTheme}
-                className={`w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity ${
-                  isDarkMode ? 'backdrop-blur-md' : 'bg-white'
-                }`}
-                style={isDarkMode ? {
-                  backgroundColor: "#262626",
-                  boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-                  border: "1px solid rgba(255, 255, 255, 0.08)",
-                } : {
-                  boxShadow: "0 2px 8px rgba(230, 179, 186, 0.15)",
-                }}
-              >
-                {isDarkMode ?
-                  <Sun className="w-5 h-5" style={{ color: "#8AB4F8" }} strokeWidth={1.5} /> :
-                  <Moon className="w-5 h-5" style={{ color: "#E6B3BA" }} strokeWidth={1.5} />
-                }
-              </div>
-              <div
-                onClick={handleProfileClick}
-                className={`w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity overflow-hidden ${
-                  isDarkMode ? 'backdrop-blur-md' : 'bg-white'
-                }`}
-                style={isDarkMode ? {
-                  backgroundColor: profilePicture ? "transparent" : "#262626",
-                  boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-                  border: profilePicture ? "none" : "1px solid rgba(255, 255, 255, 0.08)",
-                } : {
-                  boxShadow: "0 2px 8px rgba(177, 156, 217, 0.15)",
-                }}
-              >
-                {profilePicture ? (
-                  <img 
-                    src={profilePicture} 
-                    alt="Profile" 
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <User className="w-5 h-5" style={{ color: isDarkMode ? "#81C995" : "#B19CD9" }} strokeWidth={1.5} />
-                )}
-              </div>
+            {/* Right: Profile - same as dashboard */}
+            <div
+              onClick={handleProfileClick}
+              className={`w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity overflow-hidden flex-shrink-0 ${
+                isDarkMode ? 'backdrop-blur-md' : 'bg-white'
+              }`}
+              style={isDarkMode ? {
+                backgroundColor: profilePicture ? "transparent" : "#262626",
+                boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
+                border: profilePicture ? "none" : "1px solid rgba(255, 255, 255, 0.08)",
+              } : {
+                boxShadow: "0 2px 8px rgba(177, 156, 217, 0.15)",
+              }}
+            >
+              {profilePicture ? (
+                <img 
+                  src={profilePicture} 
+                  alt="Profile" 
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <User className="w-5 h-5" style={{ color: "#3AD4F8" }} strokeWidth={1.5} />
+              )}
             </div>
           </div>
           <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
