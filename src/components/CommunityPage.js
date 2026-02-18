@@ -789,8 +789,8 @@ export default function CommunityPage() {
           style={{
             paddingTop: 'max(0.5rem, env(safe-area-inset-top, 0px))',
             paddingBottom: '0.125rem',
-            background: isDarkMode ? '#131314' : '#B5C4AE',
-            borderBottom: isDarkMode ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(0,0,0,0.06)',
+            background: isDarkMode ? '#131314' : '#ffffff',
+            borderBottom: isDarkMode ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(0,0,0,0.08)',
           }}
         >
           <div className="flex items-center justify-between px-1 py-2 min-h-[2.75rem]">
