@@ -570,8 +570,8 @@ export default function DashboardPage() {
             }}
           >
             {isDarkMode ?
-              <Sun className="w-5 h-5" style={{ color: "#3AD4F8" }} strokeWidth={1.5} /> :
-              <Moon className="w-5 h-5" style={{ color: "#3AD4F8" }} strokeWidth={1.5} />
+              <Moon className="w-5 h-5" style={{ color: "#3AD4F8" }} strokeWidth={1.5} /> :
+              <Sun className="w-5 h-5" style={{ color: "#3AD4F8" }} strokeWidth={1.5} />
             }
           </div>
 
