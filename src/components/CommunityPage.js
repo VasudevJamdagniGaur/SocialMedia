@@ -789,38 +789,52 @@ export default function CommunityPage() {
           style={{
             paddingTop: 'max(0.5rem, env(safe-area-inset-top, 0px))',
             paddingBottom: '0.125rem',
-            background: isDarkMode ? '#131314' : '#ffffff',
+            background: 'transparent',
             borderBottom: isDarkMode ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(0,0,0,0.08)',
           }}
         >
           <div className="flex items-center justify-between px-1 py-2 min-h-[2.75rem]">
             <div
               onClick={toggleTheme}
-              className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity flex-shrink-0"
+              className={`w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity flex-shrink-0 ${!isDarkMode ? 'bg-white' : ''}`}
               style={isDarkMode ? {
                 backgroundColor: '#262626',
                 border: '1px solid rgba(255,255,255,0.08)',
-              } : { boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}
+              } : {
+                boxShadow: '0 2px 8px rgba(230, 179, 186, 0.15)',
+              }}
             >
               {isDarkMode ? <Moon className="w-5 h-5" style={{ color: '#3AD4F8' }} strokeWidth={1.5} /> : <Sun className="w-5 h-5" style={{ color: '#3AD4F8' }} strokeWidth={1.5} />}
             </div>
-            <img
-              src="/hub-icon.png"
-              alt="Deite Hub"
-              className="object-contain flex-shrink-0"
-              style={{
-                width: 40,
-                height: 40,
-                filter: isDarkMode ? 'brightness(0) invert(1)' : 'brightness(0)',
+            <div
+              className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${!isDarkMode ? 'bg-white' : ''}`}
+              style={isDarkMode ? {
+                backgroundColor: '#262626',
+                border: '1px solid rgba(255,255,255,0.08)',
+                padding: 6,
+              } : {
+                boxShadow: '0 2px 8px rgba(230, 179, 186, 0.15)',
+                padding: 6,
               }}
-            />
+            >
+              <img
+                src="/hub-icon.png"
+                alt="Deite Hub"
+                className="object-contain w-full h-full"
+                style={{
+                  filter: isDarkMode ? 'brightness(0) invert(1)' : 'brightness(0)',
+                }}
+              />
+            </div>
             <div
               onClick={handleProfileClick}
-              className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity overflow-hidden flex-shrink-0"
+              className={`w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity overflow-hidden flex-shrink-0 ${!isDarkMode ? 'bg-white' : ''}`}
               style={isDarkMode ? {
                 backgroundColor: profilePicture ? 'transparent' : '#262626',
-                border: '1px solid rgba(255,255,255,0.08)',
-              } : { boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}
+                border: profilePicture ? 'none' : '1px solid rgba(255,255,255,0.08)',
+              } : {
+                boxShadow: '0 2px 8px rgba(177, 156, 217, 0.15)',
+              }}
             >
               {profilePicture ? (
                 <img src={profilePicture} alt="Profile" className="w-full h-full object-cover" />
