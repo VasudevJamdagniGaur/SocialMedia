@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
-import { MessageCircle, Heart, User, Sun, Moon, Send, X, Plus, XCircle, Image, Link, Share2 } from 'lucide-react';
+import { MessageCircle, Heart, User, Sun, Moon, Send, X, Plus, XCircle, Image, Link, Share2, Menu, Search, Repeat } from 'lucide-react';
 import { getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
 import { collection, addDoc, query, orderBy, getDocs, serverTimestamp, doc, setDoc, updateDoc, increment, deleteDoc, onSnapshot } from 'firebase/firestore';
@@ -43,6 +43,7 @@ export default function CommunityPage() {
   const TAB_ORDER = ['mySpace', 'following', 'explore'];
   const [followLoadingUid, setFollowLoadingUid] = useState(null);
   const [socialShares, setSocialShares] = useState([]);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // Load profile picture
   useEffect(() => {
@@ -734,181 +735,156 @@ export default function CommunityPage() {
   };
 
 
+  // Threads-style theme constants
+  const THREADS = {
+    bg: '#0F0F0F',
+    bgSecondary: '#121212',
+    text: '#FFFFFF',
+    textSecondary: '#A0A0A0',
+    divider: '#1E1E1E',
+    accent: '#E91E63',
+  };
+
   return (
     <div
-      className="min-h-screen px-6 relative overflow-hidden slide-up"
+      className="min-h-screen relative overflow-hidden slide-up"
       style={{
-        background: isDarkMode
-          ? "#131314"
-          : "#B5C4AE",
+        background: THREADS.bg,
         paddingTop: 0,
-        // Dedicated buffer: nav bar (56px) + breathing gap (24px) + safe-area so content never touches the bar
         paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))',
       }}
     >
-      <div className="absolute inset-0 overflow-hidden">
-        {isDarkMode ? (
-          // Dark mode decorative elements
-          <>
-            <div className="absolute top-20 left-16 opacity-15">
-              <svg width="60" height="30" viewBox="0 0 60 30" fill="none" stroke="#7DD3C0" strokeWidth="0.5">
-                <path d="M8 18c0-6 4-10 10-10s10 4 10 10c0 3-2 6-5 8H13c-3-2-5-5-5-8z" />
-                <path d="M25 15c0-4 3-7 7-7s7 3 7 7c0 2-1 4-3 5H28c-2-1-3-3-3-5z" />
-                <path d="M40 12c0-3 2-5 5-5s5 2 5 5c0 1.5-0.5 3-2 4H42c-1.5-1-2-2.5-2-4z" />
-              </svg>
-            </div>
-            <div className="absolute top-40 right-20 opacity-12">
-              <svg width="80" height="25" viewBox="0 0 80 25" fill="none" stroke="#D4AF37" strokeWidth="0.4">
-                <path d="M5 15c0-5 3-8 8-8s8 3 8 8c0 2.5-1.5 5-4 6.5H9c-2.5-1.5-4-4-4-6.5z" />
-                <path d="M20 12c0-4 2.5-6 6-6s6 2 6 6c0 2-1 4-2.5 5H22.5c-1.5-1-2.5-3-2.5-5z" />
-              </svg>
-            </div>
-          </>
-        ) : (
-          // Light mode decorative elements
-          <>
-            <div className="absolute top-16 left-12 opacity-20">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#87A96B" strokeWidth="1">
-                <path d="M12 2c-4 0-8 4-8 8 0 2 1 4 3 5l5-5V2z" />
-                <path d="M12 2c4 0 8 4 8 8 0 2-1 4-3 5l-5-5V2z" />
-              </svg>
-            </div>
-            <div className="absolute top-32 right-16 opacity-15">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E6B3BA" strokeWidth="1">
-                <ellipse cx="12" cy="8" rx="6" ry="4" />
-                <path d="M12 12v8" />
-              </svg>
-            </div>
-          </>
-        )}
-      </div>
-
-      <div className="relative z-10 max-w-sm mx-auto">
-        {/* Minimal Hub header - Twitter-style */}
-        <div className="sticky top-0 z-20 mb-0"
+      <div className="relative z-10 mx-auto w-full max-w-[600px] px-4 sm:px-5">
+        {/* Threads-style sticky header: Hamburger | Deite logo | Search */}
+        <header
+          className="sticky top-0 z-20 flex items-center justify-between px-1 py-3 min-h-[52px]"
           style={{
-            paddingTop: 'max(0.5rem, env(safe-area-inset-top, 0px))',
-            paddingBottom: '0.125rem',
-            background: 'transparent',
-            borderBottom: isDarkMode ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(0,0,0,0.08)',
+            paddingTop: 'max(12px, env(safe-area-inset-top, 0px))',
+            background: THREADS.bg,
+            borderBottom: `1px solid ${THREADS.divider}`,
           }}
         >
-          <div className="flex items-center justify-between px-1 py-2 min-h-[2.75rem]">
-            <div
-              onClick={toggleTheme}
-              className={`w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity flex-shrink-0 ${!isDarkMode ? 'bg-white' : ''}`}
-              style={isDarkMode ? {
-                backgroundColor: '#262626',
-                border: '1px solid rgba(255,255,255,0.08)',
-              } : {
-                boxShadow: '0 2px 8px rgba(230, 179, 186, 0.15)',
-              }}
-            >
-              {isDarkMode ? <Moon className="w-5 h-5" style={{ color: '#3AD4F8' }} strokeWidth={1.5} /> : <Sun className="w-5 h-5" style={{ color: '#3AD4F8' }} strokeWidth={1.5} />}
-            </div>
-            <div
-              className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${!isDarkMode ? 'bg-white' : ''}`}
-              style={isDarkMode ? {
-                backgroundColor: '#262626',
-                border: '1px solid rgba(255,255,255,0.08)',
-                padding: 6,
-              } : {
-                boxShadow: '0 2px 8px rgba(230, 179, 186, 0.15)',
-                padding: 6,
-              }}
-            >
-              <img
-                src="/hub-icon.png"
-                alt="Deite Hub"
-                className="object-contain w-full h-full"
-                style={{
-                  filter: isDarkMode ? 'brightness(0) invert(1)' : 'brightness(0)',
-                }}
-              />
-            </div>
-            <div
-              onClick={handleProfileClick}
-              className={`w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity overflow-hidden flex-shrink-0 ${!isDarkMode ? 'bg-white' : ''}`}
-              style={isDarkMode ? {
-                backgroundColor: profilePicture ? 'transparent' : '#262626',
-                border: profilePicture ? 'none' : '1px solid rgba(255,255,255,0.08)',
-              } : {
-                boxShadow: '0 2px 8px rgba(177, 156, 217, 0.15)',
-              }}
-            >
-              {profilePicture ? (
-                <img src={profilePicture} alt="Profile" className="w-full h-full object-cover" />
-              ) : (
-                <User className="w-5 h-5" style={{ color: '#3AD4F8' }} strokeWidth={1.5} />
-              )}
-            </div>
-          </div>
-
-          {/* Segmented tabs - My Presence | Following | Explore (swipeable) */}
-          <div
-            className="flex items-center justify-around overflow-x-auto overflow-y-visible no-scrollbar touch-pan-y"
-            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}
-            onTouchStart={handleTabTouchStart}
-            onTouchEnd={handleTabTouchEnd}
+          <button
+            onClick={() => setMenuOpen(true)}
+            className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity flex-shrink-0 text-white"
+            aria-label="Menu"
           >
-            {[
-              { id: 'mySpace', label: 'My Presence' },
-              { id: 'following', label: 'Following' },
-              { id: 'explore', label: 'Explore' },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => switchTab(tab.id)}
-                className="flex-1 min-w-0 py-2.5 px-2 text-center transition-colors duration-200 relative flex flex-col items-center gap-0.5"
-              >
-                <span
-                  className={`text-[15px] font-medium transition-colors ${
-                    activeTab === tab.id
-                      ? (isDarkMode ? 'text-white' : 'text-gray-900')
-                      : (isDarkMode ? 'text-gray-500' : 'text-gray-500')
-                  }`}
-                >
-                  {tab.label}
-                </span>
-                {activeTab === tab.id && (
-                  <span
-                    className="absolute bottom-0 left-1/2 -translate-x-1/2 w-12 h-0.5 rounded-full"
-                    style={{ backgroundColor: isDarkMode ? '#8AB4F8' : '#87A96B' }}
-                  />
-                )}
-              </button>
-            ))}
+            <Menu className="w-5 h-5" strokeWidth={2} />
+          </button>
+          <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ background: THREADS.bgSecondary }}>
+            <img src="/hub-icon.png" alt="Deite" className="object-contain w-6 h-6 invert" />
           </div>
+          <button
+            className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity flex-shrink-0 text-white"
+            aria-label="Search"
+          >
+            <Search className="w-5 h-5" strokeWidth={2} />
+          </button>
+        </header>
+
+        {/* Hamburger menu overlay */}
+        {menuOpen && (
+          <div
+            className="fixed inset-0 z-50 bg-black/60"
+            style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
+            onClick={() => setMenuOpen(false)}
+          >
+            <div
+              className="mt-2 mx-4 rounded-2xl overflow-hidden max-w-[280px]"
+              style={{ background: THREADS.bgSecondary }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-4 border-b" style={{ borderColor: THREADS.divider }}>
+                <button
+                  onClick={() => { setMenuOpen(false); handleProfileClick(); }}
+                  className="flex items-center gap-3 w-full text-left py-2 rounded-lg hover:opacity-90 transition-opacity"
+                  style={{ color: THREADS.text }}
+                >
+                  {profilePicture ? (
+                    <img src={profilePicture} alt="" className="w-10 h-10 rounded-full object-cover" />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: THREADS.divider }}>
+                      <User className="w-5 h-5" style={{ color: THREADS.textSecondary }} />
+                    </div>
+                  )}
+                  <span className="font-medium">Profile</span>
+                </button>
+              </div>
+              <div className="p-4">
+                <button
+                  onClick={() => { setMenuOpen(false); toggleTheme(); }}
+                  className="flex items-center gap-3 w-full text-left py-2 rounded-lg hover:opacity-90 transition-opacity"
+                  style={{ color: THREADS.text }}
+                >
+                  {isDarkMode ? <Moon className="w-5 h-5" style={{ color: THREADS.textSecondary }} /> : <Sun className="w-5 h-5" style={{ color: THREADS.textSecondary }} />}
+                  <span className="font-medium">Theme</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tabs - Threads style */}
+        <div
+          className="flex items-center justify-around overflow-x-auto no-scrollbar touch-pan-y"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}
+          onTouchStart={handleTabTouchStart}
+          onTouchEnd={handleTabTouchEnd}
+        >
+          {[
+            { id: 'mySpace', label: 'My Presence' },
+            { id: 'following', label: 'Following' },
+            { id: 'explore', label: 'Explore' },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => switchTab(tab.id)}
+              className="flex-1 min-w-0 py-4 px-2 text-center transition-colors duration-200 relative"
+            >
+              <span
+                className="text-[15px] font-medium transition-colors"
+                style={{ color: activeTab === tab.id ? THREADS.text : THREADS.textSecondary }}
+              >
+                {tab.label}
+              </span>
+              {activeTab === tab.id && (
+                <span
+                  className="absolute bottom-0 left-1/2 -translate-x-1/2 w-12 h-0.5 rounded-full"
+                  style={{ backgroundColor: THREADS.accent }}
+                />
+              )}
+            </button>
+          ))}
         </div>
 
-        {/* Subtle stats line - minimal, one row */}
-        <div className={`px-2 py-2 flex items-center justify-center gap-4 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`} style={{ fontSize: '12px' }}>
+        {/* Stats line */}
+        <div className="py-3 flex items-center justify-center gap-6" style={{ fontSize: '12px', color: THREADS.textSecondary }}>
           <span>{activeMembersCount.toLocaleString()} members</span>
           <span>{postsTodayCount} today</span>
         </div>
 
-        {/* Feed - vertical list with smooth transition */}
+        {/* Feed - Threads style flat list */}
         <div
-          className="pb-2"
+          className="pb-4"
           style={{
             opacity: tabTransition ? 0.7 : 1,
             transform: tabTransition ? 'translateY(4px)' : 'translateY(0)',
-            transition: 'opacity 0.15s ease, transform 0.15s ease',
+            transition: 'opacity 0.2s ease, transform 0.2s ease',
           }}
         >
           {activeTab === 'mySpace' && filteredPosts.length === 0 && socialOnlyDates.length === 0 && (
-            <div className="py-12 px-6 text-center">
-              <p className={`text-base leading-relaxed ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+            <div className="py-16 px-6 text-center">
+              <p className="text-base leading-relaxed" style={{ color: THREADS.textSecondary }}>
                 Your reflections will appear here when you share them with the community.
               </p>
-              <p className={`mt-2 text-sm ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+              <p className="mt-2 text-sm" style={{ color: THREADS.textSecondary }}>
                 A quiet space just for what you’ve shared.
               </p>
             </div>
           )}
           {activeTab === 'following' && filteredPosts.length === 0 && (
-            <div className="py-12 px-6 text-center">
-              <p className={`text-base leading-relaxed ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+            <div className="py-16 px-6 text-center">
+              <p className="text-base leading-relaxed" style={{ color: THREADS.textSecondary }}>
                 {followingIds.length === 0
                   ? 'Follow people to see their reflections here. Familiar faces, calm feed.'
                   : 'No posts from people you follow yet.'}
@@ -916,15 +892,15 @@ export default function CommunityPage() {
             </div>
           )}
           {activeTab === 'explore' && filteredPosts.length === 0 && (
-            <div className="py-12 px-6 text-center">
-              <p className={`text-base leading-relaxed ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+            <div className="py-16 px-6 text-center">
+              <p className="text-base leading-relaxed" style={{ color: THREADS.textSecondary }}>
                 No reflections in the community yet. Be the first to share.
               </p>
             </div>
           )}
 
-          <div className="space-y-4 px-2">
-          {filteredPosts.map((post) => {
+          <div className="rounded-2xl overflow-hidden" style={{ background: THREADS.bg }}>
+          {filteredPosts.map((post, index) => {
             const postCommentsData = postComments[post.id] || { comments: post.comments || [], showComments: false, newComment: '' };
             const postLikesCount = postLikes[post.id] || post.likes || 0;
             const likedUsers = postLikedBy[post.id] || [];
@@ -933,130 +909,101 @@ export default function CommunityPage() {
             return (
               <div
                 key={post.id}
-                className={`rounded-2xl p-4 relative overflow-hidden ${
-                  isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
-                }`}
-                style={isDarkMode ? {
-                  backgroundColor: 'rgba(38, 38, 38, 0.6)',
-                  boxShadow: '0 2px 12px rgba(0, 0, 0, 0.2)',
-                  border: '1px solid rgba(255, 255, 255, 0.06)',
-                } : {
-                  boxShadow: '0 2px 12px rgba(0, 0, 0, 0.06)',
-                  border: '1px solid rgba(0, 0, 0, 0.04)',
+                className="relative transition-[background,transform] duration-150 hover:bg-white/[0.03] active:scale-[0.99] fadeIn"
+                style={{
+                  borderTop: index === 0 ? 'none' : `1px solid ${THREADS.divider}`,
+                  padding: '16px 0',
+                  animation: 'fadeIn 0.25s ease forwards',
                 }}
               >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                <div className="flex items-start gap-3 px-1">
+                  <button
+                    type="button"
+                    onClick={() => post.authorId && openUserProfile(post.authorId)}
+                    className="flex-shrink-0 rounded-full focus:outline-none cursor-pointer"
+                  >
+                    {post.profilePicture ? (
+                      <img src={post.profilePicture} alt="" className="w-10 h-10 rounded-full object-cover" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: THREADS.divider }}>
+                        <User className="w-5 h-5" style={{ color: THREADS.textSecondary }} strokeWidth={1.5} />
+                      </div>
+                    )}
+                  </button>
+                  <div className="flex-1 min-w-0">
                     <button
                       type="button"
                       onClick={() => post.authorId && openUserProfile(post.authorId)}
-                      className="flex-shrink-0 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-0 focus:ring-[#8AB4F8]/50 cursor-pointer"
+                      className="flex items-center gap-2 text-left cursor-pointer hover:opacity-90"
+                      style={{ fontSize: '13px' }}
                     >
-                      {post.profilePicture ? (
-                        <img
-                          src={post.profilePicture}
-                          alt=""
-                          className="w-9 h-9 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div
-                          className="w-9 h-9 rounded-full flex items-center justify-center"
-                          style={{
-                            backgroundColor: isDarkMode ? 'rgba(125, 211, 192, 0.25)' : 'rgba(230, 179, 186, 0.3)',
-                          }}
-                        >
-                          <User className={`w-4 h-4 ${isDarkMode ? 'text-[#7DD3C0]' : 'text-[#E6B3BA]'}`} strokeWidth={1.5} />
-                        </div>
-                      )}
+                      <span className="font-semibold" style={{ color: THREADS.text }}>{post.author}</span>
+                      <span style={{ color: THREADS.textSecondary }}>{formatTimeAgo(post.createdAt)}</span>
                     </button>
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-[15px] leading-snug ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`} style={{ fontFamily: 'inherit' }}>
-                        {post.content}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => post.authorId && openUserProfile(post.authorId)}
-                        className={`flex items-center gap-2 mt-2 text-left ${isDarkMode ? 'text-gray-500' : 'text-gray-500'} focus:outline-none focus:ring-0 cursor-pointer hover:opacity-80`}
-                        style={{ fontSize: '13px' }}
-                      >
-                        <span className="font-medium">{post.author}</span>
-                        <span>·</span>
-                        <span>{formatTimeAgo(post.createdAt)}</span>
-                      </button>
-                      {activeTab === 'mySpace' && user && post.authorId === user.uid && (() => {
-                        const normDate = normalizeReflectionDate(post.reflectionDate);
-                        const platforms = normDate ? (socialSharesByDate[normDate] || []) : [];
-                        if (platforms.length === 0) return null;
-                        const text = platforms.map((p) => socialPlatformLabels[p] || p).join(', ');
-                        return (
-                          <p className={`mt-1.5 text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                            Shared to social: {text}
-                          </p>
-                        );
-                      })()}
-                      {post.image && (
-                        <div className="mt-3 rounded-xl overflow-hidden">
-                          <img
-                            src={post.image}
-                            alt=""
-                            className="w-full max-h-80 object-cover"
-                            onError={(e) => { e.target.style.display = 'none'; }}
-                          />
-                        </div>
-                      )}
-                    </div>
+                    <p className="text-[15px] leading-snug mt-0.5" style={{ color: THREADS.text }}>
+                      {post.content}
+                    </p>
+                    {activeTab === 'mySpace' && user && post.authorId === user.uid && (() => {
+                      const normDate = normalizeReflectionDate(post.reflectionDate);
+                      const platforms = normDate ? (socialSharesByDate[normDate] || []) : [];
+                      if (platforms.length === 0) return null;
+                      const text = platforms.map((p) => socialPlatformLabels[p] || p).join(', ');
+                      return (
+                        <p className="mt-1.5 text-xs" style={{ color: THREADS.textSecondary }}>
+                          Shared to social: {text}
+                        </p>
+                      );
+                    })()}
+                    {post.image && (
+                      <div className="mt-3 rounded-2xl overflow-hidden" style={{ borderRadius: '14px' }}>
+                        <img
+                          src={post.image}
+                          alt=""
+                          className="w-full max-h-80 object-cover"
+                          onError={(e) => { e.target.style.display = 'none'; }}
+                        />
+                      </div>
+                    )}
                   </div>
                   {post.authorId && user && post.authorId !== user.uid && (
                     <button
                       onClick={() => handleFollowClick(post.authorId)}
                       disabled={followLoadingUid === post.authorId}
                       className={`flex-shrink-0 text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
-                        followLoadingUid === post.authorId
-                          ? 'opacity-60 cursor-not-allowed'
-                          : 'hover:opacity-90'
-                      } ${
-                        followingIds.includes(post.authorId)
-                          ? (isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-600')
-                          : (isDarkMode ? 'bg-[#8AB4F8] text-white' : 'bg-[#87A96B] text-white')
-                      }`}
+                        followLoadingUid === post.authorId ? 'opacity-60 cursor-not-allowed' : 'hover:opacity-90'
+                      } ${followingIds.includes(post.authorId) ? 'bg-white/10 text-white' : ''}`}
+                      style={!followingIds.includes(post.authorId) ? { background: THREADS.accent, color: '#fff' } : {}}
                     >
                       {followLoadingUid === post.authorId ? '…' : followingIds.includes(post.authorId) ? 'Following' : 'Follow'}
                     </button>
                   )}
                 </div>
-                <div className="flex items-center gap-4 mt-3 pt-3" style={{ borderTop: isDarkMode ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(0,0,0,0.06)' }}>
-                  <button 
+                <div className="flex items-center gap-6 mt-3 pt-3 px-1" style={{ borderTop: `1px solid ${THREADS.divider}` }}>
+                  <button
                     onClick={() => handlePostLike(post.id)}
-                    className="flex items-center space-x-1 transition-colors hover:opacity-80"
+                    className="flex items-center gap-1.5 transition-transform hover:opacity-80 active:scale-95"
                   >
-                    <Heart 
-                      className={`w-4 h-4 transition-colors ${
-                        isPostLiked 
-                          ? 'text-red-500 fill-red-500' 
-                          : (isDarkMode ? 'text-gray-400' : 'text-gray-500')
-                      }`} 
-                      fill={isPostLiked ? 'currentColor' : 'none'}
+                    <Heart
+                      className="w-4 h-4 transition-colors"
+                      style={{ color: isPostLiked ? THREADS.accent : THREADS.textSecondary }}
+                      fill={isPostLiked ? THREADS.accent : 'none'}
                     />
-                    <span className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                      {postLikesCount}
-                    </span>
+                    <span className="text-xs" style={{ color: THREADS.textSecondary }}>{postLikesCount}</span>
                   </button>
-                  <button 
-                    onClick={() => {
-                      setPostComments({
-                        ...postComments,
-                        [post.id]: {
-                          ...postCommentsData,
-                          showComments: !postCommentsData.showComments
-                        }
-                      });
-                    }}
-                    className="flex items-center space-x-1 transition-colors hover:opacity-80"
+                  <button
+                    onClick={() => setPostComments({ ...postComments, [post.id]: { ...postCommentsData, showComments: !postCommentsData.showComments } })}
+                    className="flex items-center gap-1.5 transition-transform hover:opacity-80 active:scale-95"
                   >
-                    <MessageCircle className={`w-4 h-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
-                    <span className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                      {postCommentsData.comments.length}
-                    </span>
+                    <MessageCircle className="w-4 h-4" style={{ color: THREADS.textSecondary }} />
+                    <span className="text-xs" style={{ color: THREADS.textSecondary }}>{postCommentsData.comments.length}</span>
+                  </button>
+                  <button className="flex items-center gap-1.5 transition-transform hover:opacity-80 active:scale-95">
+                    <Repeat className="w-4 h-4" style={{ color: THREADS.textSecondary }} />
+                    <span className="text-xs" style={{ color: THREADS.textSecondary }}>0</span>
+                  </button>
+                  <button className="flex items-center gap-1.5 transition-transform hover:opacity-80 active:scale-95">
+                    <Send className="w-4 h-4" style={{ color: THREADS.textSecondary }} />
+                    <span className="text-xs" style={{ color: THREADS.textSecondary }}>0</span>
                   </button>
                   {activeTab === 'mySpace' && user && post.authorId === user.uid && (() => {
                     const normDate = normalizeReflectionDate(post.reflectionDate);
@@ -1065,8 +1012,8 @@ export default function CommunityPage() {
                     const sharedIg = platforms.includes('instagram');
                     const sharedReddit = platforms.includes('reddit');
                     const sharedWa = platforms.includes('whatsapp');
-                    const socialGreen = isDarkMode ? '#7DD3C0' : '#87A96B';
-                    const socialGrey = isDarkMode ? 'rgba(156, 163, 175, 0.9)' : 'rgba(107, 114, 128, 0.9)';
+                    const socialGreen = THREADS.accent;
+                    const socialGrey = THREADS.textSecondary;
                     return (
                       <div className="flex items-center gap-3 ml-auto" title="Shared to social">
                         <span className="w-4 h-4 flex items-center justify-center" title={sharedX ? 'Shared to X' : 'Not shared to X'}>
@@ -1096,12 +1043,12 @@ export default function CommunityPage() {
                   })()}
                 </div>
 
-                {/* Comments Section */}
+                {/* Comments Section - Threads style */}
                 {postCommentsData.showComments && (
-                  <div className="mt-4 pt-4 border-t" style={{ borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)' }}>
+                  <div className="mt-4 pt-4 border-t" style={{ borderColor: THREADS.divider }}>
                     <div className="mb-3">
                       <div className="flex items-center justify-between mb-3">
-                        <h3 className={`text-sm font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                        <h3 className="text-sm font-semibold" style={{ color: THREADS.text }}>
                           Comments ({postCommentsData.comments.length})
                         </h3>
                         <button
@@ -1114,11 +1061,9 @@ export default function CommunityPage() {
                               }
                             });
                           }}
-                          className={`p-1 rounded-full hover:opacity-80 transition-opacity ${
-                            isDarkMode ? 'hover:bg-gray-800/50' : 'hover:bg-gray-100'
-                          }`}
+                          className="p-1 rounded-full hover:opacity-80 transition-opacity hover:bg-white/10"
                         >
-                          <X className={`w-4 h-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
+                          <X className="w-4 h-4" style={{ color: THREADS.textSecondary }} />
                         </button>
                       </div>
                       
@@ -1135,7 +1080,7 @@ export default function CommunityPage() {
                                 <div
                                   className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-xs bg-cover bg-center"
                                   style={{
-                                    backgroundColor: isDarkMode ? "#7DD3C0" + '30' : "#E6B3BA" + '20',
+                                    backgroundColor: THREADS.divider,
                                     ...(commentAvatar ? { backgroundImage: `url(${commentAvatar})` } : {}),
                                   }}
                                 >
@@ -1143,99 +1088,66 @@ export default function CommunityPage() {
                                 </div>
                                 <div className="flex-1">
                                   <div className="flex items-center space-x-2 mb-1">
-                                    <span className={`text-xs font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                                      {comment.author}
-                                    </span>
-                                    <span className={`text-[10px] ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
-                                      {comment.time || 'Just now'}
-                                    </span>
+                                    <span className="text-xs font-semibold" style={{ color: THREADS.text }}>{comment.author}</span>
+                                    <span className="text-[10px]" style={{ color: THREADS.textSecondary }}>{comment.time || 'Just now'}</span>
                                   </div>
-                                  <p className={`text-xs leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                                    {comment.text}
-                                  </p>
+                                  <p className="text-xs leading-relaxed" style={{ color: THREADS.text }}>{comment.text}</p>
                                   <div className="flex items-center space-x-3 mt-1">
                                     <button
                                       onClick={() => {
-                                        if (isReplying) {
-                                          setReplyingTo(null);
-                                          setReplyText('');
-                                        } else {
-                                          setReplyingTo({ postId: post.id, commentId: comment.id });
-                                        }
+                                        if (isReplying) { setReplyingTo(null); setReplyText(''); } else { setReplyingTo({ postId: post.id, commentId: comment.id }); }
                                       }}
-                                      className={`text-[10px] ${isDarkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'} transition-colors`}
+                                      className="text-[10px] transition-colors hover:opacity-80"
+                                      style={{ color: THREADS.textSecondary }}
                                     >
                                       {isReplying ? 'Cancel' : 'Reply'}
                                     </button>
                                     {replies.length > 0 && (
-                                      <span className={`text-[10px] ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+                                      <span className="text-[10px]" style={{ color: THREADS.textSecondary }}>
                                         {replies.length} {replies.length === 1 ? 'reply' : 'replies'}
                                       </span>
                                     )}
                                   </div>
-                                  
-                                  {/* Reply Input */}
                                   {isReplying && (
                                     <div className="mt-2 flex items-center space-x-2">
                                       <input
                                         type="text"
                                         value={replyText}
                                         onChange={(e) => setReplyText(e.target.value)}
-                                        onKeyPress={(e) => {
-                                          if (e.key === 'Enter') {
-                                            handleAddComment(post.id, comment.id);
-                                          }
-                                        }}
+                                        onKeyPress={(e) => { if (e.key === 'Enter') handleAddComment(post.id, comment.id); }}
                                         placeholder={`Reply to ${comment.author}...`}
-                                        className={`flex-1 rounded-lg px-2 py-1.5 text-xs border-none outline-none ${
-                                          isDarkMode 
-                                            ? 'bg-gray-800/50 text-white placeholder-gray-500' 
-                                            : 'bg-gray-100 text-gray-800 placeholder-gray-500'
-                                        }`}
+                                        className="flex-1 rounded-lg px-2 py-1.5 text-xs border-none outline-none placeholder:opacity-60"
+                                        style={{ background: 'rgba(255,255,255,0.06)', color: THREADS.text }}
                                         autoFocus
                                       />
                                       <button
                                         onClick={() => handleAddComment(post.id, comment.id)}
                                         disabled={!replyText.trim()}
-                                        className={`px-2 py-1.5 rounded-lg text-xs transition-colors ${
-                                          replyText.trim()
-                                            ? (isDarkMode ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-blue-500 hover:bg-blue-600 text-white')
-                                            : (isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-200 text-gray-400 cursor-not-allowed')
-                                        }`}
+                                        className="px-2 py-1.5 rounded-lg text-xs transition-opacity disabled:opacity-50"
+                                        style={{ backgroundColor: replyText.trim() ? THREADS.accent : THREADS.divider, color: '#fff' }}
                                       >
                                         <Send className="w-3 h-3" />
                                       </button>
                                     </div>
                                   )}
-                                  
-                                  {/* Replies List */}
                                   {replies.length > 0 && (
-                                    <div className="mt-2 ml-4 space-y-2 pl-3 border-l-2" style={{ borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)' }}>
+                                    <div className="mt-2 ml-4 space-y-2 pl-3 border-l-2" style={{ borderColor: THREADS.divider }}>
                                       {replies.map((reply) => {
                                         const replyAvatar = reply.profilePicture || (reply.userId === user?.uid ? (localStorage.getItem(`user_profile_picture_${user?.uid}`) || profilePicture) : null);
                                         return (
                                         <div key={reply.id} className="flex items-start space-x-2">
                                           <div
                                             className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 text-xs bg-cover bg-center"
-                                            style={{
-                                              backgroundColor: isDarkMode ? "#7DD3C0" + '20' : "#E6B3BA" + '15',
-                                              ...(replyAvatar ? { backgroundImage: `url(${replyAvatar})` } : {}),
-                                            }}
+                                            style={{ backgroundColor: THREADS.divider, ...(replyAvatar ? { backgroundImage: `url(${replyAvatar})` } : {}) }}
                                           >
                                             {!replyAvatar && <span>👤</span>}
                                           </div>
                                           <div className="flex-1">
                                             <div className="flex items-center space-x-2 mb-0.5">
-                                              <span className={`text-[10px] font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                                                {reply.author}
-                                              </span>
-                                              <span className={`text-[9px] ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
-                                                {reply.time || 'Just now'}
-                                              </span>
+                                              <span className="text-[10px] font-semibold" style={{ color: THREADS.text }}>{reply.author}</span>
+                                              <span className="text-[9px]" style={{ color: THREADS.textSecondary }}>{reply.time || 'Just now'}</span>
                                             </div>
-                                            <p className={`text-[11px] leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                                              {reply.text}
-                                            </p>
+                                            <p className="text-[11px] leading-relaxed" style={{ color: THREADS.text }}>{reply.text}</p>
                                           </div>
                                         </div>
                                         );
@@ -1269,20 +1181,19 @@ export default function CommunityPage() {
                             }
                           }}
                           placeholder="Add a comment..."
-                          className={`flex-1 rounded-lg px-3 py-2 text-xs border-none outline-none ${
-                            isDarkMode 
-                              ? 'bg-gray-800/50 text-white placeholder-gray-500' 
-                              : 'bg-gray-100 text-gray-800 placeholder-gray-500'
-                          }`}
+                          className="flex-1 rounded-lg px-3 py-2 text-xs border-none outline-none"
+                          style={{
+                            background: 'rgba(255,255,255,0.06)',
+                            color: THREADS.text,
+                          }}
                         />
                         <button
                           onClick={() => handleAddComment(post.id)}
                           disabled={!postCommentsData.newComment?.trim()}
-                          className={`w-8 h-8 rounded-lg flex items-center justify-center transition-opacity ${
-                            postCommentsData.newComment?.trim()
-                              ? (isDarkMode ? 'bg-[#8AB4F8]' : 'bg-[#87A96B]')
-                              : (isDarkMode ? 'bg-gray-700 opacity-50' : 'bg-gray-300 opacity-50')
-                          }`}
+                          className="w-8 h-8 rounded-lg flex items-center justify-center transition-opacity disabled:opacity-50"
+                          style={{
+                            backgroundColor: postCommentsData.newComment?.trim() ? THREADS.accent : THREADS.divider,
+                          }}
                         >
                           <Send className="w-3 h-3 text-white" />
                         </button>
@@ -1299,19 +1210,12 @@ export default function CommunityPage() {
             return (
               <div
                 key={`social-${dateStr}`}
-                className={`rounded-2xl p-4 ${isDarkMode ? 'backdrop-blur-lg' : 'bg-white'}`}
-                style={isDarkMode ? {
-                  backgroundColor: 'rgba(38, 38, 38, 0.6)',
-                  boxShadow: '0 2px 12px rgba(0, 0, 0, 0.2)',
-                  border: '1px solid rgba(255, 255, 255, 0.06)',
-                } : {
-                  boxShadow: '0 2px 12px rgba(0, 0, 0, 0.06)',
-                  border: '1px solid rgba(0, 0, 0, 0.04)',
-                }}
+                className="rounded-2xl p-4 border-t transition-[background] duration-150 hover:bg-white/[0.03]"
+                style={{ borderColor: THREADS.divider }}
               >
                 <div className="flex items-center gap-2">
-                  <Share2 className={`w-4 h-4 flex-shrink-0 ${isDarkMode ? 'text-[#7DD3C0]' : 'text-[#87A96B]'}`} />
-                  <p className={`text-sm ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                  <Share2 className="w-4 h-4 flex-shrink-0" style={{ color: THREADS.accent }} />
+                  <p className="text-sm" style={{ color: THREADS.text }}>
                     Shared to {text} on {formatSocialDate(dateStr)}
                   </p>
                 </div>
@@ -1322,42 +1226,38 @@ export default function CommunityPage() {
         </div>
       </div>
 
-      {/* Floating Action Button - Create Post */}
+      {/* FAB - Threads style with Deite accent */}
       <button
         onClick={() => setShowCreatePost(true)}
-        className={`fixed bottom-20 right-4 z-40 w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95 shadow-lg ${
+        className={`fixed bottom-20 right-4 z-40 w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-105 active:scale-95 ${
           showFAB ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
         }`}
         style={{
-          backgroundColor: "#1d9bf0",
-          boxShadow: "0 4px 16px rgba(29, 155, 240, 0.4)",
+          backgroundColor: THREADS.accent,
+          boxShadow: `0 4px 20px ${THREADS.accent}40`,
         }}
       >
         <Plus className="w-6 h-6 text-white" strokeWidth={2.5} />
       </button>
 
-      {/* Create Post Modal */}
+      {/* Create Post Modal - Threads style */}
       {showCreatePost && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+          style={{ backgroundColor: 'rgba(0, 0, 0, 0.7)' }}
           onClick={() => setShowCreatePost(false)}
         >
           <div
-            className={`rounded-2xl p-6 w-full max-w-sm relative ${
-              isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
-            }`}
-            style={isDarkMode ? {
-              backgroundColor: "#262626",
-              boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)",
-              border: "1px solid rgba(255, 255, 255, 0.1)",
-            } : {
-              boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
+            className="rounded-2xl p-6 w-full max-w-sm relative"
+            style={{
+              backgroundColor: THREADS.bgSecondary,
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
+              border: `1px solid ${THREADS.divider}`,
             }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
-              <h2 className={`text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+              <h2 className="text-xl font-semibold" style={{ color: THREADS.text }}>
                 Create a Post
               </h2>
               <button
@@ -1368,11 +1268,9 @@ export default function CommunityPage() {
                   setPostImageUrl('');
                   setUploadOption(null);
                 }}
-                className={`p-1 rounded-full hover:opacity-80 transition-opacity ${
-                  isDarkMode ? 'hover:bg-gray-800/50' : 'hover:bg-gray-100'
-                }`}
+                className="p-1 rounded-full hover:opacity-80 transition-opacity hover:bg-white/10"
               >
-                <XCircle className={`w-5 h-5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
+                <XCircle className="w-5 h-5" style={{ color: THREADS.textSecondary }} />
               </button>
             </div>
 
@@ -1381,45 +1279,35 @@ export default function CommunityPage() {
               onChange={(e) => setPostContent(e.target.value)}
               placeholder="What's on your mind?"
               rows={6}
-              className={`w-full rounded-lg px-4 py-3 text-sm border-none outline-none resize-none mb-4 ${
-                isDarkMode 
-                  ? 'bg-gray-800/50 text-white placeholder-gray-500' 
-                  : 'bg-gray-100 text-gray-800 placeholder-gray-500'
-              }`}
+              className="w-full rounded-xl px-4 py-3 text-sm border-none outline-none resize-none mb-4 placeholder:opacity-60"
+              style={{
+                background: 'rgba(255,255,255,0.06)',
+                color: THREADS.text,
+              }}
             />
 
             {/* Photo Upload Options */}
             {!uploadOption && (
               <div className="mb-4">
-                <p className={`text-sm mb-3 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                <p className="text-sm mb-3" style={{ color: THREADS.textSecondary }}>
                   Add a photo:
                 </p>
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     onClick={() => setUploadOption('device')}
-                    className={`flex flex-col items-center justify-center p-4 rounded-lg border-2 transition-all ${
-                      isDarkMode 
-                        ? 'border-gray-700 hover:border-[#8AB4F8] bg-gray-800/30' 
-                        : 'border-gray-300 hover:border-[#87A96B] bg-gray-50'
-                    }`}
+                    className="flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all hover:opacity-90"
+                    style={{ borderColor: THREADS.divider, background: 'rgba(255,255,255,0.04)' }}
                   >
-                    <Image className={`w-6 h-6 mb-2 ${isDarkMode ? 'text-[#8AB4F8]' : 'text-[#87A96B]'}`} />
-                    <span className={`text-xs font-medium ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                      Upload Photo
-                    </span>
+                    <Image className="w-6 h-6 mb-2" style={{ color: THREADS.accent }} />
+                    <span className="text-xs font-medium" style={{ color: THREADS.text }}>Upload Photo</span>
                   </button>
                   <button
                     onClick={() => setUploadOption('url')}
-                    className={`flex flex-col items-center justify-center p-4 rounded-lg border-2 transition-all ${
-                      isDarkMode 
-                        ? 'border-gray-700 hover:border-[#8AB4F8] bg-gray-800/30' 
-                        : 'border-gray-300 hover:border-[#87A96B] bg-gray-50'
-                    }`}
+                    className="flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all hover:opacity-90"
+                    style={{ borderColor: THREADS.divider, background: 'rgba(255,255,255,0.04)' }}
                   >
-                    <Link className={`w-6 h-6 mb-2 ${isDarkMode ? 'text-[#8AB4F8]' : 'text-[#87A96B]'}`} />
-                    <span className={`text-xs font-medium ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                      From URL
-                    </span>
+                    <Link className="w-6 h-6 mb-2" style={{ color: THREADS.accent }} />
+                    <span className="text-xs font-medium" style={{ color: THREADS.text }}>From URL</span>
                   </button>
                 </div>
               </div>
@@ -1429,33 +1317,20 @@ export default function CommunityPage() {
             {uploadOption === 'device' && (
               <div className="mb-4">
                 <div className="flex items-center justify-between mb-2">
-                  <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                    Upload from device
-                  </p>
+                  <p className="text-sm" style={{ color: THREADS.textSecondary }}>Upload from device</p>
                   <button
-                    onClick={() => {
-                      setUploadOption(null);
-                      setPostImage(null);
-                    }}
-                    className={`text-xs ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-800'}`}
+                    onClick={() => { setUploadOption(null); setPostImage(null); }}
+                    className="text-xs hover:opacity-80 transition-opacity"
+                    style={{ color: THREADS.textSecondary }}
                   >
                     Change option
                   </button>
                 </div>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  className="hidden"
-                  id="image-upload-input"
-                />
+                <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" id="image-upload-input" />
                 <label
                   htmlFor="image-upload-input"
-                  className={`block w-full rounded-lg px-4 py-3 text-sm text-center cursor-pointer transition-all ${
-                    isDarkMode 
-                      ? 'bg-gray-800/50 text-white border border-gray-700 hover:bg-gray-800/70' 
-                      : 'bg-gray-100 text-gray-800 border border-gray-300 hover:bg-gray-200'
-                  }`}
+                  className="block w-full rounded-xl px-4 py-3 text-sm text-center cursor-pointer transition-all hover:opacity-90"
+                  style={{ background: 'rgba(255,255,255,0.06)', color: THREADS.text, border: `1px solid ${THREADS.divider}` }}
                 >
                   {postImage ? 'Change Photo' : 'Choose Photo'}
                 </label>
@@ -1481,15 +1356,11 @@ export default function CommunityPage() {
             {uploadOption === 'url' && (
               <div className="mb-4">
                 <div className="flex items-center justify-between mb-2">
-                  <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                    Upload from URL
-                  </p>
+                  <p className="text-sm" style={{ color: THREADS.textSecondary }}>Upload from URL</p>
                   <button
-                    onClick={() => {
-                      setUploadOption(null);
-                      setPostImageUrl('');
-                    }}
-                    className={`text-xs ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-800'}`}
+                    onClick={() => { setUploadOption(null); setPostImageUrl(''); }}
+                    className="text-xs hover:opacity-80 transition-opacity"
+                    style={{ color: THREADS.textSecondary }}
                   >
                     Change option
                   </button>
@@ -1499,11 +1370,8 @@ export default function CommunityPage() {
                   value={postImageUrl}
                   onChange={(e) => handleImageUrlChange(e.target.value)}
                   placeholder="https://example.com/image.jpg"
-                  className={`w-full rounded-lg px-4 py-3 text-sm border-none outline-none mb-3 ${
-                    isDarkMode 
-                      ? 'bg-gray-800/50 text-white placeholder-gray-500' 
-                      : 'bg-gray-100 text-gray-800 placeholder-gray-500'
-                  }`}
+                  className="w-full rounded-xl px-4 py-3 text-sm border-none outline-none mb-3 placeholder:opacity-60"
+                  style={{ background: 'rgba(255,255,255,0.06)', color: THREADS.text }}
                 />
                 {postImageUrl && (
                   <div className="relative">
@@ -1536,20 +1404,18 @@ export default function CommunityPage() {
                   setPostImageUrl('');
                   setUploadOption(null);
                 }}
-                className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-opacity hover:opacity-80 ${
-                  isDarkMode ? 'bg-gray-700 text-white' : 'bg-gray-200 text-gray-800'
-                }`}
+                className="flex-1 rounded-xl px-4 py-2 text-sm font-medium transition-opacity hover:opacity-80 bg-white/10 text-white"
               >
                 Cancel
               </button>
               <button
                 onClick={handleCreatePost}
                 disabled={(!postContent.trim() && !postImage && !postImageUrl.trim()) || isPosting}
-                className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-opacity ${
-                  (postContent.trim() || postImage || postImageUrl.trim()) && !isPosting
-                    ? (isDarkMode ? 'bg-[#8AB4F8] text-white hover:opacity-90' : 'bg-[#87A96B] text-white hover:opacity-90')
-                    : (isDarkMode ? 'bg-gray-700 opacity-50 text-gray-400' : 'bg-gray-300 opacity-50 text-gray-500')
-                }`}
+                className="flex-1 rounded-xl px-4 py-2 text-sm font-medium transition-opacity disabled:opacity-50"
+                style={{
+                  backgroundColor: (postContent.trim() || postImage || postImageUrl.trim()) && !isPosting ? THREADS.accent : THREADS.divider,
+                  color: '#fff',
+                }}
               >
                 {isPosting ? 'Posting...' : 'Post'}
               </button>
