@@ -7,6 +7,17 @@ import reflectionService from '../services/reflectionService';
 import firestoreService from '../services/firestoreService';
 import { getCurrentUser } from '../services/authService';
 import { getDateId, formatDateForDisplay, getReflectionFromLocalStorage } from '../utils/dateUtils';
+
+// Theme matching Pod / Community / Wellbeing (HUB)
+const HUB = {
+  bg: '#0F0F0F',
+  bgSecondary: '#121212',
+  text: '#FFFFFF',
+  textSecondary: '#A0A0A0',
+  divider: '#1E1E1E',
+  accent: '#E91E63',
+};
+
 export default function DashboardPage() {
   const navigate = useNavigate();
   const { isDarkMode, toggleTheme } = useTheme();
@@ -390,7 +401,7 @@ export default function DashboardPage() {
       className="min-h-screen px-6 relative overflow-hidden slide-up"
       style={{
         background: isDarkMode
-          ? "#131314"
+          ? HUB.bg
           : "#B5C4AE",
         paddingTop: 'max(1.5rem, calc(env(safe-area-inset-top, 0px) + 1rem))',
         // Dedicated buffer: nav bar (56px) + breathing gap (24px) + safe-area so content never touches the bar
@@ -398,36 +409,7 @@ export default function DashboardPage() {
       }}
     >
       <div className="absolute inset-0 overflow-hidden">
-        {isDarkMode ? (
-          // Dark mode decorative elements
-          <>
-            {/* Flowing cloud outlines - barely visible */}
-            <div className="absolute top-20 left-16 opacity-15">
-              <svg width="60" height="30" viewBox="0 0 60 30" fill="none" stroke="#7DD3C0" strokeWidth="0.5">
-                <path d="M8 18c0-6 4-10 10-10s10 4 10 10c0 3-2 6-5 8H13c-3-2-5-5-5-8z" />
-                <path d="M25 15c0-4 3-7 7-7s7 3 7 7c0 2-1 4-3 5H28c-2-1-3-3-3-5z" />
-                <path d="M40 12c0-3 2-5 5-5s5 2 5 5c0 1.5-0.5 3-2 4H42c-1.5-1-2-2.5-2-4z" />
-              </svg>
-            </div>
-
-            <div className="absolute top-40 right-20 opacity-12">
-              <svg width="80" height="25" viewBox="0 0 80 25" fill="none" stroke="#D4AF37" strokeWidth="0.4">
-                <path d="M5 15c0-5 3-8 8-8s8 3 8 8c0 2.5-1.5 5-4 6.5H9c-2.5-1.5-4-4-4-6.5z" />
-                <path d="M20 12c0-4 2.5-6 6-6s6 2 6 6c0 2-1 4-2.5 5H22.5c-1.5-1-2.5-3-2.5-5z" />
-                <path d="M35 10c0-3 2-5 5-5s5 2 5 5c0 1.5-0.5 3-2 4H37c-1.5-1-2-2.5-2-4z" />
-                <path d="M50 13c0-4 3-7 7-7s7 3 7 7c0 2-1 4-3 5H53c-2-1-3-3-3-5z" />
-              </svg>
-            </div>
-
-            <div className="absolute bottom-32 left-12 opacity-14">
-              <svg width="70" height="28" viewBox="0 0 70 28" fill="none" stroke="#9BB5FF" strokeWidth="0.5">
-                <path d="M6 17c0-5.5 3.5-9 9-9s9 3.5 9 9c0 2.8-1.5 5.5-4 7H10c-2.5-1.5-4-4.2-4-7z" />
-                <path d="M22 14c0-4 2.5-6.5 6.5-6.5s6.5 2.5 6.5 6.5c0 2-1 4-2.5 5H24.5c-1.5-1-2.5-3-2.5-5z" />
-                <path d="M40 11c0-3 2-5 5-5s5 2 5 5c0 1.5-0.5 3-2 4H42c-1.5-1-2-2.5-2-4z" />
-              </svg>
-            </div>
-          </>
-        ) : (
+        {isDarkMode ? null : (
           // Light mode decorative elements
           <>
             {/* Calm leaves */}
@@ -562,15 +544,15 @@ export default function DashboardPage() {
               isDarkMode ? 'backdrop-blur-md' : 'bg-white'
             }`}
             style={isDarkMode ? {
-              backgroundColor: "#262626",
+              backgroundColor: HUB.bgSecondary,
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
+              border: `1px solid ${HUB.divider}`,
             } : {
               boxShadow: "0 2px 8px rgba(230, 179, 186, 0.15)",
             }}
           >
             {isDarkMode ?
-              <Moon className="w-5 h-5" style={{ color: "#3AD4F8" }} strokeWidth={1.5} /> :
+              <Moon className="w-5 h-5" style={{ color: HUB.accent }} strokeWidth={1.5} /> :
               <Sun className="w-5 h-5" style={{ color: "#3AD4F8" }} strokeWidth={1.5} />
             }
           </div>
@@ -581,14 +563,14 @@ export default function DashboardPage() {
               isDarkMode ? 'backdrop-blur-md' : 'bg-white'
             }`}
             style={isDarkMode ? {
-              backgroundColor: "#262626",
+              backgroundColor: HUB.bgSecondary,
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
+              border: `1px solid ${HUB.divider}`,
             } : {
               boxShadow: "0 0 0 1px rgba(58, 212, 248, 0.15), 0 4px 12px rgba(58, 212, 248, 0.2)",
             }}
           >
-            <Brain className="w-7 h-7" style={{ color: "#3AD4F8" }} strokeWidth={1.5} />
+            <Brain className="w-7 h-7" style={{ color: isDarkMode ? HUB.accent : "#3AD4F8" }} strokeWidth={1.5} />
           </div>
 
           {/* Right icon - Profile */}
@@ -598,9 +580,9 @@ export default function DashboardPage() {
               isDarkMode ? 'backdrop-blur-md' : 'bg-white'
             }`}
             style={isDarkMode ? {
-              backgroundColor: profilePicture ? "transparent" : "#262626",
+              backgroundColor: profilePicture ? "transparent" : HUB.bgSecondary,
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-              border: profilePicture ? "none" : "1px solid rgba(255, 255, 255, 0.08)",
+              border: profilePicture ? "none" : `1px solid ${HUB.divider}`,
             } : {
               boxShadow: "0 2px 8px rgba(177, 156, 217, 0.15)",
             }}
@@ -612,7 +594,7 @@ export default function DashboardPage() {
                 className="w-full h-full object-cover"
               />
             ) : (
-              <User className="w-5 h-5" style={{ color: "#3AD4F8" }} strokeWidth={1.5} />
+              <User className="w-5 h-5" style={{ color: isDarkMode ? HUB.accent : "#3AD4F8" }} strokeWidth={1.5} />
             )}
           </div>
         </div>
