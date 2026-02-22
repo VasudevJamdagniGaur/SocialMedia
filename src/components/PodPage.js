@@ -503,249 +503,136 @@ export default function PodPage() {
           </p>
         </div>
 
-        {/* Crew Content */}
-        <div className="space-y-4">
-          {/* Group Message Section */}
+        {/* Shared theme for all Crew cards - same as Crew's Activity / Community */}
+        {(() => {
+          const HUB = {
+            bg: '#0F0F0F',
+            text: '#FFFFFF',
+            textSecondary: '#A0A0A0',
+            divider: '#1E1E1E',
+            accent: '#E91E63',
+          };
+          const cardClass = 'rounded-2xl overflow-hidden';
+          const cardStyle = { background: HUB.bg, border: `1px solid ${HUB.divider}` };
+          const headerClass = 'flex items-center justify-between px-4 py-4';
+          const headerBorder = { borderBottom: `1px solid ${HUB.divider}` };
+
+          return (
+        <>
+        {/* Crew Content - consistent padding and spacing */}
+        <div className="space-y-5 px-1">
+          {/* Crew's Sphere - same UI as Crew's Activity */}
           <div
             onClick={() => navigate('/pod/chat')}
-            className={`rounded-2xl p-5 relative overflow-hidden cursor-pointer transition-opacity hover:opacity-90 ${
-              isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
-            }`}
-            style={isDarkMode ? {
-              backgroundColor: "#262626",
-              boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
-            } : {
-              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)",
-            }}
+            className={`${cardClass} cursor-pointer transition-opacity hover:opacity-90`}
+            style={cardStyle}
           >
-            {/* Title - Centered */}
-            <div className="flex items-center justify-center mb-4">
-              <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                Crew's Sphere
-              </h2>
+            <div className={headerClass} style={headerBorder}>
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: HUB.accent + '30' }}>
+                  <Users className="w-4 h-4" style={{ color: HUB.accent }} strokeWidth={2} />
+                </div>
+                <h2 className="text-lg font-semibold" style={{ color: HUB.text }}>Crew's Sphere</h2>
+              </div>
+              <ChevronRight className="w-5 h-5 flex-shrink-0" style={{ color: HUB.textSecondary }} />
             </div>
-            
-            {/* Group Members - Centered */}
-            <div className="flex items-center justify-center space-x-2 flex-wrap">
-              {/* Current User */}
+            <div className="px-4 py-4 flex items-center justify-center space-x-2 flex-wrap gap-y-3">
               {(() => {
                 const user = getCurrentUser();
                 const userName = user?.displayName || 'You';
                 return (
-                  <div
-                    className="flex flex-col items-center"
-                    title={userName}
-                  >
+                  <div className="flex flex-col items-center" title={userName}>
                     <div
-                      className="w-8 h-8 rounded-full flex items-center justify-center text-xs mb-1 overflow-hidden"
-                      style={{
-                        backgroundColor: profilePicture ? "transparent" : (isDarkMode ? '#8AB4F8' + '30' : '#87A96B' + '20'),
-                        border: profilePicture ? "none" : `2px solid ${isDarkMode ? '#8AB4F8' : '#87A96B'}40`,
-                      }}
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-xs overflow-hidden"
+                      style={{ backgroundColor: profilePicture ? 'transparent' : HUB.accent + '30', border: profilePicture ? 'none' : `2px solid ${HUB.accent}40` }}
                     >
-                      {profilePicture ? (
-                        <img 
-                          src={profilePicture} 
-                          alt="You" 
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <User className="w-4 h-4" style={{ color: isDarkMode ? '#8AB4F8' : '#87A96B' }} />
-                      )}
+                      {profilePicture ? <img src={profilePicture} alt="You" className="w-full h-full object-cover" /> : <User className="w-4 h-4" style={{ color: HUB.accent }} />}
                     </div>
-                    <span className={`text-[10px] ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                      {userName}
-                    </span>
+                    <span className="text-[10px] mt-1" style={{ color: HUB.textSecondary }}>{userName}</span>
                   </div>
                 );
               })()}
-              
-              {/* Other Members - Only show when loaded (not during loading) */}
               {!isLoadingCrewMembers && [
                 ...crewMembers.map((member, index) => ({
                   name: member.displayName || member.name || 'User',
                   emoji: '👤',
-                  color: ['#7DD3C0', '#FDD663', '#8AB4F8', '#E6B3BA', '#81C995'][index % 5],
+                  color: ['#7DD3C0', '#FDD663', HUB.accent, '#E6B3BA', '#81C995'][index % 5],
                   profilePicture: member.profilePicture || null,
                   uid: member.uid
                 })),
-                // Show AI together with other members when loading is complete
                 { name: 'AI', emoji: '🤖', color: '#B19CD9', avatar: '/ai-avatar.png' },
               ].map((member, index) => (
-                <div
-                  key={index}
-                  className="flex flex-col items-center"
-                  title={member.name}
-                >
+                <div key={index} className="flex flex-col items-center" title={member.name}>
                   <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-xs mb-1 overflow-hidden"
-                    style={{
-                      backgroundColor: member.avatar ? "transparent" : (isDarkMode ? member.color + '30' : member.color + '20'),
-                      border: member.avatar ? "none" : `2px solid ${member.color}40`,
-                    }}
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-xs overflow-hidden"
+                    style={{ backgroundColor: member.avatar ? 'transparent' : member.color + '30', border: member.avatar ? 'none' : `2px solid ${member.color}40` }}
                   >
-                    {member.avatar ? (
-                      <img 
-                        src={member.avatar} 
-                        alt={member.name} 
-                        className="w-full h-full object-cover"
-                      />
-                    ) : member.profilePicture ? (
-                      <img 
-                        src={member.profilePicture} 
-                        alt={member.name} 
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <span>{member.emoji}</span>
-                    )}
+                    {member.avatar ? <img src={member.avatar} alt={member.name} className="w-full h-full object-cover" /> : member.profilePicture ? <img src={member.profilePicture} alt={member.name} className="w-full h-full object-cover" /> : <span>{member.emoji}</span>}
                   </div>
-                  <span className={`text-[10px] ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                    {member.name}
-                  </span>
+                  <span className="text-[10px] mt-1" style={{ color: HUB.textSecondary }}>{member.name}</span>
                 </div>
               ))}
             </div>
-
           </div>
 
-          {/* Pod Reflection Section - Dropdown Card */}
+          {/* Crew's Reflection - same UI as Crew's Activity */}
           <div
-            onClick={(e) => {
-              // Only navigate if clicking on the card itself, not on buttons inside
-              if (e.target === e.currentTarget || e.target.closest('.reflection-content')) {
-                navigate('/pod/reflections');
-              }
-            }}
-            className={`rounded-2xl p-5 relative overflow-hidden transition-all ${
-              !podReflection ? '' : 'cursor-pointer hover:opacity-90'
-            } ${
-              isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
-            }`}
-            style={isDarkMode ? {
-              backgroundColor: "#262626",
-              boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
-            } : {
-              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)",
-              borderTop: "3px solid #E6B3BA30",
-            }}
+            onClick={(e) => { if (e.target === e.currentTarget || e.target.closest('.reflection-content')) navigate('/pod/reflections'); }}
+            className={`${cardClass} transition-all ${!podReflection ? '' : 'cursor-pointer hover:opacity-90'}`}
+            style={cardStyle}
           >
-            {/* Main Heading: Crew's Reflection */}
-            <div className="flex items-center justify-between mb-4">
+            <div className={headerClass} style={headerBorder}>
               <div className="flex items-center space-x-3">
-                <div
-                  className="w-8 h-8 rounded-full flex items-center justify-center"
-                  style={{
-                    backgroundColor: isDarkMode ? "#FDD663" : "#E6B3BA",
-                    boxShadow: isDarkMode ? "0 4px 16px rgba(0, 0, 0, 0.15)" : "none",
-                  }}
-                >
-                  <Sparkles className="w-4 h-4" style={{ color: isDarkMode ? "#000" : "#fff" }} strokeWidth={2} />
+                <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: HUB.accent + '30' }}>
+                  <Sparkles className="w-4 h-4" style={{ color: HUB.accent }} strokeWidth={2} />
                 </div>
-                <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>Crew's Reflection</h2>
+                <h2 className="text-lg font-semibold" style={{ color: HUB.text }}>Crew's Reflection</h2>
               </div>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  navigate('/pod/reflections');
-                }}
-                className={`p-1 rounded-full transition-opacity hover:opacity-80 ${
-                  isDarkMode ? 'hover:bg-gray-800/50' : 'hover:bg-gray-100'
-                }`}
-              >
-              <ChevronRight className={`w-5 h-5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
+              <button onClick={(e) => { e.stopPropagation(); navigate('/pod/reflections'); }} className="p-1 rounded-full hover:opacity-80 transition-opacity">
+                <ChevronRight className="w-5 h-5" style={{ color: HUB.textSecondary }} />
               </button>
             </div>
-            
-            {/* Reflection Content */}
+            <div className="px-4 py-4">
             {isLoadingPodReflection ? (
-              <div className="flex flex-col items-center justify-center py-4">
+              <div className="flex flex-col items-center justify-center py-6">
                 <div className="flex space-x-1 mb-3">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                  <div className="w-2 h-2 rounded-full animate-bounce bg-[#E91E63]" style={{ animationDelay: '0ms' }} />
+                  <div className="w-2 h-2 rounded-full animate-bounce bg-[#E91E63]" style={{ animationDelay: '150ms' }} />
+                  <div className="w-2 h-2 rounded-full animate-bounce bg-[#E91E63]" style={{ animationDelay: '300ms' }} />
                 </div>
-                <p className={`text-sm text-center italic ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Generating crew reflection...</p>
+                <p className="text-sm italic" style={{ color: HUB.textSecondary }}>Generating crew reflection...</p>
               </div>
             ) : podReflection ? (
               <div className="reflection-content">
-                <div className="flex items-start">
-                  <div className="flex-1">
-                    <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-600'} whitespace-pre-wrap break-words`}>
-                      {podReflection}
-                    </p>
-                  </div>
-                </div>
+                <p className="text-[15px] leading-relaxed whitespace-pre-wrap break-words" style={{ color: HUB.text }}>
+                  {podReflection}
+                </p>
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-4">
-                <div
-                  className={`w-12 h-12 rounded-lg flex items-center justify-center mb-3 ${
-                    isDarkMode ? 'backdrop-blur-md' : 'bg-white'
-                  }`}
-                  style={isDarkMode ? {
-                    backgroundColor: "rgba(28, 31, 46, 0.5)",
-                    boxShadow: "inset 0 0 20px rgba(125, 211, 192, 0.12), 0 8px 32px rgba(125, 211, 192, 0.08)",
-                    border: "1px solid rgba(125, 211, 192, 0.18)",
-                  } : {
-                    boxShadow: "0 2px 6px rgba(0, 0, 0, 0.06)",
-                  }}
-                >
+                <div className="w-12 h-12 rounded-lg flex items-center justify-center mb-3" style={{ backgroundColor: HUB.accent + '20', border: `1px solid ${HUB.accent}30` }}>
                   <span className="text-2xl">🌿</span>
                 </div>
-                <p className={`text-sm text-center mb-4 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                  No reflection yet.
-                </p>
+                <p className="text-sm text-center mb-4" style={{ color: HUB.text }}>No reflection yet.</p>
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation(); // Prevent navigation when clicking button
-                    handleGeneratePodReflection();
-                  }}
+                  onClick={(e) => { e.stopPropagation(); handleGeneratePodReflection(); }}
                   disabled={isLoadingPodReflection}
-                  className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
-                    isLoadingPodReflection
-                      ? 'opacity-50 cursor-not-allowed'
-                      : 'hover:opacity-90 active:scale-95'
-                  } ${
-                    isDarkMode
-                      ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white'
-                      : 'bg-gradient-to-r from-purple-500 to-pink-500 text-white'
-                  }`}
-                  style={{
-                    boxShadow: isDarkMode 
-                      ? '0 4px 12px rgba(168, 85, 247, 0.3)' 
-                      : '0 2px 8px rgba(168, 85, 247, 0.2)'
-                  }}
+                  className="px-4 py-2 rounded-lg font-medium transition-all duration-200 hover:opacity-90 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-white"
+                  style={{ backgroundColor: HUB.accent, boxShadow: `0 4px 12px ${HUB.accent}40` }}
                 >
                   {isLoadingPodReflection ? 'Generating...' : 'Create Reflection'}
                 </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    navigate('/pod/reflections');
-                  }}
-                  className={`mt-2 text-xs ${isDarkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-600'} transition-colors`}
-                >
+                <button onClick={(e) => { e.stopPropagation(); navigate('/pod/reflections'); }} className="mt-2 text-xs transition-colors hover:opacity-80" style={{ color: HUB.textSecondary }}>
                   View all reflections →
                 </button>
               </div>
             )}
+            </div>
           </div>
 
           {/* Crew's Activity - same theme, gap and post layout as Community page feed */}
-          {(() => {
-            const HUB = {
-              bg: '#0F0F0F',
-              text: '#FFFFFF',
-              textSecondary: '#A0A0A0',
-              divider: '#1E1E1E',
-              accent: '#E91E63',
-            };
-            return (
-              <div className="rounded-2xl overflow-hidden" style={{ background: HUB.bg, border: `1px solid ${HUB.divider}` }}>
-                <div className="flex items-center justify-between px-4 py-4" style={{ borderBottom: `1px solid ${HUB.divider}` }}>
+          <div className={cardClass} style={cardStyle}>
+                <div className={headerClass} style={headerBorder}>
                   <div className="flex items-center space-x-3">
                     <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: HUB.accent + '30' }}>
                       <Activity className="w-4 h-4" style={{ color: HUB.accent }} strokeWidth={2} />
@@ -843,9 +730,10 @@ export default function PodPage() {
                   </div>
                 )}
               </div>
-            );
-          })()}
         </div>
+        </>
+          );
+        })()}
       </div>
 
       {/* Calendar Popup */}
