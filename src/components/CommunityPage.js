@@ -774,7 +774,27 @@ export default function CommunityPage() {
           <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ background: THREADS.bgSecondary }}>
             <img src="/hub-icon.png" alt="Deite" className="object-contain w-6 h-6 invert" />
           </div>
-          <div className="w-10 h-10 flex-shrink-0" aria-hidden />
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button
+              onClick={toggleTheme}
+              className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity text-white"
+              aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {isDarkMode ? <Sun className="w-5 h-5" strokeWidth={2} /> : <Moon className="w-5 h-5" strokeWidth={2} />}
+            </button>
+            <button
+              onClick={handleProfileClick}
+              className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity overflow-hidden flex-shrink-0"
+              style={{ background: profilePicture ? 'transparent' : THREADS.bgSecondary }}
+              aria-label="Profile"
+            >
+              {profilePicture ? (
+                <img src={profilePicture} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <User className="w-5 h-5 text-white" style={{ color: THREADS.text }} strokeWidth={2} />
+              )}
+            </button>
+          </div>
         </header>
 
         {/* Hamburger menu overlay */}
