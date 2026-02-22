@@ -72,6 +72,16 @@ class ErrorBoundary extends React.Component {
   }
 }
 
+// Theme matching Pod / Community (HUB)
+const HUB = {
+  bg: '#0F0F0F',
+  bgSecondary: '#121212',
+  text: '#FFFFFF',
+  textSecondary: '#A0A0A0',
+  divider: '#1E1E1E',
+  accent: '#E91E63',
+};
+
 export default function EmotionalWellbeing() {
   const navigate = useNavigate();
   const { isDarkMode } = useTheme();
@@ -3177,7 +3187,7 @@ Return in this JSON format:
               isDarkMode ? 'border border-gray-600/20' : 'bg-white/40 border border-gray-200/30'
             }`}
             style={isDarkMode ? {
-              backgroundColor: "#262626",
+              backgroundColor: HUB.bgSecondary,
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
             } : {
               backgroundColor: "rgba(255, 255, 255, 0.6)",
@@ -3193,7 +3203,7 @@ Return in this JSON format:
                     border: "1px solid rgba(125, 211, 192, 0.3)",
                   }}
                 >
-                  <BarChart3 className="w-5 h-5" style={{ color: "#3AD4F8" }} />
+                  <BarChart3 className="w-5 h-5" style={{ color: HUB.accent }} />
                 </div>
                 <h3 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
                   Mood Chart
@@ -3205,36 +3215,27 @@ Return in this JSON format:
                 <button
                   onClick={() => setSelectedPeriod(7)}
                   className={`flex-1 px-3 py-2 rounded-full text-sm transition-all duration-300 touch-manipulation ${
-                    selectedPeriod === 7
-                      ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white'
-                      : isDarkMode
-                        ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    selectedPeriod === 7 ? 'text-white' : isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                   }`}
+                  style={selectedPeriod === 7 ? { backgroundColor: HUB.accent } : undefined}
                 >
                   7 Days
                 </button>
                 <button
                   onClick={() => setSelectedPeriod(15)}
                   className={`flex-1 px-3 py-2 rounded-full text-sm transition-all duration-300 touch-manipulation ${
-                    selectedPeriod === 15
-                      ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white'
-                      : isDarkMode
-                        ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    selectedPeriod === 15 ? 'text-white' : isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                   }`}
+                  style={selectedPeriod === 15 ? { backgroundColor: HUB.accent } : undefined}
                 >
                   15 Days
                 </button>
                 <button
                   onClick={() => setSelectedPeriod(365)}
                   className={`flex-1 px-3 py-2 rounded-full text-sm transition-all duration-300 touch-manipulation ${
-                    selectedPeriod === 365
-                      ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white'
-                      : isDarkMode
-                        ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    selectedPeriod === 365 ? 'text-white' : isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                   }`}
+                  style={selectedPeriod === 365 ? { backgroundColor: HUB.accent } : undefined}
                 >
                   Lifetime
                 </button>
@@ -3248,14 +3249,14 @@ Return in this JSON format:
                 <div
                   className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3"
                   style={isDarkMode ? {
-                    backgroundColor: "#262626",
-                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    backgroundColor: HUB.bgSecondary,
+                    border: `1px solid ${HUB.divider}`,
                   } : {
                     backgroundColor: "rgba(255, 255, 255, 0.6)",
                     border: "1px solid rgba(0, 0, 0, 0.08)",
                   }}
                 >
-                  <Heart className="w-6 h-6" style={{ color: isDarkMode ? "#FDD663" : "#87A96B" }} />
+                  <Heart className="w-6 h-6" style={{ color: isDarkMode ? HUB.accent : "#87A96B" }} />
                 </div>
                 <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                   No data yet
@@ -3383,7 +3384,7 @@ Return in this JSON format:
                 isDarkMode ? 'border border-gray-600/20' : 'bg-white/40 border border-gray-200/30'
               }`}
               style={isDarkMode ? {
-                backgroundColor: "#262626",
+                backgroundColor: HUB.bgSecondary,
                 boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
               } : {
                 backgroundColor: "rgba(255, 255, 255, 0.6)",
@@ -3399,7 +3400,7 @@ Return in this JSON format:
                       border: "1px solid rgba(212, 175, 55, 0.3)",
                     }}
                   >
-                    <Target className="w-5 h-5" style={{ color: "#3AD4F8" }} />
+                    <Target className="w-5 h-5" style={{ color: HUB.accent }} />
                   </div>
                   <h3 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
                     Emotional Balance
@@ -3411,36 +3412,27 @@ Return in this JSON format:
                   <button
                     onClick={() => setBalancePeriod(7)}
                     className={`flex-1 px-3 py-2 rounded-full text-sm transition-all duration-300 touch-manipulation ${
-                      balancePeriod === 7
-                        ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white'
-                        : isDarkMode
-                          ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      balancePeriod === 7 ? 'text-white' : isDarkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                     }`}
+                    style={balancePeriod === 7 ? { backgroundColor: HUB.accent } : undefined}
                   >
                     7 Days
                   </button>
                   <button
                     onClick={() => setBalancePeriod(30)}
                     className={`flex-1 px-3 py-2 rounded-full text-sm transition-all duration-300 touch-manipulation ${
-                      balancePeriod === 30
-                        ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white'
-                        : isDarkMode
-                          ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      balancePeriod === 30 ? 'text-white' : isDarkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                     }`}
+                    style={balancePeriod === 30 ? { backgroundColor: HUB.accent } : undefined}
                   >
                     30 Days
                   </button>
                   <button
                     onClick={() => setBalancePeriod(365)}
                     className={`flex-1 px-3 py-2 rounded-full text-sm transition-all duration-300 touch-manipulation ${
-                      balancePeriod === 365
-                        ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white'
-                        : isDarkMode
-                          ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      balancePeriod === 365 ? 'text-white' : isDarkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                     }`}
+                    style={balancePeriod === 365 ? { backgroundColor: HUB.accent } : undefined}
                   >
                     Lifetime
                   </button>
@@ -3454,14 +3446,14 @@ Return in this JSON format:
                 <div
                   className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3"
                   style={isDarkMode ? {
-                    backgroundColor: "#262626",
-                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    backgroundColor: HUB.bgSecondary,
+                    border: `1px solid ${HUB.divider}`,
                   } : {
                     backgroundColor: "rgba(255, 255, 255, 0.6)",
                     border: "1px solid rgba(0, 0, 0, 0.08)",
                   }}
                 >
-                  <Target className="w-6 h-6" style={{ color: "#3AD4F8" }} />
+                  <Target className="w-6 h-6" style={{ color: HUB.accent }} />
                 </div>
                 <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                   No balance data yet
@@ -3566,7 +3558,7 @@ Return in this JSON format:
               isDarkMode ? 'border border-gray-600/20' : 'bg-white/40 border border-gray-200/30'
             }`}
             style={isDarkMode ? {
-              backgroundColor: "#262626",
+              backgroundColor: HUB.bgSecondary,
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
             } : {
               backgroundColor: "rgba(255, 255, 255, 0.6)",
@@ -3577,14 +3569,14 @@ Return in this JSON format:
               <div
                 className="w-10 h-10 rounded-full flex items-center justify-center"
                 style={isDarkMode ? {
-                  backgroundColor: "#262626",
-                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                  backgroundColor: HUB.bgSecondary,
+                  border: `1px solid ${HUB.divider}`,
                 } : {
                   backgroundColor: "rgba(255, 255, 255, 0.6)",
                   border: "1px solid rgba(0, 0, 0, 0.08)",
                 }}
               >
-                <Award className="w-5 h-5" style={{ color: isDarkMode ? "#8AB4F8" : "#87A96B" }} />
+                <Award className="w-5 h-5" style={{ color: isDarkMode ? HUB.accent : "#87A96B" }} />
               </div>
               <div>
                 <h3 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
@@ -3601,14 +3593,14 @@ Return in this JSON format:
             <div
               className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3"
               style={isDarkMode ? {
-                backgroundColor: "#262626",
-                border: "1px solid rgba(255, 255, 255, 0.08)",
+                backgroundColor: HUB.bgSecondary,
+                border: `1px solid ${HUB.divider}`,
               } : {
                 backgroundColor: "rgba(255, 255, 255, 0.6)",
                 border: "1px solid rgba(0, 0, 0, 0.08)",
               }}
             >
-              <Award className="w-6 h-6" style={{ color: isDarkMode ? "#8AB4F8" : "#87A96B" }} />
+              <Award className="w-6 h-6" style={{ color: isDarkMode ? HUB.accent : "#87A96B" }} />
             </div>
             <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
               Highlights will appear here
@@ -3714,7 +3706,7 @@ Return in this JSON format:
               isDarkMode ? 'border border-gray-600/20' : 'bg-white/40 border border-gray-200/30'
             }`}
             style={isDarkMode ? {
-              backgroundColor: "#262626",
+              backgroundColor: HUB.bgSecondary,
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
             } : {
               backgroundColor: "rgba(255, 255, 255, 0.6)",
@@ -3725,16 +3717,16 @@ Return in this JSON format:
               <div
                 className="w-10 h-10 rounded-full flex items-center justify-center"
                 style={isDarkMode ? {
-                  backgroundColor: "#262626",
-                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                  backgroundColor: HUB.bgSecondary,
+                  border: `1px solid ${HUB.divider}`,
                 } : {
                   backgroundColor: "rgba(255, 255, 255, 0.6)",
                   border: "1px solid rgba(0, 0, 0, 0.08)",
                 }}
               >
-                <Lightbulb className="w-5 h-5" style={{ color: "#3AD4F8" }} />
+                <Lightbulb className="w-5 h-5" style={{ color: HUB.accent }} />
               </div>
-              <h3 className="text-lg font-semibold" style={{ color: "#3AD4F8" }}>
+              <h3 className="text-lg font-semibold" style={{ color: HUB.accent }}>
                 Triggers & Patterns
               </h3>
             </div>
@@ -3744,14 +3736,14 @@ Return in this JSON format:
             <div
               className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3"
               style={isDarkMode ? {
-                backgroundColor: "#262626",
-                border: "1px solid rgba(255, 255, 255, 0.08)",
+                backgroundColor: HUB.bgSecondary,
+                border: `1px solid ${HUB.divider}`,
               } : {
                 backgroundColor: "rgba(255, 255, 255, 0.6)",
                 border: "1px solid rgba(0, 0, 0, 0.08)",
               }}
             >
-              <Lightbulb className="w-6 h-6" style={{ color: "#3AD4F8" }} />
+              <Lightbulb className="w-6 h-6" style={{ color: HUB.accent }} />
             </div>
             <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
               Patterns will appear here
@@ -3789,7 +3781,7 @@ Return in this JSON format:
                       border: "1px solid rgba(253, 214, 99, 0.15)",
                     }}>
                     <div className="flex items-center space-x-2">
-                      <AlertTriangle className="w-5 h-5" style={{ color: "#FDD663" }} />
+                      <AlertTriangle className="w-5 h-5" style={{ color: HUB.accent }} />
                       <span className={`text-sm font-medium ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
                         {patternAnalysis.message || `No chat data available for analysis`}
                       </span>
@@ -3895,7 +3887,7 @@ Return in this JSON format:
                       border: "1px solid rgba(138, 180, 248, 0.15)",
                     }}>
                     <h4 className={`font-medium mb-3 flex items-center space-x-2 ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                      <Target className="w-4 h-4" style={{ color: "#8AB4F8" }} />
+                      <Target className="w-4 h-4" style={{ color: HUB.accent }} />
                       <span>Key Insights</span>
                     </h4>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -3932,7 +3924,7 @@ Return in this JSON format:
               isDarkMode ? 'border border-gray-600/20' : 'bg-white/40 border border-gray-200/30'
             }`}
             style={isDarkMode ? {
-              backgroundColor: "#262626",
+              backgroundColor: HUB.bgSecondary,
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
             } : {
               backgroundColor: "rgba(255, 255, 255, 0.6)",
@@ -3943,14 +3935,14 @@ Return in this JSON format:
               <div
                 className="w-10 h-10 rounded-full flex items-center justify-center"
                 style={isDarkMode ? {
-                  backgroundColor: "#262626",
-                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                  backgroundColor: HUB.bgSecondary,
+                  border: `1px solid ${HUB.divider}`,
                 } : {
                   backgroundColor: "rgba(255, 255, 255, 0.6)",
                   border: "1px solid rgba(0, 0, 0, 0.08)",
                 }}
               >
-                <BookOpen className="w-5 h-5" style={{ color: isDarkMode ? "#8AB4F8" : "#87A96B" }} />
+                <BookOpen className="w-5 h-5" style={{ color: isDarkMode ? HUB.accent : "#87A96B" }} />
               </div>
               <h3 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
                 Personalized Guidance
@@ -3962,14 +3954,14 @@ Return in this JSON format:
             <div
               className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3"
               style={isDarkMode ? {
-                backgroundColor: "#262626",
-                border: "1px solid rgba(255, 255, 255, 0.08)",
+                backgroundColor: HUB.bgSecondary,
+                border: `1px solid ${HUB.divider}`,
               } : {
                 backgroundColor: "rgba(255, 255, 255, 0.6)",
                 border: "1px solid rgba(0, 0, 0, 0.08)",
               }}
             >
-              <BookOpen className="w-6 h-6" style={{ color: isDarkMode ? "#8AB4F8" : "#87A96B" }} />
+              <BookOpen className="w-6 h-6" style={{ color: isDarkMode ? HUB.accent : "#87A96B" }} />
             </div>
             <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
               Guidance will appear here
@@ -4027,14 +4019,14 @@ Return in this JSON format:
                     <div
                       className="w-8 h-8 rounded-full flex items-center justify-center animate-pulse"
                       style={isDarkMode ? {
-                        backgroundColor: "#262626",
-                        border: "1px solid rgba(255, 255, 255, 0.08)",
+                        backgroundColor: HUB.bgSecondary,
+                        border: `1px solid ${HUB.divider}`,
                       } : {
                         backgroundColor: "rgba(255, 255, 255, 0.6)",
                         border: "1px solid rgba(0, 0, 0, 0.08)",
                       }}
                     >
-                      <BookOpen className="w-4 h-4" style={{ color: isDarkMode ? "#8AB4F8" : "#87A96B" }} />
+                      <BookOpen className="w-4 h-4" style={{ color: isDarkMode ? HUB.accent : "#87A96B" }} />
                     </div>
                     <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                       Analyzing your patterns to generate personalized tips...
@@ -4097,7 +4089,7 @@ Return in this JSON format:
                       <div
                         className="w-8 h-8 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-300"
                         style={{
-                          backgroundColor: "#8AB4F8",
+                          backgroundColor: HUB.accent,
                         }}
                       >
                         <Sun className="w-4 h-4 text-white" />
@@ -4127,7 +4119,7 @@ Return in this JSON format:
                       <div
                         className="w-8 h-8 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-300"
                         style={{
-                          backgroundColor: "#FDD663",
+                          backgroundColor: HUB.accent,
                         }}
                       >
                         <Star className="w-4 h-4 text-white" />
@@ -4186,25 +4178,23 @@ Return in this JSON format:
         <div
           className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden"
           style={{
-            background: isDarkMode
-              ? "#131314"
-              : "#B5C4AE",
+            background: isDarkMode ? HUB.bg : '#B5C4AE',
           }}
         >
           <div className="flex flex-col items-center space-y-4">
             <div
               className="w-16 h-16 rounded-full flex items-center justify-center animate-pulse"
               style={isDarkMode ? {
-                backgroundColor: "#262626",
-                border: "1px solid rgba(255, 255, 255, 0.08)",
+                backgroundColor: HUB.bgSecondary,
+                border: `1px solid ${HUB.divider}`,
               } : {
-                backgroundColor: "rgba(255, 255, 255, 0.6)",
-                border: "1px solid rgba(0, 0, 0, 0.08)",
+                backgroundColor: 'rgba(255, 255, 255, 0.6)',
+                border: '1px solid rgba(0, 0, 0, 0.08)',
               }}
             >
-              <Heart className="w-8 h-8" style={{ color: isDarkMode ? "#FDD663" : "#87A96B" }} />
+              <Heart className="w-8 h-8" style={{ color: isDarkMode ? HUB.accent : '#87A96B' }} />
             </div>
-            <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+            <p className="text-sm" style={{ color: isDarkMode ? HUB.textSecondary : '#5A5A5A' }}>
               Loading Emotional Wellbeing...
             </p>
           </div>
@@ -4218,24 +4208,17 @@ Return in this JSON format:
       <div
         className="min-h-screen flex flex-col relative overflow-hidden"
         style={{
-          background: isDarkMode
-            ? "#131314"
-            : "#B5C4AE",
-          // Top safe area so header/buttons never overlap status bar/notch
+          background: isDarkMode ? HUB.bg : '#B5C4AE',
           paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))',
-          // Dedicated buffer: nav bar (56px) + breathing gap (24px) + safe-area so content never touches the bar
           paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))',
         }}
       >
-      {/* Header: respect status bar and notch */}
+      {/* Header - same theme as Pod/Community */}
       <div
-        className={`sticky top-0 z-20 flex items-center justify-between pl-6 pr-8 border-b backdrop-blur-lg ${
-          isDarkMode ? 'border-gray-600/20' : 'border-gray-200/50'
-        }`}
+        className="sticky top-0 z-20 flex items-center justify-between pl-6 pr-8 border-b backdrop-blur-lg"
         style={{
-          backgroundColor: isDarkMode
-            ? "rgba(19, 19, 19, 0.95)"
-            : "rgba(181, 196, 174, 0.96)", // match light green app chrome instead of white
+          backgroundColor: isDarkMode ? HUB.bg : 'rgba(181, 196, 174, 0.96)',
+          borderColor: isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)',
           paddingTop: '0.75rem',
           paddingBottom: '1.25rem',
         }}
@@ -4245,22 +4228,20 @@ Return in this JSON format:
 
         <div className="flex items-center space-x-3 flex-1 justify-center mx-4">
           <div
-            className={`w-10 h-10 rounded-full flex items-center justify-center ${
-              isDarkMode ? 'backdrop-blur-md' : 'bg-white'
-            }`}
+            className={`w-10 h-10 rounded-full flex items-center justify-center ${isDarkMode ? '' : 'bg-white'}`}
             style={isDarkMode ? {
-              backgroundColor: "#262626",
-              boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
+              backgroundColor: HUB.bgSecondary,
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
+              border: `1px solid ${HUB.divider}`,
             } : {
-              boxShadow: "0 2px 8px rgba(134, 169, 107, 0.15)",
+              boxShadow: '0 2px 8px rgba(134, 169, 107, 0.15)',
             }}
           >
-            <Heart className="w-5 h-5" style={{ color: isDarkMode ? "#FDD663" : "#87A96B" }} strokeWidth={1.5} />
+            <Heart className="w-5 h-5" style={{ color: isDarkMode ? HUB.accent : '#87A96B' }} strokeWidth={1.5} />
           </div>
           <div className="flex items-center space-x-3">
             <div className="text-center px-2">
-              <h1 className={`text-xl font-semibold whitespace-nowrap ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+              <h1 className="text-xl font-semibold whitespace-nowrap" style={{ color: isDarkMode ? HUB.text : '#2D2D2D' }}>
                 Emotional Wellbeing
               </h1>
             </div>
@@ -4268,15 +4249,13 @@ Return in this JSON format:
               onClick={handleAIUpdate}
               disabled={isUpdating}
               className={`flex items-center space-x-2 px-3 py-2 rounded-xl transition-all duration-200 touch-manipulation ${
-                isUpdating
-                  ? 'bg-gray-200 dark:bg-gray-700 cursor-not-allowed'
-                  : 'text-white shadow-lg hover:shadow-xl transform hover:scale-105'
+                isUpdating ? 'cursor-not-allowed' : 'text-white shadow-lg hover:shadow-xl transform hover:scale-105'
               }`}
               style={isDarkMode ? {
-                backgroundColor: isUpdating ? "" : "#262626",
-                border: isUpdating ? "" : "1px solid rgba(255, 255, 255, 0.08)",
+                backgroundColor: isUpdating ? HUB.divider : HUB.accent,
+                border: 'none',
               } : {
-                backgroundColor: isUpdating ? "" : "rgba(134, 169, 107, 0.95)",
+                backgroundColor: isUpdating ? '#d1d5db' : 'rgba(134, 169, 107, 0.95)',
               }}
             >
               <RefreshCw className={`w-4 h-4 ${(isUpdating || isLoadingFresh) ? 'animate-spin' : ''}`} />
@@ -4302,7 +4281,7 @@ Return in this JSON format:
               isDarkMode ? 'bg-gray-800' : 'bg-white'
             }`}
             style={isDarkMode ? {
-              backgroundColor: "#262626",
+              backgroundColor: HUB.bgSecondary,
               boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)",
             } : {
               boxShadow: "0 20px 60px rgba(0, 0, 0, 0.15)",
@@ -4357,7 +4336,7 @@ Return in this JSON format:
                 }}>
                 <div className="flex items-center space-x-3 mb-2">
                   <div className="w-6 h-6 rounded-full flex items-center justify-center"
-                    style={{ backgroundColor: "#FDD663" }}>
+                    style={{ backgroundColor: HUB.accent }}>
                     <Zap className="w-4 h-4 text-white" />
                   </div>
                   <h4 className={`font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
@@ -4380,7 +4359,7 @@ Return in this JSON format:
                 }}>
                 <div className="flex items-center space-x-3 mb-2">
                   <div className="w-6 h-6 rounded-full flex items-center justify-center"
-                    style={{ backgroundColor: "#8AB4F8" }}>
+                    style={{ backgroundColor: HUB.accent }}>
                     <AlertTriangle className="w-4 h-4 text-white" />
                   </div>
                   <h4 className={`font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
@@ -4421,10 +4400,10 @@ Return in this JSON format:
                 onClick={() => setShowDetailsModal(false)}
                 className="px-6 py-2 text-white rounded-full hover:opacity-90 transition-opacity"
                 style={isDarkMode ? {
-                  backgroundColor: "#262626",
-                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                  backgroundColor: HUB.bgSecondary,
+                  border: `1px solid ${HUB.divider}`,
                 } : {
-                  backgroundColor: "#262626",
+                  backgroundColor: HUB.bgSecondary,
                   border: "1px solid rgba(0, 0, 0, 0.08)",
                 }}
               >
@@ -4443,7 +4422,7 @@ Return in this JSON format:
               isDarkMode ? 'bg-gray-800' : 'bg-white'
             }`}
             style={isDarkMode ? {
-              backgroundColor: "#262626",
+              backgroundColor: HUB.bgSecondary,
               boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)",
             } : {
               boxShadow: "0 20px 60px rgba(0, 0, 0, 0.15)",
@@ -4491,10 +4470,10 @@ Return in this JSON format:
                 onClick={() => setSelectedGuidanceTip(null)}
                 className="px-6 py-2 text-white rounded-full hover:opacity-90 transition-opacity"
                 style={isDarkMode ? {
-                  backgroundColor: "#262626",
-                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                  backgroundColor: HUB.bgSecondary,
+                  border: `1px solid ${HUB.divider}`,
                 } : {
-                  backgroundColor: "#262626",
+                  backgroundColor: HUB.bgSecondary,
                   border: "1px solid rgba(0, 0, 0, 0.08)",
                 }}
               >
