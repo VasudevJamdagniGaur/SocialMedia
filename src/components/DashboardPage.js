@@ -602,34 +602,34 @@ export default function DashboardPage() {
         <div
           className="rounded-2xl p-4 mb-6 relative overflow-hidden"
           style={{
-            backgroundColor: "#1E1E1E",
+            backgroundColor: isDarkMode ? HUB.bgSecondary : "#1E1E1E",
             boxShadow: "0 4px 16px rgba(0, 0, 0, 0.3)",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
+            border: isDarkMode ? `1px solid ${HUB.divider}` : "1px solid rgba(255, 255, 255, 0.08)",
           }}
         >
-          <div className="flex items-center justify-between" style={{ color: '#E5E5E5' }}>
+          <div className="flex items-center justify-between" style={{ color: isDarkMode ? HUB.text : '#E5E5E5' }}>
             <button 
               onClick={handlePreviousDay}
               className="p-1 rounded transition-colors hover:bg-white/10"
             >
-              <span className="text-lg" style={{ color: '#B0B0B0' }}>‹</span>
+              <span className="text-lg" style={{ color: isDarkMode ? HUB.textSecondary : '#B0B0B0' }}>‹</span>
             </button>
             <div 
               className="text-center cursor-pointer rounded-xl p-2 transition-colors hover:bg-white/10"
               onClick={handleCalendarClick}
             >
               <div className="flex items-center justify-center space-x-2 mb-1">
-                <Calendar className="w-4 h-4" style={{ color: "#3AD4F8" }} />
-                <span className="text-sm" style={{ color: '#B0B0B0' }}>Selected Date</span>
+                <Calendar className="w-4 h-4" style={{ color: isDarkMode ? HUB.accent : "#3AD4F8" }} />
+                <span className="text-sm" style={{ color: isDarkMode ? HUB.textSecondary : '#B0B0B0' }}>Selected Date</span>
               </div>
-              <div className="font-semibold" style={{ color: '#E5E5E5' }}>{formatDateForDisplay(selectedDate)}</div>
-              <div className="text-xs" style={{ color: '#888888' }}>Click to open calendar</div>
+              <div className="font-semibold" style={{ color: isDarkMode ? HUB.text : '#E5E5E5' }}>{formatDateForDisplay(selectedDate)}</div>
+              <div className="text-xs" style={{ color: isDarkMode ? HUB.textSecondary : '#888888' }}>Click to open calendar</div>
             </div>
             <button 
               onClick={handleNextDay}
               className="p-1 rounded transition-colors hover:bg-white/10"
             >
-              <span className="text-lg" style={{ color: '#B0B0B0' }}>›</span>
+              <span className="text-lg" style={{ color: isDarkMode ? HUB.textSecondary : '#B0B0B0' }}>›</span>
             </button>
           </div>
         </div>
@@ -638,73 +638,77 @@ export default function DashboardPage() {
         <div
           className="rounded-2xl relative overflow-hidden"
           style={{
-            backgroundColor: "#1E1E1E",
+            backgroundColor: isDarkMode ? HUB.bgSecondary : "#1E1E1E",
             boxShadow: "0 4px 20px rgba(0, 0, 0, 0.3)",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
+            border: isDarkMode ? `1px solid ${HUB.divider}` : "1px solid rgba(255, 255, 255, 0.08)",
           }}
         >
           <div className="p-6 pb-5">
-            {/* Title + date only; one line of context, one action. Logic revealed only when needed (e.g. alert on tap). */}
             <div 
               onClick={() => navigate('/reflections')}
               className="flex items-center justify-between cursor-pointer transition-opacity hover:opacity-85 mb-6"
             >
               <div>
-                <h2 className="text-lg font-semibold" style={{ color: '#E5E5E5' }}>
+                <h2 className="text-lg font-semibold" style={{ color: isDarkMode ? HUB.text : '#E5E5E5' }}>
                   Day's Reflect
                 </h2>
                 <p
                   className="text-sm mt-0.5"
-                  style={{ color: '#3AD4F8' }}
+                  style={{ color: isDarkMode ? HUB.accent : '#3AD4F8' }}
                 >
                   {formatDateForDisplay(selectedDate)}
                 </p>
               </div>
-              <ChevronRight className="w-5 h-5 flex-shrink-0" style={{ color: '#3AD4F8' }} strokeWidth={2} />
+              <ChevronRight className="w-5 h-5 flex-shrink-0" style={{ color: isDarkMode ? HUB.accent : '#3AD4F8' }} strokeWidth={2} />
             </div>
 
             <div
               className="rounded-xl relative overflow-hidden"
               style={{
-                backgroundColor: "rgba(255, 255, 255, 0.06)",
-                border: "1px solid rgba(255, 255, 255, 0.08)",
+                backgroundColor: isDarkMode ? "rgba(255, 255, 255, 0.06)" : "rgba(255, 255, 255, 0.06)",
+                border: isDarkMode ? `1px solid ${HUB.divider}` : "1px solid rgba(255, 255, 255, 0.08)",
               }}
             >
               {isLoadingReflection ? (
                 <div className="flex flex-col items-center justify-center py-10">
                   <div className="flex space-x-1.5 mb-4">
-                    <div className="w-2 h-2 rounded-full animate-bounce bg-[#3AD4F8]" style={{ animationDelay: '0ms' }} />
-                    <div className="w-2 h-2 rounded-full animate-bounce bg-[#3AD4F8]" style={{ animationDelay: '150ms' }} />
-                    <div className="w-2 h-2 rounded-full animate-bounce bg-[#3AD4F8]" style={{ animationDelay: '300ms' }} />
+                    <div className="w-2 h-2 rounded-full animate-bounce" style={{ animationDelay: '0ms', backgroundColor: isDarkMode ? HUB.accent : '#3AD4F8' }} />
+                    <div className="w-2 h-2 rounded-full animate-bounce" style={{ animationDelay: '150ms', backgroundColor: isDarkMode ? HUB.accent : '#3AD4F8' }} />
+                    <div className="w-2 h-2 rounded-full animate-bounce" style={{ animationDelay: '300ms', backgroundColor: isDarkMode ? HUB.accent : '#3AD4F8' }} />
                   </div>
-                  <p className="text-sm" style={{ color: '#888888' }}>
+                  <p className="text-sm" style={{ color: isDarkMode ? HUB.textSecondary : '#888888' }}>
                     Preparing...
                   </p>
                 </div>
               ) : reflection ? (
                 <div onClick={() => navigate('/reflections')} className="p-5 cursor-pointer hover:opacity-95 transition-opacity">
-                  <p className="text-[15px] leading-relaxed" style={{ color: '#E5E5E5' }}>
+                  <p className="text-[15px] leading-relaxed" style={{ color: isDarkMode ? HUB.text : '#E5E5E5' }}>
                     {reflection}
                   </p>
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); navigate('/share-reflection', { state: { reflection, selectedDate } }); }}
-                    className="mt-4 flex items-center justify-center gap-2 rounded-lg py-2.5 px-4 text-sm font-medium transition-all hover:opacity-90 text-[#1E1E1E] bg-[#3AD4F8]/20 border border-[#3AD4F8]/50"
+                    className="mt-4 flex items-center justify-center gap-2 rounded-lg py-2.5 px-4 text-sm font-medium transition-all hover:opacity-90"
+                    style={isDarkMode ? { color: '#1E1E1E', backgroundColor: `${HUB.accent}20`, border: `1px solid ${HUB.accent}50` } : { color: '#1E1E1E', backgroundColor: 'rgba(58, 212, 248, 0.2)', border: '1px solid rgba(58, 212, 248, 0.5)' }}
                   >
-                    <Share2 className="w-4 h-4" style={{ color: '#3AD4F8' }} strokeWidth={2} />
+                    <Share2 className="w-4 h-4" style={{ color: isDarkMode ? HUB.accent : '#3AD4F8' }} strokeWidth={2} />
                     Share to HUB
                   </button>
                 </div>
               ) : (
                 <div className="px-6 pt-6 pb-7 flex flex-col items-stretch">
-                  <p className="text-sm" style={{ color: '#B0B0B0' }}>
+                  <p className="text-sm" style={{ color: isDarkMode ? HUB.textSecondary : '#B0B0B0' }}>
                     A quiet moment for this day
                   </p>
                   <button
                     type="button"
                     onClick={handleChatClick}
                     className="mt-6 w-full rounded-xl py-3.5 px-5 font-medium text-[15px] transition-all duration-200 hover:opacity-90 active:scale-[0.99] flex items-center justify-center gap-2"
-                    style={{
+                    style={isDarkMode ? {
+                      backgroundColor: `${HUB.accent}20`,
+                      color: HUB.text,
+                      border: `1px solid ${HUB.accent}50`,
+                    } : {
                       backgroundColor: 'rgba(58, 212, 248, 0.2)',
                       color: '#E5E5E5',
                       border: '1px solid rgba(58, 212, 248, 0.5)',
@@ -723,12 +727,12 @@ export default function DashboardPage() {
             onClick={handleChatClick}
             className="flex items-center space-x-3 font-medium rounded-xl px-6 py-3.5 hover:opacity-90 transition-all duration-200 w-full justify-center"
             style={{
-              backgroundColor: "#1E1E1E",
-              color: "#E5E5E5",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
+              backgroundColor: isDarkMode ? HUB.bgSecondary : "#1E1E1E",
+              color: isDarkMode ? HUB.text : "#E5E5E5",
+              border: isDarkMode ? `1px solid ${HUB.divider}` : "1px solid rgba(255, 255, 255, 0.08)",
             }}
           >
-            <MessageCircle className="w-5 h-5" style={{ color: '#3AD4F8' }} />
+            <MessageCircle className="w-5 h-5" style={{ color: isDarkMode ? HUB.accent : '#3AD4F8' }} />
             <span>Chat with Deite</span>
           </button>
 
@@ -736,12 +740,12 @@ export default function DashboardPage() {
             onClick={handleWhisperClick}
             className="flex items-center space-x-3 font-medium rounded-xl px-6 py-3.5 hover:opacity-90 transition-all duration-200 w-full justify-center"
             style={{
-              backgroundColor: "#1E1E1E",
-              color: "#E5E5E5",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
+              backgroundColor: isDarkMode ? HUB.bgSecondary : "#1E1E1E",
+              color: isDarkMode ? HUB.text : "#E5E5E5",
+              border: isDarkMode ? `1px solid ${HUB.divider}` : "1px solid rgba(255, 255, 255, 0.08)",
             }}
           >
-            <MessageCircle className="w-5 h-5" style={{ color: '#3AD4F8' }} />
+            <MessageCircle className="w-5 h-5" style={{ color: isDarkMode ? HUB.accent : '#3AD4F8' }} />
             <span>Whisper Session</span>
           </button>
         </div>
