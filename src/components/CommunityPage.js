@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
-import { MessageCircle, Heart, User, Sun, Moon, Send, X, Plus, XCircle, Image, Link, Share2, Menu, Repeat } from 'lucide-react';
+import { MessageCircle, Heart, User, Sun, Moon, Send, X, Plus, XCircle, Image, Link, Share2, Repeat } from 'lucide-react';
 import { getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
 import { collection, addDoc, query, orderBy, getDocs, serverTimestamp, doc, setDoc, updateDoc, increment, deleteDoc, onSnapshot } from 'firebase/firestore';
@@ -755,7 +755,7 @@ export default function CommunityPage() {
       }}
     >
       <div className="relative z-10 mx-auto w-full max-w-[600px] px-4 sm:px-5">
-        {/* Threads-style sticky header: Hamburger | Deite logo */}
+        {/* Sticky header: Theme | Deite logo | Profile */}
         <header
           className="sticky top-0 z-20 flex items-center justify-between px-1 py-3 min-h-[52px]"
           style={{
@@ -765,36 +765,27 @@ export default function CommunityPage() {
           }}
         >
           <button
-            onClick={() => setMenuOpen(true)}
+            onClick={toggleTheme}
             className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity flex-shrink-0 text-white"
-            aria-label="Menu"
+            aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
           >
-            <Menu className="w-5 h-5" strokeWidth={2} />
+            {isDarkMode ? <Sun className="w-5 h-5" strokeWidth={2} /> : <Moon className="w-5 h-5" strokeWidth={2} />}
           </button>
           <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ background: THREADS.bgSecondary }}>
             <img src="/hub-icon.png" alt="Deite" className="object-contain w-6 h-6 invert" />
           </div>
-          <div className="flex items-center gap-1 flex-shrink-0">
-            <button
-              onClick={toggleTheme}
-              className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity text-white"
-              aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-            >
-              {isDarkMode ? <Sun className="w-5 h-5" strokeWidth={2} /> : <Moon className="w-5 h-5" strokeWidth={2} />}
-            </button>
-            <button
-              onClick={handleProfileClick}
-              className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity overflow-hidden flex-shrink-0"
-              style={{ background: profilePicture ? 'transparent' : THREADS.bgSecondary }}
-              aria-label="Profile"
-            >
-              {profilePicture ? (
-                <img src={profilePicture} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <User className="w-5 h-5 text-white" style={{ color: THREADS.text }} strokeWidth={2} />
-              )}
-            </button>
-          </div>
+          <button
+            onClick={handleProfileClick}
+            className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity overflow-hidden flex-shrink-0"
+            style={{ background: profilePicture ? 'transparent' : THREADS.bgSecondary }}
+            aria-label="Profile"
+          >
+            {profilePicture ? (
+              <img src={profilePicture} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <User className="w-5 h-5 text-white" style={{ color: THREADS.text }} strokeWidth={2} />
+            )}
+          </button>
         </header>
 
         {/* Hamburger menu overlay */}
