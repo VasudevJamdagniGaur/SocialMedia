@@ -21,6 +21,7 @@ export default function BottomNavigation() {
       style={{
         bottom: 0,
         paddingBottom: 'max(12px, env(safe-area-inset-bottom, 0px))',
+        backgroundColor: isDarkMode ? '#000000' : '#ffffff',
       }}
     >
       <div
