@@ -917,19 +917,32 @@ export default function CommunityPage() {
                 }}
               >
                 <div className="flex items-start gap-3 px-1">
-                  <button
-                    type="button"
-                    onClick={() => post.authorId && openUserProfile(post.authorId)}
-                    className="flex-shrink-0 rounded-full focus:outline-none cursor-pointer"
-                  >
-                    {post.profilePicture ? (
-                      <img src={post.profilePicture} alt="" className="w-10 h-10 rounded-full object-cover" />
-                    ) : (
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: THREADS.divider }}>
-                        <User className="w-5 h-5" style={{ color: THREADS.textSecondary }} strokeWidth={1.5} />
-                      </div>
+                  <div className="flex-shrink-0 relative">
+                    <button
+                      type="button"
+                      onClick={() => post.authorId && openUserProfile(post.authorId)}
+                      className="rounded-full focus:outline-none cursor-pointer"
+                    >
+                      {post.profilePicture ? (
+                        <img src={post.profilePicture} alt="" className="w-10 h-10 rounded-full object-cover" />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: THREADS.divider }}>
+                          <User className="w-5 h-5" style={{ color: THREADS.textSecondary }} strokeWidth={1.5} />
+                        </div>
+                      )}
+                    </button>
+                    {post.authorId && user && post.authorId !== user.uid && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleFollowClick(post.authorId); }}
+                        disabled={followLoadingUid === post.authorId}
+                        className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-white flex items-center justify-center shadow-md border border-gray-200 focus:outline-none cursor-pointer hover:opacity-90 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+                        aria-label={followingIds.includes(post.authorId) ? 'Unfollow' : 'Follow'}
+                      >
+                        <Plus className="w-3 h-3 text-black" strokeWidth={2.5} stroke="currentColor" />
+                      </button>
                     )}
-                  </button>
+                  </div>
                   <div className="flex-1 min-w-0">
                     <button
                       type="button"
@@ -965,18 +978,6 @@ export default function CommunityPage() {
                       </div>
                     )}
                   </div>
-                  {post.authorId && user && post.authorId !== user.uid && (
-                    <button
-                      onClick={() => handleFollowClick(post.authorId)}
-                      disabled={followLoadingUid === post.authorId}
-                      className={`flex-shrink-0 text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
-                        followLoadingUid === post.authorId ? 'opacity-60 cursor-not-allowed' : 'hover:opacity-90'
-                      } ${followingIds.includes(post.authorId) ? 'bg-white/10 text-white' : ''}`}
-                      style={!followingIds.includes(post.authorId) ? { background: THREADS.accent, color: '#fff' } : {}}
-                    >
-                      {followLoadingUid === post.authorId ? '…' : followingIds.includes(post.authorId) ? 'Following' : 'Follow'}
-                    </button>
-                  )}
                 </div>
                 <div className="flex items-center gap-6 mt-3 pt-3 px-1" style={{ borderTop: `1px solid ${THREADS.divider}` }}>
                   <button
