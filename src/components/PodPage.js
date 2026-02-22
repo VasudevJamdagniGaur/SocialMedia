@@ -734,128 +734,117 @@ export default function PodPage() {
             )}
           </div>
 
-          {/* Crew's Activity - recent posts from crew members */}
-          <div
-            className={`rounded-2xl p-5 relative overflow-hidden ${
-              isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
-            }`}
-            style={isDarkMode ? {
-              backgroundColor: '#262626',
-              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.15)',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
-            } : {
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
-            }}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center space-x-3">
-                <div
-                  className="w-8 h-8 rounded-full flex items-center justify-center"
-                  style={{
-                    backgroundColor: isDarkMode ? '#8AB4F8' + '30' : '#87A96B' + '20',
-                  }}
-                >
-                  <Activity className={`w-4 h-4 ${isDarkMode ? 'text-[#8AB4F8]' : 'text-[#87A96B]'}`} strokeWidth={2} />
-                </div>
-                <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>Crew's Activity</h2>
-              </div>
-              <button
-                onClick={() => navigate('/community')}
-                className={`p-1 rounded-full transition-opacity hover:opacity-80 ${
-                  isDarkMode ? 'hover:bg-gray-800/50' : 'hover:bg-gray-100'
-                }`}
-              >
-                <ChevronRight className={`w-5 h-5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
-              </button>
-            </div>
-            {isLoadingCrewActivity ? (
-              <div className="flex flex-col items-center justify-center py-6">
-                <div className="flex space-x-1 mb-2">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                </div>
-                <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Loading activity...</p>
-              </div>
-            ) : crewActivityPosts.length === 0 ? (
-              <div className="py-6 text-center">
-                <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  No recent posts from your crew yet. Share something in the Hub!
-                </p>
-                <button
-                  onClick={() => navigate('/community')}
-                  className={`mt-3 text-sm font-medium ${isDarkMode ? 'text-[#8AB4F8] hover:underline' : 'text-[#87A96B] hover:underline'}`}
-                >
-                  Go to Hub →
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {crewActivityPosts.slice(0, 5).map((post) => {
-                  const currentUser = getCurrentUser();
-                  const showFollow = post.authorId && currentUser && post.authorId !== currentUser.uid;
-                  return (
-                    <div
-                      key={post.id}
-                      onClick={() => navigate('/community')}
-                      className={`rounded-xl p-3 cursor-pointer transition-opacity hover:opacity-90 ${
-                        isDarkMode ? 'bg-black/20' : 'bg-gray-50'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); openUserProfile(post.authorId); }}
-                          className="flex items-center gap-2 flex-shrink-0 cursor-pointer rounded-full focus:outline-none"
-                        >
-                          {post.profilePicture ? (
-                            <img src={post.profilePicture} alt="" className="w-6 h-6 rounded-full object-cover" />
-                          ) : (
-                            <div
-                              className="w-6 h-6 rounded-full flex items-center justify-center"
-                              style={{ backgroundColor: isDarkMode ? '#7DD3C0' + '30' : '#E6B3BA' + '40' }}
-                            >
-                              <User className="w-3 h-3" style={{ color: isDarkMode ? '#7DD3C0' : '#E6B3BA' }} />
-                            </div>
-                          )}
-                          <span className={`text-xs font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                            {post.author || 'Someone'}
-                          </span>
-                          <span className={`text-[10px] ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
-                            {formatTimeAgo(post.createdAt)}
-                          </span>
-                        </button>
-                        {showFollow && (
-                          <button
-                            onClick={(e) => handleFollowClick(e, post.authorId)}
-                            disabled={followLoadingUid === post.authorId}
-                            className={`ml-auto text-[10px] font-medium px-2 py-1 rounded-full transition-colors ${
-                              followLoadingUid === post.authorId ? 'opacity-60' : 'hover:opacity-90'
-                            } ${
-                              followingIds.includes(post.authorId)
-                                ? (isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-600')
-                                : (isDarkMode ? 'bg-[#8AB4F8] text-white' : 'bg-[#87A96B] text-white')
-                            }`}
-                          >
-                            {followLoadingUid === post.authorId ? '…' : followingIds.includes(post.authorId) ? 'Following' : 'Follow'}
-                          </button>
-                        )}
-                      </div>
-                      <p className={`text-sm leading-snug line-clamp-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                        {post.content || ''}
-                      </p>
+          {/* Crew's Activity - same theme, gap and post layout as Community page feed */}
+          {(() => {
+            const HUB = {
+              bg: '#0F0F0F',
+              text: '#FFFFFF',
+              textSecondary: '#A0A0A0',
+              divider: '#1E1E1E',
+              accent: '#E91E63',
+            };
+            return (
+              <div className="rounded-2xl overflow-hidden" style={{ background: HUB.bg, border: `1px solid ${HUB.divider}` }}>
+                <div className="flex items-center justify-between px-4 py-4" style={{ borderBottom: `1px solid ${HUB.divider}` }}>
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: HUB.accent + '30' }}>
+                      <Activity className="w-4 h-4" style={{ color: HUB.accent }} strokeWidth={2} />
                     </div>
-                  );
-                })}
-                <button
-                  onClick={() => navigate('/community')}
-                  className={`w-full mt-2 text-xs ${isDarkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-600'} transition-colors`}
-                >
-                  View all in Hub →
-                </button>
+                    <h2 className="text-lg font-semibold" style={{ color: HUB.text }}>Crew's Activity</h2>
+                  </div>
+                  <button onClick={() => navigate('/community')} className="p-1 rounded-full hover:opacity-80 transition-opacity">
+                    <ChevronRight className="w-5 h-5" style={{ color: HUB.textSecondary }} />
+                  </button>
+                </div>
+                {isLoadingCrewActivity ? (
+                  <div className="flex flex-col items-center justify-center py-8">
+                    <div className="flex space-x-1 mb-2">
+                      <div className="w-2 h-2 rounded-full animate-bounce bg-[#E91E63]" style={{ animationDelay: '0ms' }} />
+                      <div className="w-2 h-2 rounded-full animate-bounce bg-[#E91E63]" style={{ animationDelay: '150ms' }} />
+                      <div className="w-2 h-2 rounded-full animate-bounce bg-[#E91E63]" style={{ animationDelay: '300ms' }} />
+                    </div>
+                    <p className="text-sm" style={{ color: HUB.textSecondary }}>Loading activity...</p>
+                  </div>
+                ) : crewActivityPosts.length === 0 ? (
+                  <div className="py-8 px-4 text-center">
+                    <p className="text-sm" style={{ color: HUB.textSecondary }}>
+                      No recent posts from your crew yet. Share something in the Hub!
+                    </p>
+                    <button onClick={() => navigate('/community')} className="mt-3 text-sm font-medium hover:underline" style={{ color: HUB.accent }}>
+                      Go to Hub →
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    {crewActivityPosts.slice(0, 5).map((post, index) => {
+                      const currentUser = getCurrentUser();
+                      const showFollow = post.authorId && currentUser && post.authorId !== currentUser.uid;
+                      return (
+                        <div
+                          key={post.id}
+                          onClick={() => navigate('/community')}
+                          className="transition-[background] duration-150 hover:bg-white/[0.03] active:scale-[0.99] cursor-pointer"
+                          style={{
+                            borderTop: index === 0 ? 'none' : `1px solid ${HUB.divider}`,
+                            padding: '16px 16px',
+                          }}
+                        >
+                          <div className="flex items-start gap-3">
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); openUserProfile(post.authorId); }}
+                              className="flex-shrink-0 rounded-full focus:outline-none cursor-pointer"
+                            >
+                              {post.profilePicture ? (
+                                <img src={post.profilePicture} alt="" className="w-10 h-10 rounded-full object-cover" />
+                              ) : (
+                                <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: HUB.divider }}>
+                                  <User className="w-5 h-5" style={{ color: HUB.textSecondary }} strokeWidth={1.5} />
+                                </div>
+                              )}
+                            </button>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); openUserProfile(post.authorId); }}
+                                  className="flex items-center gap-2 text-left cursor-pointer hover:opacity-90"
+                                  style={{ fontSize: '13px' }}
+                                >
+                                  <span className="font-semibold" style={{ color: HUB.text }}>{post.author || 'Someone'}</span>
+                                  <span style={{ color: HUB.textSecondary }}>{formatTimeAgo(post.createdAt)}</span>
+                                </button>
+                                {showFollow && (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); handleFollowClick(e, post.authorId); }}
+                                    disabled={followLoadingUid === post.authorId}
+                                    className={`flex-shrink-0 text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
+                                      followLoadingUid === post.authorId ? 'opacity-60 cursor-not-allowed' : 'hover:opacity-90'
+                                    } ${followingIds.includes(post.authorId) ? 'bg-white/10 text-white' : 'text-white'}`}
+                                    style={!followingIds.includes(post.authorId) ? { background: HUB.accent } : {}}
+                                  >
+                                    {followLoadingUid === post.authorId ? '…' : followingIds.includes(post.authorId) ? 'Following' : 'Follow'}
+                                  </button>
+                                )}
+                              </div>
+                              <p className="text-[15px] leading-snug mt-0.5 line-clamp-2" style={{ color: HUB.text }}>
+                                {post.content || ''}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <div style={{ borderTop: `1px solid ${HUB.divider}`, padding: '12px 16px' }}>
+                      <button onClick={() => navigate('/community')} className="w-full text-left text-xs transition-colors hover:opacity-80" style={{ color: HUB.textSecondary }}>
+                        View all in Hub →
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            );
+          })()}
         </div>
       </div>
 
