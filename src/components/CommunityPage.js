@@ -994,8 +994,8 @@ export default function CommunityPage() {
                     onClick={() => setPostComments({ ...postComments, [post.id]: { ...postCommentsData, showComments: !postCommentsData.showComments } })}
                     className="flex items-center gap-1.5 transition-transform hover:opacity-80 active:scale-95"
                   >
-                    <MessageCircle className="w-4 h-4" style={{ color: THREADS.textSecondary }} />
-                    <span className="text-xs" style={{ color: THREADS.textSecondary }}>{postCommentsData.comments.length}</span>
+                    <MessageCircle className="w-4 h-4" style={{ color: THREADS.bg }} />
+                    <span className="text-xs" style={{ color: THREADS.bg }}>{postCommentsData.comments.length}</span>
                   </button>
                   <button className="flex items-center gap-1.5 transition-transform hover:opacity-80 active:scale-95">
                     <Repeat className="w-4 h-4" style={{ color: THREADS.textSecondary }} />
