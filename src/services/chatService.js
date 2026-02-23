@@ -1587,7 +1587,7 @@ Do not add numbers, labels, titles, or explanations. Only the post text. Each po
         model: this.openaiModelName,
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.5,
-        max_tokens: 800
+        max_tokens: 1200
       };
       headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` };
     } else if (this.apiProvider === 'grok') {
@@ -1596,14 +1596,14 @@ Do not add numbers, labels, titles, or explanations. Only the post text. Each po
         model: this.grokModelName,
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.5,
-        max_tokens: 800
+        max_tokens: 1200
       };
       headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` };
     } else {
       apiUrl = `${this.geminiBaseURL}/models/${this.geminiModelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
       requestBody = {
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.5, maxOutputTokens: 800 }
+        generationConfig: { temperature: 0.5, maxOutputTokens: 1200 }
       };
       headers = { 'Content-Type': 'application/json' };
     }
@@ -1753,6 +1753,9 @@ ${(postText || '').trim().slice(0, 600)}`;
         }
       }
     }
+
+    // When the post had person/place/event entities we must not show a random stock image (e.g. Picsum) — it would be irrelevant (e.g. a tiger). Return null so the UI can hide the image.
+    if (useSerper && searchQueries.length > 0) return null;
 
     const seed = encodeURIComponent(String(searchQueries[0] || 'post').slice(0, 50).replace(/\s+/g, '-'));
     return `https://picsum.photos/seed/${seed}/600/340`;
