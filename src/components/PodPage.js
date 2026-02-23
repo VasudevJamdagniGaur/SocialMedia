@@ -455,16 +455,16 @@ export default function PodPage() {
                 isDarkMode ? 'backdrop-blur-md' : 'bg-white'
               }`}
               style={isDarkMode ? {
-                backgroundColor: "#262626",
+                backgroundColor: "#121212",
                 boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-                border: "1px solid rgba(255, 255, 255, 0.08)",
+                border: "1px solid #1E1E1E",
               } : {
                 boxShadow: "0 2px 8px rgba(230, 179, 186, 0.15)",
               }}
             >
               {isDarkMode ?
-                <Moon className="w-5 h-5" style={{ color: "#3AD4F8" }} strokeWidth={1.5} /> :
-                <Sun className="w-5 h-5" style={{ color: "#3AD4F8" }} strokeWidth={1.5} />
+                <Moon className="w-5 h-5" style={{ color: "#E91E63" }} strokeWidth={1.5} /> :
+                <Sun className="w-5 h-5" style={{ color: "#E91E63" }} strokeWidth={1.5} />
               }
             </div>
             {/* Center: Crew (beta) */}
@@ -480,9 +480,9 @@ export default function PodPage() {
                 isDarkMode ? 'backdrop-blur-md' : 'bg-white'
               }`}
               style={isDarkMode ? {
-                backgroundColor: profilePicture ? "transparent" : "#262626",
+                backgroundColor: profilePicture ? "transparent" : "#121212",
                 boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-                border: profilePicture ? "none" : "1px solid rgba(255, 255, 255, 0.08)",
+                border: profilePicture ? "none" : "1px solid #1E1E1E",
               } : {
                 boxShadow: "0 2px 8px rgba(177, 156, 217, 0.15)",
               }}
@@ -494,7 +494,7 @@ export default function PodPage() {
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <User className="w-5 h-5" style={{ color: "#3AD4F8" }} strokeWidth={1.5} />
+                <User className="w-5 h-5" style={{ color: "#E91E63" }} strokeWidth={1.5} />
               )}
             </div>
           </div>
