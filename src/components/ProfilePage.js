@@ -32,6 +32,18 @@ import {
   ChevronRight
 } from 'lucide-react';
 
+// Theme matching Dashboard / Community / Pod (HUB)
+const HUB = {
+  bg: '#0F0F0F',
+  bgSecondary: '#121212',
+  text: '#FFFFFF',
+  textSecondary: '#A0A0A0',
+  divider: '#1E1E1E',
+  accent: '#A855F7',
+  accentHighlight: '#C084FC',
+  accentShadow: '#7E22CE',
+};
+
 export default function ProfilePage() {
   const navigate = useNavigate();
   const { isDarkMode } = useTheme();
@@ -972,27 +984,19 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
     <div
       className="min-h-screen relative overflow-hidden"
       style={{
-        background: isDarkMode
-          ? "#131314"
-          : "#B5C4AE",
+        background: isDarkMode ? HUB.bg : '#F5F5F5',
       }}
     >
-      {/* Floating decorative elements */}
-      <div className="absolute inset-0 overflow-hidden">
+      {/* Subtle accent decorations */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-20 left-8 opacity-10">
-          <Heart className="w-6 h-6 text-pink-400 animate-pulse" />
+          <Heart className="w-6 h-6" style={{ color: HUB.accent }} />
         </div>
-        <div className="absolute top-16 right-12 opacity-12">
-          <Sparkles className="w-7 h-7 animate-bounce" style={{ color: "#8AB4F8", animationDuration: '3s' }} />
+        <div className="absolute top-16 right-12 opacity-10">
+          <Sparkles className="w-7 h-7" style={{ color: HUB.accentHighlight }} />
         </div>
-        <div className="absolute bottom-24 left-16 opacity-11">
-          <Star className="w-5 h-5 animate-pulse" style={{ color: "#81C995", animationDelay: '1s' }} />
-        </div>
-        <div className="absolute top-1/3 right-1/4 opacity-8">
-          <Star className="w-4 h-4 animate-bounce" style={{ color: "#FDD663", animationDelay: '2s', animationDuration: '4s' }} />
-        </div>
-        <div className="absolute bottom-1/3 left-1/5 opacity-9">
-          <Heart className="w-5 h-5 animate-pulse" style={{ color: "#F28B82", animationDelay: '1.5s' }} />
+        <div className="absolute bottom-24 left-16 opacity-10">
+          <Star className="w-5 h-5" style={{ color: HUB.accent }} />
         </div>
       </div>
 
@@ -1001,39 +1005,37 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
         <div className="flex items-center gap-4 mb-8">
           <button
             onClick={handleBack}
-            className="w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md hover:opacity-80 transition-opacity"
+            className="w-10 h-10 rounded-full flex items-center justify-center hover:opacity-80 transition-opacity"
             style={{
-              backgroundColor: "#262626",
-              boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
+              backgroundColor: HUB.bgSecondary,
+              border: `1px solid ${HUB.divider}`,
             }}
           >
-            <ArrowLeft className="w-5 h-5" style={{ color: "#8AB4F8" }} strokeWidth={1.5} />
+            <ArrowLeft className="w-5 h-5" style={{ color: HUB.accent }} strokeWidth={1.5} />
           </button>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
+          <h1 className="text-3xl font-bold" style={{ color: HUB.accent }}>
             Your Profile
           </h1>
         </div>
 
         {/* Profile Card */}
         <div
-          className="backdrop-blur-lg border-2 rounded-2xl p-6"
+          className="rounded-2xl p-6"
           style={{
-            backgroundColor: "#262626",
-            boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
+            backgroundColor: isDarkMode ? HUB.bgSecondary : '#FFFFFF',
+            boxShadow: isDarkMode ? '0 4px 20px rgba(0,0,0,0.3)' : '0 4px 16px rgba(0,0,0,0.08)',
+            border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'}`,
           }}
         >
           {/* Profile Header */}
-          <div className="text-center pb-6 border-b border-gray-700/30">
+          <div className="text-center pb-6" style={{ borderBottom: `1px solid ${HUB.divider}` }}>
             <div className="flex justify-center mb-4">
               <div className="relative">
-                <div 
-                  className="w-24 h-24 rounded-full flex items-center justify-center text-2xl font-bold text-white relative overflow-hidden"
+                <div
+                  className="w-24 h-24 rounded-full flex items-center justify-center text-2xl font-bold relative overflow-hidden"
                   style={{
-                    backgroundColor: "#262626",
-                    boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    backgroundColor: HUB.divider,
+                    border: `1px solid ${HUB.divider}`,
                   }}
                 >
                   {profilePicture ? (
@@ -1047,17 +1049,16 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
                   )}
                 </div>
                 {/* Change Picture Button - Always available */}
-                <button 
+                <button
                   className="absolute bottom-0 right-0 w-8 h-8 rounded-full flex items-center justify-center cursor-pointer transition-all hover:scale-110"
                   style={{
-                    backgroundColor: "rgba(138, 180, 248, 0.9)",
-                    boxShadow: "0 2px 8px rgba(0, 0, 0, 0.2)",
-                    border: "2px solid #262626",
+                    backgroundColor: HUB.accent,
+                    border: `2px solid ${HUB.bgSecondary}`,
                   }}
                   title="Change profile picture"
                   onClick={() => setShowAvatarModal(true)}
                 >
-                  <Camera className="w-4 h-4 text-white" />
+                  <Camera className="w-4 h-4" style={{ color: '#FFFFFF' }} />
                 </button>
                 <input
                   ref={fileInputRef}
@@ -1077,15 +1078,15 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
                     }}
                     title="Remove picture"
                   >
-                    <X className="w-3 h-3 text-white" />
+                    <X className="w-3 h-3" style={{ color: '#FFFFFF' }} />
                   </button>
                 )}
               </div>
             </div>
-            <h2 className="text-2xl font-bold text-white mb-2">
+            <h2 className="text-2xl font-bold mb-2" style={{ color: HUB.text }}>
               {user.displayName || 'User'}
             </h2>
-            <p className="text-gray-300 text-sm">
+            <p className="text-sm" style={{ color: HUB.textSecondary }}>
               {user.email}
             </p>
           </div>
@@ -1097,15 +1098,15 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
                 <div
                   className="p-4 rounded-xl"
                   style={{
-                    backgroundColor: "#262626",
-                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    backgroundColor: isDarkMode ? HUB.bg : 'rgba(0,0,0,0.04)',
+                    border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'}`,
                   }}
                 >
                   <div className="flex items-center gap-3 mb-2">
-                    <User className="w-5 h-5 text-purple-400" />
-                    <span className="font-medium text-gray-300">Display Name</span>
+                    <User className="w-5 h-5" style={{ color: HUB.accent }} />
+                    <span className="font-medium" style={{ color: HUB.textSecondary }}>Display Name</span>
                   </div>
-                  <p className="text-lg font-semibold text-white">
+                  <p className="text-lg font-semibold" style={{ color: HUB.text }}>
                     {user.displayName || 'Not set'}
                   </p>
                 </div>
@@ -1113,15 +1114,15 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
                 <div
                   className="p-4 rounded-xl"
                   style={{
-                    backgroundColor: "#262626",
-                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    backgroundColor: isDarkMode ? HUB.bg : 'rgba(0,0,0,0.04)',
+                    border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'}`,
                   }}
                 >
                   <div className="flex items-center gap-3 mb-2">
-                    <Calendar className="w-5 h-5 text-purple-400" />
-                    <span className="font-medium text-gray-300">Age</span>
+                    <Calendar className="w-5 h-5" style={{ color: HUB.accent }} />
+                    <span className="font-medium" style={{ color: HUB.textSecondary }}>Age</span>
                   </div>
-                  <p className="text-lg font-semibold text-white">
+                  <p className="text-lg font-semibold" style={{ color: HUB.text }}>
                     {editData.birthday 
                       ? `${calculateAgeFromBirthday(editData.birthday) || editData.age || 'Calculating...'} years old`
                       : editData.age 
@@ -1133,15 +1134,15 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
                 <div
                   className="p-4 rounded-xl"
                   style={{
-                    backgroundColor: "#262626",
-                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    backgroundColor: isDarkMode ? HUB.bg : 'rgba(0,0,0,0.04)',
+                    border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'}`,
                   }}
                 >
                   <div className="flex items-center gap-3 mb-2">
-                    <Gift className="w-5 h-5 text-purple-400" />
-                    <span className="font-medium text-gray-300">Birthday</span>
+                    <Gift className="w-5 h-5" style={{ color: HUB.accent }} />
+                    <span className="font-medium" style={{ color: HUB.textSecondary }}>Birthday</span>
                   </div>
-                  <p className="text-lg font-semibold text-white">
+                  <p className="text-lg font-semibold" style={{ color: HUB.text }}>
                     {formatBirthdayDisplay(editData.birthday)}
                   </p>
                 </div>
@@ -1149,15 +1150,15 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
                 <div
                   className="p-4 rounded-xl"
                   style={{
-                    backgroundColor: "#262626",
-                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    backgroundColor: isDarkMode ? HUB.bg : 'rgba(0,0,0,0.04)',
+                    border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'}`,
                   }}
                 >
                   <div className="flex items-center gap-3 mb-2">
-                    <User className="w-5 h-5 text-purple-400" />
-                    <span className="font-medium text-gray-300">Gender</span>
+                    <User className="w-5 h-5" style={{ color: HUB.accent }} />
+                    <span className="font-medium" style={{ color: HUB.textSecondary }}>Gender</span>
                   </div>
-                  <p className="text-lg font-semibold text-white">
+                  <p className="text-lg font-semibold" style={{ color: HUB.text }}>
                     {getGenderEmoji(editData.gender)} {editData.gender || 'Not set'}
                   </p>
                 </div>
@@ -1166,11 +1167,11 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
 
               <button
                 onClick={() => setIsEditing(true)}
-                className="w-full mt-6 py-3 px-4 rounded-xl font-semibold text-white hover:opacity-90 transition-all duration-300"
+                className="w-full mt-6 py-3 px-4 rounded-xl font-semibold hover:opacity-90 transition-all duration-300"
                 style={{
-                  backgroundColor: "#262626",
-                  color: "#FFFFFF",
-                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                  backgroundColor: HUB.bgSecondary,
+                  color: HUB.text,
+                  border: `1px solid ${HUB.divider}`,
                 }}
               >
                 <Edit3 className="w-4 h-4 inline mr-2" />
@@ -1182,27 +1183,29 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
               {/* Edit Mode */}
               <div className="space-y-4 mt-6">
                 <div>
-                  <label className="block mb-2 font-medium text-gray-300">Display Name</label>
+                  <label className="block mb-2 font-medium" style={{ color: HUB.textSecondary }}>Display Name</label>
                   <input
                     type="text"
                     value={editData.displayName}
                     onChange={(e) => setEditData({ ...editData, displayName: e.target.value })}
                     placeholder="Enter your display name"
-                    className="w-full px-3 py-2 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-400"
+                    className="w-full px-3 py-2 rounded-xl placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-0"
                     style={{
-                      backgroundColor: "#262626",
-                      border: "1px solid rgba(255, 255, 255, 0.08)",
+                      backgroundColor: HUB.bgSecondary,
+                      border: `1px solid ${HUB.divider}`,
+                      color: HUB.text,
                     }}
                   />
                 </div>
 
                 <div>
-                  <label className="block mb-2 font-medium text-gray-300">Age</label>
+                  <label className="block mb-2 font-medium" style={{ color: HUB.textSecondary }}>Age</label>
                   <div
-                    className="w-full px-3 py-2 rounded-xl text-white"
+                    className="w-full px-3 py-2 rounded-xl"
                     style={{
-                      backgroundColor: "#262626",
-                      border: "1px solid rgba(255, 255, 255, 0.08)",
+                      backgroundColor: HUB.bgSecondary,
+                      border: `1px solid ${HUB.divider}`,
+                      color: HUB.text,
                     }}
                   >
                     {editData.birthday 
@@ -1211,13 +1214,13 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
                         ? `${editData.age} years old`
                         : 'Enter your birthday to calculate age'}
                   </div>
-                  <p className="text-xs text-gray-400 mt-1">
+                  <p className="text-xs mt-1" style={{ color: HUB.textSecondary }}>
                     Age is automatically calculated from your birthday
                   </p>
                 </div>
 
                 <div>
-                  <label className="block mb-2 font-medium text-gray-300">Birthday</label>
+                  <label className="block mb-2 font-medium" style={{ color: HUB.textSecondary }}>Birthday</label>
                   <div className="relative">
                     <button
                       type="button"
@@ -1226,10 +1229,11 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
                         setBirthdayDate(date);
                         setShowBirthdayCalendar(true);
                       }}
-                      className="w-full px-3 py-2 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-400 text-left"
+                      className="w-full px-3 py-2 rounded-xl placeholder-gray-400 focus:outline-none focus:ring-2 text-left"
                       style={{
-                        backgroundColor: "#262626",
-                        border: "1px solid rgba(255, 255, 255, 0.08)",
+                        backgroundColor: HUB.bgSecondary,
+                        border: `1px solid ${HUB.divider}`,
+                        color: HUB.text,
                       }}
                     >
                       {formatDateDisplay(editData.birthday) || 'Select your birthday'}
@@ -1248,7 +1252,7 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        color: '#cbd5e1',
+                        color: HUB.textSecondary,
                         cursor: 'pointer',
                         pointerEvents: 'auto'
                       }}
@@ -1259,7 +1263,7 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
                 </div>
 
                 <div>
-                  <label className="block mb-3 font-medium text-gray-300">Gender</label>
+                  <label className="block mb-3 font-medium" style={{ color: HUB.textSecondary }}>Gender</label>
                   <div className="space-y-2">
                     {[
                       { value: 'female', label: 'Female 👩' },
@@ -1277,14 +1281,12 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
                         />
                         <div
                           className={`p-3 text-center rounded-xl border-2 transition-all duration-300 font-medium ${
-                            editData.gender === option.value
-                              ? 'border-purple-400 text-white'
-                              : 'border-gray-600 text-gray-300 hover:border-gray-500'
+                            editData.gender === option.value ? '' : ''
                           }`}
                           style={{
-                            backgroundColor: editData.gender === option.value
-                              ? "rgba(129, 201, 149, 0.2)"
-                              : "#262626",
+                            backgroundColor: editData.gender === option.value ? `${HUB.accent}20` : HUB.bgSecondary,
+                            borderColor: editData.gender === option.value ? HUB.accent : HUB.divider,
+                            color: HUB.text,
                           }}
                         >
                           {option.label}
@@ -1299,10 +1301,11 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
                 <button
                   onClick={handleSave}
                   disabled={loading}
-                  className="flex-1 py-3 px-4 rounded-xl font-semibold text-white transition-all duration-300 disabled:opacity-50"
+                  className="flex-1 py-3 px-4 rounded-xl font-semibold transition-all duration-300 disabled:opacity-50"
                   style={{
-                    backgroundColor: "#262626",
-                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    backgroundColor: HUB.accent,
+                    color: '#FFFFFF',
+                    border: `1px solid ${HUB.accent}`,
                   }}
                 >
                   <Save className="w-4 h-4 inline mr-2" />
@@ -1310,7 +1313,12 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
                 </button>
                 <button
                   onClick={handleCancel}
-                  className="flex-1 py-3 px-4 rounded-xl font-semibold text-gray-300 border border-gray-600 hover:bg-gray-700/20 transition-all duration-300"
+                  className="flex-1 py-3 px-4 rounded-xl font-semibold transition-all duration-300"
+                  style={{
+                    color: HUB.textSecondary,
+                    border: `1px solid ${HUB.divider}`,
+                    backgroundColor: HUB.bgSecondary,
+                  }}
                 >
                   <X className="w-4 h-4 inline mr-2" />
                   Cancel
@@ -1324,23 +1332,23 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
         <div
           className="backdrop-blur-lg border-2 rounded-2xl p-6"
           style={{
-            backgroundColor: "#262626",
+            backgroundColor: isDarkMode ? HUB.bgSecondary : 'rgba(0,0,0,0.04)',
             boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
+            border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'}`,
           }}
         >
           <div className="flex items-center gap-3 mb-2">
-            <Mail className="w-5 h-5 text-purple-400" />
-            <span className="font-medium text-gray-300">About Me</span>
+            <Mail className="w-5 h-5" style={{ color: HUB.accent }} />
+            <span className="font-medium" style={{ color: HUB.textSecondary }}>About Me</span>
           </div>
-          <p className="text-white mb-2">
+          <p className="mb-2" style={{ color: HUB.text }}>
             {editData.bio || 'No bio added yet'}
           </p>
-          <p className="text-xs text-gray-400 mb-4">
+          <p className="text-xs mb-4" style={{ color: HUB.textSecondary }}>
             Automatically refreshed daily at 02:00 AM to reflect your latest overall vibe.
           </p>
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <span className="text-xs text-gray-500">
+            <span className="text-xs" style={{ color: HUB.textSecondary }}>
               Last updated:{' '}
               {bioLastUpdated
                 ? new Date(bioLastUpdated).toLocaleString()
@@ -1349,10 +1357,11 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
             <button
               onClick={handleManualBioUpdate}
               disabled={isBioUpdating}
-              className="px-4 py-2 rounded-xl text-sm font-semibold text-white transition-all duration-300 disabled:opacity-40"
+              className="px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-300 disabled:opacity-40"
               style={{
-                backgroundColor: "rgba(129, 201, 149, 0.3)",
-                border: "1px solid rgba(255, 255, 255, 0.08)",
+                backgroundColor: `${HUB.accent}30`,
+                border: `1px solid ${HUB.divider}`,
+                color: HUB.text,
               }}
             >
               {isBioUpdating ? 'Updating...' : 'Update summary now'}
@@ -1363,55 +1372,56 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
         <div
           className="backdrop-blur-lg border rounded-2xl p-6 space-y-4"
           style={{
-            backgroundColor: "#262626",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
+            backgroundColor: isDarkMode ? HUB.bgSecondary : 'rgba(0,0,0,0.04)',
+            border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'}`,
           }}
         >
-          <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-            <Settings className="w-5 h-5" style={{ color: "#8AB4F8" }} />
+          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2" style={{ color: HUB.text }}>
+            <Settings className="w-5 h-5" style={{ color: HUB.accent }} />
             Account Actions
           </h3>
 
           <button
             onClick={handleSignOut}
-            className="w-full p-4 rounded-xl text-left hover:opacity-80 transition-all duration-300 border border-gray-600"
+            className="w-full p-4 rounded-xl text-left hover:opacity-80 transition-all duration-300"
             style={{
-              backgroundColor: "rgba(11, 14, 20, 0.4)",
+              backgroundColor: isDarkMode ? HUB.bg : 'rgba(0,0,0,0.06)',
+              border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'}`,
             }}
           >
             <div className="flex items-center gap-3">
-              <LogOut className="w-5 h-5 text-white" />
+              <LogOut className="w-5 h-5" style={{ color: HUB.text }} />
               <div>
-                <p className="font-medium text-white">Sign Out</p>
-                <p className="text-sm text-gray-400">Sign out of your account</p>
+                <p className="font-medium" style={{ color: HUB.text }}>Sign Out</p>
+                <p className="text-sm" style={{ color: HUB.textSecondary }}>Sign out of your account</p>
               </div>
             </div>
           </button>
 
           {/* Crew Enrollment Toggle */}
           <div
-            className="w-full p-4 rounded-xl border border-gray-600"
+            className="w-full p-4 rounded-xl"
             style={{
-              backgroundColor: "rgba(11, 14, 20, 0.4)",
+              backgroundColor: isDarkMode ? HUB.bg : 'rgba(0,0,0,0.06)',
+              border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'}`,
             }}
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3 flex-1">
-                <Users className="w-5 h-5 text-white" />
+                <Users className="w-5 h-5" style={{ color: HUB.text }} />
                 <div>
-                  <p className="font-medium text-white">Enroll for Crew</p>
-                  <p className="text-sm text-gray-400">
+                  <p className="font-medium" style={{ color: HUB.text }}>Enroll for Crew</p>
+                  <p className="text-sm" style={{ color: HUB.textSecondary }}>
                     {isCrewEnrolled ? 'Enrolled in crew features' : 'Not enrolled in crew'}
                   </p>
                 </div>
               </div>
               <button
                 onClick={handleCrewEnrollmentToggle}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-                  isCrewEnrolled ? 'focus:ring-[#8AB4F8]' : 'focus:ring-gray-500'
-                }`}
+                className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-transparent"
                 style={{
-                  backgroundColor: isCrewEnrolled ? '#8AB4F8' : 'rgba(107, 114, 128, 0.5)',
+                  backgroundColor: isCrewEnrolled ? HUB.accent : 'rgba(107, 114, 128, 0.5)',
+                  ...(isCrewEnrolled && { boxShadow: `0 0 0 2px ${HUB.accent}` }),
                 }}
                 role="switch"
                 aria-checked={isCrewEnrolled}
@@ -1430,46 +1440,48 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
         <div
           className="backdrop-blur-lg border rounded-2xl p-6 space-y-4"
           style={{
-            backgroundColor: "#262626",
-            border: "1px solid rgba(129, 201, 149, 0.15)",
+            backgroundColor: isDarkMode ? HUB.bgSecondary : 'rgba(0,0,0,0.04)',
+            border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'}`,
           }}
         >
-          <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-            <MessageCircle className="w-5 h-5 text-white" />
+          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2" style={{ color: HUB.text }}>
+            <MessageCircle className="w-5 h-5" style={{ color: HUB.accent }} />
             Helpdesk
           </h3>
-          <p className="text-gray-300 text-sm mb-4">
+          <p className="text-sm mb-4" style={{ color: HUB.textSecondary }}>
             Contact our founders for support and assistance
           </p>
 
           <button
             onClick={() => window.open('tel:9536138120', '_self')}
-            className="w-full p-4 rounded-xl text-left hover:opacity-80 transition-all duration-300 border border-gray-600"
+            className="w-full p-4 rounded-xl text-left hover:opacity-80 transition-all duration-300"
             style={{
-              backgroundColor: "rgba(11, 14, 20, 0.4)",
+              backgroundColor: isDarkMode ? HUB.bg : 'rgba(0,0,0,0.06)',
+              border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'}`,
             }}
           >
             <div className="flex items-center gap-3">
-              <Phone className="w-5 h-5 text-white" />
+              <Phone className="w-5 h-5" style={{ color: HUB.text }} />
               <div>
-                <p className="font-medium text-white">Call Founders</p>
-                <p className="text-sm text-gray-400">Call us at +91 9536138120</p>
+                <p className="font-medium" style={{ color: HUB.text }}>Call Founders</p>
+                <p className="text-sm" style={{ color: HUB.textSecondary }}>Call us at +91 9536138120</p>
               </div>
             </div>
           </button>
 
           <button
             onClick={() => window.open('https://wa.me/919536138120', '_blank')}
-            className="w-full p-4 rounded-xl text-left hover:opacity-80 transition-all duration-300 border border-gray-600"
+            className="w-full p-4 rounded-xl text-left hover:opacity-80 transition-all duration-300"
             style={{
-              backgroundColor: "rgba(11, 14, 20, 0.4)",
+              backgroundColor: isDarkMode ? HUB.bg : 'rgba(0,0,0,0.06)',
+              border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'}`,
             }}
           >
             <div className="flex items-center gap-3">
-              <MessageCircle className="w-5 h-5 text-white" />
+              <MessageCircle className="w-5 h-5" style={{ color: HUB.text }} />
               <div>
-                <p className="font-medium text-white">WhatsApp Message</p>
-                <p className="text-sm text-gray-400">Send us a message on WhatsApp</p>
+                <p className="font-medium" style={{ color: HUB.text }}>WhatsApp Message</p>
+                <p className="text-sm" style={{ color: HUB.textSecondary }}>Send us a message on WhatsApp</p>
               </div>
             </div>
           </button>
@@ -1479,8 +1491,8 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
         <div
           className="backdrop-blur-lg border-2 rounded-2xl p-6"
           style={{
-            backgroundColor: "#262626",
-            border: "1px solid rgba(242, 139, 130, 0.15)",
+            backgroundColor: isDarkMode ? HUB.bgSecondary : 'rgba(0,0,0,0.04)',
+            border: "1px solid rgba(242, 139, 130, 0.25)",
             boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
           }}
         >
@@ -1491,24 +1503,25 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
                 style={{
                   backgroundColor: "rgba(242, 139, 130, 0.8)",
                   boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                  border: `1px solid ${HUB.divider}`,
                 }}
               >
-                <AlertTriangle className="w-8 h-8 text-white" />
+                <AlertTriangle className="w-8 h-8" style={{ color: '#FFFFFF' }} />
               </div>
             </div>
-            <h3 className="text-xl font-bold text-white mb-2">Danger Zone</h3>
-            <p className="text-gray-300 mb-6">
+            <h3 className="text-xl font-bold mb-2" style={{ color: HUB.text }}>Danger Zone</h3>
+            <p className="mb-6" style={{ color: HUB.textSecondary }}>
               Clear your account data permanently
             </p>
 
             {!showDeleteConfirm ? (
               <button
                 onClick={() => setShowDeleteConfirm(true)}
-                className="px-6 py-3 rounded-xl font-semibold text-white hover:opacity-90 transition-all duration-300"
+                className="px-6 py-3 rounded-xl font-semibold hover:opacity-90 transition-all duration-300"
                 style={{
                   backgroundColor: "rgba(242, 139, 130, 0.8)",
-                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                  border: `1px solid ${HUB.divider}`,
+                  color: '#FFFFFF',
                 }}
               >
                 <Trash2 className="w-4 h-4 inline mr-2" />
@@ -1517,10 +1530,10 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
             ) : (
               <div className="space-y-4">
                 <div
-                  className="p-4 rounded-xl border-2 border-dashed border-red-500/50"
+                  className="p-4 rounded-xl border-2 border-dashed"
                   style={{
                     backgroundColor: "rgba(242, 139, 130, 0.08)",
-                    border: "1px solid rgba(242, 139, 130, 0.15)",
+                    borderColor: "rgba(242, 139, 130, 0.35)",
                   }}
                 >
                   <p className="text-sm text-red-300 mb-4">
@@ -1530,17 +1543,23 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
                     <button
                       onClick={handleDeleteAccount}
                       disabled={deleteLoading}
-                      className="flex-1 py-2 px-4 rounded-xl font-medium text-white transition-all duration-300 disabled:opacity-50"
+                      className="flex-1 py-2 px-4 rounded-xl font-medium transition-all duration-300 disabled:opacity-50"
                       style={{
                         backgroundColor: "rgba(242, 139, 130, 0.8)",
-                        border: "1px solid rgba(255, 255, 255, 0.08)",
+                        border: `1px solid ${HUB.divider}`,
+                        color: '#FFFFFF',
                       }}
                     >
                       {deleteLoading ? 'Clearing...' : 'Yes, Clear Data'}
                     </button>
                     <button
                       onClick={() => setShowDeleteConfirm(false)}
-                      className="flex-1 py-2 px-4 rounded-xl font-medium text-gray-300 border border-gray-600 hover:bg-gray-700/20 transition-all duration-300"
+                      className="flex-1 py-2 px-4 rounded-xl font-medium transition-all duration-300"
+                      style={{
+                        color: HUB.textSecondary,
+                        border: `1px solid ${HUB.divider}`,
+                        backgroundColor: HUB.bgSecondary,
+                      }}
                     >
                       Cancel
                     </button>
@@ -1562,13 +1581,13 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
         <div
           className="relative z-10 w-full max-w-xl rounded-3xl p-6 space-y-6"
           style={{
-            backgroundColor: "rgba(18, 18, 18, 0.95)",
-            border: "1px solid rgba(255, 255, 255, 0.1)",
+            backgroundColor: `${HUB.bgSecondary}F2`,
+            border: `1px solid ${HUB.divider}`,
             boxShadow: "0 25px 50px -12px rgba(0,0,0,0.7)",
           }}
         >
-          <h3 className="text-xl font-semibold text-white text-center">Adjust your photo</h3>
-          <p className="text-center text-gray-400 text-sm">
+          <h3 className="text-xl font-semibold text-center" style={{ color: HUB.text }}>Adjust your photo</h3>
+          <p className="text-center text-sm" style={{ color: HUB.textSecondary }}>
             Drag the image to position it. Pinch with two fingers to zoom in or out. Everything inside the circle will appear on your profile.
           </p>
           <div className="relative w-full h-72 bg-black rounded-2xl overflow-hidden">
@@ -1588,7 +1607,12 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
           <div className="flex gap-4">
             <button
               onClick={handleCancelCrop}
-              className="flex-1 py-3 rounded-2xl font-semibold text-white border border-gray-600 hover:bg-gray-700/40 transition-all duration-200"
+              className="flex-1 py-3 rounded-2xl font-semibold transition-all duration-200"
+              style={{
+                color: HUB.text,
+                border: `1px solid ${HUB.divider}`,
+                backgroundColor: HUB.bgSecondary,
+              }}
             >
               Retake
             </button>
@@ -1596,8 +1620,8 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
               onClick={handleApplyCrop}
               className="flex-1 py-3 rounded-2xl font-semibold text-black"
               style={{
-                backgroundColor: "#8AB4F8",
-                boxShadow: "0 10px 20px rgba(138, 180, 248, 0.35)",
+                backgroundColor: HUB.accent,
+                boxShadow: `0 10px 20px ${HUB.accentShadow}59`,
               }}
             >
               Crop & Continue
@@ -1616,51 +1640,57 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
         <div
           className="relative z-10 w-full max-w-md rounded-3xl p-6 space-y-6"
           style={{
-            backgroundColor: "rgba(18, 18, 18, 0.95)",
-            border: "1px solid rgba(255, 255, 255, 0.1)",
+            backgroundColor: `${HUB.bgSecondary}F2`,
+            border: `1px solid ${HUB.divider}`,
             boxShadow: "0 25px 50px -12px rgba(0,0,0,0.7)",
           }}
         >
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xl font-semibold text-white">Select Profile Picture</h3>
+            <h3 className="text-xl font-semibold" style={{ color: HUB.text }}>Select Profile Picture</h3>
             <button
               onClick={() => setShowAvatarModal(false)}
-              className="p-2 rounded-full hover:bg-gray-700/40 transition-all"
+              className="p-2 rounded-full transition-all"
+              style={{ color: HUB.textSecondary }}
             >
-              <X className="w-5 h-5 text-gray-400" />
+              <X className="w-5 h-5" />
             </button>
           </div>
           
           <div className="space-y-4">
-            <p className="text-gray-400 text-sm">Choose an avatar:</p>
+            <p className="text-sm" style={{ color: HUB.textSecondary }}>Choose an avatar:</p>
             <div className="grid grid-cols-3 gap-4">
               {avatars.map((avatar, index) => (
                 <button
                   key={index}
                   onClick={() => handleAvatarSelect(avatar.path)}
-                  className="flex flex-col items-center p-3 rounded-xl hover:bg-gray-700/40 transition-all group"
+                  className="flex flex-col items-center p-3 rounded-xl transition-all group"
+                  style={{ border: '2px solid transparent' }}
                 >
-                  <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-transparent group-hover:border-blue-400 transition-all mb-2">
+                  <div
+                    className="w-20 h-20 rounded-full overflow-hidden border-2 border-transparent transition-all mb-2"
+                    style={{ borderColor: 'transparent' }}
+                  >
                     <img
                       src={avatar.path}
                       alt={avatar.name}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-cover group-hover:opacity-90"
                     />
                   </div>
-                  <span className="text-xs text-gray-400 group-hover:text-white transition-colors">
+                  <span className="text-xs transition-colors" style={{ color: HUB.textSecondary }}>
                     {avatar.name}
                   </span>
                 </button>
               ))}
             </div>
             
-            <div className="pt-4 border-t border-gray-700">
+            <div className="pt-4 border-t" style={{ borderColor: HUB.divider }}>
               <button
                 onClick={handleUploadFromGallery}
-                className="w-full py-3 px-4 rounded-xl font-semibold text-white flex items-center justify-center gap-2 hover:opacity-90 transition-all"
+                className="w-full py-3 px-4 rounded-xl font-semibold flex items-center justify-center gap-2 hover:opacity-90 transition-all"
                 style={{
-                  backgroundColor: "#8AB4F8",
-                  boxShadow: "0 10px 20px rgba(138, 180, 248, 0.35)",
+                  backgroundColor: HUB.accent,
+                  color: '#FFFFFF',
+                  boxShadow: `0 10px 20px ${HUB.accentShadow}59`,
                 }}
               >
                 <ImageIcon className="w-5 h-5" />
@@ -1681,13 +1711,13 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
         <div
           className="relative z-10 w-full max-w-md rounded-3xl p-6 space-y-6"
           style={{
-            backgroundColor: "rgba(18, 18, 18, 0.95)",
-            border: "1px solid rgba(255, 255, 255, 0.1)",
+            backgroundColor: `${HUB.bgSecondary}F2`,
+            border: `1px solid ${HUB.divider}`,
             boxShadow: "0 25px 50px -12px rgba(0,0,0,0.7)",
           }}
         >
-          <h3 className="text-xl font-semibold text-white text-center">Preview your photo</h3>
-          <p className="text-center text-gray-400 text-sm">
+          <h3 className="text-xl font-semibold text-center" style={{ color: HUB.text }}>Preview your photo</h3>
+          <p className="text-center text-sm" style={{ color: HUB.textSecondary }}>
             Everything inside the circle will appear on your profile.
           </p>
           <div className="flex justify-center">
@@ -1707,7 +1737,12 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
           <div className="flex gap-4">
             <button
               onClick={handleCancelPictureSelection}
-              className="flex-1 py-3 rounded-2xl font-semibold text-white border border-gray-600 hover:bg-gray-700/40 transition-all duration-200"
+              className="flex-1 py-3 rounded-2xl font-semibold transition-all duration-200"
+              style={{
+                color: HUB.text,
+                border: `1px solid ${HUB.divider}`,
+                backgroundColor: HUB.bgSecondary,
+              }}
             >
               Retake
             </button>
@@ -1715,8 +1750,8 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
               onClick={handleConfirmPicture}
               className="flex-1 py-3 rounded-2xl font-semibold text-black"
               style={{
-                backgroundColor: "#8AB4F8",
-                boxShadow: "0 10px 20px rgba(138, 180, 248, 0.35)",
+                backgroundColor: HUB.accent,
+                boxShadow: `0 10px 20px ${HUB.accentShadow}59`,
               }}
             >
               Use Photo
@@ -1973,23 +2008,24 @@ const BirthdayCalendar = ({ selectedDate, onDateSelect, onClose }) => {
         <div
           className="relative rounded-2xl p-6 max-w-sm w-full backdrop-blur-lg animate-in zoom-in-95 duration-300"
           style={{
-            backgroundColor: "#262626",
+            backgroundColor: HUB.bgSecondary,
             boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
+            border: `1px solid ${HUB.divider}`,
             maxHeight: '80vh',
             display: 'flex',
             flexDirection: 'column'
           }}
         >
-          <div className="flex items-center justify-center mb-4 pb-4 border-b border-gray-700/50">
+          <div className="flex items-center justify-center mb-4 pb-4 border-b" style={{ borderColor: HUB.divider }}>
             <button
               onClick={handleHeaderClick}
-              className="text-lg font-semibold text-white hover:opacity-80 transition-opacity cursor-pointer"
+              className="text-lg font-semibold hover:opacity-80 transition-opacity cursor-pointer"
+              style={{ color: HUB.text }}
             >
               Select Year
             </button>
           </div>
-          
+
           {/* Wheel Picker Container */}
           <div className="relative" style={{ height: '250px', overflow: 'hidden' }}>
             {/* Selection indicator lines */}
@@ -2043,7 +2079,7 @@ const BirthdayCalendar = ({ selectedDate, onDateSelect, onClose }) => {
                       height: `${itemHeight}px`,
                       opacity: opacity,
                       transform: `scale(${scale})`,
-                      color: isCenter ? '#FFFFFF' : '#9CA3AF',
+                      color: isCenter ? HUB.text : HUB.textSecondary,
                       fontWeight: isCenter ? '600' : '400',
                       fontSize: isCenter ? '20px' : '18px',
                       scrollSnapAlign: 'center'
@@ -2076,18 +2112,19 @@ const BirthdayCalendar = ({ selectedDate, onDateSelect, onClose }) => {
         <div
           className="relative rounded-2xl p-6 max-w-sm w-full backdrop-blur-lg animate-in zoom-in-95 duration-300"
           style={{
-            backgroundColor: "#262626",
+            backgroundColor: HUB.bgSecondary,
             boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
+            border: `1px solid ${HUB.divider}`,
             maxHeight: '80vh',
             display: 'flex',
             flexDirection: 'column'
           }}
         >
-          <div className="flex items-center justify-center mb-4 pb-4 border-b border-gray-700/50">
+          <div className="flex items-center justify-center mb-4 pb-4 border-b" style={{ borderColor: HUB.divider }}>
             <button
               onClick={handleHeaderClick}
-              className="text-lg font-semibold text-white hover:opacity-80 transition-opacity cursor-pointer"
+              className="text-lg font-semibold hover:opacity-80 transition-opacity cursor-pointer"
+              style={{ color: HUB.text }}
             >
               {selectedYear}
             </button>
@@ -2146,7 +2183,7 @@ const BirthdayCalendar = ({ selectedDate, onDateSelect, onClose }) => {
                       height: `${itemHeight}px`,
                       opacity: opacity,
                       transform: `scale(${scale})`,
-                      color: isCenter ? '#FFFFFF' : '#9CA3AF',
+                      color: isCenter ? HUB.text : HUB.textSecondary,
                       fontWeight: isCenter ? '600' : '400',
                       fontSize: isCenter ? '20px' : '18px',
                       scrollSnapAlign: 'center'
@@ -2179,26 +2216,28 @@ const BirthdayCalendar = ({ selectedDate, onDateSelect, onClose }) => {
       <div
         className="relative rounded-2xl p-6 max-w-sm w-full backdrop-blur-lg animate-in zoom-in-95 duration-300"
         style={{
-          backgroundColor: "#262626",
+          backgroundColor: HUB.bgSecondary,
           boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)",
-          border: "1px solid rgba(255, 255, 255, 0.08)",
+          border: `1px solid ${HUB.divider}`,
         }}
       >
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <button
             onClick={handlePreviousMonth}
-            className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-gray-700/30 transition-colors"
+            className="w-10 h-10 rounded-full flex items-center justify-center transition-colors"
+            style={{ color: HUB.text }}
           >
-            <ChevronLeft className="w-5 h-5 text-gray-300" />
+            <ChevronLeft className="w-5 h-5" />
           </button>
           
           <div className="text-center">
             <button
               onClick={handleHeaderClick}
-              className={`text-lg font-semibold text-white transition-opacity duration-150 hover:opacity-80 cursor-pointer ${
+              className={`text-lg font-semibold transition-opacity duration-150 hover:opacity-80 cursor-pointer ${
                 isAnimating ? 'opacity-0' : 'opacity-100'
               }`}
+              style={{ color: HUB.text }}
             >
               {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
             </button>
@@ -2206,9 +2245,10 @@ const BirthdayCalendar = ({ selectedDate, onDateSelect, onClose }) => {
           
           <button
             onClick={handleNextMonth}
-            className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-gray-700/30 transition-colors"
+            className="w-10 h-10 rounded-full flex items-center justify-center transition-colors"
+            style={{ color: HUB.text }}
           >
-            <ChevronRight className="w-5 h-5 text-gray-300" />
+            <ChevronRight className="w-5 h-5" />
           </button>
         </div>
 
@@ -2216,7 +2256,7 @@ const BirthdayCalendar = ({ selectedDate, onDateSelect, onClose }) => {
         <div className="grid grid-cols-7 gap-1 mb-2">
           {dayNames.map((day) => (
             <div key={day} className="text-center py-2">
-              <span className="text-xs font-medium text-gray-400">{day}</span>
+              <span className="text-xs font-medium" style={{ color: HUB.textSecondary }}>{day}</span>
             </div>
           ))}
         </div>
@@ -2232,20 +2272,20 @@ const BirthdayCalendar = ({ selectedDate, onDateSelect, onClose }) => {
                   onClick={() => handleDateClick(date)}
                   disabled={isFuture(date)}
                   className={`w-full h-full rounded-lg flex items-center justify-center text-sm font-medium transition-all duration-200 ${
-                    isSelected(date)
-                      ? 'text-black font-bold shadow-lg'
-                      : isFuture(date)
-                      ? 'text-gray-600 cursor-not-allowed opacity-30'
-                      : 'text-gray-300 hover:bg-gray-700/30 hover:text-white'
+                    !isSelected(date) && !isFuture(date) ? 'hover:opacity-80' : ''
                   }`}
                   style={
                     isSelected(date)
                       ? {
-                          backgroundColor: "rgba(129, 201, 149, 0.9)",
+                          backgroundColor: HUB.accent,
+                          color: '#FFFFFF',
+                          fontWeight: 'bold',
                           boxShadow: "0 4px 20px rgba(0, 0, 0, 0.3)",
-                          border: "1px solid rgba(255, 255, 255, 0.08)",
+                          border: `1px solid ${HUB.divider}`,
                         }
-                      : {}
+                      : isFuture(date)
+                      ? { color: HUB.textSecondary, cursor: 'not-allowed', opacity: 0.3 }
+                      : { color: HUB.text }
                   }
                 >
                   {date.getDate()}
