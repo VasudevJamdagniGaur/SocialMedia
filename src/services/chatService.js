@@ -1680,12 +1680,13 @@ Reflection: ${(reflection || '').trim().slice(0, 300)}`;
   async fetchImageForReflection(reflection) {
     if (!reflection?.trim()) return null;
     const query = await this.getImageSearchQuery(reflection);
-    if (!query) return null;
+    const searchQuery = query || reflection.trim().slice(0, 40).replace(/\s+/g, ' ');
+    if (!searchQuery) return null;
     // Try Pexels first (free API key at https://www.pexels.com/api/)
     if (this.pexelsApiKey) {
       try {
         const res = await fetch(
-          `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=1`,
+          `https://api.pexels.com/v1/search?query=${encodeURIComponent(searchQuery)}&per_page=1`,
           { headers: { Authorization: this.pexelsApiKey } }
         );
         if (res.ok) {
@@ -1703,7 +1704,7 @@ Reflection: ${(reflection || '').trim().slice(0, 300)}`;
         const res = await fetch('https://google.serper.dev/images', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-API-KEY': this.serperApiKey },
-          body: JSON.stringify({ q: query, num: 1 })
+          body: JSON.stringify({ q: searchQuery, num: 1 })
         });
         if (res.ok) {
           const data = await res.json();
@@ -1714,7 +1715,9 @@ Reflection: ${(reflection || '').trim().slice(0, 300)}`;
         console.warn('Serper image search failed:', e.message);
       }
     }
-    return null;
+    // Fallback: Picsum (no API key) – deterministic image per query so each reflection gets a consistent image
+    const seed = encodeURIComponent(String(searchQuery).slice(0, 50).replace(/\s+/g, '-'));
+    return `https://picsum.photos/seed/${seed || 'reflection'}/600/340`;
   }
 
   async generateDayDescription(dayData, type, periodText, userCharacterCount = null) {
