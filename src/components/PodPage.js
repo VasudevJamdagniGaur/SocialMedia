@@ -463,8 +463,8 @@ export default function PodPage() {
               }}
             >
               {isDarkMode ?
-                <Moon className="w-5 h-5" style={{ color: "#E91E63" }} strokeWidth={1.5} /> :
-                <Sun className="w-5 h-5" style={{ color: "#E91E63" }} strokeWidth={1.5} />
+                <Moon className="w-5 h-5" style={{ color: "#9975C7" }} strokeWidth={1.5} /> :
+                <Sun className="w-5 h-5" style={{ color: "#9975C7" }} strokeWidth={1.5} />
               }
             </div>
             {/* Center: Crew (beta) */}
@@ -494,7 +494,7 @@ export default function PodPage() {
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <User className="w-5 h-5" style={{ color: "#E91E63" }} strokeWidth={1.5} />
+                <User className="w-5 h-5" style={{ color: "#9975C7" }} strokeWidth={1.5} />
               )}
             </div>
           </div>
@@ -510,7 +510,7 @@ export default function PodPage() {
             text: '#FFFFFF',
             textSecondary: '#A0A0A0',
             divider: '#1E1E1E',
-            accent: '#E91E63',
+            accent: '#9975C7',
           };
           const cardClass = 'rounded-2xl overflow-hidden';
           const cardStyle = { background: HUB.bg, border: `1px solid ${HUB.divider}` };
@@ -596,9 +596,9 @@ export default function PodPage() {
             {isLoadingPodReflection ? (
               <div className="flex flex-col items-center justify-center py-6">
                 <div className="flex space-x-1 mb-3">
-                  <div className="w-2 h-2 rounded-full animate-bounce bg-[#E91E63]" style={{ animationDelay: '0ms' }} />
-                  <div className="w-2 h-2 rounded-full animate-bounce bg-[#E91E63]" style={{ animationDelay: '150ms' }} />
-                  <div className="w-2 h-2 rounded-full animate-bounce bg-[#E91E63]" style={{ animationDelay: '300ms' }} />
+                  <div className="w-2 h-2 rounded-full animate-bounce bg-[#9975C7]" style={{ animationDelay: '0ms' }} />
+                  <div className="w-2 h-2 rounded-full animate-bounce bg-[#9975C7]" style={{ animationDelay: '150ms' }} />
+                  <div className="w-2 h-2 rounded-full animate-bounce bg-[#9975C7]" style={{ animationDelay: '300ms' }} />
                 </div>
                 <p className="text-sm italic" style={{ color: HUB.textSecondary }}>Generating crew reflection...</p>
               </div>
@@ -646,9 +646,9 @@ export default function PodPage() {
                 {isLoadingCrewActivity ? (
                   <div className="flex flex-col items-center justify-center py-8">
                     <div className="flex space-x-1 mb-2">
-                      <div className="w-2 h-2 rounded-full animate-bounce bg-[#E91E63]" style={{ animationDelay: '0ms' }} />
-                      <div className="w-2 h-2 rounded-full animate-bounce bg-[#E91E63]" style={{ animationDelay: '150ms' }} />
-                      <div className="w-2 h-2 rounded-full animate-bounce bg-[#E91E63]" style={{ animationDelay: '300ms' }} />
+                      <div className="w-2 h-2 rounded-full animate-bounce bg-[#9975C7]" style={{ animationDelay: '0ms' }} />
+                      <div className="w-2 h-2 rounded-full animate-bounce bg-[#9975C7]" style={{ animationDelay: '150ms' }} />
+                      <div className="w-2 h-2 rounded-full animate-bounce bg-[#9975C7]" style={{ animationDelay: '300ms' }} />
                     </div>
                     <p className="text-sm" style={{ color: HUB.textSecondary }}>Loading activity...</p>
                   </div>

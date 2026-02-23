@@ -12,7 +12,7 @@ const CalendarPopup = ({ isOpen, onClose, selectedDate, onDateSelect, chatDays =
     text: '#FFFFFF',
     textSecondary: '#A0A0A0',
     divider: '#1E1E1E',
-    accent: '#E91E63',
+    accent: '#9975C7',
   };
 
   useEffect(() => {
