@@ -2973,7 +2973,7 @@ Return in this JSON format:
 
     try {
       const apiKey = process.env.REACT_APP_GOOGLE_API_KEY || '';
-      const apiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${encodeURIComponent(apiKey)}`;
       
       const response = await fetch(apiUrl, {
         method: 'POST',
