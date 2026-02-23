@@ -1639,27 +1639,36 @@ Do not add numbers, labels, titles, or explanations. Only the post text. Each po
   }
 
   /**
-   * Get image search queries from reflection text: prioritise "person + place", then person/main subject only.
-   * @param {string} reflection - The day's reflection text
-   * @returns {Promise<string[]>} - [primaryQuery, fallbackQuery] e.g. ["Sam Altman IIT Delhi", "Sam Altman"]
+   * Extract entity-based image search queries from the actual post text (not generic keywords).
+   * Prioritises: public figures, organizations, events, locations. Falls back to contextual scene description.
+   * @param {string} postText - The generated post/suggestion text (e.g. "Listening to Sam Altman at IIT Delhi...")
+   * @returns {Promise<string[]>} - [primaryQuery, fallbackQuery] e.g. ["Sam Altman IIT Delhi interview", "Sam Altman"]
    */
-  async getImageSearchQuery(reflection) {
-    const savedProvider = (typeof localStorage !== 'undefined' && localStorage.getItem('chat_api_provider')) || 'openai';
-    this.setApiProvider('gemini');
+  async getImageSearchQueryForPost(postText) {
     const apiKey = this.geminiApiKey || process.env.REACT_APP_GOOGLE_API_KEY || '';
-    this.setApiProvider(savedProvider);
-    if (!apiKey || !reflection?.trim()) return [];
-    const prompt = `Given this reflection, extract search phrases for finding a relevant photograph. Prioritise people and places.
+    if (!apiKey || !postText?.trim()) return [];
 
-Rules:
-- If a specific person AND a place/event are mentioned (e.g. "Sam Altman" and "IIT Delhi"), give TWO lines:
-  Line 1: person and place together for a photo of that person at that place (e.g. "Sam Altman IIT Delhi" or "Sam Altman at IIT Delhi").
-  Line 2: just the person or main subject (e.g. "Sam Altman").
-- If only a person is mentioned, give one line with their name.
-- If only a place/event, give one line with that.
-- Use 2-6 words per line. No quotes, no explanation. Separate the two lines with a single newline.
+    const prompt = `You are extracting image search keywords from a social media post. The goal is to find a REAL photograph that matches the post topic.
 
-Reflection: ${(reflection || '').trim().slice(0, 400)}`;
+Step 1 – Extract entities from the post:
+- Public figures (e.g. Sam Altman, Elon Musk)
+- Organizations (e.g. IIT Delhi, OpenAI)
+- Events (e.g. interview, conference, summit)
+- Locations (e.g. city, venue name)
+
+Step 2 – Output search queries (one per line, no numbering, no quotes):
+- If you found a person AND a place/event: 
+  Line 1: combined query for a photo of that person at that place/event (e.g. "Sam Altman IIT Delhi interview").
+  Line 2: person or main figure only (e.g. "Sam Altman").
+- If only a person: one line with their name.
+- If only a place/event: one line with that.
+- If NO specific person, place, or event: output ONE line that is a concrete, searchable scene description (e.g. "Professional AI conference stage discussion", "tech keynote speaker on stage"). Do NOT use generic mood words like "morning motivation", "inspiration", "growth mindset", "innovation abstract".
+
+Rules: 2–6 words per line. No quotes. Separate two lines with a single newline. Prefer real entities over generic themes.
+
+Post text:
+${(postText || '').trim().slice(0, 600)}`;
+
     try {
       const apiUrl = `${this.geminiBaseURL}/models/${this.geminiModelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
       const res = await fetch(apiUrl, {
@@ -1667,7 +1676,7 @@ Reflection: ${(reflection || '').trim().slice(0, 400)}`;
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.2, maxOutputTokens: 80 }
+          generationConfig: { temperature: 0.2, maxOutputTokens: 100 }
         })
       });
       if (!res.ok) return [];
@@ -1675,33 +1684,33 @@ Reflection: ${(reflection || '').trim().slice(0, 400)}`;
       const text = (data.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '').trim();
       if (!text) return [];
       const lines = text.split(/\n/).map(s => s.trim()).filter(s => s.length > 0 && s.length < 120);
-      return lines.length ? lines : [];
+      return lines;
     } catch (e) {
       return [];
     }
   }
 
   /**
-   * Fetch one image URL for a reflection (for suggestions). Tries "person + place" first, then person only.
-   * Uses Pexels or Serper images if API keys are set; else Picsum with query-based seed.
-   * @param {string} reflection - The day's reflection text
+   * Fetch one image URL for a post. Uses extracted entities (person, place, event) for search.
+   * Never uses random endpoints; always search with query. Prefers real images (Pexels/Serper); fallback Picsum with query-based seed.
+   * @param {string} postText - The generated post text (or reflection if no suggestions yet)
    * @returns {Promise<string|null>} - Image URL or null
    */
-  async fetchImageForReflection(reflection) {
-    if (!reflection?.trim()) return null;
-    const queries = await this.getImageSearchQuery(reflection);
-    const primaryQuery = queries[0];
-    const fallbackQuery = queries[1];
-    const searchQueries = [primaryQuery, fallbackQuery].filter(Boolean);
+  async fetchImageForReflection(postText) {
+    if (!postText?.trim()) return null;
+
+    const queries = await this.getImageSearchQueryForPost(postText);
+    const searchQueries = [...queries].filter(Boolean);
     if (searchQueries.length === 0) {
-      const fallback = reflection.trim().slice(0, 40).replace(/\s+/g, ' ');
+      const fallback = postText.trim().slice(0, 50).replace(/\s+/g, ' ');
       if (!fallback) return null;
       searchQueries.push(fallback);
     }
-    // Try each query in order (person+place first, then person-only) until we get an image
+
+    // Try each query in order (entity-based first, then fallback) – search only, no random
     for (const searchQuery of searchQueries) {
       if (!searchQuery) continue;
-      // Try Pexels (free API key at https://www.pexels.com/api/)
+
       if (this.pexelsApiKey) {
         try {
           const res = await fetch(
@@ -1717,7 +1726,7 @@ Reflection: ${(reflection || '').trim().slice(0, 400)}`;
           console.warn('Pexels image search failed:', e.message);
         }
       }
-      // Try Serper images (optional)
+
       if (this.serperApiKey) {
         try {
           const res = await fetch('https://google.serper.dev/images', {
@@ -1735,9 +1744,15 @@ Reflection: ${(reflection || '').trim().slice(0, 400)}`;
         }
       }
     }
-    // Fallback: Picsum (no API key) – use primary query for deterministic seed
-    const seed = encodeURIComponent(String(searchQueries[0] || 'reflection').slice(0, 50).replace(/\s+/g, '-'));
-    return `https://picsum.photos/seed/${seed || 'reflection'}/600/340`;
+
+    // Deterministic fallback (query-based seed, not random)
+    const seed = encodeURIComponent(String(searchQueries[0] || 'post').slice(0, 50).replace(/\s+/g, '-'));
+    return `https://picsum.photos/seed/${seed}/600/340`;
+  }
+
+  /** @deprecated Use getImageSearchQueryForPost. Kept for compatibility. */
+  async getImageSearchQuery(reflection) {
+    return this.getImageSearchQueryForPost(reflection);
   }
 
   async generateDayDescription(dayData, type, periodText, userCharacterCount = null) {

@@ -70,8 +70,9 @@ export default function ShareSuggestionsPage() {
           setPlatformSuggestions(posts.length ? posts : [reflectionFromState]);
           setSelectedIndex(0);
           setSuggestionImageUrl(null);
-          // Try to find an image for the reflection (optional; no key = no image)
-          chatService.fetchImageForReflection(reflectionFromState).then((url) => {
+          // Image from actual post content (first option) so it matches the topic, not random keywords
+          const postTextForImage = (posts.length ? posts[0] : reflectionFromState) || reflectionFromState;
+          chatService.fetchImageForReflection(postTextForImage).then((url) => {
             if (!cancelled && url) setSuggestionImageUrl(url);
           }).catch(() => {});
         }
