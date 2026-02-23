@@ -742,7 +742,9 @@ export default function CommunityPage() {
     text: '#FFFFFF',
     textSecondary: '#A0A0A0',
     divider: '#1E1E1E',
-    accent: '#9975C7',
+    accent: '#A855F7',
+    accentHighlight: '#C084FC',
+    accentShadow: '#7E22CE',
   };
 
   return (
@@ -1241,7 +1243,7 @@ export default function CommunityPage() {
         }`}
         style={{
           backgroundColor: THREADS.accent,
-          boxShadow: `0 4px 20px ${THREADS.accent}40`,
+          boxShadow: `0 4px 20px ${THREADS.accentShadow}60`,
         }}
       >
         <Plus className="w-6 h-6 text-white" strokeWidth={2.5} />

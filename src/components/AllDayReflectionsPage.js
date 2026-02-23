@@ -409,7 +409,9 @@ export default function AllDayReflectionsPage() {
     text: '#FFFFFF',
     textSecondary: '#A0A0A0',
     divider: '#1E1E1E',
-    accent: '#9975C7',
+    accent: '#A855F7',
+    accentHighlight: '#C084FC',
+    accentShadow: '#7E22CE',
   };
 
   return (

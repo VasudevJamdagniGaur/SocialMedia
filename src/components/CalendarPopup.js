@@ -12,7 +12,9 @@ const CalendarPopup = ({ isOpen, onClose, selectedDate, onDateSelect, chatDays =
     text: '#FFFFFF',
     textSecondary: '#A0A0A0',
     divider: '#1E1E1E',
-    accent: '#9975C7',
+    accent: '#A855F7',
+    accentHighlight: '#C084FC',
+    accentShadow: '#7E22CE',
   };
 
   useEffect(() => {
@@ -180,7 +182,7 @@ const CalendarPopup = ({ isOpen, onClose, selectedDate, onDateSelect, chatDays =
                         ? {
                             backgroundColor: THREADS.accent,
                             color: THREADS.text,
-                            boxShadow: `0 4px 12px ${THREADS.accent}50`,
+                            boxShadow: `0 4px 12px ${THREADS.accentShadow}60`,
                             border: `1px solid ${THREADS.accent}`,
                           }
                         : isToday(date)
@@ -207,7 +209,7 @@ const CalendarPopup = ({ isOpen, onClose, selectedDate, onDateSelect, chatDays =
                             width: '5px',
                             height: '5px',
                             backgroundColor: THREADS.accent,
-                            boxShadow: `0 0 6px ${THREADS.accent}80`,
+                            boxShadow: `0 0 6px ${THREADS.accentHighlight}80`,
                           }}
                         />
                       )}
@@ -228,7 +230,7 @@ const CalendarPopup = ({ isOpen, onClose, selectedDate, onDateSelect, chatDays =
               className="w-2 h-2 rounded-full"
               style={{
                 backgroundColor: THREADS.accent,
-                boxShadow: `0 0 4px ${THREADS.accent}80`,
+                boxShadow: `0 0 4px ${THREADS.accentHighlight}80`,
               }}
             />
             <span style={{ color: THREADS.textSecondary }}>Chat</span>

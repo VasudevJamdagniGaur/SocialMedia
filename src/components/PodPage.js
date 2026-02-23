@@ -463,8 +463,8 @@ export default function PodPage() {
               }}
             >
               {isDarkMode ?
-                <Moon className="w-5 h-5" style={{ color: "#9975C7" }} strokeWidth={1.5} /> :
-                <Sun className="w-5 h-5" style={{ color: "#9975C7" }} strokeWidth={1.5} />
+                <Moon className="w-5 h-5" style={{ color: "#A855F7" }} strokeWidth={1.5} /> :
+                <Sun className="w-5 h-5" style={{ color: "#A855F7" }} strokeWidth={1.5} />
               }
             </div>
             {/* Center: Crew (beta) */}
@@ -494,7 +494,7 @@ export default function PodPage() {
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <User className="w-5 h-5" style={{ color: "#9975C7" }} strokeWidth={1.5} />
+                <User className="w-5 h-5" style={{ color: "#A855F7" }} strokeWidth={1.5} />
               )}
             </div>
           </div>
@@ -510,7 +510,9 @@ export default function PodPage() {
             text: '#FFFFFF',
             textSecondary: '#A0A0A0',
             divider: '#1E1E1E',
-            accent: '#9975C7',
+            accent: '#A855F7',
+            accentHighlight: '#C084FC',
+            accentShadow: '#7E22CE',
           };
           const cardClass = 'rounded-2xl overflow-hidden';
           const cardStyle = { background: HUB.bg, border: `1px solid ${HUB.divider}` };
@@ -596,9 +598,9 @@ export default function PodPage() {
             {isLoadingPodReflection ? (
               <div className="flex flex-col items-center justify-center py-6">
                 <div className="flex space-x-1 mb-3">
-                  <div className="w-2 h-2 rounded-full animate-bounce bg-[#9975C7]" style={{ animationDelay: '0ms' }} />
-                  <div className="w-2 h-2 rounded-full animate-bounce bg-[#9975C7]" style={{ animationDelay: '150ms' }} />
-                  <div className="w-2 h-2 rounded-full animate-bounce bg-[#9975C7]" style={{ animationDelay: '300ms' }} />
+                  <div className="w-2 h-2 rounded-full animate-bounce bg-[#A855F7]" style={{ animationDelay: '0ms' }} />
+                  <div className="w-2 h-2 rounded-full animate-bounce bg-[#A855F7]" style={{ animationDelay: '150ms' }} />
+                  <div className="w-2 h-2 rounded-full animate-bounce bg-[#A855F7]" style={{ animationDelay: '300ms' }} />
                 </div>
                 <p className="text-sm italic" style={{ color: HUB.textSecondary }}>Generating crew reflection...</p>
               </div>
@@ -618,7 +620,7 @@ export default function PodPage() {
                   onClick={(e) => { e.stopPropagation(); handleGeneratePodReflection(); }}
                   disabled={isLoadingPodReflection}
                   className="px-4 py-2 rounded-lg font-medium transition-all duration-200 hover:opacity-90 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-white"
-                  style={{ backgroundColor: HUB.accent, boxShadow: `0 4px 12px ${HUB.accent}40` }}
+                  style={{ backgroundColor: HUB.accent, boxShadow: `0 4px 12px ${HUB.accentShadow}60` }}
                 >
                   {isLoadingPodReflection ? 'Generating...' : 'Create Reflection'}
                 </button>
@@ -646,9 +648,9 @@ export default function PodPage() {
                 {isLoadingCrewActivity ? (
                   <div className="flex flex-col items-center justify-center py-8">
                     <div className="flex space-x-1 mb-2">
-                      <div className="w-2 h-2 rounded-full animate-bounce bg-[#9975C7]" style={{ animationDelay: '0ms' }} />
-                      <div className="w-2 h-2 rounded-full animate-bounce bg-[#9975C7]" style={{ animationDelay: '150ms' }} />
-                      <div className="w-2 h-2 rounded-full animate-bounce bg-[#9975C7]" style={{ animationDelay: '300ms' }} />
+                      <div className="w-2 h-2 rounded-full animate-bounce bg-[#A855F7]" style={{ animationDelay: '0ms' }} />
+                      <div className="w-2 h-2 rounded-full animate-bounce bg-[#A855F7]" style={{ animationDelay: '150ms' }} />
+                      <div className="w-2 h-2 rounded-full animate-bounce bg-[#A855F7]" style={{ animationDelay: '300ms' }} />
                     </div>
                     <p className="text-sm" style={{ color: HUB.textSecondary }}>Loading activity...</p>
                   </div>
