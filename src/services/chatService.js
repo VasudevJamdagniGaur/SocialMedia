@@ -17,7 +17,8 @@ class ChatService {
     this.visionModelName = 'gpt-4o'; // For OpenAI vision
     // Optional: Add your Serper API key here for better results
     // Get free API key at: https://serper.dev (2,500 free searches/month)
-    this.serperApiKey = null; // Set this if you want to use Serper API
+    this.serperApiKey = process.env.REACT_APP_SERPER_API_KEY || null;
+    this.pexelsApiKey = process.env.REACT_APP_PEXELS_API_KEY || null;
     
     // Debug: Log API key status (first 10 chars only for security)
     console.log('🔑 API Keys loaded:');
@@ -1635,6 +1636,85 @@ Do not add numbers, labels, titles, or explanations. Only the post text. Each po
     const posts = trimmed.split(/\n *--- *\n/).map(s => s.trim()).filter(Boolean);
     if (posts.length === 0) return [reflection.trim()];
     return posts;
+  }
+
+  /**
+   * Get a short image search query from reflection text using AI (for suggestion images).
+   * @param {string} reflection - The day's reflection text
+   * @returns {Promise<string|null>} - Search query string or null
+   */
+  async getImageSearchQuery(reflection) {
+    const savedProvider = (typeof localStorage !== 'undefined' && localStorage.getItem('chat_api_provider')) || 'openai';
+    const prevProvider = this.apiProvider;
+    this.setApiProvider('gemini');
+    const apiKey = this.geminiApiKey || process.env.REACT_APP_GOOGLE_API_KEY || '';
+    this.setApiProvider(savedProvider);
+    if (!apiKey || !reflection?.trim()) return null;
+    const prompt = `Given this short reflection, reply with ONLY a single English search phrase (2-5 words) to find one representative stock photo. No quotes, no explanation, no punctuation at the end.
+
+Reflection: ${(reflection || '').trim().slice(0, 300)}`;
+    try {
+      const apiUrl = `${this.geminiBaseURL}/models/${this.geminiModelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const res = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.3, maxOutputTokens: 50 }
+        })
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      const text = (data.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '').trim();
+      return text && text.length < 100 ? text : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
+   * Fetch one image URL for a reflection (for suggestions). Uses Pexels or Serper images if API keys are set.
+   * @param {string} reflection - The day's reflection text
+   * @returns {Promise<string|null>} - Image URL or null
+   */
+  async fetchImageForReflection(reflection) {
+    if (!reflection?.trim()) return null;
+    const query = await this.getImageSearchQuery(reflection);
+    if (!query) return null;
+    // Try Pexels first (free API key at https://www.pexels.com/api/)
+    if (this.pexelsApiKey) {
+      try {
+        const res = await fetch(
+          `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=1`,
+          { headers: { Authorization: this.pexelsApiKey } }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          const url = data.photos?.[0]?.src?.medium || data.photos?.[0]?.src?.large;
+          if (url) return url;
+        }
+      } catch (e) {
+        console.warn('Pexels image search failed:', e.message);
+      }
+    }
+    // Fallback: Serper images (optional)
+    if (this.serperApiKey) {
+      try {
+        const res = await fetch('https://google.serper.dev/images', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-API-KEY': this.serperApiKey },
+          body: JSON.stringify({ q: query, num: 1 })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const url = data.images?.[0]?.imageUrl;
+          if (url) return url;
+        }
+      } catch (e) {
+        console.warn('Serper image search failed:', e.message);
+      }
+    }
+    return null;
   }
 
   async generateDayDescription(dayData, type, periodText, userCharacterCount = null) {

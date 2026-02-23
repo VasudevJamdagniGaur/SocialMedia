@@ -49,6 +49,7 @@ export default function ShareSuggestionsPage() {
   // Selected platform: from navigation state or from tapping an icon (LinkedIn / X / Reddit)
   const [selectedPlatform, setSelectedPlatform] = useState(platformFromState || null);
   const [platformSuggestions, setPlatformSuggestions] = useState([]);
+  const [suggestionImageUrl, setSuggestionImageUrl] = useState(null);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(!!platformFromState);
   const [suggestionError, setSuggestionError] = useState(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -68,6 +69,11 @@ export default function ShareSuggestionsPage() {
         if (!cancelled) {
           setPlatformSuggestions(posts.length ? posts : [reflectionFromState]);
           setSelectedIndex(0);
+          setSuggestionImageUrl(null);
+          // Try to find an image for the reflection (optional; no key = no image)
+          chatService.fetchImageForReflection(reflectionFromState).then((url) => {
+            if (!cancelled && url) setSuggestionImageUrl(url);
+          }).catch(() => {});
         }
       })
       .catch((err) => {
@@ -75,6 +81,7 @@ export default function ShareSuggestionsPage() {
           setSuggestionError(err.message || 'Could not generate suggestions');
           setPlatformSuggestions([reflectionFromState]);
           setSelectedIndex(0);
+          setSuggestionImageUrl(null);
         }
       })
       .finally(() => {
@@ -226,14 +233,26 @@ export default function ShareSuggestionsPage() {
                 key={idx}
                 type="button"
                 onClick={() => setSelectedIndex(idx)}
-                className="w-full text-left rounded-xl p-4 transition-all"
+                className="w-full text-left rounded-xl overflow-hidden transition-all"
                 style={{
                   background: selectedIndex === idx ? (isDarkMode ? `${HUB.accent}20` : 'rgba(168, 85, 247, 0.12)') : (isDarkMode ? HUB.bgSecondary : '#FFFFFF'),
                   border: `1px solid ${selectedIndex === idx ? HUB.accent : (isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)')}`,
                 }}
               >
-                <p className="text-xs font-semibold mb-1" style={{ color: HUB.accent }}>Option {idx + 1}</p>
-                <p className="text-[14px] leading-relaxed" style={{ color: isDarkMode ? HUB.text : '#333' }}>{text}</p>
+                {suggestionImageUrl && (
+                  <div className="w-full aspect-video bg-black/20 flex-shrink-0">
+                    <img
+                      src={suggestionImageUrl}
+                      alt=""
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                  </div>
+                )}
+                <div className="p-4">
+                  <p className="text-xs font-semibold mb-1" style={{ color: HUB.accent }}>Option {idx + 1}</p>
+                  <p className="text-[14px] leading-relaxed" style={{ color: isDarkMode ? HUB.text : '#333' }}>{text}</p>
+                </div>
               </button>
             ))}
             {suggestionError && (
