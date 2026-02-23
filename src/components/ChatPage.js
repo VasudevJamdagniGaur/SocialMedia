@@ -1179,8 +1179,28 @@ export default function ChatPage() {
     });
   };
 
+  // Date label for message separators (e.g. "TODAY 11:45 AM", "YESTERDAY 2:30 PM")
+  const getMessageDateLabel = (timestamp) => {
+    if (!timestamp) return '';
+    const d = timestamp instanceof Date ? timestamp : new Date(timestamp);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const msgDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const diffDays = Math.floor((today - msgDate) / (1000 * 60 * 60 * 24));
+    const timeStr = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+    if (diffDays === 0) return `TODAY ${timeStr}`;
+    if (diffDays === 1) return `YESTERDAY ${timeStr}`;
+    return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined }) + ` ${timeStr}`;
+  };
+
+  const getDateKey = (timestamp) => {
+    if (!timestamp) return '';
+    const d = timestamp instanceof Date ? timestamp : new Date(timestamp);
+    return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  };
+
   return (
-    <>
+    <React.Fragment>
       <style>
         {`
           @keyframes blink {
@@ -1193,7 +1213,7 @@ export default function ChatPage() {
       className="min-h-screen flex flex-col relative overflow-hidden"
       style={{
         background: isDarkMode
-          ? "#131314"
+          ? "#0F0F0F"
           : "#B5C4AE",
       }}
     >
@@ -1277,68 +1297,87 @@ export default function ChatPage() {
         </div>
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 relative z-10">
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
-            <div
-              className={`max-w-xs lg:max-w-md px-4 py-3 rounded-2xl backdrop-blur-lg relative overflow-hidden ${
-                message.sender === 'user' ? 'ml-4' : 'mr-4'
-              }`}
-              style={{
-                backgroundColor: message.sender === 'user'
-                  ? "rgba(129, 201, 149, 0.08)"
-                  : message.isProcessingReel
-                  ? "#262626"
-                  : "#262626",
-                boxShadow: message.sender === 'user'
-                  ? "0 4px 16px rgba(0, 0, 0, 0.15)"
-                  : "0 4px 16px rgba(0, 0, 0, 0.15)",
-                border: message.sender === 'user'
-                  ? "1px solid rgba(129, 201, 149, 0.15)"
-                  : "1px solid rgba(255, 255, 255, 0.08)",
-              }}
-            >
-              {message.image && (
-                <img 
-                  src={message.image} 
-                  alt="Shared" 
-                  className="max-w-full rounded-lg mb-2 object-cover"
-                  style={{ maxHeight: '300px' }}
-                />
-              )}
-              {message.isProcessingReel ? (
-                <div className="flex items-center space-x-2">
-                  <Eye className="w-5 h-5 text-yellow-400 animate-pulse" />
-                  <p className="text-white text-sm leading-relaxed">
-                    {message.text}
-                  </p>
-                </div>
-              ) : (
-                <p className="text-white text-sm leading-relaxed">
-                  {message.text}
-                  {message.isStreaming && (
-                    <span className="inline-block ml-1 w-2 h-4 bg-gray-400 animate-pulse" style={{
-                      animation: 'blink 1s infinite'
-                    }}>|</span>
+      {/* Messages - Threads-style: date separators, user right (dark gray), AI left with avatar */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 relative z-10">
+        {(() => {
+          let lastDateKey = '';
+          const CHAT = {
+            userBubble: '#363636',
+            aiBubble: '#252525',
+            aiAvatarBg: '#1E1E1E',
+            dateSep: '#888888',
+            text: '#FFFFFF',
+          };
+          return messages.map((message) => {
+            const ts = message.timestamp;
+            const dateKey = ts ? getDateKey(ts) : '';
+            const showDateSep = dateKey && dateKey !== lastDateKey;
+            if (showDateSep) lastDateKey = dateKey;
+            return (
+              <React.Fragment key={message.id}>
+                {showDateSep && (
+                  <div className="flex justify-center py-2">
+                    <span className="text-xs font-medium" style={{ color: CHAT.dateSep }}>
+                      {getMessageDateLabel(ts)}
+                    </span>
+                  </div>
+                )}
+                <div className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'} items-end gap-2`}>
+                  {message.sender !== 'user' && (
+                    <div
+                      className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+                      style={{ backgroundColor: CHAT.aiAvatarBg }}
+                    >
+                      <Brain className="w-4 h-4" style={{ color: '#E91E63' }} strokeWidth={1.5} />
+                    </div>
                   )}
-                </p>
-              )}
-              <p className="text-xs text-gray-400 mt-1">{formatTime(message.timestamp)}</p>
-            </div>
-          </div>
-        ))}
-        
-        
+                  <div
+                    className={`max-w-[85%] sm:max-w-md px-4 py-2.5 rounded-2xl ${
+                      message.sender === 'user' ? 'rounded-br-md' : 'rounded-bl-md'
+                    }`}
+                    style={{
+                      backgroundColor: message.sender === 'user' ? CHAT.userBubble : (message.isProcessingReel ? CHAT.aiBubble : CHAT.aiBubble),
+                      color: CHAT.text,
+                    }}
+                  >
+                    {message.image && (
+                      <img
+                        src={message.image}
+                        alt="Shared"
+                        className="max-w-full rounded-lg mb-2 object-cover"
+                        style={{ maxHeight: '300px' }}
+                      />
+                    )}
+                    {message.isProcessingReel ? (
+                      <div className="flex items-center space-x-2">
+                        <Eye className="w-5 h-5 text-amber-400 animate-pulse" />
+                        <p className="text-sm leading-relaxed" style={{ color: CHAT.text }}>
+                          {message.text}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-sm leading-relaxed whitespace-pre-wrap break-words" style={{ color: CHAT.text }}>
+                        {message.text}
+                        {message.isStreaming && (
+                          <span className="inline-block ml-1 w-2 h-4 bg-gray-400 animate-pulse" style={{ animation: 'blink 1s infinite' }}>|</span>
+                        )}
+                      </p>
+                    )}
+                    <p className="text-[11px] mt-1.5 opacity-75" style={{ color: CHAT.text }}>
+                      {ts ? formatTime(ts instanceof Date ? ts : new Date(ts)) : ''}
+                    </p>
+                  </div>
+                </div>
+              </React.Fragment>
+            );
+          });
+        })()}
         <div ref={messagesEndRef} />
       </div>
 
 
-      {/* Input */}
-      <div className="relative z-10 p-4 border-t border-gray-700/30">
+      {/* Input - Threads-style: rounded field, "Message..." placeholder */}
+      <div className="relative z-10 p-4 border-t border-gray-700/30" style={isDarkMode ? { backgroundColor: '#0F0F0F' } : {}}>
         {/* Image Preview */}
         {imagePreview && (
           <div className="mb-3 relative inline-block" style={{ display: 'block' }}>
@@ -1485,17 +1524,13 @@ export default function ChatPage() {
             type="text"
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
-            placeholder={
-              apiProvider === 'openai' ? 'Ask OpenAI...' : 
-              apiProvider === 'gemini' ? 'Ask Gemini...' : 
-              'Ask Grok...'
-            }
+            placeholder="Message..."
             disabled={isLoading}
-            className="flex-1 min-w-0 px-4 py-3 rounded-2xl focus:outline-none focus:ring-2 text-white placeholder-gray-400 backdrop-blur-md"
+            className="flex-1 min-w-0 px-4 py-3 rounded-2xl focus:outline-none focus:ring-2 text-white placeholder-gray-400"
             style={{
-              backgroundColor: "#262626",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
-              boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
+              backgroundColor: isDarkMode ? "#3a3a3a" : "rgba(255,255,255,0.9)",
+              border: isDarkMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.08)",
+              color: isDarkMode ? "#fff" : "#1a1a1a",
             }}
           />
           
@@ -1637,6 +1672,6 @@ export default function ChatPage() {
       )}
 
     </div>
-    </>
+    </React.Fragment>
   );
 }
