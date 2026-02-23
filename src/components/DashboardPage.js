@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
-import { Brain, MessageCircle, Calendar, Heart, Sparkles, User, Sun, Moon, ChevronRight, Share2 } from "lucide-react";
+import { Brain, MessageCircle, Calendar, Heart, Sparkles, User, Sun, Moon, ChevronRight, Share2, Linkedin, Twitter } from "lucide-react";
 import { useTheme } from '../contexts/ThemeContext';
 import CalendarPopup from './CalendarPopup';
 import reflectionService from '../services/reflectionService';
@@ -696,6 +696,35 @@ export default function DashboardPage() {
                     <Share2 className="w-4 h-4" style={{ color: isDarkMode ? '#FFFFFF' : HUB.accent }} strokeWidth={2} />
                     Share to HUB
                   </button>
+                  <div className="mt-4 flex items-center justify-center gap-4" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      onClick={() => navigate('/share-suggestions', { state: { reflection, selectedDate, platform: 'linkedin' } })}
+                      className="w-11 h-11 rounded-full flex items-center justify-center transition-opacity hover:opacity-90"
+                      style={{ backgroundColor: 'rgba(10, 102, 194, 0.25)', border: `1px solid rgba(10, 102, 194, 0.4)` }}
+                      aria-label="Suggestions for LinkedIn"
+                    >
+                      <Linkedin className="w-5 h-5" style={{ color: '#0A66C2' }} strokeWidth={2} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigate('/share-suggestions', { state: { reflection, selectedDate, platform: 'x' } })}
+                      className="w-11 h-11 rounded-full flex items-center justify-center transition-opacity hover:opacity-90"
+                      style={{ backgroundColor: 'rgba(29, 155, 240, 0.25)', border: `1px solid rgba(29, 155, 240, 0.4)` }}
+                      aria-label="Suggestions for X (Twitter)"
+                    >
+                      <Twitter className="w-5 h-5" style={{ color: '#1D9BF0' }} strokeWidth={2} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigate('/share-suggestions', { state: { reflection, selectedDate, platform: 'reddit' } })}
+                      className="w-11 h-11 rounded-full flex items-center justify-center transition-opacity hover:opacity-90"
+                      style={{ backgroundColor: 'rgba(255, 69, 0, 0.25)', border: `1px solid rgba(255, 69, 0, 0.4)` }}
+                      aria-label="Suggestions for Reddit"
+                    >
+                      <MessageCircle className="w-5 h-5" style={{ color: '#FF4500' }} strokeWidth={2} />
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="px-6 pt-6 pb-7 flex flex-col items-stretch">

@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Linkedin, Twitter, Share2 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
+import chatService from '../services/chatService';
 import { getDateId } from '../utils/dateUtils';
 
 const HUB = {
@@ -17,10 +18,15 @@ const HUB = {
   accentShadow: '#7E22CE',
 };
 
-// Reddit brand color for icon
 const REDDIT_COLOR = '#FF4500';
 
-function buildSuggestions(original) {
+const PLATFORM_LABELS = {
+  linkedin: 'LinkedIn',
+  x: 'X (Twitter)',
+  reddit: 'Reddit',
+};
+
+function buildFallbackSuggestions(original) {
   const t = (original || '').trim();
   if (!t) return [];
   const short = t.length > 120 ? t.slice(0, 117).trim() + '...' : t;
@@ -38,19 +44,56 @@ export default function ShareSuggestionsPage() {
   const { isDarkMode } = useTheme();
   const state = location.state || {};
   const reflectionFromState = (state.reflection ?? '').trim();
+  const platformFromState = state.platform; // 'linkedin' | 'x' | 'reddit' when from Dashboard icons
 
-  const [selectedSuggestionId, setSelectedSuggestionId] = useState('original');
-  const suggestions = buildSuggestions(reflectionFromState);
-  const selectedText = suggestions.find((s) => s.id === selectedSuggestionId)?.text ?? reflectionFromState;
+  // Selected platform: from navigation state or from tapping an icon (LinkedIn / X / Reddit)
+  const [selectedPlatform, setSelectedPlatform] = useState(platformFromState || null);
+  const [platformSuggestions, setPlatformSuggestions] = useState([]);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(!!platformFromState);
+  const [suggestionError, setSuggestionError] = useState(null);
+  const [selectedIndex, setSelectedIndex] = useState(0);
 
   const reflectionDate = state.selectedDate ? (state.selectedDate instanceof Date ? state.selectedDate : new Date(state.selectedDate)) : new Date();
   const dateStr = reflectionDate instanceof Date ? getDateId(reflectionDate) : getDateId(new Date(reflectionDate));
 
-  const recordShare = (platform) => {
+  // When user selects a platform (from state or by tapping an icon), fetch that platform's suggestions only
+  useEffect(() => {
+    if (!selectedPlatform || !reflectionFromState) return;
+    let cancelled = false;
+    setIsLoadingSuggestions(true);
+    setSuggestionError(null);
+    chatService
+      .generateSocialPostSuggestions(reflectionFromState, selectedPlatform)
+      .then((posts) => {
+        if (!cancelled) {
+          setPlatformSuggestions(posts.length ? posts : [reflectionFromState]);
+          setSelectedIndex(0);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setSuggestionError(err.message || 'Could not generate suggestions');
+          setPlatformSuggestions([reflectionFromState]);
+          setSelectedIndex(0);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingSuggestions(false);
+      });
+    return () => { cancelled = true; };
+  }, [selectedPlatform, reflectionFromState]);
+
+  const fallbackSuggestions = buildFallbackSuggestions(reflectionFromState);
+  const selectedFallbackId = fallbackSuggestions[selectedIndex]?.id ?? 'original';
+  const selectedText = selectedPlatform
+    ? (platformSuggestions[selectedIndex] ?? platformSuggestions[0] ?? reflectionFromState)
+    : (fallbackSuggestions[selectedIndex]?.text ?? reflectionFromState);
+
+  const recordShare = (plat) => {
     const user = getCurrentUser();
     if (user?.uid) {
       firestoreService.saveSocialShare(user.uid, {
-        platform,
+        platform: plat,
         reflectionDate: dateStr,
         reflectionSnippet: (selectedText || '').slice(0, 200) || undefined,
       });
@@ -59,32 +102,22 @@ export default function ShareSuggestionsPage() {
 
   const shareToLinkedIn = () => {
     if (!selectedText) return;
-    const url = typeof window !== 'undefined' && window.location?.origin
-      ? window.location.origin
-      : 'https://deite.app';
-    const shareUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`;
-    window.open(shareUrl, '_blank', 'noopener,noreferrer');
+    const url = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : 'https://deite.app';
+    window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`, '_blank', 'noopener,noreferrer');
     recordShare('linkedin');
-    if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(selectedText);
-    }
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(selectedText);
   };
 
   const shareToTwitter = () => {
     if (!selectedText) return;
-    window.open(
-      `https://twitter.com/intent/tweet?text=${encodeURIComponent(selectedText)}`,
-      '_blank',
-      'noopener,noreferrer'
-    );
+    window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(selectedText)}`, '_blank', 'noopener,noreferrer');
     recordShare('x');
   };
 
   const shareToReddit = () => {
     if (!selectedText) return;
-    const title = 'My reflection';
     window.open(
-      `https://www.reddit.com/submit?title=${encodeURIComponent(title)}&selftext=${encodeURIComponent(selectedText)}`,
+      `https://www.reddit.com/submit?title=${encodeURIComponent('My reflection')}&selftext=${encodeURIComponent(selectedText)}`,
       '_blank',
       'noopener,noreferrer'
     );
@@ -96,13 +129,18 @@ export default function ShareSuggestionsPage() {
     return null;
   }
 
+  const title = selectedPlatform ? `Suggestions for ${PLATFORM_LABELS[selectedPlatform]}` : 'Suggestions for your post';
+  const cardStyle = {
+    background: isDarkMode ? HUB.bgSecondary : '#FFFFFF',
+    border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'}`,
+  };
+
   return (
     <div
       className="min-h-screen flex flex-col px-4 py-6 pb-10"
       style={{ background: isDarkMode ? HUB.bg : '#F5F5F5' }}
     >
       <div className="max-w-md w-full mx-auto flex flex-col flex-1">
-        {/* Back + Header */}
         <div className="flex items-center gap-3 pt-2 pb-4">
           <button
             type="button"
@@ -113,141 +151,114 @@ export default function ShareSuggestionsPage() {
           >
             <ArrowLeft className="w-5 h-5" strokeWidth={2} />
           </button>
-          <h1
-            className="text-lg font-semibold"
-            style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}
-          >
-            Suggestions for your post
+          <h1 className="text-lg font-semibold" style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}>
+            {title}
           </h1>
         </div>
 
-        {/* Reflection preview */}
-        <div
-          className="rounded-xl p-4 mb-6"
-          style={{
-            background: isDarkMode ? HUB.bgSecondary : '#FFFFFF',
-            border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'}`,
-          }}
-        >
-          <p
-            className="text-sm leading-relaxed"
-            style={{ color: isDarkMode ? HUB.textSecondary : '#666' }}
-          >
-            Your reflection
-          </p>
-          <p
-            className="text-[15px] leading-relaxed mt-1"
-            style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}
-          >
+        <div className="rounded-xl p-4 mb-6" style={cardStyle}>
+          <p className="text-sm" style={{ color: isDarkMode ? HUB.textSecondary : '#666' }}>Your reflection</p>
+          <p className="text-[15px] leading-relaxed mt-1" style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}>
             {reflectionFromState}
           </p>
         </div>
 
-        {/* Suggestion options */}
-        <p
-          className="text-sm font-medium mb-3"
-          style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}
-        >
-          Choose a version to share
+        <p className="text-sm font-medium mb-3" style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}>
+          {selectedPlatform ? 'Choose a post to share' : 'Choose a version to share'}
         </p>
-        <div className="space-y-3 mb-8">
-          {suggestions.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => setSelectedSuggestionId(s.id)}
-              className="w-full text-left rounded-xl p-4 transition-all"
-              style={{
-                background: selectedSuggestionId === s.id
-                  ? (isDarkMode ? `${HUB.accent}20` : 'rgba(168, 85, 247, 0.12)')
-                  : (isDarkMode ? HUB.bgSecondary : '#FFFFFF'),
-                border: `1px solid ${selectedSuggestionId === s.id ? HUB.accent : (isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)')}`,
-              }}
-            >
-              <p
-                className="text-xs font-semibold mb-1"
-                style={{ color: HUB.accent }}
-              >
-                {s.label}
-              </p>
-              <p
-                className="text-[14px] leading-relaxed"
-                style={{ color: isDarkMode ? HUB.text : '#333' }}
-              >
-                {s.text}
-              </p>
-            </button>
-          ))}
+        <div className="flex items-center justify-center gap-6 mb-6">
+          <button
+            type="button"
+            onClick={() => setSelectedPlatform('linkedin')}
+            className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all hover:opacity-100"
+            style={{
+              background: selectedPlatform === 'linkedin' ? 'rgba(10, 102, 194, 0.35)' : 'rgba(10, 102, 194, 0.2)',
+              border: `2px solid ${selectedPlatform === 'linkedin' ? '#0A66C2' : 'rgba(10, 102, 194, 0.4)'}`,
+              opacity: selectedPlatform === null || selectedPlatform === 'linkedin' ? 1 : 0.7,
+            }}
+            title="LinkedIn – get LinkedIn-style post suggestions"
+          >
+            <Linkedin className="w-5 h-5" style={{ color: '#0A66C2' }} strokeWidth={2} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedPlatform('x')}
+            className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all hover:opacity-100"
+            style={{
+              background: selectedPlatform === 'x' ? 'rgba(29, 155, 240, 0.35)' : 'rgba(29, 155, 240, 0.2)',
+              border: `2px solid ${selectedPlatform === 'x' ? '#1D9BF0' : 'rgba(29, 155, 240, 0.4)'}`,
+              opacity: selectedPlatform === null || selectedPlatform === 'x' ? 1 : 0.7,
+            }}
+            title="X (Twitter) – get X-style post suggestions"
+          >
+            <Twitter className="w-5 h-5" style={{ color: '#1D9BF0' }} strokeWidth={2} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedPlatform('reddit')}
+            className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all hover:opacity-100"
+            style={{
+              background: selectedPlatform === 'reddit' ? 'rgba(255, 69, 0, 0.35)' : 'rgba(255, 69, 0, 0.2)',
+              border: `2px solid ${selectedPlatform === 'reddit' ? REDDIT_COLOR : 'rgba(255, 69, 0, 0.4)'}`,
+              opacity: selectedPlatform === null || selectedPlatform === 'reddit' ? 1 : 0.7,
+            }}
+            title="Reddit – get Reddit-style post suggestions"
+          >
+            <Share2 className="w-5 h-5" style={{ color: REDDIT_COLOR }} strokeWidth={2} />
+          </button>
         </div>
 
-        {/* Share to: LinkedIn, Twitter, Reddit */}
-        <p
-          className="text-sm font-medium mb-3"
-          style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}
-        >
-          Share to
-        </p>
-        <div className="flex flex-col gap-3">
-          <button
-            type="button"
-            onClick={shareToLinkedIn}
-            className="flex items-center gap-4 rounded-xl px-5 py-4 transition-opacity hover:opacity-90"
-            style={{
-              background: isDarkMode ? HUB.bgSecondary : '#FFFFFF',
-              border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'}`,
-            }}
-          >
-            <div
-              className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
-              style={{ background: 'rgba(10, 102, 194, 0.2)' }}
-            >
-              <Linkedin className="w-5 h-5" style={{ color: '#0A66C2' }} strokeWidth={2} />
+        {selectedPlatform && isLoadingSuggestions ? (
+          <div className="rounded-xl p-6 flex flex-col items-center justify-center mb-8" style={cardStyle}>
+            <div className="flex space-x-1.5 mb-3">
+              <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: HUB.accent, animationDelay: '0ms' }} />
+              <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: HUB.accent, animationDelay: '150ms' }} />
+              <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: HUB.accent, animationDelay: '300ms' }} />
             </div>
-            <span className="font-medium" style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}>
-              LinkedIn
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={shareToTwitter}
-            className="flex items-center gap-4 rounded-xl px-5 py-4 transition-opacity hover:opacity-90"
-            style={{
-              background: isDarkMode ? HUB.bgSecondary : '#FFFFFF',
-              border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'}`,
-            }}
-          >
-            <div
-              className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
-              style={{ background: 'rgba(29, 155, 240, 0.2)' }}
-            >
-              <Twitter className="w-5 h-5" style={{ color: '#1D9BF0' }} strokeWidth={2} />
-            </div>
-            <span className="font-medium" style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}>
-              X (Twitter)
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={shareToReddit}
-            className="flex items-center gap-4 rounded-xl px-5 py-4 transition-opacity hover:opacity-90"
-            style={{
-              background: isDarkMode ? HUB.bgSecondary : '#FFFFFF',
-              border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'}`,
-            }}
-          >
-            <div
-              className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
-              style={{ background: 'rgba(255, 69, 0, 0.2)' }}
-            >
-              <Share2 className="w-5 h-5" style={{ color: REDDIT_COLOR }} strokeWidth={2} />
-            </div>
-            <span className="font-medium" style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}>
-              Reddit
-            </span>
-          </button>
-        </div>
+            <p className="text-sm" style={{ color: isDarkMode ? HUB.textSecondary : '#666' }}>
+              Creating {PLATFORM_LABELS[selectedPlatform]}-style suggestions...
+            </p>
+          </div>
+        ) : selectedPlatform && platformSuggestions.length > 0 ? (
+          <div className="space-y-3 mb-8">
+            {platformSuggestions.map((text, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => setSelectedIndex(idx)}
+                className="w-full text-left rounded-xl p-4 transition-all"
+                style={{
+                  background: selectedIndex === idx ? (isDarkMode ? `${HUB.accent}20` : 'rgba(168, 85, 247, 0.12)') : (isDarkMode ? HUB.bgSecondary : '#FFFFFF'),
+                  border: `1px solid ${selectedIndex === idx ? HUB.accent : (isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)')}`,
+                }}
+              >
+                <p className="text-xs font-semibold mb-1" style={{ color: HUB.accent }}>Option {idx + 1}</p>
+                <p className="text-[14px] leading-relaxed" style={{ color: isDarkMode ? HUB.text : '#333' }}>{text}</p>
+              </button>
+            ))}
+            {suggestionError && (
+              <p className="text-xs" style={{ color: isDarkMode ? HUB.textSecondary : '#888' }}>Using reflection after: {suggestionError}</p>
+            )}
+          </div>
+        ) : !selectedPlatform ? (
+          <div className="space-y-3 mb-8">
+            {fallbackSuggestions.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => setSelectedIndex(fallbackSuggestions.findIndex((x) => x.id === s.id))}
+                className="w-full text-left rounded-xl p-4 transition-all"
+                style={{
+                  background: selectedFallbackId === s.id ? (isDarkMode ? `${HUB.accent}20` : 'rgba(168, 85, 247, 0.12)') : (isDarkMode ? HUB.bgSecondary : '#FFFFFF'),
+                  border: `1px solid ${selectedFallbackId === s.id ? HUB.accent : (isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)')}`,
+                }}
+              >
+                <p className="text-xs font-semibold mb-1" style={{ color: HUB.accent }}>{s.label}</p>
+                <p className="text-[14px] leading-relaxed" style={{ color: isDarkMode ? HUB.text : '#333' }}>{s.text}</p>
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
     </div>
   );

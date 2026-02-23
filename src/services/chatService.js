@@ -1540,6 +1540,103 @@ ${text}`;
     return (edited || '').trim();
   }
 
+  /**
+   * Generate 1-3 platform-style post suggestions from a day reflection.
+   * Can be one post for the whole day or one per incident (model decides).
+   * @param {string} reflection - The day's reflection text
+   * @param {string} platform - 'linkedin' | 'x' | 'reddit'
+   * @returns {Promise<string[]>} - Array of suggested post strings (1-3)
+   */
+  async generateSocialPostSuggestions(reflection, platform) {
+    const savedProvider = (typeof localStorage !== 'undefined' && localStorage.getItem('chat_api_provider')) || 'openai';
+    this.setApiProvider(savedProvider);
+
+    this.openaiApiKey = process.env.REACT_APP_OPENAI_API_KEY || this.openaiApiKey || '';
+    this.geminiApiKey = process.env.REACT_APP_GOOGLE_API_KEY || this.geminiApiKey || '';
+    this.grokApiKey = process.env.REACT_APP_GROK_API_KEY || this.grokApiKey || '';
+
+    const apiKey = this.getApiKey();
+    if (!apiKey || apiKey.trim() === '') {
+      const providerName = this.apiProvider === 'openai' ? 'OpenAI' : this.apiProvider === 'gemini' ? 'Gemini' : 'Grok';
+      const envKeyName = this.apiProvider === 'openai' ? 'REACT_APP_OPENAI_API_KEY' : this.apiProvider === 'gemini' ? 'REACT_APP_GOOGLE_API_KEY' : 'REACT_APP_GROK_API_KEY';
+      throw new Error(`${providerName} API key is not set. Add ${envKeyName} in .env`);
+    }
+
+    const platformRules = {
+      linkedin: `Write in the style of real LinkedIn posts: professional but personal. Use a strong opening hook (question, bold statement, or story). Share a clear insight or learning. Keep paragraphs short (1-2 sentences). Optional soft call-to-action or question at the end. Tone: confident, helpful, authentic. No excessive hashtags (0-3 max). Can be one post for the whole reflection or one post per key incident/learning (1-3 posts).`,
+      x: `Write in the style of real X (Twitter) posts: concise, punchy, conversational. STRICT: each post must be under 280 characters. Use line breaks for emphasis. Optional 1-2 relevant hashtags. Can be a single tweet or a short thread (1-3 tweets). Match how people actually tweet: direct, engaging, sometimes witty or reflective.`,
+      reddit: `Write in the style of real Reddit posts: casual, conversational, authentic. As if posting to a subreddit like r/CasualConversation, r/self, or r/DecidingToBeBetter. Can use a conversational opener, "TIL" or "DAE" style if it fits, or a short story. Be genuine and relatable. Can be one post or one per topic/incident (1-3 posts).`
+    };
+    const platformLabel = platform === 'x' ? 'X (Twitter)' : platform.charAt(0).toUpperCase() + platform.slice(1);
+
+    const prompt = `You are rewriting a daily reflection into ${platformLabel}-style post(s) that look and read like real posts on that platform.
+
+Reflection:
+${(reflection || '').trim()}
+
+${platformRules[platform] || platformRules.linkedin}
+
+Output format: Return ONLY the suggested post(s). Put each post on its own line. Separate multiple posts with a line that contains exactly: ---
+Do not add numbers, labels, titles, or explanations. Only the post text. Each post should be ready to copy-paste.`;
+
+    let apiUrl, requestBody, headers;
+    if (this.apiProvider === 'openai') {
+      apiUrl = `${this.openaiBaseURL}/chat/completions`;
+      requestBody = {
+        model: this.openaiModelName,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.5,
+        max_tokens: 800
+      };
+      headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` };
+    } else if (this.apiProvider === 'grok') {
+      apiUrl = `${this.grokBaseURL}/chat/completions`;
+      requestBody = {
+        model: this.grokModelName,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.5,
+        max_tokens: 800
+      };
+      headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` };
+    } else {
+      apiUrl = `${this.geminiBaseURL}/models/${this.geminiModelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      requestBody = {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.5, maxOutputTokens: 800 }
+      };
+      headers = { 'Content-Type': 'application/json' };
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000);
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(requestBody),
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Suggestions failed: ${response.status} ${errText.substring(0, 150)}`);
+    }
+
+    const data = await response.json();
+    let raw = '';
+    if (this.apiProvider === 'openai' || this.apiProvider === 'grok') {
+      raw = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) ? data.choices[0].message.content : '';
+    } else {
+      raw = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts)
+        ? data.candidates[0].content.parts.map(p => p.text).join('') : '';
+    }
+    const trimmed = (raw || '').trim();
+    if (!trimmed) return [reflection.trim()];
+    const posts = trimmed.split(/\n *--- *\n/).map(s => s.trim()).filter(Boolean);
+    if (posts.length === 0) return [reflection.trim()];
+    return posts;
+  }
+
   async generateDayDescription(dayData, type, periodText, userCharacterCount = null) {
     try {
       console.log(`🤖 Generating ${type} day description for`, dayData.date);
