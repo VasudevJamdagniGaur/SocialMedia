@@ -1323,14 +1323,6 @@ export default function ChatPage() {
                   </div>
                 )}
                 <div className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'} items-end gap-2`}>
-                  {message.sender !== 'user' && (
-                    <div
-                      className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
-                      style={{ backgroundColor: CHAT.aiAvatarBg }}
-                    >
-                      <Brain className="w-4 h-4" style={{ color: '#E91E63' }} strokeWidth={1.5} />
-                    </div>
-                  )}
                   <div
                     className={`max-w-[85%] sm:max-w-md px-4 py-2.5 rounded-2xl ${
                       message.sender === 'user' ? 'rounded-br-md' : 'rounded-bl-md'
