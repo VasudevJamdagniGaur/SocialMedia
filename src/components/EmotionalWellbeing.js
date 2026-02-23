@@ -2971,13 +2971,12 @@ Return in this JSON format:
 
     try {
       const apiKey = process.env.REACT_APP_GOOGLE_API_KEY || '';
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent`;
+      const apiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-3-flash-preview:generateContent?key=${encodeURIComponent(apiKey)}`;
       
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           contents: [{

@@ -9,10 +9,10 @@ class ChatService {
     this.grokApiKey = process.env.REACT_APP_GROK_API_KEY || '';
     this.apiProvider = 'openai'; // 'openai', 'gemini', or 'grok'
     this.openaiBaseURL = 'https://api.openai.com/v1';
-    this.geminiBaseURL = 'https://generativelanguage.googleapis.com/v1beta';
+    this.geminiBaseURL = 'https://generativelanguage.googleapis.com/v1';
     this.grokBaseURL = 'https://api.x.ai/v1';
     this.openaiModelName = 'gpt-4o';
-    this.geminiModelName = 'gemini-1.5-flash';
+    this.geminiModelName = 'gemini-3-flash-preview';
     this.grokModelName = 'grok-3';
     this.visionModelName = 'gpt-4o'; // For OpenAI vision
     // Optional: Add your Serper API key here for better results
@@ -1320,8 +1320,8 @@ Assistant:`;
           'Authorization': `Bearer ${apiKey}`
         };
       } else {
-        // Gemini API
-        apiUrl = `${this.geminiBaseURL}/models/${this.geminiModelName}:generateContent`;
+        // Gemini API - v1, key as query param
+        apiUrl = `${this.geminiBaseURL}/models/${this.geminiModelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
         requestBody = {
           contents: [{
             parts: [{
@@ -1334,8 +1334,7 @@ Assistant:`;
           }
         };
         headers = {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey
+          'Content-Type': 'application/json'
         };
       }
       
@@ -1507,12 +1506,12 @@ ${text}`;
       };
       headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` };
     } else {
-      apiUrl = `${this.geminiBaseURL}/models/${this.geminiModelName}:generateContent`;
+      apiUrl = `${this.geminiBaseURL}/models/${this.geminiModelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
       requestBody = {
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: { temperature: 0.3, maxOutputTokens: 1000 }
       };
-      headers = { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey };
+      headers = { 'Content-Type': 'application/json' };
     }
 
     const controller = new AbortController();
