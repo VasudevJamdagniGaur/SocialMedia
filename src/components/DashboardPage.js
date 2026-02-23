@@ -647,7 +647,7 @@ export default function DashboardPage() {
         >
           <div className="p-6 pb-5">
             <div 
-              onClick={() => navigate('/reflections')}
+              onClick={() => reflection ? navigate('/share-suggestions', { state: { reflection, selectedDate } }) : navigate('/reflections')}
               className="flex items-center justify-between cursor-pointer transition-opacity hover:opacity-85 mb-6"
             >
               <div>
@@ -683,7 +683,7 @@ export default function DashboardPage() {
                   </p>
                 </div>
               ) : reflection ? (
-                <div onClick={() => navigate('/reflections')} className="p-5 cursor-pointer hover:opacity-95 transition-opacity">
+                <div onClick={() => reflection ? navigate('/share-suggestions', { state: { reflection, selectedDate } }) : navigate('/reflections')} className="p-5 cursor-pointer hover:opacity-95 transition-opacity">
                   <p className="text-[15px] leading-relaxed" style={{ color: isDarkMode ? HUB.text : '#E5E5E5' }}>
                     {reflection}
                   </p>

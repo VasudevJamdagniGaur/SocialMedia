@@ -768,10 +768,10 @@ export default function CommunityPage() {
         >
           <button
             onClick={toggleTheme}
-            className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity flex-shrink-0 text-white"
+            className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity flex-shrink-0"
             aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
           >
-            {isDarkMode ? <Sun className="w-5 h-5" strokeWidth={2} /> : <Moon className="w-5 h-5" strokeWidth={2} />}
+            {isDarkMode ? <Moon className="w-5 h-5" strokeWidth={2} style={{ color: THREADS.accent }} /> : <Sun className="w-5 h-5" strokeWidth={2} style={{ color: THREADS.accent }} />}
           </button>
           <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ background: THREADS.bgSecondary }}>
             <img src="/hub-icon.png" alt="Deite" className="object-contain w-6 h-6 invert" />
@@ -1003,8 +1003,8 @@ export default function CommunityPage() {
                     onClick={() => setPostComments({ ...postComments, [post.id]: { ...postCommentsData, showComments: !postCommentsData.showComments } })}
                     className="flex items-center gap-1.5 transition-transform hover:opacity-80 active:scale-95"
                   >
-                    <MessageCircle className="w-4 h-4" style={{ color: THREADS.bg }} />
-                    <span className="text-xs" style={{ color: THREADS.bg }}>{postCommentsData.comments.length}</span>
+                    <MessageCircle className="w-4 h-4" style={{ color: THREADS.textSecondary }} />
+                    <span className="text-xs" style={{ color: THREADS.textSecondary }}>{postCommentsData.comments.length}</span>
                   </button>
                   <button className="flex items-center gap-1.5 transition-transform hover:opacity-80 active:scale-95">
                     <Repeat className="w-4 h-4" style={{ color: THREADS.textSecondary }} />
