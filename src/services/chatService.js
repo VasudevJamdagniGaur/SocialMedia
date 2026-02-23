@@ -12,7 +12,7 @@ class ChatService {
     this.geminiBaseURL = 'https://generativelanguage.googleapis.com/v1';
     this.grokBaseURL = 'https://api.x.ai/v1';
     this.openaiModelName = 'gpt-4o';
-    this.geminiModelName = 'gemini-3-flash-preview';
+    this.geminiModelName = 'gemini-1.5-flash';
     this.grokModelName = 'grok-3';
     this.visionModelName = 'gpt-4o'; // For OpenAI vision
     // Optional: Add your Serper API key here for better results
@@ -1563,9 +1563,9 @@ ${text}`;
     }
 
     const platformRules = {
-      linkedin: `Write in the style of real LinkedIn posts: professional but personal. Use a strong opening hook (question, bold statement, or story). Share a clear insight or learning. Keep paragraphs short (1-2 sentences). Optional soft call-to-action or question at the end. Tone: confident, helpful, authentic. No excessive hashtags (0-3 max). Can be one post for the whole reflection or one post per key incident/learning (1-3 posts).`,
-      x: `Write in the style of real X (Twitter) posts: concise, punchy, conversational. STRICT: each post must be under 280 characters. Use line breaks for emphasis. Optional 1-2 relevant hashtags. Can be a single tweet or a short thread (1-3 tweets). Match how people actually tweet: direct, engaging, sometimes witty or reflective.`,
-      reddit: `Write in the style of real Reddit posts: casual, conversational, authentic. As if posting to a subreddit like r/CasualConversation, r/self, or r/DecidingToBeBetter. Can use a conversational opener, "TIL" or "DAE" style if it fits, or a short story. Be genuine and relatable. Can be one post or one per topic/incident (1-3 posts).`
+      linkedin: `Write in the style of real LinkedIn posts: professional but personal. Use a strong opening hook (question, bold statement, or story). Share a clear insight or learning. Keep paragraphs short (1-2 sentences). Optional soft call-to-action or question at the end. Tone: confident, helpful, authentic. No excessive hashtags (0-3 max). Give 2-3 DIFFERENT post options: vary the angle (e.g. one story-led, one insight-led, one question-led). Separate each option with ---.`,
+      x: `Write in the style of real X (Twitter) posts: concise, punchy, conversational. STRICT: each post must be under 280 characters. Use line breaks for emphasis. Optional 1-2 relevant hashtags. Give 2-3 DIFFERENT tweet options: vary tone or focus (e.g. one punchy, one reflective, one with a hook). Separate each option with ---.`,
+      reddit: `Write in the style of real Reddit posts: casual, conversational, authentic. As if posting to r/CasualConversation, r/self, or r/DecidingToBeBetter. Can use a conversational opener, "TIL" or "DAE" style if it fits, or a short story. Be genuine and relatable. Give 2-3 DIFFERENT post options: vary the angle or tone. Separate each option with ---.`
     };
     const platformLabel = platform === 'x' ? 'X (Twitter)' : platform.charAt(0).toUpperCase() + platform.slice(1);
 
@@ -1576,7 +1576,7 @@ ${(reflection || '').trim()}
 
 ${platformRules[platform] || platformRules.linkedin}
 
-Output format: Return ONLY the suggested post(s). Put each post on its own line. Separate multiple posts with a line that contains exactly: ---
+Output format: Return 2 or 3 different post options. Put each post on its own line. Separate options with a line that contains exactly: ---
 Do not add numbers, labels, titles, or explanations. Only the post text. Each post should be ready to copy-paste.`;
 
     let apiUrl, requestBody, headers;
