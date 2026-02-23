@@ -5,6 +5,16 @@ const CalendarPopup = ({ isOpen, onClose, selectedDate, onDateSelect, chatDays =
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [isAnimating, setIsAnimating] = useState(false);
 
+  // Match Community / app theme (THREADS)
+  const THREADS = {
+    bg: '#0F0F0F',
+    bgSecondary: '#121212',
+    text: '#FFFFFF',
+    textSecondary: '#A0A0A0',
+    divider: '#1E1E1E',
+    accent: '#E91E63',
+  };
+
   useEffect(() => {
     if (selectedDate) {
       setCurrentMonth(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1));
@@ -113,33 +123,35 @@ const CalendarPopup = ({ isOpen, onClose, selectedDate, onDateSelect, chatDays =
       <div
         className="relative rounded-2xl p-6 max-w-sm w-full backdrop-blur-lg animate-in zoom-in-95 duration-300"
         style={{
-          backgroundColor: "#262626",
-          boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)",
-          border: "1px solid rgba(255, 255, 255, 0.08)",
+          backgroundColor: THREADS.bgSecondary,
+          boxShadow: "0 8px 32px rgba(0, 0, 0, 0.4)",
+          border: `1px solid ${THREADS.divider}`,
         }}
       >
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <button
             onClick={handlePreviousMonth}
-            className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-gray-700/30 transition-colors"
+            className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:opacity-80"
+            style={{ color: THREADS.text }}
           >
-            <ChevronLeft className="w-5 h-5 text-gray-300" />
+            <ChevronLeft className="w-5 h-5" />
           </button>
           
           <div className="text-center">
-            <h3 className={`text-lg font-semibold text-white transition-opacity duration-150 ${
+            <h3 className={`text-lg font-semibold transition-opacity duration-150 ${
               isAnimating ? 'opacity-0' : 'opacity-100'
-            }`}>
+            }`} style={{ color: THREADS.text }}>
               {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
             </h3>
           </div>
           
           <button
             onClick={handleNextMonth}
-            className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-gray-700/30 transition-colors"
+            className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:opacity-80"
+            style={{ color: THREADS.text }}
           >
-            <ChevronRight className="w-5 h-5 text-gray-300" />
+            <ChevronRight className="w-5 h-5" />
           </button>
         </div>
 
@@ -147,7 +159,7 @@ const CalendarPopup = ({ isOpen, onClose, selectedDate, onDateSelect, chatDays =
         <div className="grid grid-cols-7 gap-1 mb-2">
           {dayNames.map((day) => (
             <div key={day} className="text-center py-2">
-              <span className="text-xs font-medium text-gray-400">{day}</span>
+              <span className="text-xs font-medium" style={{ color: THREADS.textSecondary }}>{day}</span>
             </div>
           ))}
         </div>
@@ -162,21 +174,25 @@ const CalendarPopup = ({ isOpen, onClose, selectedDate, onDateSelect, chatDays =
                 <div className="relative w-full h-full">
                   <button
                     onClick={() => handleDateClick(date)}
-                    className={`w-full h-full rounded-lg flex items-center justify-center text-sm font-medium transition-all duration-200 hover:scale-105 ${
-                      isSelected(date)
-                        ? 'text-black font-bold shadow-lg'
-                        : isToday(date)
-                        ? 'text-white bg-gray-700/50 border border-cyan-400/50'
-                        : 'text-gray-300 hover:bg-gray-700/30 hover:text-white'
-                    }`}
+                    className="w-full h-full rounded-lg flex items-center justify-center text-sm font-medium transition-all duration-200 hover:scale-105 hover:bg-white/10"
                     style={
                       isSelected(date)
                         ? {
-                            backgroundColor: "rgba(129, 201, 149, 0.9)",
-                            boxShadow: "0 4px 20px rgba(0, 0, 0, 0.3)",
-                            border: "1px solid rgba(255, 255, 255, 0.08)",
+                            backgroundColor: THREADS.accent,
+                            color: THREADS.text,
+                            boxShadow: `0 4px 12px ${THREADS.accent}50`,
+                            border: `1px solid ${THREADS.accent}`,
                           }
-                        : {}
+                        : isToday(date)
+                        ? {
+                            color: THREADS.text,
+                            backgroundColor: THREADS.divider,
+                            border: `1px solid ${THREADS.accent}60`,
+                          }
+                        : {
+                            color: THREADS.text,
+                            backgroundColor: 'transparent',
+                          }
                     }
                   >
                     {date.getDate()}
@@ -184,15 +200,14 @@ const CalendarPopup = ({ isOpen, onClose, selectedDate, onDateSelect, chatDays =
                   {/* Activity indicators */}
                   {!isSelected(date) && (
                     <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2 flex space-x-1">
-                      {/* Green circle indicator for chat activity */}
                       {hasChatActivity(date) && (
                         <div 
                           className="rounded-full"
                           style={{
                             width: '5px',
                             height: '5px',
-                            backgroundColor: '#81C995',
-                            boxShadow: '0 0 6px rgba(129, 201, 149, 0.6)',
+                            backgroundColor: THREADS.accent,
+                            boxShadow: `0 0 6px ${THREADS.accent}80`,
                           }}
                         />
                       )}
@@ -212,11 +227,11 @@ const CalendarPopup = ({ isOpen, onClose, selectedDate, onDateSelect, chatDays =
             <div 
               className="w-2 h-2 rounded-full"
               style={{
-                backgroundColor: '#81C995',
-                boxShadow: '0 0 4px rgba(129, 201, 149, 0.6)',
+                backgroundColor: THREADS.accent,
+                boxShadow: `0 0 4px ${THREADS.accent}80`,
               }}
             />
-            <span className="text-gray-400">Chat</span>
+            <span style={{ color: THREADS.textSecondary }}>Chat</span>
           </div>
         </div>
 
@@ -224,10 +239,11 @@ const CalendarPopup = ({ isOpen, onClose, selectedDate, onDateSelect, chatDays =
         <div className="mt-4 flex justify-center">
           <button
             onClick={() => handleDateClick(new Date())}
-            className="px-4 py-2 rounded-xl text-sm font-medium text-white hover:opacity-80 transition-all duration-200"
+            className="px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 hover:opacity-90"
             style={{
-              backgroundColor: "#262626",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
+              backgroundColor: THREADS.accent,
+              color: THREADS.text,
+              border: `1px solid ${THREADS.accent}`,
             }}
           >
             Go to Today
