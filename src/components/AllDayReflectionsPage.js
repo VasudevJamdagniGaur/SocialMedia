@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
-import { ArrowLeft, Zap, Check, Calendar, X, Share2, User, Sun, Moon } from 'lucide-react';
+import { ArrowLeft, Zap, Check, Calendar, X, Share2, Sun, Moon } from 'lucide-react';
 import { getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
 import { getDateId, formatDateForDisplay } from '../utils/dateUtils';
@@ -448,54 +448,19 @@ export default function AllDayReflectionsPage() {
             </h1>
           </div>
           <button
-            onClick={() => navigate('/profile')}
-            className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity overflow-hidden flex-shrink-0"
-            style={{ background: profilePicture ? 'transparent' : (isDarkMode ? THREADS.bgSecondary : '#fff') }}
-            aria-label="Profile"
+            onClick={handleCalendarClick}
+            className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity flex-shrink-0"
+            style={isDarkMode ? { background: THREADS.bgSecondary } : { background: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}
+            aria-label="Search by date"
           >
-            {profilePicture ? (
-              <img src={profilePicture} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <User className="w-5 h-5" style={{ color: isDarkMode ? THREADS.text : '#374151' }} strokeWidth={1.5} />
-            )}
+            <Calendar className="w-5 h-5" style={{ color: isDarkMode ? THREADS.accent : '#87A96B' }} strokeWidth={1.5} />
           </button>
         </header>
 
-        {/* Subtitle + Date search - Community-style bar */}
+        {/* Subtitle - no search bar, date filter via header calendar icon */}
         <p className="text-sm py-2 px-1" style={{ color: isDarkMode ? THREADS.textSecondary : '#6b7280' }}>
           All your day reflections
         </p>
-        <div
-          onClick={handleCalendarClick}
-          className={`rounded-xl px-4 py-3 flex items-center ${selectedDate ? 'justify-between' : 'justify-center'} cursor-pointer transition-opacity hover:opacity-90 mb-4`}
-          style={{
-            background: isDarkMode ? THREADS.bgSecondary : '#fff',
-            border: `1px solid ${isDarkMode ? THREADS.divider : 'rgba(0,0,0,0.08)'}`,
-            boxShadow: isDarkMode ? 'none' : '0 2px 6px rgba(0,0,0,0.06)',
-          }}
-        >
-          <div className={`flex items-center ${selectedDate ? 'gap-2' : 'flex-col gap-0.5'}`}>
-            <Calendar className="w-4 h-4 flex-shrink-0" style={{ color: isDarkMode ? THREADS.accent : '#87A96B' }} />
-            <div className={selectedDate ? '' : 'text-center'}>
-              <div className="text-sm font-medium" style={{ color: isDarkMode ? THREADS.text : '#1f2937' }}>
-                {selectedDate ? formatDateForDisplay(selectedDate) : 'Search by date'}
-              </div>
-              <div className="text-xs" style={{ color: isDarkMode ? THREADS.textSecondary : '#6b7280' }}>
-                {selectedDate ? 'Tap to change date' : 'Tap to select a date'}
-              </div>
-            </div>
-          </div>
-          {selectedDate && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); handleClearDateFilter(); }}
-              className="p-1.5 rounded-full hover:opacity-80 transition-opacity"
-              aria-label="Clear date"
-            >
-              <X className="w-4 h-4" style={{ color: THREADS.textSecondary }} />
-            </button>
-          )}
-        </div>
 
       {/* Reflections List - Community-style flat cards with dividers */}
       {isLoading ? (
