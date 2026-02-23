@@ -1639,32 +1639,32 @@ Do not add numbers, labels, titles, or explanations. Only the post text. Each po
   }
 
   /**
-   * Extract entity-based image search queries from the actual post text (not generic keywords).
-   * Prioritises: public figures, organizations, events, locations. Falls back to contextual scene description.
-   * @param {string} postText - The generated post/suggestion text (e.g. "Listening to Sam Altman at IIT Delhi...")
-   * @returns {Promise<string[]>} - [primaryQuery, fallbackQuery] e.g. ["Sam Altman IIT Delhi interview", "Sam Altman"]
+   * Extract entity-based image search queries and decide Serper vs Pexels.
+   * Use Serper only when the post mentions: public figures, events, companies, specific locations, or interviews/conferences.
+   * Otherwise use Pexels.
+   * @param {string} postText - The generated post/suggestion text
+   * @returns {Promise<{ queries: string[], useSerper: boolean }>} - Search queries and whether to use Serper first
    */
   async getImageSearchQueryForPost(postText) {
     const apiKey = this.geminiApiKey || process.env.REACT_APP_GOOGLE_API_KEY || '';
-    if (!apiKey || !postText?.trim()) return [];
+    const empty = { queries: [], useSerper: false };
+    if (!apiKey || !postText?.trim()) return empty;
 
-    const prompt = `You are extracting image search keywords from a social media post. The goal is to find a REAL photograph that matches the post topic.
+    const prompt = `You are extracting image search keywords from a social media post and deciding which image source to use.
 
-Step 1 – Extract entities from the post:
-- Public figures (e.g. Sam Altman, Elon Musk)
-- Organizations (e.g. IIT Delhi, OpenAI)
-- Events (e.g. interview, conference, summit)
-- Locations (e.g. city, venue name)
+Step 1 – Decide source (first line only):
+- Output exactly "SERPER" (one word) if the post mentions ANY of: public figures (e.g. Sam Altman, Elon Musk), events (e.g. IIT Delhi Summit 2025), companies (OpenAI, Apple, Google), specific locations, or interviews/conferences.
+- Otherwise output exactly "PEXELS".
 
-Step 2 – Output search queries (one per line, no numbering, no quotes):
-- If you found a person AND a place/event: 
-  Line 1: combined query for a photo of that person at that place/event (e.g. "Sam Altman IIT Delhi interview").
-  Line 2: person or main figure only (e.g. "Sam Altman").
+Step 2 – Extract entities and output search queries (one per line, no numbering, no quotes):
+- If you found a person AND a place/event: Line 1: combined query (e.g. "Sam Altman IIT Delhi interview"). Line 2: person only (e.g. "Sam Altman").
 - If only a person: one line with their name.
 - If only a place/event: one line with that.
-- If NO specific person, place, or event: output ONE line that is a concrete, searchable scene description (e.g. "Professional AI conference stage discussion", "tech keynote speaker on stage"). Do NOT use generic mood words like "morning motivation", "inspiration", "growth mindset", "innovation abstract".
+- If NO specific person, place, or event: ONE line that is a concrete, searchable scene description (e.g. "Professional AI conference stage", "tech keynote speaker"). Do NOT use generic mood words like "morning motivation", "inspiration", "growth mindset".
 
-Rules: 2–6 words per line. No quotes. Separate two lines with a single newline. Prefer real entities over generic themes.
+Format:
+Line 1: SERPER or PEXELS
+Line 2+: search queries (2–6 words each, no quotes)
 
 Post text:
 ${(postText || '').trim().slice(0, 600)}`;
@@ -1676,40 +1676,60 @@ ${(postText || '').trim().slice(0, 600)}`;
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.2, maxOutputTokens: 100 }
+          generationConfig: { temperature: 0.2, maxOutputTokens: 120 }
         })
       });
-      if (!res.ok) return [];
+      if (!res.ok) return empty;
       const data = await res.json();
       const text = (data.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '').trim();
-      if (!text) return [];
-      const lines = text.split(/\n/).map(s => s.trim()).filter(s => s.length > 0 && s.length < 120);
-      return lines;
+      if (!text) return empty;
+      const lines = text.split(/\n/).map(s => s.trim()).filter(s => s.length > 0);
+      const first = (lines[0] || '').toUpperCase();
+      const useSerper = first === 'SERPER';
+      const queryLines = lines.slice(1).filter(s => s.length < 120);
+      return { queries: queryLines, useSerper };
     } catch (e) {
-      return [];
+      return empty;
     }
   }
 
   /**
-   * Fetch one image URL for a post. Uses extracted entities (person, place, event) for search.
-   * Never uses random endpoints; always search with query. Prefers real images (Pexels/Serper); fallback Picsum with query-based seed.
+   * Fetch one image URL for a post. Extracts identities/entities from text.
+   * Uses Serper only when the post mentions public figures, events, companies, locations, or interviews/conferences; otherwise Pexels.
+   * Fallback: Picsum with query-based seed.
    * @param {string} postText - The generated post text (or reflection if no suggestions yet)
    * @returns {Promise<string|null>} - Image URL or null
    */
   async fetchImageForReflection(postText) {
     if (!postText?.trim()) return null;
 
-    const queries = await this.getImageSearchQueryForPost(postText);
-    const searchQueries = [...queries].filter(Boolean);
+    const { queries: entityQueries, useSerper } = await this.getImageSearchQueryForPost(postText);
+    const searchQueries = [...(entityQueries || [])].filter(Boolean);
     if (searchQueries.length === 0) {
       const fallback = postText.trim().slice(0, 50).replace(/\s+/g, ' ');
       if (!fallback) return null;
       searchQueries.push(fallback);
     }
 
-    // Try each query in order (entity-based first, then fallback) – search only, no random
     for (const searchQuery of searchQueries) {
       if (!searchQuery) continue;
+
+      if (useSerper && this.serperApiKey) {
+        try {
+          const res = await fetch('https://google.serper.dev/images', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-API-KEY': this.serperApiKey },
+            body: JSON.stringify({ q: searchQuery, num: 1 })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const url = data.images?.[0]?.imageUrl;
+            if (url) return url;
+          }
+        } catch (e) {
+          console.warn('Serper image search failed:', e.message);
+        }
+      }
 
       if (this.pexelsApiKey) {
         try {
@@ -1726,26 +1746,8 @@ ${(postText || '').trim().slice(0, 600)}`;
           console.warn('Pexels image search failed:', e.message);
         }
       }
-
-      if (this.serperApiKey) {
-        try {
-          const res = await fetch('https://google.serper.dev/images', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-API-KEY': this.serperApiKey },
-            body: JSON.stringify({ q: searchQuery, num: 1 })
-          });
-          if (res.ok) {
-            const data = await res.json();
-            const url = data.images?.[0]?.imageUrl;
-            if (url) return url;
-          }
-        } catch (e) {
-          console.warn('Serper image search failed:', e.message);
-        }
-      }
     }
 
-    // Deterministic fallback (query-based seed, not random)
     const seed = encodeURIComponent(String(searchQueries[0] || 'post').slice(0, 50).replace(/\s+/g, '-'));
     return `https://picsum.photos/seed/${seed}/600/340`;
   }
