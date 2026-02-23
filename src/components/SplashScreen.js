@@ -115,7 +115,7 @@ export default function SplashScreen() {
     <div
       className="min-h-screen flex items-center justify-center relative overflow-hidden"
       style={{
-        background: "#131314",
+        background: "#0F0F0F",
       }}
     >
       <div className="absolute inset-0 overflow-hidden">
@@ -213,21 +213,21 @@ export default function SplashScreen() {
         <div
           className="w-24 h-24 rounded-full flex items-center justify-center relative overflow-hidden backdrop-blur-lg"
           style={{
-            backgroundColor: "#262626",
-            boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
+            backgroundColor: "#121212",
+            boxShadow: "0 0 24px rgba(192, 132, 252, 0.35), 0 4px 20px rgba(126, 34, 206, 0.4)",
+            border: "1px solid rgba(168, 85, 247, 0.3)",
           }}
         >
-          <Brain className="w-12 h-12 relative z-10" style={{ color: "#8AB4F8" }} strokeWidth={1.5} />
+          <Brain className="w-12 h-12 relative z-10" style={{ color: "#A855F7" }} strokeWidth={1.5} />
         </div>
         
         {/* Loading indicator */}
         <div className="mt-8 flex justify-center">
-          <div className="w-8 h-1 rounded-full" style={{ backgroundColor: "rgba(129, 201, 149, 0.3)" }}>
+          <div className="w-8 h-1 rounded-full" style={{ backgroundColor: "rgba(126, 34, 206, 0.25)" }}>
             <div 
               className="h-full rounded-full animate-pulse"
               style={{ 
-                backgroundColor: "#81C995",
+                backgroundColor: "#A855F7",
                 width: "100%",
                 animation: "pulse 1.5s ease-in-out infinite"
               }}

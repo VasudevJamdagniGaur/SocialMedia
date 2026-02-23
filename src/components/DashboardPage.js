@@ -555,7 +555,7 @@ export default function DashboardPage() {
           >
             {isDarkMode ?
               <Moon className="w-5 h-5" style={{ color: HUB.accent }} strokeWidth={1.5} /> :
-              <Sun className="w-5 h-5" style={{ color: "#3AD4F8" }} strokeWidth={1.5} />
+              <Sun className="w-5 h-5" style={{ color: HUB.accent }} strokeWidth={1.5} />
             }
           </div>
 
@@ -569,10 +569,10 @@ export default function DashboardPage() {
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
               border: `1px solid ${HUB.divider}`,
             } : {
-              boxShadow: "0 0 0 1px rgba(58, 212, 248, 0.15), 0 4px 12px rgba(58, 212, 248, 0.2)",
+              boxShadow: "0 0 0 1px rgba(168, 85, 247, 0.2), 0 4px 12px rgba(126, 34, 206, 0.25)",
             }}
           >
-            <Brain className="w-7 h-7" style={{ color: isDarkMode ? HUB.accent : "#3AD4F8" }} strokeWidth={1.5} />
+            <Brain className="w-7 h-7" style={{ color: HUB.accent }} strokeWidth={1.5} />
           </div>
 
           {/* Right icon - Profile */}
@@ -596,7 +596,7 @@ export default function DashboardPage() {
                 className="w-full h-full object-cover"
               />
             ) : (
-              <User className="w-5 h-5" style={{ color: isDarkMode ? HUB.accent : "#3AD4F8" }} strokeWidth={1.5} />
+              <User className="w-5 h-5" style={{ color: HUB.accent }} strokeWidth={1.5} />
             )}
           </div>
         </div>
@@ -621,7 +621,7 @@ export default function DashboardPage() {
               onClick={handleCalendarClick}
             >
               <div className="flex items-center justify-center space-x-2 mb-1">
-                <Calendar className="w-4 h-4" style={{ color: isDarkMode ? HUB.accent : "#3AD4F8" }} />
+                <Calendar className="w-4 h-4" style={{ color: HUB.accent }} />
                 <span className="text-sm" style={{ color: isDarkMode ? HUB.textSecondary : '#B0B0B0' }}>Selected Date</span>
               </div>
               <div className="font-semibold" style={{ color: isDarkMode ? HUB.text : '#E5E5E5' }}>{formatDateForDisplay(selectedDate)}</div>
@@ -656,12 +656,12 @@ export default function DashboardPage() {
                 </h2>
                 <p
                   className="text-sm mt-0.5"
-                  style={{ color: isDarkMode ? HUB.accent : '#3AD4F8' }}
+                  style={{ color: HUB.accent }}
                 >
                   {formatDateForDisplay(selectedDate)}
                 </p>
               </div>
-              <ChevronRight className="w-5 h-5 flex-shrink-0" style={{ color: isDarkMode ? HUB.accent : '#3AD4F8' }} strokeWidth={2} />
+              <ChevronRight className="w-5 h-5 flex-shrink-0" style={{ color: HUB.accent }} strokeWidth={2} />
             </div>
 
             <div
@@ -674,9 +674,9 @@ export default function DashboardPage() {
               {isLoadingReflection ? (
                 <div className="flex flex-col items-center justify-center py-10">
                   <div className="flex space-x-1.5 mb-4">
-                    <div className="w-2 h-2 rounded-full animate-bounce" style={{ animationDelay: '0ms', backgroundColor: isDarkMode ? HUB.accent : '#3AD4F8' }} />
-                    <div className="w-2 h-2 rounded-full animate-bounce" style={{ animationDelay: '150ms', backgroundColor: isDarkMode ? HUB.accent : '#3AD4F8' }} />
-                    <div className="w-2 h-2 rounded-full animate-bounce" style={{ animationDelay: '300ms', backgroundColor: isDarkMode ? HUB.accent : '#3AD4F8' }} />
+                    <div className="w-2 h-2 rounded-full animate-bounce" style={{ animationDelay: '0ms', backgroundColor: HUB.accent }} />
+                    <div className="w-2 h-2 rounded-full animate-bounce" style={{ animationDelay: '150ms', backgroundColor: HUB.accent }} />
+                    <div className="w-2 h-2 rounded-full animate-bounce" style={{ animationDelay: '300ms', backgroundColor: HUB.accent }} />
                   </div>
                   <p className="text-sm" style={{ color: isDarkMode ? HUB.textSecondary : '#888888' }}>
                     Preparing...
@@ -691,9 +691,9 @@ export default function DashboardPage() {
                     type="button"
                     onClick={(e) => { e.stopPropagation(); navigate('/share-reflection', { state: { reflection, selectedDate } }); }}
                     className="mt-4 flex items-center justify-center gap-2 rounded-lg py-2.5 px-4 text-sm font-semibold transition-all hover:opacity-90"
-                    style={isDarkMode ? { color: '#FFFFFF', backgroundColor: `${HUB.accent}20`, border: `1px solid ${HUB.accent}50` } : { color: '#1E1E1E', backgroundColor: 'rgba(58, 212, 248, 0.2)', border: '1px solid rgba(58, 212, 248, 0.5)' }}
+                    style={isDarkMode ? { color: '#FFFFFF', backgroundColor: `${HUB.accent}20`, border: `1px solid ${HUB.accent}50` } : { color: '#FFFFFF', backgroundColor: 'rgba(168, 85, 247, 0.2)', border: '1px solid rgba(168, 85, 247, 0.5)' }}
                   >
-                    <Share2 className="w-4 h-4" style={{ color: isDarkMode ? '#FFFFFF' : '#3AD4F8' }} strokeWidth={2} />
+                    <Share2 className="w-4 h-4" style={{ color: isDarkMode ? '#FFFFFF' : HUB.accent }} strokeWidth={2} />
                     Share to HUB
                   </button>
                 </div>
@@ -711,9 +711,9 @@ export default function DashboardPage() {
                       color: HUB.text,
                       border: `1px solid ${HUB.accent}50`,
                     } : {
-                      backgroundColor: 'rgba(58, 212, 248, 0.2)',
-                      color: '#E5E5E5',
-                      border: '1px solid rgba(58, 212, 248, 0.5)',
+                      backgroundColor: `${HUB.accent}20`,
+                      color: HUB.text,
+                      border: `1px solid ${HUB.accent}50`,
                     }}
                   >
                     Look back at this day
@@ -734,7 +734,7 @@ export default function DashboardPage() {
               border: isDarkMode ? `1px solid ${HUB.divider}` : "1px solid rgba(255, 255, 255, 0.08)",
             }}
           >
-            <MessageCircle className="w-5 h-5" style={{ color: isDarkMode ? HUB.accent : '#3AD4F8' }} />
+            <MessageCircle className="w-5 h-5" style={{ color: HUB.accent }} />
             <span>Chat with Deite</span>
           </button>
 
@@ -747,7 +747,7 @@ export default function DashboardPage() {
               border: isDarkMode ? `1px solid ${HUB.divider}` : "1px solid rgba(255, 255, 255, 0.08)",
             }}
           >
-            <MessageCircle className="w-5 h-5" style={{ color: isDarkMode ? HUB.accent : '#3AD4F8' }} />
+            <MessageCircle className="w-5 h-5" style={{ color: HUB.accent }} />
             <span>Whisper Session</span>
           </button>
         </div>

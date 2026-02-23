@@ -38,7 +38,7 @@ export default function LandingPage() {
     <div
       className="min-h-screen flex flex-col items-center justify-center px-6 relative overflow-hidden slide-up"
       style={{
-        background: "#131314",
+        background: "#0F0F0F",
       }}
     >
       <div className="absolute inset-0 overflow-hidden">
@@ -145,12 +145,12 @@ export default function LandingPage() {
           <div
             className="w-24 h-24 rounded-full flex items-center justify-center relative overflow-hidden backdrop-blur-lg"
             style={{
-              backgroundColor: "#262626",
-              boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
+              backgroundColor: "#121212",
+              boxShadow: "0 0 24px rgba(192, 132, 252, 0.35), 0 4px 20px rgba(126, 34, 206, 0.4)",
+              border: "1px solid rgba(168, 85, 247, 0.3)",
             }}
           >
-            <Brain className="w-12 h-12 relative z-10" style={{ color: "#3AD4F8" }} strokeWidth={1.5} />
+            <Brain className="w-12 h-12 relative z-10" style={{ color: "#A855F7" }} strokeWidth={1.5} />
           </div>
         </div>
 
@@ -164,10 +164,10 @@ export default function LandingPage() {
             onClick={handleGetStarted}
             className="px-8 py-3 font-semibold rounded-full hover:shadow-lg transition-all duration-300 hover:scale-105 backdrop-blur-lg relative overflow-hidden"
             style={{
-              backgroundColor: "#262626",
-              boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
+              backgroundColor: "#A855F7",
+              boxShadow: "0 0 20px rgba(192, 132, 252, 0.3), 0 4px 16px rgba(126, 34, 206, 0.4)",
               color: "#FFFFFF",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
+              border: "1px solid rgba(168, 85, 247, 0.5)",
             }}
           >
             Get Started
