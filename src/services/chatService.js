@@ -1640,8 +1640,8 @@ Do not add numbers, labels, titles, or explanations. Only the post text. Each po
 
   /**
    * Extract entity-based image search queries and decide Serper vs Pexels.
-   * Use Serper only when the post mentions: public figures, events, companies, specific locations, or interviews/conferences.
-   * Otherwise use Pexels.
+   * Extract entities (person names, places, events, companies) from the post text.
+   * Use Serper when the post contains any person name or place name (or events, companies, interviews/conferences); otherwise Pexels.
    * @param {string} postText - The generated post/suggestion text
    * @returns {Promise<{ queries: string[], useSerper: boolean }>} - Search queries and whether to use Serper first
    */
@@ -1650,17 +1650,23 @@ Do not add numbers, labels, titles, or explanations. Only the post text. Each po
     const empty = { queries: [], useSerper: false };
     if (!apiKey || !postText?.trim()) return empty;
 
-    const prompt = `You are extracting image search keywords from a social media post and deciding which image source to use.
+    const prompt = `You are extracting entities from a social media post and deciding which image source to use.
 
-Step 1 – Decide source (first line only):
-- Output exactly "SERPER" (one word) if the post mentions ANY of: public figures (e.g. Sam Altman, Elon Musk), events (e.g. IIT Delhi Summit 2025), companies (OpenAI, Apple, Google), specific locations, or interviews/conferences.
-- Otherwise output exactly "PEXELS".
+Step 1 – Extract entities from the post:
+- Person names (e.g. Sam Altman, Elon Musk)
+- Place/location names (e.g. IIT Delhi, San Francisco)
+- Events (e.g. IIT Delhi Summit 2025, conference, interview)
+- Companies (OpenAI, Apple, Google)
 
-Step 2 – Extract entities and output search queries (one per line, no numbering, no quotes):
+Step 2 – Decide source (first line of your response only):
+- You MUST output exactly "SERPER" if the post contains ANY named person OR ANY specific place/location OR events, companies, or interviews/conferences. Examples: "Sam Altman", "IIT Delhi", "interview at IIT Delhi" → SERPER.
+- Output exactly "PEXELS" only when there is NO person name, NO place name, NO event, and NO company—just generic or mood-based content.
+
+Step 3 – Output search queries (one per line, no numbering, no quotes):
 - If you found a person AND a place/event: Line 1: combined query (e.g. "Sam Altman IIT Delhi interview"). Line 2: person only (e.g. "Sam Altman").
 - If only a person: one line with their name.
 - If only a place/event: one line with that.
-- If NO specific person, place, or event: ONE line that is a concrete, searchable scene description (e.g. "Professional AI conference stage", "tech keynote speaker"). Do NOT use generic mood words like "morning motivation", "inspiration", "growth mindset".
+- If NO specific person, place, or event: ONE line that is a concrete, searchable scene description. Do NOT use generic mood words like "morning motivation", "inspiration", "growth mindset".
 
 Format:
 Line 1: SERPER or PEXELS
