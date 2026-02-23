@@ -688,10 +688,10 @@ export default function DashboardPage() {
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); navigate('/share-reflection', { state: { reflection, selectedDate } }); }}
-                    className="mt-4 flex items-center justify-center gap-2 rounded-lg py-2.5 px-4 text-sm font-medium transition-all hover:opacity-90"
-                    style={isDarkMode ? { color: '#1E1E1E', backgroundColor: `${HUB.accent}20`, border: `1px solid ${HUB.accent}50` } : { color: '#1E1E1E', backgroundColor: 'rgba(58, 212, 248, 0.2)', border: '1px solid rgba(58, 212, 248, 0.5)' }}
+                    className="mt-4 flex items-center justify-center gap-2 rounded-lg py-2.5 px-4 text-sm font-semibold transition-all hover:opacity-90"
+                    style={isDarkMode ? { color: '#FFFFFF', backgroundColor: `${HUB.accent}20`, border: `1px solid ${HUB.accent}50` } : { color: '#1E1E1E', backgroundColor: 'rgba(58, 212, 248, 0.2)', border: '1px solid rgba(58, 212, 248, 0.5)' }}
                   >
-                    <Share2 className="w-4 h-4" style={{ color: isDarkMode ? HUB.accent : '#3AD4F8' }} strokeWidth={2} />
+                    <Share2 className="w-4 h-4" style={{ color: isDarkMode ? '#FFFFFF' : '#3AD4F8' }} strokeWidth={2} />
                     Share to HUB
                   </button>
                 </div>
