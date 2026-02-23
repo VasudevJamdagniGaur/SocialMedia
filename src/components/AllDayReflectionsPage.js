@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
-import { ArrowLeft, Zap, Check, Calendar, X, Share2 } from 'lucide-react';
+import { ArrowLeft, Zap, Check, Calendar, X, Share2, User, Sun, Moon } from 'lucide-react';
 import { getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
 import { getDateId, formatDateForDisplay } from '../utils/dateUtils';
@@ -11,7 +11,7 @@ import CalendarPopup from './CalendarPopup';
 
 export default function AllDayReflectionsPage() {
   const navigate = useNavigate();
-  const { isDarkMode } = useTheme();
+  const { isDarkMode, toggleTheme } = useTheme();
   const [reflections, setReflections] = useState([]);
   const [filteredReflections, setFilteredReflections] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -403,162 +403,161 @@ export default function AllDayReflectionsPage() {
   }, []);
 
   // When share modal opens, init editable text (original Day's Reflect is never changed)
+  const THREADS = {
+    bg: '#0F0F0F',
+    bgSecondary: '#121212',
+    text: '#FFFFFF',
+    textSecondary: '#A0A0A0',
+    divider: '#1E1E1E',
+    accent: '#E91E63',
+  };
+
   return (
     <div
-      className="min-h-screen px-6 py-8 pb-20 relative overflow-hidden"
+      className="min-h-screen relative overflow-hidden"
       style={{
-        background: isDarkMode
-          ? "#131314"
-          : "#B5C4AE"
+        background: isDarkMode ? THREADS.bg : '#B5C4AE',
+        paddingTop: 0,
+        paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))',
       }}
     >
-      {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center space-x-3 mb-2">
+      <div className="relative z-10 mx-auto w-full max-w-[600px] px-4 sm:px-5">
+        {/* Sticky header - same layout as Community: Theme | Logo/Title | Profile */}
+        <header
+          className="sticky top-0 z-20 flex items-center justify-between px-1 py-3 min-h-[52px]"
+          style={{
+            paddingTop: 'max(12px, env(safe-area-inset-top, 0px))',
+            background: isDarkMode ? THREADS.bg : 'rgba(250,250,248,0.95)',
+            borderBottom: `1px solid ${isDarkMode ? THREADS.divider : 'rgba(0,0,0,0.08)'}`,
+          }}
+        >
           <button
             onClick={() => navigate('/dashboard')}
-            className={`w-10 h-10 rounded-full flex items-center justify-center ${
-              isDarkMode ? 'hover:bg-gray-800/50' : 'hover:bg-gray-100'
-            } transition-colors`}
+            className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity flex-shrink-0"
+            style={isDarkMode ? { background: THREADS.bgSecondary } : { background: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}
+            aria-label="Back"
           >
-            <ArrowLeft className={`w-5 h-5 ${isDarkMode ? 'text-white' : 'text-gray-800'}`} />
+            <ArrowLeft className="w-5 h-5" style={{ color: isDarkMode ? THREADS.text : '#374151' }} strokeWidth={1.5} />
           </button>
-          <div className="flex items-center space-x-2">
-            <div
-              className="w-8 h-8 rounded-full flex items-center justify-center"
-              style={{
-                backgroundColor: isDarkMode ? "#FDD663" : "#E6B3BA",
-                boxShadow: isDarkMode ? "0 4px 16px rgba(0, 0, 0, 0.15)" : "none",
-              }}
-            >
-              <Zap className={`w-4 h-4 ${isDarkMode ? 'text-black' : 'text-white'}`} />
+          <div className="flex items-center justify-center gap-2 flex-1 min-w-0">
+            <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: isDarkMode ? THREADS.bgSecondary : '#fff', boxShadow: isDarkMode ? 'none' : '0 2px 6px rgba(0,0,0,0.06)' }}>
+              <Zap className="w-4 h-4" style={{ color: isDarkMode ? THREADS.accent : '#87A96B' }} strokeWidth={1.5} />
             </div>
-            <h1 className={`text-xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+            <h1 className="text-lg font-semibold truncate" style={{ color: isDarkMode ? THREADS.text : '#1f2937' }}>
               Day's Reflect
             </h1>
           </div>
-        </div>
-        <p className={`text-sm ml-14 mb-3 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+          <button
+            onClick={() => navigate('/profile')}
+            className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity overflow-hidden flex-shrink-0"
+            style={{ background: profilePicture ? 'transparent' : (isDarkMode ? THREADS.bgSecondary : '#fff') }}
+            aria-label="Profile"
+          >
+            {profilePicture ? (
+              <img src={profilePicture} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <User className="w-5 h-5" style={{ color: isDarkMode ? THREADS.text : '#374151' }} strokeWidth={1.5} />
+            )}
+          </button>
+        </header>
+
+        {/* Subtitle + Date search - Community-style bar */}
+        <p className="text-sm py-2 px-1" style={{ color: isDarkMode ? THREADS.textSecondary : '#6b7280' }}>
           All your day reflections
         </p>
-        
-        {/* Date Search */}
-        <div className="ml-14 mb-4">
-          <div
-            onClick={handleCalendarClick}
-            className={`rounded-lg px-3 py-2 flex items-center ${selectedDate ? 'justify-between' : 'justify-center'} cursor-pointer hover:opacity-80 transition-opacity ${
-              isDarkMode ? 'backdrop-blur-md' : 'bg-white'
-            }`}
-            style={isDarkMode ? {
-              backgroundColor: "#262626",
-              boxShadow: "0 2px 8px rgba(0, 0, 0, 0.15)",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
-            } : {
-              boxShadow: "0 2px 6px rgba(0, 0, 0, 0.08)",
-            }}
-          >
-            <div className={`flex items-center ${selectedDate ? 'space-x-2' : 'flex-col space-y-1'}`}>
-              <Calendar className="w-4 h-4" style={{ color: isDarkMode ? "#7DD3C0" : "#87A96B" }} />
-              <div className={selectedDate ? '' : 'text-center'}>
-                <div className={`text-sm font-medium ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                  {selectedDate ? formatDateForDisplay(selectedDate) : 'Search by date'}
-                </div>
-                <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  {selectedDate ? 'Tap to change date' : 'Tap to select a date'}
-                </div>
+        <div
+          onClick={handleCalendarClick}
+          className={`rounded-xl px-4 py-3 flex items-center ${selectedDate ? 'justify-between' : 'justify-center'} cursor-pointer transition-opacity hover:opacity-90 mb-4`}
+          style={{
+            background: isDarkMode ? THREADS.bgSecondary : '#fff',
+            border: `1px solid ${isDarkMode ? THREADS.divider : 'rgba(0,0,0,0.08)'}`,
+            boxShadow: isDarkMode ? 'none' : '0 2px 6px rgba(0,0,0,0.06)',
+          }}
+        >
+          <div className={`flex items-center ${selectedDate ? 'gap-2' : 'flex-col gap-0.5'}`}>
+            <Calendar className="w-4 h-4 flex-shrink-0" style={{ color: isDarkMode ? THREADS.accent : '#87A96B' }} />
+            <div className={selectedDate ? '' : 'text-center'}>
+              <div className="text-sm font-medium" style={{ color: isDarkMode ? THREADS.text : '#1f2937' }}>
+                {selectedDate ? formatDateForDisplay(selectedDate) : 'Search by date'}
+              </div>
+              <div className="text-xs" style={{ color: isDarkMode ? THREADS.textSecondary : '#6b7280' }}>
+                {selectedDate ? 'Tap to change date' : 'Tap to select a date'}
               </div>
             </div>
-            {selectedDate && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleClearDateFilter();
-                }}
-                className="ml-2 p-1 rounded-full hover:opacity-80 transition-opacity"
-              >
-                <X className={`w-4 h-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
-              </button>
-            )}
           </div>
+          {selectedDate && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); handleClearDateFilter(); }}
+              className="p-1.5 rounded-full hover:opacity-80 transition-opacity"
+              aria-label="Clear date"
+            >
+              <X className="w-4 h-4" style={{ color: THREADS.textSecondary }} />
+            </button>
+          )}
         </div>
-      </div>
 
-      {/* Reflections List */}
+      {/* Reflections List - Community-style flat cards with dividers */}
       {isLoading ? (
         <div className="flex flex-col items-center justify-center py-12">
           <div className="flex space-x-1 mb-3">
-            <div className={`w-2 h-2 rounded-full animate-bounce ${isDarkMode ? 'bg-gray-400' : 'bg-gray-500'}`} style={{ animationDelay: '0ms' }}></div>
-            <div className={`w-2 h-2 rounded-full animate-bounce ${isDarkMode ? 'bg-gray-400' : 'bg-gray-500'}`} style={{ animationDelay: '150ms' }}></div>
-            <div className={`w-2 h-2 rounded-full animate-bounce ${isDarkMode ? 'bg-gray-400' : 'bg-gray-500'}`} style={{ animationDelay: '300ms' }}></div>
+            <div className="w-2 h-2 rounded-full animate-bounce" style={{ animationDelay: '0ms', background: isDarkMode ? THREADS.accent : '#87A96B' }} />
+            <div className="w-2 h-2 rounded-full animate-bounce" style={{ animationDelay: '150ms', background: isDarkMode ? THREADS.accent : '#87A96B' }} />
+            <div className="w-2 h-2 rounded-full animate-bounce" style={{ animationDelay: '300ms', background: isDarkMode ? THREADS.accent : '#87A96B' }} />
           </div>
-          <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+          <p className="text-sm" style={{ color: isDarkMode ? THREADS.textSecondary : '#6b7280' }}>
             Loading reflections...
           </p>
         </div>
       ) : filteredReflections.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12">
+        <div className="flex flex-col items-center justify-center py-12 px-4">
           <div
-            className={`w-16 h-16 rounded-lg flex items-center justify-center mb-4 ${
-              isDarkMode ? 'backdrop-blur-md' : 'bg-white'
-            }`}
-            style={isDarkMode ? {
-              backgroundColor: "rgba(28, 31, 46, 0.5)",
-              boxShadow: "inset 0 0 20px rgba(125, 211, 192, 0.12), 0 8px 32px rgba(125, 211, 192, 0.08)",
-              border: "1px solid rgba(125, 211, 192, 0.18)",
-            } : {
-              boxShadow: "0 2px 6px rgba(0, 0, 0, 0.06)",
-            }}
+            className="w-16 h-16 rounded-full flex items-center justify-center mb-4"
+            style={{ background: isDarkMode ? THREADS.bgSecondary : 'rgba(255,255,255,0.8)', border: `1px solid ${isDarkMode ? THREADS.divider : 'rgba(0,0,0,0.08)'}` }}
           >
-            <span className="text-3xl">🌿</span>
+            <Zap className="w-8 h-8" style={{ color: isDarkMode ? THREADS.accent : '#87A96B' }} />
           </div>
-          <p className={`text-sm text-center ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+          <p className="text-sm text-center" style={{ color: isDarkMode ? THREADS.textSecondary : '#6b7280' }}>
             {selectedDate ? 'No reflection found for the selected date.' : 'No reflections yet. Start chatting with Deite to generate reflections!'}
           </p>
         </div>
       ) : (
-        <div className="space-y-3 max-w-sm mx-auto">
-          {filteredReflections.map((reflection) => (
+        <div className="rounded-2xl overflow-hidden" style={{ background: isDarkMode ? THREADS.bg : '#fff', border: `1px solid ${isDarkMode ? THREADS.divider : 'rgba(0,0,0,0.08)'}` }}>
+          {filteredReflections.map((reflection, index) => (
             <div
               key={reflection.id}
               onClick={() => handleReflectionClick(reflection)}
-              className={`rounded-2xl p-4 relative overflow-hidden cursor-pointer transition-opacity hover:opacity-90 ${
-                isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
-              }`}
-              style={isDarkMode ? {
-                backgroundColor: "#262626",
-                boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-                border: "1px solid rgba(255, 255, 255, 0.08)",
-              } : {
-                boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)",
+              className="px-4 py-4 cursor-pointer transition-[background] duration-150 hover:bg-white/[0.03] active:bg-white/[0.05]"
+              style={{
+                borderTop: index === 0 ? 'none' : `1px solid ${THREADS.divider}`,
               }}
             >
               <div className="flex items-start gap-3">
-                <div className="flex-shrink-0 mt-1">
-                  <Check className={`w-4 h-4 ${isDarkMode ? 'text-[#81C995]' : 'text-[#87A96B]'}`} />
+                <div className="flex-shrink-0 mt-0.5">
+                  <Check className="w-4 h-4" style={{ color: isDarkMode ? THREADS.accent : '#22c55e' }} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className={`text-xs font-medium mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  <div className="text-xs font-medium mb-1" style={{ color: isDarkMode ? THREADS.textSecondary : '#6b7280' }}>
                     {formatReflectionDate(reflection)}
                   </div>
-                  <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-700'} line-clamp-3`}>
+                  <p className="text-[15px] leading-snug line-clamp-3" style={{ color: isDarkMode ? THREADS.text : '#1f2937' }}>
                     {reflection.reflection}
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); navigate('/share-reflection', { state: { reflectionToShare: reflection } }); }}
-                  className={`flex-shrink-0 p-2 rounded-full transition-opacity hover:opacity-90 ${
-                    isDarkMode ? 'hover:bg-white/10' : 'hover:bg-black/5'
-                  }`}
+                  className="flex-shrink-0 p-2 rounded-full transition-opacity hover:opacity-80"
                   title="Share to HUB"
                 >
-                  <Share2 className={`w-4 h-4 ${isDarkMode ? 'text-[#7DD3C0]' : 'text-[#87A96B]'}`} strokeWidth={2} />
+                  <Share2 className="w-4 h-4" style={{ color: THREADS.accent }} strokeWidth={2} />
                 </button>
               </div>
             </div>
           ))}
         </div>
       )}
+      </div>
 
       {/* Calendar Popup */}
       <CalendarPopup
@@ -569,60 +568,49 @@ export default function AllDayReflectionsPage() {
         chatDays={reflectionDays}
       />
 
-      {/* Reflection Detail Modal */}
+      {/* Reflection Detail Modal - Community-style */}
       {selectedReflection && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+          style={{ backgroundColor: 'rgba(0, 0, 0, 0.6)' }}
           onClick={() => {
             setSelectedReflection(null);
             setMoodData(null);
           }}
         >
           <div
-            className={`rounded-2xl p-6 w-full max-w-sm relative max-h-[90vh] overflow-y-auto ${
-              isDarkMode ? 'backdrop-blur-lg' : 'bg-white'
-            }`}
-            style={isDarkMode ? {
-              backgroundColor: "#262626",
-              boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)",
-              border: "1px solid rgba(255, 255, 255, 0.1)",
-            } : {
-              boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
+            className="rounded-2xl p-6 w-full max-w-sm relative max-h-[90vh] overflow-y-auto"
+            style={{
+              background: isDarkMode ? THREADS.bgSecondary : '#fff',
+              border: `1px solid ${isDarkMode ? THREADS.divider : 'rgba(0,0,0,0.08)'}`,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
             }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
             <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center gap-2">
                 <div
                   className="w-8 h-8 rounded-full flex items-center justify-center"
-                  style={{
-                    backgroundColor: isDarkMode ? "#FDD663" : "#E6B3BA",
-                    boxShadow: isDarkMode ? "0 4px 16px rgba(0, 0, 0, 0.15)" : "none",
-                  }}
+                  style={{ background: isDarkMode ? THREADS.accent + '30' : 'rgba(135,169,107,0.2)' }}
                 >
-                  <Zap className={`w-4 h-4 ${isDarkMode ? 'text-black' : 'text-white'}`} />
+                  <Zap className="w-4 h-4" style={{ color: isDarkMode ? THREADS.accent : '#87A96B' }} />
                 </div>
-                <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                <h2 className="text-lg font-semibold" style={{ color: isDarkMode ? THREADS.text : '#1f2937' }}>
                   Day's Reflect
                 </h2>
               </div>
               <button
-                onClick={() => {
-                  setSelectedReflection(null);
-                  setMoodData(null);
-                }}
-                className={`p-1 rounded-full hover:opacity-80 transition-opacity ${
-                  isDarkMode ? 'hover:bg-gray-800/50' : 'hover:bg-gray-100'
-                }`}
+                onClick={() => { setSelectedReflection(null); setMoodData(null); }}
+                className="p-1.5 rounded-full hover:opacity-80 transition-opacity"
+                style={{ color: isDarkMode ? THREADS.textSecondary : '#6b7280' }}
               >
-                <X className={`w-5 h-5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Date */}
-            <div className={`text-xs font-medium mb-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+            <div className="text-xs font-medium mb-4" style={{ color: isDarkMode ? THREADS.textSecondary : '#6b7280' }}>
               {formatReflectionDate(selectedReflection)}
             </div>
 
@@ -630,126 +618,76 @@ export default function AllDayReflectionsPage() {
             {isLoadingMood ? (
               <div className="mb-4 flex items-center justify-center py-4">
                 <div className="flex space-x-1">
-                  <div className={`w-2 h-2 rounded-full animate-bounce ${isDarkMode ? 'bg-gray-400' : 'bg-gray-500'}`} style={{ animationDelay: '0ms' }}></div>
-                  <div className={`w-2 h-2 rounded-full animate-bounce ${isDarkMode ? 'bg-gray-400' : 'bg-gray-500'}`} style={{ animationDelay: '150ms' }}></div>
-                  <div className={`w-2 h-2 rounded-full animate-bounce ${isDarkMode ? 'bg-gray-400' : 'bg-gray-500'}`} style={{ animationDelay: '300ms' }}></div>
+                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ animationDelay: '0ms', background: THREADS.accent }} />
+                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ animationDelay: '150ms', background: THREADS.accent }} />
+                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ animationDelay: '300ms', background: THREADS.accent }} />
                 </div>
               </div>
             ) : moodData ? (
               <div className="mb-6 space-y-3">
-                <h3 className={`text-sm font-semibold mb-3 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                <h3 className="text-sm font-semibold mb-3" style={{ color: isDarkMode ? THREADS.text : '#374151' }}>
                   Emotional Metrics
                 </h3>
                 <div className="grid grid-cols-2 gap-3">
                   {/* Happiness */}
-                  <div className={`p-3 rounded-lg ${isDarkMode ? 'bg-gray-800/50' : 'bg-gray-100'}`}>
+                  <div className="p-3 rounded-lg" style={{ background: isDarkMode ? 'rgba(255,255,255,0.06)' : '#f3f4f6' }}>
                     <div className="flex items-center justify-between mb-1">
-                      <span className={`text-xs font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                        Happiness
-                      </span>
-                      <span className={`text-sm font-bold ${isDarkMode ? 'text-[#81C995]' : 'text-[#87A96B]'}`}>
-                        {moodData.happiness}%
-                      </span>
+                      <span className="text-xs font-medium" style={{ color: isDarkMode ? THREADS.textSecondary : '#6b7280' }}>Happiness</span>
+                      <span className="text-sm font-bold" style={{ color: THREADS.accent }}>{moodData.happiness}%</span>
                     </div>
-                    <div className={`h-2 rounded-full ${isDarkMode ? 'bg-gray-700' : 'bg-gray-200'}`}>
-                      <div
-                        className="h-2 rounded-full transition-all"
-                        style={{
-                          width: `${moodData.happiness}%`,
-                          backgroundColor: '#81C995'
-                        }}
-                      />
+                    <div className="h-2 rounded-full" style={{ background: isDarkMode ? THREADS.divider : '#e5e7eb' }}>
+                      <div className="h-2 rounded-full transition-all" style={{ width: `${moodData.happiness}%`, backgroundColor: THREADS.accent }} />
                     </div>
                   </div>
-
                   {/* Energy */}
-                  <div className={`p-3 rounded-lg ${isDarkMode ? 'bg-gray-800/50' : 'bg-gray-100'}`}>
+                  <div className="p-3 rounded-lg" style={{ background: isDarkMode ? 'rgba(255,255,255,0.06)' : '#f3f4f6' }}>
                     <div className="flex items-center justify-between mb-1">
-                      <span className={`text-xs font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                        Energy
-                      </span>
-                      <span className={`text-sm font-bold ${isDarkMode ? 'text-[#8AB4F8]' : 'text-[#87A96B]'}`}>
-                        {moodData.energy}%
-                      </span>
+                      <span className="text-xs font-medium" style={{ color: isDarkMode ? THREADS.textSecondary : '#6b7280' }}>Energy</span>
+                      <span className="text-sm font-bold" style={{ color: THREADS.accent }}>{moodData.energy}%</span>
                     </div>
-                    <div className={`h-2 rounded-full ${isDarkMode ? 'bg-gray-700' : 'bg-gray-200'}`}>
-                      <div
-                        className="h-2 rounded-full transition-all"
-                        style={{
-                          width: `${moodData.energy}%`,
-                          backgroundColor: '#8AB4F8'
-                        }}
-                      />
+                    <div className="h-2 rounded-full" style={{ background: isDarkMode ? THREADS.divider : '#e5e7eb' }}>
+                      <div className="h-2 rounded-full transition-all" style={{ width: `${moodData.energy}%`, backgroundColor: THREADS.accent }} />
                     </div>
                   </div>
-
                   {/* Anxiety */}
-                  <div className={`p-3 rounded-lg ${isDarkMode ? 'bg-gray-800/50' : 'bg-gray-100'}`}>
+                  <div className="p-3 rounded-lg" style={{ background: isDarkMode ? 'rgba(255,255,255,0.06)' : '#f3f4f6' }}>
                     <div className="flex items-center justify-between mb-1">
-                      <span className={`text-xs font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                        Anxiety
-                      </span>
-                      <span className={`text-sm font-bold ${isDarkMode ? 'text-[#E6B3BA]' : 'text-[#E6B3BA]'}`}>
-                        {moodData.anxiety}%
-                      </span>
+                      <span className="text-xs font-medium" style={{ color: isDarkMode ? THREADS.textSecondary : '#6b7280' }}>Anxiety</span>
+                      <span className="text-sm font-bold" style={{ color: THREADS.accent }}>{moodData.anxiety}%</span>
                     </div>
-                    <div className={`h-2 rounded-full ${isDarkMode ? 'bg-gray-700' : 'bg-gray-200'}`}>
-                      <div
-                        className="h-2 rounded-full transition-all"
-                        style={{
-                          width: `${moodData.anxiety}%`,
-                          backgroundColor: '#E6B3BA'
-                        }}
-                      />
+                    <div className="h-2 rounded-full" style={{ background: isDarkMode ? THREADS.divider : '#e5e7eb' }}>
+                      <div className="h-2 rounded-full transition-all" style={{ width: `${moodData.anxiety}%`, backgroundColor: THREADS.accent }} />
                     </div>
                   </div>
-
                   {/* Stress */}
-                  <div className={`p-3 rounded-lg ${isDarkMode ? 'bg-gray-800/50' : 'bg-gray-100'}`}>
+                  <div className="p-3 rounded-lg" style={{ background: isDarkMode ? 'rgba(255,255,255,0.06)' : '#f3f4f6' }}>
                     <div className="flex items-center justify-between mb-1">
-                      <span className={`text-xs font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                        Stress
-                      </span>
-                      <span className={`text-sm font-bold ${isDarkMode ? 'text-[#FDD663]' : 'text-[#FDD663]'}`}>
-                        {moodData.stress}%
-                      </span>
+                      <span className="text-xs font-medium" style={{ color: isDarkMode ? THREADS.textSecondary : '#6b7280' }}>Stress</span>
+                      <span className="text-sm font-bold" style={{ color: THREADS.accent }}>{moodData.stress}%</span>
                     </div>
-                    <div className={`h-2 rounded-full ${isDarkMode ? 'bg-gray-700' : 'bg-gray-200'}`}>
-                      <div
-                        className="h-2 rounded-full transition-all"
-                        style={{
-                          width: `${moodData.stress}%`,
-                          backgroundColor: '#FDD663'
-                        }}
-                      />
+                    <div className="h-2 rounded-full" style={{ background: isDarkMode ? THREADS.divider : '#e5e7eb' }}>
+                      <div className="h-2 rounded-full transition-all" style={{ width: `${moodData.stress}%`, backgroundColor: THREADS.accent }} />
                     </div>
                   </div>
                 </div>
               </div>
             ) : (
-              <div className={`mb-6 p-3 rounded-lg ${isDarkMode ? 'bg-gray-800/30' : 'bg-gray-100'}`}>
-                <p className={`text-xs text-center ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
-                  No emotional metrics available for this date
-                </p>
+              <div className="mb-6 p-3 rounded-lg" style={{ background: isDarkMode ? 'rgba(255,255,255,0.04)' : '#f3f4f6' }}>
+                <p className="text-xs text-center" style={{ color: THREADS.textSecondary }}>No emotional metrics available for this date</p>
               </div>
             )}
 
             {/* Reflection Content */}
             <div className="mb-4">
-              <h3 className={`text-sm font-semibold mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                Reflection
-              </h3>
-              <div className={`p-4 rounded-lg ${isDarkMode ? 'bg-gray-800/50' : 'bg-gray-100'}`}>
-                <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  {selectedReflection.reflection}
-                </p>
+              <h3 className="text-sm font-semibold mb-2" style={{ color: isDarkMode ? THREADS.text : '#374151' }}>Reflection</h3>
+              <div className="p-4 rounded-lg" style={{ background: isDarkMode ? 'rgba(255,255,255,0.06)' : '#f3f4f6', border: `1px solid ${isDarkMode ? THREADS.divider : 'rgba(0,0,0,0.08)'}` }}>
+                <p className="text-sm leading-relaxed" style={{ color: isDarkMode ? THREADS.text : '#374151' }}>{selectedReflection.reflection}</p>
               </div>
               <button
                 type="button"
                 onClick={() => navigate('/share-reflection', { state: { reflectionToShare: selectedReflection } })}
-                className={`mt-3 w-full flex items-center justify-center gap-2 rounded-xl py-3 px-4 text-sm font-medium transition-all hover:opacity-90 ${
-                  isDarkMode ? 'text-[#7DD3C0] bg-white/5 border border-white/10' : 'text-[#87A96B] bg-black/5 border border-black/10'
-                }`}
+                className="mt-3 w-full flex items-center justify-center gap-2 rounded-xl py-3 px-4 text-sm font-semibold transition-all hover:opacity-90"
+                style={{ background: THREADS.accent, color: '#fff', border: `1px solid ${THREADS.accent}` }}
               >
                 <Share2 className="w-4 h-4" strokeWidth={2} />
                 Share to HUB
