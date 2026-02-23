@@ -1639,20 +1639,27 @@ Do not add numbers, labels, titles, or explanations. Only the post text. Each po
   }
 
   /**
-   * Get a short image search query from reflection text using AI (for suggestion images).
+   * Get image search queries from reflection text: prioritise "person + place", then person/main subject only.
    * @param {string} reflection - The day's reflection text
-   * @returns {Promise<string|null>} - Search query string or null
+   * @returns {Promise<string[]>} - [primaryQuery, fallbackQuery] e.g. ["Sam Altman IIT Delhi", "Sam Altman"]
    */
   async getImageSearchQuery(reflection) {
     const savedProvider = (typeof localStorage !== 'undefined' && localStorage.getItem('chat_api_provider')) || 'openai';
-    const prevProvider = this.apiProvider;
     this.setApiProvider('gemini');
     const apiKey = this.geminiApiKey || process.env.REACT_APP_GOOGLE_API_KEY || '';
     this.setApiProvider(savedProvider);
-    if (!apiKey || !reflection?.trim()) return null;
-    const prompt = `Given this short reflection, reply with ONLY a single English search phrase (2-5 words) to find one representative stock photo. No quotes, no explanation, no punctuation at the end.
+    if (!apiKey || !reflection?.trim()) return [];
+    const prompt = `Given this reflection, extract search phrases for finding a relevant photograph. Prioritise people and places.
 
-Reflection: ${(reflection || '').trim().slice(0, 300)}`;
+Rules:
+- If a specific person AND a place/event are mentioned (e.g. "Sam Altman" and "IIT Delhi"), give TWO lines:
+  Line 1: person and place together for a photo of that person at that place (e.g. "Sam Altman IIT Delhi" or "Sam Altman at IIT Delhi").
+  Line 2: just the person or main subject (e.g. "Sam Altman").
+- If only a person is mentioned, give one line with their name.
+- If only a place/event, give one line with that.
+- Use 2-6 words per line. No quotes, no explanation. Separate the two lines with a single newline.
+
+Reflection: ${(reflection || '').trim().slice(0, 400)}`;
     try {
       const apiUrl = `${this.geminiBaseURL}/models/${this.geminiModelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
       const res = await fetch(apiUrl, {
@@ -1660,63 +1667,76 @@ Reflection: ${(reflection || '').trim().slice(0, 300)}`;
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.3, maxOutputTokens: 50 }
+          generationConfig: { temperature: 0.2, maxOutputTokens: 80 }
         })
       });
-      if (!res.ok) return null;
+      if (!res.ok) return [];
       const data = await res.json();
       const text = (data.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '').trim();
-      return text && text.length < 100 ? text : null;
+      if (!text) return [];
+      const lines = text.split(/\n/).map(s => s.trim()).filter(s => s.length > 0 && s.length < 120);
+      return lines.length ? lines : [];
     } catch (e) {
-      return null;
+      return [];
     }
   }
 
   /**
-   * Fetch one image URL for a reflection (for suggestions). Uses Pexels or Serper images if API keys are set.
+   * Fetch one image URL for a reflection (for suggestions). Tries "person + place" first, then person only.
+   * Uses Pexels or Serper images if API keys are set; else Picsum with query-based seed.
    * @param {string} reflection - The day's reflection text
    * @returns {Promise<string|null>} - Image URL or null
    */
   async fetchImageForReflection(reflection) {
     if (!reflection?.trim()) return null;
-    const query = await this.getImageSearchQuery(reflection);
-    const searchQuery = query || reflection.trim().slice(0, 40).replace(/\s+/g, ' ');
-    if (!searchQuery) return null;
-    // Try Pexels first (free API key at https://www.pexels.com/api/)
-    if (this.pexelsApiKey) {
-      try {
-        const res = await fetch(
-          `https://api.pexels.com/v1/search?query=${encodeURIComponent(searchQuery)}&per_page=1`,
-          { headers: { Authorization: this.pexelsApiKey } }
-        );
-        if (res.ok) {
-          const data = await res.json();
-          const url = data.photos?.[0]?.src?.medium || data.photos?.[0]?.src?.large;
-          if (url) return url;
+    const queries = await this.getImageSearchQuery(reflection);
+    const primaryQuery = queries[0];
+    const fallbackQuery = queries[1];
+    const searchQueries = [primaryQuery, fallbackQuery].filter(Boolean);
+    if (searchQueries.length === 0) {
+      const fallback = reflection.trim().slice(0, 40).replace(/\s+/g, ' ');
+      if (!fallback) return null;
+      searchQueries.push(fallback);
+    }
+    // Try each query in order (person+place first, then person-only) until we get an image
+    for (const searchQuery of searchQueries) {
+      if (!searchQuery) continue;
+      // Try Pexels (free API key at https://www.pexels.com/api/)
+      if (this.pexelsApiKey) {
+        try {
+          const res = await fetch(
+            `https://api.pexels.com/v1/search?query=${encodeURIComponent(searchQuery)}&per_page=1`,
+            { headers: { Authorization: this.pexelsApiKey } }
+          );
+          if (res.ok) {
+            const data = await res.json();
+            const url = data.photos?.[0]?.src?.medium || data.photos?.[0]?.src?.large;
+            if (url) return url;
+          }
+        } catch (e) {
+          console.warn('Pexels image search failed:', e.message);
         }
-      } catch (e) {
-        console.warn('Pexels image search failed:', e.message);
+      }
+      // Try Serper images (optional)
+      if (this.serperApiKey) {
+        try {
+          const res = await fetch('https://google.serper.dev/images', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-API-KEY': this.serperApiKey },
+            body: JSON.stringify({ q: searchQuery, num: 1 })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const url = data.images?.[0]?.imageUrl;
+            if (url) return url;
+          }
+        } catch (e) {
+          console.warn('Serper image search failed:', e.message);
+        }
       }
     }
-    // Fallback: Serper images (optional)
-    if (this.serperApiKey) {
-      try {
-        const res = await fetch('https://google.serper.dev/images', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-API-KEY': this.serperApiKey },
-          body: JSON.stringify({ q: searchQuery, num: 1 })
-        });
-        if (res.ok) {
-          const data = await res.json();
-          const url = data.images?.[0]?.imageUrl;
-          if (url) return url;
-        }
-      } catch (e) {
-        console.warn('Serper image search failed:', e.message);
-      }
-    }
-    // Fallback: Picsum (no API key) – deterministic image per query so each reflection gets a consistent image
-    const seed = encodeURIComponent(String(searchQuery).slice(0, 50).replace(/\s+/g, '-'));
+    // Fallback: Picsum (no API key) – use primary query for deterministic seed
+    const seed = encodeURIComponent(String(searchQueries[0] || 'reflection').slice(0, 50).replace(/\s+/g, '-'));
     return `https://picsum.photos/seed/${seed || 'reflection'}/600/340`;
   }
 
