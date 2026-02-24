@@ -15,20 +15,17 @@ class ChatService {
     this.geminiModelName = 'gemini-3-flash-preview';
     this.grokModelName = 'grok-3';
     this.visionModelName = 'gpt-4o'; // For OpenAI vision
-    // Optional: Add your Serper API key here for better results
-    // Get free API key at: https://serper.dev (2,500 free searches/month)
-    this.serperApiKey = process.env.REACT_APP_SERPER_API_KEY || process.env.SERPER_API_KEY || null;
+    // Image generation: Gemini (gemini-3-pro-image-preview / Nano Banana Pro)
+    this.geminiImageModelName = 'gemini-3-pro-image-preview';
 
     // Debug: Log API key status (first 10 chars only for security)
     console.log('🔑 API Keys loaded:');
     console.log('  OpenAI:', this.openaiApiKey ? `${this.openaiApiKey.substring(0, 10)}... (${this.openaiApiKey.length} chars)` : 'NOT SET');
     console.log('  Gemini:', this.geminiApiKey ? `${this.geminiApiKey.substring(0, 10)}... (${this.geminiApiKey.length} chars)` : 'NOT SET');
     console.log('  Grok:', this.grokApiKey ? `${this.grokApiKey.substring(0, 10)}... (${this.grokApiKey.length} chars)` : 'NOT SET');
-    console.log('  Serper:', this.serperApiKey ? `${this.serperApiKey.substring(0, 6)}... (${this.serperApiKey.length} chars)` : 'NOT SET');
     console.log('🔍 Environment variables check:');
     console.log('  REACT_APP_GROK_API_KEY exists:', !!process.env.REACT_APP_GROK_API_KEY);
     console.log('  REACT_APP_GROK_API_KEY value:', process.env.REACT_APP_GROK_API_KEY ? `${process.env.REACT_APP_GROK_API_KEY.substring(0, 10)}...` : 'undefined');
-    console.log('  REACT_APP_SERPER_API_KEY exists:', !!process.env.REACT_APP_SERPER_API_KEY);
   }
 
   /**
@@ -486,49 +483,8 @@ class ChatService {
   async searchWeb(query) {
     try {
       console.log('🔍 Searching web for:', query);
-      
-      // Option 1: Use Serper API (better results, requires free API key) - optional
-      if (this.serperApiKey) {
-        try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
-          
-          const response = await fetch('https://google.serper.dev/search', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-API-KEY': this.serperApiKey
-            },
-            body: JSON.stringify({
-              q: query,
-              num: 5
-            }),
-            signal: controller.signal
-          });
-          
-          clearTimeout(timeoutId);
-          
-          if (response.ok) {
-            const data = await response.json();
-            const results = data.organic?.slice(0, 3).map(result => ({
-              title: result.title,
-              snippet: result.snippet,
-              link: result.link
-            })) || [];
-            
-            if (results.length > 0) {
-              console.log('✅ Web search results (Serper):', results);
-              return results;
-            }
-          }
-        } catch (serperError) {
-          if (serperError.name !== 'AbortError') {
-            console.log('⚠️ Serper API failed, trying DuckDuckGo...', serperError);
-          }
-        }
-      }
-      
-      // Option 2: Use DuckDuckGo Instant Answer API (free, no API key) - PRIMARY METHOD
+
+      // Use DuckDuckGo Instant Answer API (free, no API key)
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
@@ -1667,7 +1623,7 @@ ${(reflection || '').trim()}`;
     return result;
   }
 
-  // ---------- Image: Gemini NER first, then route by people → place → event (Serper only) ----------
+  // ---------- Image: Gemini NER + Gemini image model (one image per post, base64 → data URL) ----------
 
   /**
    * Use Gemini to extract named entities (people, place, events) from text before any image routing.
@@ -1789,11 +1745,11 @@ ${text}`;
   }
 
   /**
-   * Route image search by entity type: people → place → events (uses Gemini-extracted entities only).
+   * Build image generation prompt by entity type: people → place → events (uses Gemini-extracted entities).
    * @param {{ persons: string[], places: string[], events: string[] }} entities
-   * @returns {string|null} - Serper query or null if no entity
+   * @returns {string|null} - Prompt for Gemini image model or null if no entity
    */
-  _getSerperQueryFromEntities(entities) {
+  _getImagePromptFromEntities(entities) {
     const { persons, places, events } = entities;
     if (persons.length > 0) return `${persons[0].trim()} high quality portrait`;
     if (places.length > 0) return `${places[0].trim()} building exterior high quality`;
@@ -1802,66 +1758,72 @@ ${text}`;
   }
 
   /**
-   * Fetch image: 1) Use Gemini to extract entities (people, place, events). 2) Route by entity type (people → place → events) and call Serper.
-   * If no entity found, returns null (no image).
+   * Generate one image per post using Gemini (gemini-3-pro-image-preview). Returns a data URL for the frontend.
+   * Uses entity extraction to build the image prompt; no Serper.
    * @param {string} postText - Full post text
-   * @returns {Promise<string|null>}
+   * @returns {Promise<string|null>} - data:image/png;base64,... or null
    */
   async fetchImageForReflection(postText) {
     if (!postText?.trim()) return null;
 
-    const fullText = postText.trim();
-    // Step 1: Extract entities with Gemini before any routing
-    const entities = await this.extractEntitiesWithNER(fullText);
-    // Step 2: Route by people, then place, then events
-    const searchQuery = this._getSerperQueryFromEntities(entities);
-
-    console.log('[Image Router] Extracted Entities (Gemini):', JSON.stringify(entities));
-    console.log('[Image Router] Routed by: people → place → events');
-    console.log('[Image Router] Final Search Query:', searchQuery ?? '(no entity)');
-
-    if (!searchQuery || !this.serperApiKey) {
-      if (!this.serperApiKey) console.warn('[Image Router] Serper API key not set');
+    const apiKey = (this.geminiApiKey || process.env.REACT_APP_GOOGLE_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
+    if (!apiKey) {
+      console.warn('[Image] Gemini API key not set');
       return null;
     }
 
+    const fullText = postText.trim();
+    const entities = await this.extractEntitiesWithNER(fullText);
+    const imagePrompt = this._getImagePromptFromEntities(entities);
+
+    console.log('[Image] Entities:', JSON.stringify(entities), '→ Prompt:', imagePrompt ?? '(none)');
+    if (!imagePrompt) return null;
+
     try {
-      const res = await fetch('https://google.serper.dev/images', {
+      const apiUrl = `${this.geminiBaseURL}/models/${this.geminiImageModelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const res = await fetch(apiUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-API-KEY': this.serperApiKey },
-        body: JSON.stringify({ q: searchQuery, num: 3 })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: `Generate a single high-quality image: ${imagePrompt}.` }] }],
+          generationConfig: {
+            responseModalities: ['TEXT', 'IMAGE'],
+            imageConfig: { aspectRatio: '1:1', imageSize: '2K' }
+          }
+        })
       });
-      const data = await res.json();
+
       if (!res.ok) {
-        console.warn('[Image Router] Serper API error:', res.status, data);
+        const errBody = await res.text();
+        console.warn('[Image] Gemini image API error:', res.status, errBody);
         return null;
       }
-      const first = data.images?.[0];
-      let imageUrl = first?.imageUrl ?? first?.image ?? first?.url ?? first?.original ?? first?.link ?? (typeof first === 'string' ? first : null);
-      if (!imageUrl && Array.isArray(data.image_results) && data.image_results[0]) {
-        const img = data.image_results[0];
-        imageUrl = img.imageUrl ?? img.image ?? img.url ?? img.original ?? img.thumbnail ?? img.link ?? null;
+
+      const data = await res.json();
+      const parts = data.candidates?.[0]?.content?.parts ?? [];
+      const imagePart = parts.find(p => p.inlineData && p.inlineData.data);
+      if (!imagePart?.inlineData) {
+        console.warn('[Image] No image in response, parts:', parts.length);
+        return null;
       }
-      if (!imageUrl && first && typeof first === 'object') {
-        console.log('[Image Router] Serper first image keys:', Object.keys(first));
-      }
-      console.log('[Image Router] Serper response ok:', res.ok, 'images count:', data.images?.length ?? data.image_results?.length ?? 0, 'URL:', imageUrl ? `${imageUrl.slice(0, 50)}...` : 'none');
-      return imageUrl || null;
+
+      const { mimeType = 'image/png', data: base64 } = imagePart.inlineData;
+      const dataUrl = `data:${mimeType};base64,${base64}`;
+      console.log('[Image] Generated data URL length:', dataUrl.length);
+      return dataUrl;
     } catch (e) {
-      console.warn('Serper image search failed:', e.message);
+      console.warn('[Image] Generation failed:', e.message);
       return null;
     }
   }
 
   /**
-   * Legacy: returns Serper query + useSerper. Entity-only; Serper only.
+   * Returns image prompt from entities (no Serper). Kept for compatibility.
    */
   async getImageSearchQueryForPost(postText) {
     const entities = await this.extractEntitiesWithNER(postText || '');
-    const searchQuery = this._getSerperQueryFromEntities(entities);
-    const useSerper = searchQuery !== null;
-    const queries = searchQuery ? [searchQuery] : [];
-    return { queries, useSerper };
+    const searchQuery = this._getImagePromptFromEntities(entities);
+    return { queries: searchQuery ? [searchQuery] : [], useSerper: false };
   }
 
   /** @deprecated Use getImageSearchQueryForPost / fetchImageForReflection. Kept for compatibility. */

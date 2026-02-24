@@ -49,7 +49,7 @@ export default function ShareSuggestionsPage() {
   // Selected platform: from navigation state or from tapping an icon (LinkedIn / X / Reddit)
   const [selectedPlatform, setSelectedPlatform] = useState(platformFromState || null);
   const [platformSuggestions, setPlatformSuggestions] = useState([]);
-  const [suggestionImageUrls, setSuggestionImageUrls] = useState([]); // one image per suggestion (Gemini entities → Serper)
+  const [suggestionImageUrls, setSuggestionImageUrls] = useState([]); // one image per suggestion (Gemini entities → Gemini image model)
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(!!platformFromState);
   const [suggestionError, setSuggestionError] = useState(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -73,7 +73,7 @@ export default function ShareSuggestionsPage() {
         setPlatformSuggestions(posts);
         setSelectedIndex(0);
         setIsLoadingSuggestions(false);
-        // For each suggestion: Gemini extracts entities (person, place, event) → Serper fetches image → show with that post
+        // For each suggestion: Gemini extracts entities → Gemini image model generates one image → show with that post
         setIsLoadingImages(true);
         Promise.all(
           posts.map((item) => {
