@@ -18,8 +18,7 @@ class ChatService {
     // Optional: Add your Serper API key here for better results
     // Get free API key at: https://serper.dev (2,500 free searches/month)
     this.serperApiKey = process.env.REACT_APP_SERPER_API_KEY || null;
-    this.pexelsApiKey = process.env.REACT_APP_PEXELS_API_KEY || null;
-    
+
     // Debug: Log API key status (first 10 chars only for security)
     console.log('🔑 API Keys loaded:');
     console.log('  OpenAI:', this.openaiApiKey ? `${this.openaiApiKey.substring(0, 10)}... (${this.openaiApiKey.length} chars)` : 'NOT SET');
@@ -1638,10 +1637,10 @@ Do not add numbers, labels, titles, or explanations. Only the post text. Each po
     return posts;
   }
 
-  // ---------- Image generation: strict entity-based routing (Serper first, Pexels only if no entity or Serper fails) ----------
+  // ---------- Image: entity-based, Serper only (prefer person → place → event) ----------
 
   /**
-   * Step 1 – Extract entities using LLM. Read full post text, return structured data.
+   * Extract entities from text using LLM. Full post text, structured output.
    * @param {string} postText - Full post text
    * @returns {Promise<{ persons: string[], places: string[], events: string[] }>}
    */
@@ -1689,61 +1688,21 @@ ${(postText || '').trim()}`;
   }
 
   /**
-   * Step 2 – Deterministic routing: single search query from entity priority.
-   * persons > places > events → SERPER with exact query; else → PEXELS (keywords chosen later).
-   * @returns {{ imageSource: 'SERPER'|'PEXELS', searchQuery: string }}
+   * Build Serper search query from entity priority: person → place → event.
+   * @param {{ persons: string[], places: string[], events: string[] }} entities
+   * @returns {string|null} - Query string or null if no entity
    */
-  _getImageSourceAndQuery(entities, pexelsKeywordQuery) {
+  _getSerperQueryFromEntities(entities) {
     const { persons, places, events } = entities;
-    if (persons.length > 0) {
-      return { imageSource: 'SERPER', searchQuery: `${persons[0].trim()} high quality portrait` };
-    }
-    if (places.length > 0) {
-      return { imageSource: 'SERPER', searchQuery: `${places[0].trim()} building exterior high quality` };
-    }
-    if (events.length > 0) {
-      return { imageSource: 'SERPER', searchQuery: `${events[0].trim()} stage photo high quality` };
-    }
-    return { imageSource: 'PEXELS', searchQuery: pexelsKeywordQuery };
+    if (persons.length > 0) return `${persons[0].trim()} high quality portrait`;
+    if (places.length > 0) return `${places[0].trim()} building exterior high quality`;
+    if (events.length > 0) return `${events[0].trim()} stage photo high quality`;
+    return null;
   }
 
   /**
-   * Extract 3–5 meaningful keywords from post when no entity (Pexels only).
-   * @param {string} postText
-   * @returns {Promise<string>} - Single query string (e.g. "tech keynote conference stage")
-   */
-  async getPexelsKeywordQuery(postText) {
-    const apiKey = this.geminiApiKey || process.env.REACT_APP_GOOGLE_API_KEY || '';
-    if (!apiKey || !postText?.trim()) return postText.trim().slice(0, 50).replace(/\s+/g, ' ');
-
-    const prompt = `From this social media post, extract 3 to 5 meaningful, concrete keywords for a stock photo search. Use nouns that describe the scene or topic (e.g. "tech keynote", "conference", "speaker", "stage"). Output only the keywords as a single line, space-separated. Do NOT use vague terms like: motivation, growth, success, inspiration, mindset, tiger.
-
-Post text:
-${(postText || '').trim().slice(0, 500)}`;
-
-    try {
-      const apiUrl = `${this.geminiBaseURL}/models/${this.geminiModelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
-      const res = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.2, maxOutputTokens: 100 }
-        })
-      });
-      if (!res.ok) return postText.trim().slice(0, 50).replace(/\s+/g, ' ');
-      const data = await res.json();
-      const text = (data.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '').trim();
-      const query = text.replace(/\n/g, ' ').slice(0, 80).trim();
-      return query || postText.trim().slice(0, 50).replace(/\s+/g, ' ');
-    } catch (e) {
-      return postText.trim().slice(0, 50).replace(/\s+/g, ' ');
-    }
-  }
-
-  /**
-   * Fetch image: strict entity-based routing. Serper first if any entity; Pexels only if no entity or Serper fails.
-   * No random API choice, no hardcoded search terms, no Pexels when person/place/event exists (except Serper fallback).
+   * Fetch image using Serper only. Entities from text; prefer person, then place, then event.
+   * If no entity found, returns null (no image).
    * @param {string} postText - Full post text
    * @returns {Promise<string|null>}
    */
@@ -1752,77 +1711,36 @@ ${(postText || '').trim().slice(0, 500)}`;
 
     const fullText = postText.trim();
     const entities = await this.extractEntitiesWithNER(fullText);
+    const searchQuery = this._getSerperQueryFromEntities(entities);
 
     console.log('[Image Router] Extracted Entities:', JSON.stringify(entities));
+    console.log('[Image Router] Selected Source: SERPER');
+    console.log('[Image Router] Final Search Query:', searchQuery ?? '(no entity)');
 
-    let imageSource;
-    let searchQuery;
-    const hasEntity = entities.persons.length > 0 || entities.places.length > 0 || entities.events.length > 0;
+    if (!searchQuery || !this.serperApiKey) return null;
 
-    if (hasEntity) {
-      const resolved = this._getImageSourceAndQuery(entities, '');
-      imageSource = resolved.imageSource;
-      searchQuery = resolved.searchQuery;
-    } else {
-      const pexelsQuery = await this.getPexelsKeywordQuery(fullText);
-      const resolved = this._getImageSourceAndQuery(entities, pexelsQuery);
-      imageSource = resolved.imageSource;
-      searchQuery = resolved.searchQuery;
+    try {
+      const res = await fetch('https://google.serper.dev/images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-API-KEY': this.serperApiKey },
+        body: JSON.stringify({ q: searchQuery, num: 1 })
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data.images?.[0]?.imageUrl || null;
+    } catch (e) {
+      console.warn('Serper image search failed:', e.message);
+      return null;
     }
-
-    console.log('[Image Router] Selected Source:', imageSource);
-    console.log('[Image Router] Final Search Query:', searchQuery);
-
-    let imageUrl = null;
-
-    if (imageSource === 'SERPER' && this.serperApiKey) {
-      try {
-        const res = await fetch('https://google.serper.dev/images', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-API-KEY': this.serperApiKey },
-          body: JSON.stringify({ q: searchQuery, num: 1 })
-        });
-        if (res.ok) {
-          const data = await res.json();
-          imageUrl = data.images?.[0]?.imageUrl || null;
-        }
-      } catch (e) {
-        console.warn('Serper image search failed:', e.message);
-      }
-      if (!imageUrl) {
-        console.log('[Image Router] Serper failed → Falling back to Pexels');
-        imageSource = 'PEXELS';
-        searchQuery = searchQuery.replace(/\s*(high quality portrait|building exterior high quality|stage photo high quality)\s*$/i, '').trim() || searchQuery;
-      }
-    }
-
-    if (imageSource === 'PEXELS' && this.pexelsApiKey && !imageUrl) {
-      try {
-        const res = await fetch(
-          `https://api.pexels.com/v1/search?query=${encodeURIComponent(searchQuery)}&per_page=1`,
-          { headers: { Authorization: this.pexelsApiKey } }
-        );
-        if (res.ok) {
-          const data = await res.json();
-          imageUrl = data.photos?.[0]?.src?.medium || data.photos?.[0]?.src?.large || null;
-        }
-      } catch (e) {
-        console.warn('Pexels image search failed:', e.message);
-      }
-    }
-
-    return imageUrl;
   }
 
   /**
-   * Legacy: returns Serper query + useSerper for callers. Uses same deterministic entity logic.
+   * Legacy: returns Serper query + useSerper. Entity-only; Serper only.
    */
   async getImageSearchQueryForPost(postText) {
     const entities = await this.extractEntitiesWithNER(postText || '');
-    const hasEntity = entities.persons.length > 0 || entities.places.length > 0 || entities.events.length > 0;
-    const pexelsKeyword = hasEntity ? '' : await this.getPexelsKeywordQuery(postText || '');
-    const { imageSource, searchQuery } = this._getImageSourceAndQuery(entities, pexelsKeyword);
-    const useSerper = imageSource === 'SERPER';
+    const searchQuery = this._getSerperQueryFromEntities(entities);
+    const useSerper = searchQuery !== null;
     const queries = searchQuery ? [searchQuery] : [];
     return { queries, useSerper };
   }
