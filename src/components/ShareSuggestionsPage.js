@@ -259,7 +259,11 @@ export default function ShareSuggestionsPage() {
                         alt=""
                         className="w-full h-full object-cover"
                         loading="lazy"
-                        onError={(e) => { e.target.style.display = 'none'; }}
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          console.warn('[Suggestions] Image failed to load:', imageUrl?.slice(0, 60));
+                          e.target.style.display = 'none';
+                        }}
                       />
                     </div>
                   )}

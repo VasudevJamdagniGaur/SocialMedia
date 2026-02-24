@@ -1820,17 +1820,33 @@ ${text}`;
     console.log('[Image Router] Routed by: people → place → events');
     console.log('[Image Router] Final Search Query:', searchQuery ?? '(no entity)');
 
-    if (!searchQuery || !this.serperApiKey) return null;
+    if (!searchQuery || !this.serperApiKey) {
+      if (!this.serperApiKey) console.warn('[Image Router] Serper API key not set');
+      return null;
+    }
 
     try {
       const res = await fetch('https://google.serper.dev/images', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-API-KEY': this.serperApiKey },
-        body: JSON.stringify({ q: searchQuery, num: 1 })
+        body: JSON.stringify({ q: searchQuery, num: 3 })
       });
-      if (!res.ok) return null;
       const data = await res.json();
-      return data.images?.[0]?.imageUrl || null;
+      if (!res.ok) {
+        console.warn('[Image Router] Serper API error:', res.status, data);
+        return null;
+      }
+      const first = data.images?.[0];
+      let imageUrl = first?.imageUrl ?? first?.image ?? first?.url ?? first?.original ?? first?.link ?? (typeof first === 'string' ? first : null);
+      if (!imageUrl && Array.isArray(data.image_results) && data.image_results[0]) {
+        const img = data.image_results[0];
+        imageUrl = img.imageUrl ?? img.image ?? img.url ?? img.original ?? img.thumbnail ?? img.link ?? null;
+      }
+      if (!imageUrl && first && typeof first === 'object') {
+        console.log('[Image Router] Serper first image keys:', Object.keys(first));
+      }
+      console.log('[Image Router] Serper response ok:', res.ok, 'images count:', data.images?.length ?? data.image_results?.length ?? 0, 'URL:', imageUrl ? `${imageUrl.slice(0, 50)}...` : 'none');
+      return imageUrl || null;
     } catch (e) {
       console.warn('Serper image search failed:', e.message);
       return null;
