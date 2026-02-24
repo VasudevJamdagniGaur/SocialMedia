@@ -1556,15 +1556,15 @@ ${text}`;
     const savedProvider = (typeof localStorage !== 'undefined' && localStorage.getItem('chat_api_provider')) || 'openai';
     this.setApiProvider(savedProvider);
 
-    this.openaiApiKey = process.env.REACT_APP_OPENAI_API_KEY || this.openaiApiKey || '';
-    this.geminiApiKey = process.env.REACT_APP_GOOGLE_API_KEY || this.geminiApiKey || '';
-    this.grokApiKey = process.env.REACT_APP_GROK_API_KEY || this.grokApiKey || '';
+    this.openaiApiKey = (process.env.REACT_APP_OPENAI_API_KEY || process.env.OPENAI_API_KEY || this.openaiApiKey || '').trim();
+    this.geminiApiKey = (process.env.REACT_APP_GOOGLE_API_KEY || process.env.GOOGLE_API_KEY || this.geminiApiKey || '').trim();
+    this.grokApiKey = (process.env.REACT_APP_GROK_API_KEY || process.env.GROK_API_KEY || this.grokApiKey || '').trim();
 
     const apiKey = this.getApiKey();
     if (!apiKey || apiKey.trim() === '') {
       const providerName = this.apiProvider === 'openai' ? 'OpenAI' : this.apiProvider === 'gemini' ? 'Gemini' : 'Grok';
       const envKeyName = this.apiProvider === 'openai' ? 'REACT_APP_OPENAI_API_KEY' : this.apiProvider === 'gemini' ? 'REACT_APP_GOOGLE_API_KEY' : 'REACT_APP_GROK_API_KEY';
-      throw new Error(`${providerName} API key is not set. Add ${envKeyName} in .env`);
+      throw new Error(`${providerName} API key is not set. Add ${envKeyName} to .env in the project root, then restart the dev server (npm start).`);
     }
 
     const platformLabel = platform === 'x' ? 'X (Twitter)' : platform.charAt(0).toUpperCase() + platform.slice(1);
