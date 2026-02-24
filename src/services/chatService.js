@@ -1545,9 +1545,12 @@ ${text}`;
   /**
    * Generate 1-3 platform-style post suggestions from a day reflection.
    * Can be one post for the whole day or one per incident (model decides).
+  /**
+   * Generate share suggestions as one standalone post per key event from the day's reflection.
+   * Does not use "Option 1" / "Option 2"; each post is centered on one core event (e.g. meeting Sumit, reading Source Code).
    * @param {string} reflection - The day's reflection text
    * @param {string} platform - 'linkedin' | 'x' | 'reddit'
-   * @returns {Promise<string[]>} - Array of suggested post strings (1-3)
+   * @returns {Promise<{ eventLabel: string, post: string }[]>} - Array of { eventLabel, post } per event
    */
   async generateSocialPostSuggestions(reflection, platform) {
     const savedProvider = (typeof localStorage !== 'undefined' && localStorage.getItem('chat_api_provider')) || 'openai';
@@ -1564,22 +1567,39 @@ ${text}`;
       throw new Error(`${providerName} API key is not set. Add ${envKeyName} in .env`);
     }
 
-    const platformRules = {
-      linkedin: `Write in the style of real LinkedIn posts: professional but personal. Use a strong opening hook (question, bold statement, or story). Share a clear insight or learning. Keep paragraphs short (1-2 sentences). Optional soft call-to-action or question at the end. Tone: confident, helpful, authentic. No excessive hashtags (0-3 max). Give 2-3 DIFFERENT post options: vary the angle (e.g. one story-led, one insight-led, one question-led). Separate each option with ---.`,
-      x: `Write in the style of real X (Twitter) posts: concise, punchy, conversational. STRICT: each post must be under 280 characters. Use line breaks for emphasis. Optional 1-2 relevant hashtags. Give 2-3 DIFFERENT tweet options: vary tone or focus (e.g. one punchy, one reflective, one with a hook). Separate each option with ---.`,
-      reddit: `Write in the style of real Reddit posts: casual, conversational, authentic. As if posting to r/CasualConversation, r/self, or r/DecidingToBeBetter. Can use a conversational opener, "TIL" or "DAE" style if it fits, or a short story. Be genuine and relatable. Give 2-3 DIFFERENT post options: vary the angle or tone. Separate each option with ---.`
-    };
     const platformLabel = platform === 'x' ? 'X (Twitter)' : platform.charAt(0).toUpperCase() + platform.slice(1);
+    const platformStyle = {
+      linkedin: 'LinkedIn: professional but personal, strong hook, clear insight, short paragraphs, 0–3 hashtags.',
+      x: 'X (Twitter): concise, punchy, under 280 characters per post, line breaks for emphasis, 1–2 hashtags.',
+      reddit: 'Reddit: casual, conversational, authentic (r/CasualConversation style).'
+    };
 
-    const prompt = `You are rewriting a daily reflection into ${platformLabel}-style post(s) that look and read like real posts on that platform.
+    const prompt = `You are turning a day's reflection into separate social posts. Each post must be based on ONE key event or moment from the day.
+
+Step 1 – Identify the main events/moments in the reflection (e.g. "Meeting my friend Sumit", "Reading the book Source Code"). Pick 2–4 distinct events.
+
+Step 2 – For EACH event, write ONE complete, standalone post that:
+- Focuses only on that single event
+- Expands on the thoughts, emotions, or insights from that moment
+- Feels natural and reflective, like a real social post (not a summary)
+- Is written in ${platformStyle[platform] || platformStyle.linkedin}
+
+Output format (strict):
+- For each post, first write exactly: EVENT: <short event label>
+- Then on the next lines write the full post text.
+- Separate each post with a line that contains only: ---
+- Do NOT use "Option 1", "Option 2", or any option labels. Only EVENT: and the post content.
+
+Example format:
+EVENT: Meeting my friend Sumit
+[Full post about that moment only.]
+
+---
+EVENT: Reading the book Source Code
+[Full post about that moment only.]
 
 Reflection:
-${(reflection || '').trim()}
-
-${platformRules[platform] || platformRules.linkedin}
-
-Output format: Return 2 or 3 different post options. Put each post on its own line. Separate options with a line that contains exactly: ---
-Do not add numbers, labels, titles, or explanations. Only the post text. Each post should be ready to copy-paste.`;
+${(reflection || '').trim()}`;
 
     let apiUrl, requestBody, headers;
     if (this.apiProvider === 'openai') {
@@ -1633,10 +1653,18 @@ Do not add numbers, labels, titles, or explanations. Only the post text. Each po
         ? data.candidates[0].content.parts.map(p => p.text).join('') : '';
     }
     const trimmed = (raw || '').trim();
-    if (!trimmed) return [reflection.trim()];
-    const posts = trimmed.split(/\n *--- *\n/).map(s => s.trim()).filter(Boolean);
-    if (posts.length === 0) return [reflection.trim()];
-    return posts;
+    if (!trimmed) return [{ eventLabel: 'Reflection', post: reflection.trim() }];
+
+    const blocks = trimmed.split(/\n *--- *\n/).map(s => s.trim()).filter(Boolean);
+    const result = [];
+    for (const block of blocks) {
+      const eventMatch = block.match(/^EVENT:\s*(.+?)(?:\n|$)/i);
+      const eventLabel = eventMatch ? eventMatch[1].trim() : '';
+      const post = eventMatch ? block.slice(block.indexOf('\n') + 1).trim() : block;
+      if (post) result.push({ eventLabel: eventLabel || 'Moment', post });
+    }
+    if (result.length === 0) return [{ eventLabel: 'Reflection', post: reflection.trim() }];
+    return result;
   }
 
   // ---------- Image: Gemini NER first, then route by people → place → event (Serper only) ----------

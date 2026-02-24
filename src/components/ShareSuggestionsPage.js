@@ -67,12 +67,12 @@ export default function ShareSuggestionsPage() {
       .generateSocialPostSuggestions(reflectionFromState, selectedPlatform)
       .then((posts) => {
         if (!cancelled) {
-          setPlatformSuggestions(posts.length ? posts : [reflectionFromState]);
+          const list = Array.isArray(posts) && posts.length ? posts : [{ eventLabel: 'Reflection', post: reflectionFromState }];
+          setPlatformSuggestions(list);
           setSelectedIndex(0);
           setSuggestionImageUrl(null);
-          // Image from actual post content (first option) so it matches the topic, not random keywords
-          const postTextForImage = (posts.length ? posts[0] : reflectionFromState) || reflectionFromState;
-          chatService.fetchImageForReflection(postTextForImage).then((url) => {
+          const firstPostText = typeof list[0] === 'object' && list[0].post != null ? list[0].post : reflectionFromState;
+          chatService.fetchImageForReflection(firstPostText).then((url) => {
             if (!cancelled && url) setSuggestionImageUrl(url);
           }).catch(() => {});
         }
@@ -80,7 +80,7 @@ export default function ShareSuggestionsPage() {
       .catch((err) => {
         if (!cancelled) {
           setSuggestionError(err.message || 'Could not generate suggestions');
-          setPlatformSuggestions([reflectionFromState]);
+          setPlatformSuggestions([{ eventLabel: 'Reflection', post: reflectionFromState }]);
           setSelectedIndex(0);
           setSuggestionImageUrl(null);
         }
@@ -94,7 +94,7 @@ export default function ShareSuggestionsPage() {
   const fallbackSuggestions = buildFallbackSuggestions(reflectionFromState);
   const selectedFallbackId = fallbackSuggestions[selectedIndex]?.id ?? 'original';
   const selectedText = selectedPlatform
-    ? (platformSuggestions[selectedIndex] ?? platformSuggestions[0] ?? reflectionFromState)
+    ? (platformSuggestions[selectedIndex]?.post ?? platformSuggestions[0]?.post ?? reflectionFromState)
     : (fallbackSuggestions[selectedIndex]?.text ?? reflectionFromState);
 
   const recordShare = (plat) => {
@@ -229,34 +229,38 @@ export default function ShareSuggestionsPage() {
           </div>
         ) : selectedPlatform && platformSuggestions.length > 0 ? (
           <div className="space-y-3 mb-8">
-            {platformSuggestions.map((text, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => setSelectedIndex(idx)}
-                className="w-full text-left rounded-xl overflow-hidden transition-all"
-                style={{
-                  background: selectedIndex === idx ? (isDarkMode ? `${HUB.accent}20` : 'rgba(168, 85, 247, 0.12)') : (isDarkMode ? HUB.bgSecondary : '#FFFFFF'),
-                  border: `1px solid ${selectedIndex === idx ? HUB.accent : (isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)')}`,
-                }}
-              >
-                {suggestionImageUrl && (
-                  <div className="w-full aspect-video bg-black/20 flex-shrink-0">
-                    <img
-                      src={suggestionImageUrl}
-                      alt=""
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                      onError={(e) => { e.target.style.display = 'none'; }}
-                    />
+            {platformSuggestions.map((item, idx) => {
+              const eventLabel = typeof item === 'object' && item?.eventLabel != null ? item.eventLabel : 'Moment';
+              const postText = typeof item === 'object' && item?.post != null ? item.post : String(item);
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => setSelectedIndex(idx)}
+                  className="w-full text-left rounded-xl overflow-hidden transition-all"
+                  style={{
+                    background: selectedIndex === idx ? (isDarkMode ? `${HUB.accent}20` : 'rgba(168, 85, 247, 0.12)') : (isDarkMode ? HUB.bgSecondary : '#FFFFFF'),
+                    border: `1px solid ${selectedIndex === idx ? HUB.accent : (isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)')}`,
+                  }}
+                >
+                  {suggestionImageUrl && idx === 0 && (
+                    <div className="w-full aspect-video bg-black/20 flex-shrink-0">
+                      <img
+                        src={suggestionImageUrl}
+                        alt=""
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                        onError={(e) => { e.target.style.display = 'none'; }}
+                      />
+                    </div>
+                  )}
+                  <div className="p-4">
+                    {eventLabel ? <p className="text-xs font-semibold mb-1" style={{ color: HUB.accent }}>{eventLabel}</p> : null}
+                    <p className="text-[14px] leading-relaxed" style={{ color: isDarkMode ? HUB.text : '#333' }}>{postText}</p>
                   </div>
-                )}
-                <div className="p-4">
-                  <p className="text-xs font-semibold mb-1" style={{ color: HUB.accent }}>Option {idx + 1}</p>
-                  <p className="text-[14px] leading-relaxed" style={{ color: isDarkMode ? HUB.text : '#333' }}>{text}</p>
-                </div>
-              </button>
-            ))}
+                </button>
+              );
+            })}
             {suggestionError && (
               <p className="text-xs" style={{ color: isDarkMode ? HUB.textSecondary : '#888' }}>Using reflection after: {suggestionError}</p>
             )}
