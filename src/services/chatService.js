@@ -4,9 +4,9 @@ import { getDateId } from '../utils/dateUtils';
 
 class ChatService {
   constructor() {
-    this.openaiApiKey = process.env.REACT_APP_OPENAI_API_KEY || '';
-    this.geminiApiKey = process.env.REACT_APP_GOOGLE_API_KEY || '';
-    this.grokApiKey = process.env.REACT_APP_GROK_API_KEY || '';
+    this.openaiApiKey = process.env.REACT_APP_OPENAI_API_KEY || process.env.OPENAI_API_KEY || '';
+    this.geminiApiKey = process.env.REACT_APP_GOOGLE_API_KEY || process.env.GOOGLE_API_KEY || '';
+    this.grokApiKey = process.env.REACT_APP_GROK_API_KEY || process.env.GROK_API_KEY || '';
     this.apiProvider = 'openai'; // 'openai', 'gemini', or 'grok'
     this.openaiBaseURL = 'https://api.openai.com/v1';
     this.geminiBaseURL = 'https://generativelanguage.googleapis.com/v1beta';
@@ -17,16 +17,18 @@ class ChatService {
     this.visionModelName = 'gpt-4o'; // For OpenAI vision
     // Optional: Add your Serper API key here for better results
     // Get free API key at: https://serper.dev (2,500 free searches/month)
-    this.serperApiKey = process.env.REACT_APP_SERPER_API_KEY || null;
+    this.serperApiKey = process.env.REACT_APP_SERPER_API_KEY || process.env.SERPER_API_KEY || null;
 
     // Debug: Log API key status (first 10 chars only for security)
     console.log('🔑 API Keys loaded:');
     console.log('  OpenAI:', this.openaiApiKey ? `${this.openaiApiKey.substring(0, 10)}... (${this.openaiApiKey.length} chars)` : 'NOT SET');
     console.log('  Gemini:', this.geminiApiKey ? `${this.geminiApiKey.substring(0, 10)}... (${this.geminiApiKey.length} chars)` : 'NOT SET');
     console.log('  Grok:', this.grokApiKey ? `${this.grokApiKey.substring(0, 10)}... (${this.grokApiKey.length} chars)` : 'NOT SET');
+    console.log('  Serper:', this.serperApiKey ? `${this.serperApiKey.substring(0, 6)}... (${this.serperApiKey.length} chars)` : 'NOT SET');
     console.log('🔍 Environment variables check:');
     console.log('  REACT_APP_GROK_API_KEY exists:', !!process.env.REACT_APP_GROK_API_KEY);
     console.log('  REACT_APP_GROK_API_KEY value:', process.env.REACT_APP_GROK_API_KEY ? `${process.env.REACT_APP_GROK_API_KEY.substring(0, 10)}...` : 'undefined');
+    console.log('  REACT_APP_SERPER_API_KEY exists:', !!process.env.REACT_APP_SERPER_API_KEY);
   }
 
   /**
