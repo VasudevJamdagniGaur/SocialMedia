@@ -1739,15 +1739,38 @@ ${text}`;
   }
 
   /**
-   * Build image generation prompt by entity type: people → place → events (uses Gemini-extracted entities).
+   * Build image generation prompt: combine multiple entities into one LinkedIn-style thumbnail (not just a simple portrait).
+   * When both person and event (e.g. book) are present, feature both in a single composite image with minimal text.
    * @param {{ persons: string[], places: string[], events: string[] }} entities
    * @returns {string|null} - Prompt for Gemini image model or null if no entity
    */
   _getImagePromptFromEntities(entities) {
     const { persons, places, events } = entities;
-    if (persons.length > 0) return `${persons[0].trim()} high quality portrait`;
-    if (places.length > 0) return `${places[0].trim()} building exterior high quality`;
-    if (events.length > 0) return `${events[0].trim()} stage photo high quality`;
+    const person = persons[0]?.trim();
+    const place = places[0]?.trim();
+    const event = events[0]?.trim();
+
+    const styleSuffix = 'Professional LinkedIn-style thumbnail, minimal text on image, high quality, engaging.';
+    // Person + event (e.g. Bill Gates + Source Code book): composite thumbnail featuring both
+    if (person && event) {
+      return `${person} with the book "${event}", featured together in one image. ${styleSuffix}`;
+    }
+    // Person + place
+    if (person && place) {
+      return `${person} at ${place}, featured together. ${styleSuffix}`;
+    }
+    // Person only: avoid "simple portrait" — more thumbnail-like
+    if (person) {
+      return `${person}, professional LinkedIn-style thumbnail, engaging and dynamic, not a plain headshot. ${styleSuffix}`;
+    }
+    // Place only
+    if (place) {
+      return `${place}, professional LinkedIn-style thumbnail. ${styleSuffix}`;
+    }
+    // Event only (e.g. book title, conference)
+    if (event) {
+      return `"${event}" featured prominently, professional LinkedIn-style thumbnail, minimal text. ${styleSuffix}`;
+    }
     return null;
   }
 
@@ -1779,7 +1802,11 @@ ${text}`;
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: `Generate a single high-quality image: ${imagePrompt}.` }] }],
+          contents: [{
+            parts: [{
+              text: `Generate a single image for a LinkedIn post. Style: like a YouTube thumbnail but suitable for LinkedIn — professional, eye-catching, minimal text on the image. Combine all mentioned subjects in one scene where relevant (e.g. person with their book, or person at a place). Do not generate a simple headshot when a book or event is also mentioned; feature both in the same image. ${imagePrompt}`
+            }]
+          }],
           generationConfig: {
             responseModalities: ['TEXT', 'IMAGE'],
             imageConfig: { aspectRatio: '1:1', imageSize: '2K' }
