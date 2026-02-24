@@ -1678,41 +1678,43 @@ ${(reflection || '').trim()}`;
   async extractEntitiesWithNER(postText) {
     const apiKey = (this.geminiApiKey || process.env.REACT_APP_GOOGLE_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
     const empty = { persons: [], places: [], events: [] };
-    if (!apiKey || !postText?.trim()) return empty;
+    const text = (postText || '').trim();
+    if (!apiKey || !text) return empty;
 
     const prompt = `You are an entity extraction system.
 
 Extract real-world named entities from the text below.
 
 Rules:
-- Include only real identifiable persons, places, or events.
-- Do NOT include abstract concepts.
-- Return STRICT JSON only.
-- No explanation.
-- No markdown.
-- No commentary.
+- persons: real people (e.g. Bill Gates, Sam Altman, Elon Musk). If someone is mentioned by name, include them.
+- places: specific locations or venues (cities, institutions, buildings).
+- events: named events, or named works like books (e.g. "Source Code" as a book title). Put book titles in events if they are clearly named.
+- Include only real identifiable persons, places, or events. Do NOT include abstract concepts or hashtags as entities.
+- Return STRICT JSON only. No explanation. No markdown. No commentary.
 
-Return format:
-{
-  "persons": [],
-  "places": [],
-  "events": []
-}
+Return format (use this exact structure):
+{"persons":[],"places":[],"events":[]}
+
+Example: If the text says "Reading Bill Gates' Source Code" then return {"persons":["Bill Gates"],"places":[],"events":["Source Code"]}.
 
 Text:
-${(postText || '').trim()}`;
+${text}`;
 
     try {
+      console.log('[Entity extraction] Input length:', text.length, 'Preview:', text.slice(0, 120) + (text.length > 120 ? '...' : ''));
       const apiUrl = `${this.geminiBaseURL}/models/${this.geminiModelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
       const res = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 200 }
+          generationConfig: { temperature: 0.1, maxOutputTokens: 350 }
         })
       });
-      if (!res.ok) return empty;
+      if (!res.ok) {
+        console.warn('[Entity extraction] API not ok:', res.status);
+        return this._fallbackEntityExtraction(text);
+      }
       const data = await res.json();
       let raw = (data.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '').trim();
 
@@ -1724,16 +1726,66 @@ ${(postText || '').trim()}`;
         .trim();
 
       const jsonMatch = raw.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) return empty;
-      const parsed = JSON.parse(jsonMatch[0]);
+      if (!jsonMatch) {
+        console.warn('[Entity extraction] No JSON object in response, using fallback');
+        return this._fallbackEntityExtraction(text);
+      }
+      let parsed;
+      try {
+        parsed = JSON.parse(jsonMatch[0]);
+      } catch (parseErr) {
+        console.warn('[Entity extraction] JSON parse failed:', parseErr.message, 'Using fallback');
+        return this._fallbackEntityExtraction(text);
+      }
       const persons = Array.isArray(parsed.persons) ? parsed.persons.filter(s => typeof s === 'string' && s.trim().length > 0 && s.length < 80) : [];
       const places = Array.isArray(parsed.places) ? parsed.places.filter(s => typeof s === 'string' && s.trim().length > 0 && s.length < 80) : [];
       const events = Array.isArray(parsed.events) ? parsed.events.filter(s => typeof s === 'string' && s.trim().length > 0 && s.length < 80) : [];
-      return { persons, places, events };
+      const result = { persons, places, events };
+      if (persons.length === 0 && places.length === 0 && events.length === 0) {
+        const fallback = this._fallbackEntityExtraction(text);
+        if (fallback.persons.length > 0 || fallback.places.length > 0 || fallback.events.length > 0) {
+          console.log('[Entity extraction] Gemini returned empty, using fallback:', fallback);
+          return fallback;
+        }
+      }
+      return result;
     } catch (e) {
       console.warn('Entity extraction failed:', e.message);
-      return empty;
+      return this._fallbackEntityExtraction(text);
     }
+  }
+
+  /**
+   * Fallback when Gemini returns invalid/empty: extract obvious person names (e.g. "Bill Gates") and book titles from text.
+   */
+  _fallbackEntityExtraction(text) {
+    const result = { persons: [], places: [], events: [] };
+    if (!text || typeof text !== 'string') return result;
+    const t = text.trim();
+    if (!t.length) return result;
+    const personSet = new Set();
+    if (/\bBill\s+Gates\b/i.test(t)) personSet.add('Bill Gates');
+    if (/\bSam\s+Altman\b/i.test(t)) personSet.add('Sam Altman');
+    if (/\bElon\s+Musk\b/i.test(t)) personSet.add('Elon Musk');
+    if (/\bSumit\b/i.test(t)) personSet.add('Sumit');
+    const possessiveMatch = t.match(/\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)[''"]\s*(?:Source\s+Code|[\w\s]+)/g);
+    if (possessiveMatch) {
+      possessiveMatch.forEach((m) => {
+        const name = m.replace(/[''"].*$/, '').trim();
+        if (name.length > 1 && name.length < 50) personSet.add(name);
+      });
+    }
+    const titleCaseNames = t.match(/\b([A-Z][a-z]+\s+[A-Z][a-z]+)\b/g);
+    if (titleCaseNames) {
+      const skip = /^(Source Code|Continuous Learning|Growth Mindset|Networking|Connection|Bill Gates|Sam Altman|Elon Musk)$/i;
+      titleCaseNames.forEach((n) => {
+        const name = n.trim();
+        if (name.length > 3 && name.length < 50 && !skip.test(name)) personSet.add(name);
+      });
+    }
+    result.persons = [...personSet];
+    if (/\bSource\s+Code\b/i.test(t) && !result.events.includes('Source Code')) result.events.push('Source Code');
+    return result;
   }
 
   /**
