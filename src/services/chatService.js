@@ -1642,16 +1642,18 @@ ${(reflection || '').trim()}`;
 Extract real-world named entities from the text below.
 
 Rules:
-- persons: real people (e.g. Bill Gates, Sam Altman, Elon Musk). If someone is mentioned by name, include them.
+- persons: ONLY famous or well-known public figures (celebrities, leaders, authors, historical figures). Examples: Bill Gates, Sam Altman, Elon Musk. Do NOT include personal contacts, friends, family, or acquaintances (e.g. "my friend Sumit" or "I met John" → leave persons empty).
 - places: specific locations or venues (cities, institutions, buildings).
 - events: named events, or named works like books (e.g. "Source Code" as a book title). Put book titles in events if they are clearly named.
-- Include only real identifiable persons, places, or events. Do NOT include abstract concepts or hashtags as entities.
+- Include only real identifiable entities. Do NOT include abstract concepts or hashtags.
 - Return STRICT JSON only. No explanation. No markdown. No commentary.
 
 Return format (use this exact structure):
 {"persons":[],"places":[],"events":[]}
 
-Example: If the text says "Reading Bill Gates' Source Code" then return {"persons":["Bill Gates"],"places":[],"events":["Source Code"]}.
+Examples:
+- "I caught up with my friend Sumit today" → {"persons":[],"places":[],"events":[]}
+- "Reading Bill Gates' Source Code" → {"persons":["Bill Gates"],"places":[],"events":["Source Code"]}
 
 Text:
 ${text}`;
@@ -1712,34 +1714,26 @@ ${text}`;
   }
 
   /**
-   * Fallback when Gemini returns invalid/empty: extract obvious person names (e.g. "Bill Gates") and book titles from text.
+   * Fallback when Gemini returns invalid/empty: only add famous personalities and book titles.
+   * Do NOT add personal contacts (e.g. Sumit, friends, family).
    */
   _fallbackEntityExtraction(text) {
     const result = { persons: [], places: [], events: [] };
     if (!text || typeof text !== 'string') return result;
     const t = text.trim();
     if (!t.length) return result;
-    const personSet = new Set();
-    if (/\bBill\s+Gates\b/i.test(t)) personSet.add('Bill Gates');
-    if (/\bSam\s+Altman\b/i.test(t)) personSet.add('Sam Altman');
-    if (/\bElon\s+Musk\b/i.test(t)) personSet.add('Elon Musk');
-    if (/\bSumit\b/i.test(t)) personSet.add('Sumit');
+    const famousOnly = new Set(['Bill Gates', 'Sam Altman', 'Elon Musk']);
+    if (/\bBill\s+Gates\b/i.test(t)) result.persons.push('Bill Gates');
+    if (/\bSam\s+Altman\b/i.test(t)) result.persons.push('Sam Altman');
+    if (/\bElon\s+Musk\b/i.test(t)) result.persons.push('Elon Musk');
     const possessiveMatch = t.match(/\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)[''"]\s*(?:Source\s+Code|[\w\s]+)/g);
     if (possessiveMatch) {
       possessiveMatch.forEach((m) => {
         const name = m.replace(/[''"].*$/, '').trim();
-        if (name.length > 1 && name.length < 50) personSet.add(name);
+        if (name.length > 1 && name.length < 50 && famousOnly.has(name)) result.persons.push(name);
       });
     }
-    const titleCaseNames = t.match(/\b([A-Z][a-z]+\s+[A-Z][a-z]+)\b/g);
-    if (titleCaseNames) {
-      const skip = /^(Source Code|Continuous Learning|Growth Mindset|Networking|Connection|Bill Gates|Sam Altman|Elon Musk)$/i;
-      titleCaseNames.forEach((n) => {
-        const name = n.trim();
-        if (name.length > 3 && name.length < 50 && !skip.test(name)) personSet.add(name);
-      });
-    }
-    result.persons = [...personSet];
+    result.persons = [...new Set(result.persons)];
     if (/\bSource\s+Code\b/i.test(t) && !result.events.includes('Source Code')) result.events.push('Source Code');
     return result;
   }
