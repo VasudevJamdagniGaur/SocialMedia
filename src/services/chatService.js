@@ -1676,20 +1676,28 @@ ${(reflection || '').trim()}`;
    * @returns {Promise<{ persons: string[], places: string[], events: string[] }>}
    */
   async extractEntitiesWithNER(postText) {
-    const apiKey = this.geminiApiKey || process.env.REACT_APP_GOOGLE_API_KEY || '';
+    const apiKey = (this.geminiApiKey || process.env.REACT_APP_GOOGLE_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
     const empty = { persons: [], places: [], events: [] };
     if (!apiKey || !postText?.trim()) return empty;
 
-    const prompt = `You are a named-entity extractor. Extract only these three types from the text below.
+    const prompt = `You are an entity extraction system.
 
-1. persons – Real people (names of individuals, public figures, e.g. Sam Altman, Elon Musk).
-2. places – Specific locations or venues (cities, institutions, buildings, e.g. IIT Delhi, San Francisco, Stanford).
-3. events – Named events (conferences, summits, interviews when named, e.g. IIT Delhi Summit 2025, TechCrunch Disrupt).
+Extract real-world named entities from the text below.
 
-Return a single JSON object with exactly these keys. Use empty arrays if none found. No other text.
+Rules:
+- Include only real identifiable persons, places, or events.
+- Do NOT include abstract concepts.
+- Return STRICT JSON only.
+- No explanation.
+- No markdown.
+- No commentary.
 
-Format:
-{"persons":[],"places":[],"events":[]}
+Return format:
+{
+  "persons": [],
+  "places": [],
+  "events": []
+}
 
 Text:
 ${(postText || '').trim()}`;
@@ -1706,8 +1714,16 @@ ${(postText || '').trim()}`;
       });
       if (!res.ok) return empty;
       const data = await res.json();
-      const text = (data.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '').trim();
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      let raw = (data.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '').trim();
+
+      console.log('Raw Gemini entity output:', raw);
+
+      raw = raw
+        .replace(/```json/gi, '')
+        .replace(/```/g, '')
+        .trim();
+
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
       if (!jsonMatch) return empty;
       const parsed = JSON.parse(jsonMatch[0]);
       const persons = Array.isArray(parsed.persons) ? parsed.persons.filter(s => typeof s === 'string' && s.trim().length > 0 && s.length < 80) : [];
@@ -1715,6 +1731,7 @@ ${(postText || '').trim()}`;
       const events = Array.isArray(parsed.events) ? parsed.events.filter(s => typeof s === 'string' && s.trim().length > 0 && s.length < 80) : [];
       return { persons, places, events };
     } catch (e) {
+      console.warn('Entity extraction failed:', e.message);
       return empty;
     }
   }
