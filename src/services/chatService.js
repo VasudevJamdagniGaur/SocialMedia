@@ -1639,10 +1639,11 @@ Do not add numbers, labels, titles, or explanations. Only the post text. Each po
     return posts;
   }
 
-  // ---------- Image: entity-based, Serper only (prefer person → place → event) ----------
+  // ---------- Image: Gemini NER first, then route by people → place → event (Serper only) ----------
 
   /**
-   * Extract entities from text using LLM. Full post text, structured output.
+   * Use Gemini to extract named entities (people, place, events) from text before any image routing.
+   * Routing will use these entities in order: people first, then place, then events.
    * @param {string} postText - Full post text
    * @returns {Promise<{ persons: string[], places: string[], events: string[] }>}
    */
@@ -1651,15 +1652,16 @@ Do not add numbers, labels, titles, or explanations. Only the post text. Each po
     const empty = { persons: [], places: [], events: [] };
     if (!apiKey || !postText?.trim()) return empty;
 
-    const prompt = `Extract all named entities from the following text.
-Return JSON in this format:
-{
-  "persons": [],
-  "places": [],
-  "events": []
-}
-Only include real-world identifiable persons, places, or events.
-If none exist, return empty arrays.
+    const prompt = `You are a named-entity extractor. Extract only these three types from the text below.
+
+1. persons – Real people (names of individuals, public figures, e.g. Sam Altman, Elon Musk).
+2. places – Specific locations or venues (cities, institutions, buildings, e.g. IIT Delhi, San Francisco, Stanford).
+3. events – Named events (conferences, summits, interviews when named, e.g. IIT Delhi Summit 2025, TechCrunch Disrupt).
+
+Return a single JSON object with exactly these keys. Use empty arrays if none found. No other text.
+
+Format:
+{"persons":[],"places":[],"events":[]}
 
 Text:
 ${(postText || '').trim()}`;
@@ -1690,9 +1692,9 @@ ${(postText || '').trim()}`;
   }
 
   /**
-   * Build Serper search query from entity priority: person → place → event.
+   * Route image search by entity type: people → place → events (uses Gemini-extracted entities only).
    * @param {{ persons: string[], places: string[], events: string[] }} entities
-   * @returns {string|null} - Query string or null if no entity
+   * @returns {string|null} - Serper query or null if no entity
    */
   _getSerperQueryFromEntities(entities) {
     const { persons, places, events } = entities;
@@ -1703,7 +1705,7 @@ ${(postText || '').trim()}`;
   }
 
   /**
-   * Fetch image using Serper only. Entities from text; prefer person, then place, then event.
+   * Fetch image: 1) Use Gemini to extract entities (people, place, events). 2) Route by entity type (people → place → events) and call Serper.
    * If no entity found, returns null (no image).
    * @param {string} postText - Full post text
    * @returns {Promise<string|null>}
@@ -1712,11 +1714,13 @@ ${(postText || '').trim()}`;
     if (!postText?.trim()) return null;
 
     const fullText = postText.trim();
+    // Step 1: Extract entities with Gemini before any routing
     const entities = await this.extractEntitiesWithNER(fullText);
+    // Step 2: Route by people, then place, then events
     const searchQuery = this._getSerperQueryFromEntities(entities);
 
-    console.log('[Image Router] Extracted Entities:', JSON.stringify(entities));
-    console.log('[Image Router] Selected Source: SERPER');
+    console.log('[Image Router] Extracted Entities (Gemini):', JSON.stringify(entities));
+    console.log('[Image Router] Routed by: people → place → events');
     console.log('[Image Router] Final Search Query:', searchQuery ?? '(no entity)');
 
     if (!searchQuery || !this.serperApiKey) return null;
