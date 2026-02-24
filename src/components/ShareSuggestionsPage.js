@@ -49,10 +49,11 @@ export default function ShareSuggestionsPage() {
   // Selected platform: from navigation state or from tapping an icon (LinkedIn / X / Reddit)
   const [selectedPlatform, setSelectedPlatform] = useState(platformFromState || null);
   const [platformSuggestions, setPlatformSuggestions] = useState([]);
-  const [suggestionImageUrl, setSuggestionImageUrl] = useState(null);
+  const [suggestionImageUrls, setSuggestionImageUrls] = useState([]); // one image per suggestion (Gemini entities → Serper)
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(!!platformFromState);
   const [suggestionError, setSuggestionError] = useState(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [isLoadingImages, setIsLoadingImages] = useState(false);
 
   const reflectionDate = state.selectedDate ? (state.selectedDate instanceof Date ? state.selectedDate : new Date(state.selectedDate)) : new Date();
   const dateStr = reflectionDate instanceof Date ? getDateId(reflectionDate) : getDateId(new Date(reflectionDate));
@@ -63,30 +64,37 @@ export default function ShareSuggestionsPage() {
     let cancelled = false;
     setIsLoadingSuggestions(true);
     setSuggestionError(null);
+    setSuggestionImageUrls([]);
     chatService
       .generateSocialPostSuggestions(reflectionFromState, selectedPlatform)
-      .then((posts) => {
-        if (!cancelled) {
-          const list = Array.isArray(posts) && posts.length ? posts : [{ eventLabel: 'Reflection', post: reflectionFromState }];
-          setPlatformSuggestions(list);
-          setSelectedIndex(0);
-          setSuggestionImageUrl(null);
-          const firstPostText = typeof list[0] === 'object' && list[0].post != null ? list[0].post : reflectionFromState;
-          chatService.fetchImageForReflection(firstPostText).then((url) => {
-            if (!cancelled && url) setSuggestionImageUrl(url);
-          }).catch(() => {});
-        }
+      .then((list) => {
+        if (cancelled) return;
+        const posts = Array.isArray(list) && list.length ? list : [{ eventLabel: 'Reflection', post: reflectionFromState }];
+        setPlatformSuggestions(posts);
+        setSelectedIndex(0);
+        setIsLoadingSuggestions(false);
+        // For each suggestion: Gemini extracts entities (person, place, event) → Serper fetches image → show with that post
+        setIsLoadingImages(true);
+        Promise.all(
+          posts.map((item) => {
+            const postText = typeof item === 'object' && item?.post != null ? item.post : String(item);
+            return chatService.fetchImageForReflection(postText).catch(() => null);
+          })
+        ).then((urls) => {
+          if (!cancelled) {
+            setSuggestionImageUrls(Array.isArray(urls) ? urls : []);
+            setIsLoadingImages(false);
+          }
+        });
       })
       .catch((err) => {
         if (!cancelled) {
           setSuggestionError(err.message || 'Could not generate suggestions');
           setPlatformSuggestions([{ eventLabel: 'Reflection', post: reflectionFromState }]);
           setSelectedIndex(0);
-          setSuggestionImageUrl(null);
+          setSuggestionImageUrls([]);
+          setIsLoadingSuggestions(false);
         }
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoadingSuggestions(false);
       });
     return () => { cancelled = true; };
   }, [selectedPlatform, reflectionFromState]);
@@ -232,6 +240,7 @@ export default function ShareSuggestionsPage() {
             {platformSuggestions.map((item, idx) => {
               const eventLabel = typeof item === 'object' && item?.eventLabel != null ? item.eventLabel : 'Moment';
               const postText = typeof item === 'object' && item?.post != null ? item.post : String(item);
+              const imageUrl = suggestionImageUrls[idx] || null;
               return (
                 <button
                   key={idx}
@@ -243,15 +252,24 @@ export default function ShareSuggestionsPage() {
                     border: `1px solid ${selectedIndex === idx ? HUB.accent : (isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)')}`,
                   }}
                 >
-                  {suggestionImageUrl && idx === 0 && (
+                  {imageUrl && (
                     <div className="w-full aspect-video bg-black/20 flex-shrink-0">
                       <img
-                        src={suggestionImageUrl}
+                        src={imageUrl}
                         alt=""
                         className="w-full h-full object-cover"
                         loading="lazy"
                         onError={(e) => { e.target.style.display = 'none'; }}
                       />
+                    </div>
+                  )}
+                  {isLoadingImages && !imageUrl && (
+                    <div className="w-full aspect-video flex items-center justify-center flex-shrink-0" style={{ background: isDarkMode ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.06)' }}>
+                      <div className="flex space-x-1.5">
+                        <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: HUB.accent, animationDelay: '0ms' }} />
+                        <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: HUB.accent, animationDelay: '150ms' }} />
+                        <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: HUB.accent, animationDelay: '300ms' }} />
+                      </div>
                     </div>
                   )}
                   <div className="p-4">
