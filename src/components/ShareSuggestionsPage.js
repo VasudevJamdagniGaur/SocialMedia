@@ -179,10 +179,7 @@ export default function ShareSuggestionsPage() {
           </p>
         </div>
 
-        <p className="text-sm font-medium mb-3" style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}>
-          {selectedPlatform ? 'Choose a post to share' : 'Choose a version to share'}
-        </p>
-        <div className="flex items-center justify-center gap-6 mb-6">
+        <div className="flex items-center justify-center gap-6 mb-3">
           <button
             type="button"
             onClick={() => setSelectedPlatform('linkedin')}
@@ -223,6 +220,9 @@ export default function ShareSuggestionsPage() {
             <Share2 className="w-5 h-5" style={{ color: REDDIT_COLOR }} strokeWidth={2} />
           </button>
         </div>
+        <p className="text-sm font-medium mb-3" style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}>
+          {selectedPlatform ? 'Choose a post to share' : 'Choose a version to share'}
+        </p>
 
         {selectedPlatform && isLoadingSuggestions ? (
           <div className="rounded-xl p-6 flex flex-col items-center justify-center mb-8" style={cardStyle}>
