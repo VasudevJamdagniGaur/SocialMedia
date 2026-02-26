@@ -1683,8 +1683,8 @@ ${text.slice(0, 1000)}`;
 
   /**
    * Extract context from post and build structured prompt for Gemini image generation.
-   * Same instructions for LinkedIn and X: candid, engaging, natural (no platform-specific styling).
-   * @param {string} postText - Share suggestion text
+   * Story-first: visualize the narrative only; no platform, branding, or social media aesthetics.
+   * @param {string} postText - Share suggestion text (the story)
    * @param {{ displayName?: string, age?: string, nationality?: string, gender?: string, skinTone?: string, hairstyle?: string, clothingStyle?: string, profession?: string, profileImageUrl?: string }|null} userContext
    * @returns {Promise<string|null>} - Full image generation prompt or null
    */
@@ -1702,6 +1702,8 @@ ${text.slice(0, 1000)}`;
     const profileImageUrl = (userContext?.profileImageUrl || '').trim();
 
     const extractPrompt = `Analyze this post and extract context for a single realistic photograph. Return STRICT JSON only, no markdown.
+
+Extract: main activity, environment/location, emotional tone, time of day (if implied), professional or casual setting, body language cues.
 
 Keys (short phrases; empty string if not clear):
 - mainActivity: what the person is doing (e.g. "reading a book", "working at a desk", "walking in a corridor")
@@ -1740,33 +1742,51 @@ ${text.slice(0, 800)}`;
       const outfit = (c.contextualOutfit || '').trim() || clothingStyle;
       const bodyLanguage = (c.bodyLanguage || '').trim() || 'natural body language';
 
-      const instructions = `You are generating a realistic, context-aware photograph for a social media post.
+      const instructions = `You are generating a realistic, context-aware photograph based strictly on the story provided.
 
-IMAGE GENERATION INSTRUCTIONS:
-1. If the post implies the user is the main subject, generate a person that resembles the user.
-2. If a profile image URL is provided, use it as a visual reference for facial structure, hair style, skin tone, and general appearance.
+Your only priority is to visually represent the events, emotions, and environment described in the text.
+
+Do NOT consider:
+- The platform where this will be posted
+- Social media aesthetics
+- Branding
+- Marketing tone
+
+Focus only on accurately visualizing the story.
+
+Post:
+"""
+${text.slice(0, 1200)}
+"""
+
+User profile:
+- Age: ${age}
+- Gender: ${gender}
+- Skin tone: ${skinTone}
+- Hairstyle: ${hairstyle}
+- Clothing style preference: ${clothingStyle}
+- Profession (if known): ${profession}
+- Profile image URL (if available): ${profileImageUrl || 'none'}
+
+IMAGE GENERATION RULES:
+
+1. If the story implies the user is the subject, generate a person resembling the user.
+2. If a profile image is available, use it as visual reference for appearance consistency.
 3. Do NOT replicate the face exactly.
-4. Do NOT generate a celebrity look.
-5. The generated person should look like the same individual but as a naturally photographed version in a real-world scene.
-6. If the user is not the subject of the post, generate a context-appropriate person matching the story.
+4. Do NOT generate any celebrity resemblance.
+5. The scene must directly reflect the narrative.
+6. No random animals or unrelated objects.
+7. Avoid generic stock-photo style.
+8. Use natural lighting.
+9. Use subtle, realistic expressions.
+10. No text overlay in the image.
+11. No logos unless explicitly mentioned in the story.
 
-SCENE REQUIREMENTS:
-- The scene must directly reflect the story context.
-- No random animals or unrelated elements.
-- Avoid generic stock-photo composition.
-- Make it feel like a candid real-life captured moment.
-- Use natural lighting.
-- Use subtle, believable facial expressions.
-- Realistic human proportions.
-- No exaggerated AI-art style.
-- No text overlay in the image.
-- No logos unless mentioned in the post.`;
+Output strictly as a detailed photographic scene description in this format:`;
 
-      const styleSuffix = 'professional DSLR photography, natural lighting, shallow depth of field, cinematic but realistic, authentic moment, not staged, not stock photo style.';
+      const structuredPrompt = `A realistic high-detail photograph of a ${age}-year-old ${gender} with ${skinTone} skin tone and ${hairstyle}, resembling the user's profile appearance, wearing ${outfit}, ${activity}, in a ${environment}, natural body language reflecting ${tone}, natural lighting, shallow depth of field, realistic proportions, authentic candid moment, not staged, not stock photo style.`;
 
-      const structuredPrompt = `A realistic high-detail photograph of a ${age}-year-old ${gender} with ${skinTone} skin tone and ${hairstyle} hair, resembling the user's profile appearance, wearing ${outfit}, ${activity}, in a ${environment}, ${bodyLanguage} reflecting ${tone}, ${styleSuffix}`;
-
-      return `${instructions}\n\nGenerate the following image:\n\n${structuredPrompt}`;
+      return `${instructions}\n\n"${structuredPrompt}"`;
     } catch (e) {
       console.warn('[Image] Context extraction failed:', e.message);
       return null;
