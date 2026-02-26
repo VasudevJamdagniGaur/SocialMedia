@@ -1703,12 +1703,13 @@ ${text.slice(0, 1000)}`;
 
     const extractPrompt = `Analyze this post and extract context for a single realistic photograph. Return STRICT JSON only, no markdown.
 
-Extract: main activity, environment/location, emotional tone, time of day (if implied), professional or casual setting, body language cues.
-Prefer the SPECIFIC situation: e.g. for "wrong door" story use mainActivity like "standing in a corridor between two office doors, moment of realization" and environment like "college corridor with Director's Office and College Office doors"—not a generic "sitting thoughtfully" or "indoor".
+Extract from the FULL post text. Use the same extraction logic for every platform (no difference for LinkedIn vs X).
+Include specific items mentioned: book titles (e.g. "The Three-Body Problem"), place names (e.g. director's office, college office), and the actual situation.
+Prefer the SPECIFIC situation: e.g. for "wrong door" story use mainActivity like "standing in a corridor between two office doors, moment of realization" and environment like "college corridor with Director's Office and College Office doors"; for "reading The Three-Body Problem" use mainActivity like "reading the book The Three-Body Problem at a desk or by a window" and environment like "indoor by window" or "cafe" —not a generic "sitting thoughtfully" or "indoor".
 
 Keys (short phrases; empty string if not clear):
-- mainActivity: the specific situation and action (e.g. "standing in corridor between two doors, wrong-door moment", "reading a book at a desk", "walking in a corridor")
-- environment: the specific location (e.g. "college corridor with two labeled doors", "quiet library", "office", "home")
+- mainActivity: the specific situation and action, including any named items (e.g. "standing in corridor between two doors, wrong-door moment", "reading the book The Three-Body Problem at a desk", "reading at a table by a window")
+- environment: the specific location (e.g. "college corridor with two labeled doors", "quiet library", "cafe or room by a window", "home")
 - emotionalTone: mood (e.g. "focused", "embarrassed", "calm", "reflective")
 - timeOfDay: "morning" or "afternoon" or "evening" or ""
 - professionalOrCasual: "professional" or "casual" or "mixed" or ""
@@ -1747,11 +1748,11 @@ ${text.slice(0, 2000)}`;
 
       const instructions = `You are generating a realistic, context-aware photograph based strictly on the story provided.
 
-PRIORITY — DEPICT THE SITUATION, NOT A RANDOM PORTRAIT:
-- Do NOT generate a random photo of the user (e.g. a simple headshot, close-up portrait, or upper-body shot with only an expression).
-- The image MUST describe the SITUATION from the post: show the environment, the location, and the moment.
-- Examples: "Director's office mix-up" → show a corridor with two doors (e.g. "Director's Office" and "College Office"), person in that hallway, moment of realization or wrong door; "reading at the library" → show the library setting with the person in it; "wrong room" → show the actual setting and the mistaken moment.
-- The person can be in the scene but the SCENE and SITUATION are the focus. Include the specific place, doors, corridor, or context—not just a face.
+PRIORITY — DEPICT THE SITUATION; SAME LOGIC FOR ALL PLATFORMS (LINKEDIN AND X):
+- Do NOT focus on or center the user's face. Do NOT generate a face-close-up, headshot, or portrait-style image.
+- Use the same composition for every platform: show the SCENE and SITUATION with the person in context (medium or wide shot). The environment, location, and activity are the focus—not the face.
+- The image MUST describe the SITUATION from the post: show the environment, the location, and the moment. Examples: "Director's office mix-up" → corridor with two doors, person in that hallway; "Reading The Three-Body Problem" → person reading that book in a setting (e.g. by a window, at a table), book and environment visible—not a face close-up.
+- Extract and use the full post text. Include specific titles (e.g. book names), places, and the actual story. Same calculations and extraction as used for X post creation.
 
 Your only priority is to visually represent the events, emotions, and environment described in the text.
 
@@ -1799,7 +1800,7 @@ IMAGE GENERATION RULES:
 
 Output strictly as a detailed photographic scene description in this format:`;
 
-      const structuredPrompt = `A realistic high-detail photograph of a ${age}-year-old ${gender} with ${skinTone} skin tone and ${hairstyle}, resembling the user's profile appearance, wearing ${outfit}, ${activity}, in a ${environment}, natural body language reflecting ${tone}, natural lighting, shallow depth of field, realistic proportions, authentic candid moment, not staged, not stock photo style.`;
+      const structuredPrompt = `A realistic high-detail photograph of a ${age}-year-old ${gender} with ${skinTone} skin tone and ${hairstyle}, resembling the user's profile appearance, wearing ${outfit}, ${activity}, in a ${environment}, natural body language reflecting ${tone}, natural lighting, shallow depth of field, realistic proportions, authentic candid moment, not staged, not stock photo style. Medium or wide shot showing the scene and environment; do not crop to face only or create a portrait.`;
 
       return `${instructions}\n\n"${structuredPrompt}"`;
     } catch (e) {
@@ -2043,7 +2044,7 @@ ${text}`;
       return this._generateImageWithGemini(fallback, geminiKey, referenceImage);
     }
 
-    const strictRules = 'STRICT: Depict the SITUATION from the post (e.g. director\'s office mix-up = corridor with doors, person in that hallway; reading a book = person in that setting with the book). Do NOT output a random portrait or headshot—always show the scene, location, and moment. No animals unless mentioned. Avoid famous faces. High realism.';
+    const strictRules = 'STRICT: Same image logic for all platforms. Depict the SITUATION from the post (e.g. director\'s office mix-up = corridor with doors; reading a book = person in setting with the book visible). Do NOT focus on the face—use a medium or wide shot with scene and environment. No portrait or face-close-up. No animals unless mentioned. Avoid famous faces. High realism.';
     const fullPrompt = `${imagePrompt} ${strictRules}`;
     return this._generateImageWithGemini(fullPrompt, geminiKey, referenceImage);
   }
