@@ -283,7 +283,7 @@ export default function ShareSuggestionsPage() {
             }}
             title="Reddit – get Reddit-style post suggestions"
           >
-            <img src="/reddit-logo.png" alt="Reddit" className="w-7 h-7 object-contain" />
+            <img src="/reddit-logo.png" alt="Reddit" className="w-full h-full object-contain" />
           </button>
         </div>
 
