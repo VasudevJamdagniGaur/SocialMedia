@@ -2011,6 +2011,12 @@ ${text}`;
       return null;
     }
 
+    // When user has a profile image, resolve it for use as visual reference so the generated person resembles them
+    let referenceImage = null;
+    if (userContext?.profileImageUrl) {
+      referenceImage = await this._getProfileImageAsBase64(userContext.profileImageUrl);
+    }
+
     const imagePrompt = await this._buildStructuredPromptForNoFamous(fullText, userContext);
     if (!imagePrompt) {
       const firstSentence = fullText.split(/[.!?]/)[0]?.trim().slice(0, 100) || fullText.slice(0, 100);
@@ -2019,27 +2025,92 @@ ${text}`;
       const gender = (userContext?.gender || '').trim().toLowerCase() || 'person';
       const nationality = (userContext?.nationality || 'Indian').trim();
       const fallback = `A realistic photograph of a ${age} year old ${gender} (${nationality}), ${firstSentence}, natural lighting, high detail, not a celebrity, not stock.`;
-      return this._generateImageWithGemini(fallback, geminiKey);
+      return this._generateImageWithGemini(fallback, geminiKey, referenceImage);
     }
 
     const strictRules = 'STRICT: Do not generate random unrelated visuals. Do not generate animals unless explicitly mentioned. Do not generate generic stock office images. The person must look contextually aligned with the story. Avoid famous faces. Keep realism high.';
-    return this._generateImageWithGemini(`${imagePrompt} ${strictRules}`, geminiKey);
+    const fullPrompt = `${imagePrompt} ${strictRules}`;
+    return this._generateImageWithGemini(fullPrompt, geminiKey, referenceImage);
+  }
+
+  /**
+   * Resolve profile image URL or data URL to base64 + mimeType for use as reference in image generation.
+   * @param {string} urlOrDataUrl - Profile image URL (http/https) or data URL (data:image/...;base64,...)
+   * @returns {Promise<{ base64: string, mimeType: string }|null>}
+   */
+  async _getProfileImageAsBase64(urlOrDataUrl) {
+    const s = (urlOrDataUrl || '').trim();
+    if (!s) return null;
+    try {
+      if (s.startsWith('data:')) {
+        const match = s.match(/^data:([^;]+);base64,(.+)$/);
+        if (!match) return null;
+        const mimeType = match[1].trim().toLowerCase();
+        const base64 = match[2].replace(/\s/g, '');
+        if (!base64 || !/^image\/(jpeg|jpg|png|gif|webp)$/.test(mimeType)) return null;
+        return { base64, mimeType };
+      }
+      const res = await fetch(s, { mode: 'cors' });
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      const mimeType = (blob.type || 'image/jpeg').toLowerCase();
+      if (!/^image\/(jpeg|jpg|png|gif|webp)$/.test(mimeType)) return null;
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const dataUrl = reader.result;
+          if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) {
+            resolve(null);
+            return;
+          }
+          const m = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+          if (!m) {
+            resolve(null);
+            return;
+          }
+          resolve({ base64: m[2].replace(/\s/g, ''), mimeType: m[1].trim().toLowerCase() });
+        };
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(blob);
+      });
+    } catch (e) {
+      console.warn('[Image] Could not load profile image as reference:', e.message);
+      return null;
+    }
   }
 
   /**
    * Call Gemini Image Generation API; returns data URL or null.
+   * When referenceImage is provided, the model uses it so the generated person resembles the user's profile photo.
    * @param {string} prompt - Full image prompt
    * @param {string} apiKey - Gemini API key
+   * @param {{ base64: string, mimeType: string }|null} [referenceImage] - User's profile image to use as visual reference
    * @returns {Promise<string|null>}
    */
-  async _generateImageWithGemini(prompt, apiKey) {
+  async _generateImageWithGemini(prompt, apiKey, referenceImage = null) {
     try {
+      const referenceInstruction = referenceImage
+        ? `The image above is the user's profile photo. Generate a realistic photograph that shows THIS SAME PERSON (same face structure, skin tone, hairstyle, general appearance) in the scene described below. Do not replicate the face exactly—create a natural, candid variation of this person in the described situation. Scene to generate:\n\n`
+        : '';
+      const textPart = referenceInstruction + prompt;
+
+      const parts = [];
+      if (referenceImage) {
+        parts.push({
+          inlineData: {
+            mimeType: referenceImage.mimeType,
+            data: referenceImage.base64
+          }
+        });
+      }
+      parts.push({ text: textPart });
+
       const apiUrl = `${this.geminiBaseURL}/models/${this.geminiImageModelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
       const res = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
+          contents: [{ parts }],
           generationConfig: {
             responseModalities: ['TEXT', 'IMAGE'],
             imageConfig: { aspectRatio: '1:1', imageSize: '2K' }
@@ -2051,8 +2122,8 @@ ${text}`;
         return null;
       }
       const data = await res.json();
-      const parts = data.candidates?.[0]?.content?.parts ?? [];
-      const imagePart = parts.find(p => p.inlineData && p.inlineData.data);
+      const responseParts = data.candidates?.[0]?.content?.parts ?? [];
+      const imagePart = responseParts.find(p => p.inlineData && p.inlineData.data);
       if (!imagePart?.inlineData) return null;
       const { mimeType = 'image/png', data: base64 } = imagePart.inlineData;
       return `data:${mimeType};base64,${base64}`;
