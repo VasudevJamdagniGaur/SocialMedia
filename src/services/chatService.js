@@ -1509,18 +1509,11 @@ ${text}`;
    * @returns {Promise<{ eventLabel: string, post: string }[]>} - Array of { eventLabel, post } per event
    */
   async generateSocialPostSuggestions(reflection, platform) {
-    const savedProvider = (typeof localStorage !== 'undefined' && localStorage.getItem('chat_api_provider')) || 'openai';
-    this.setApiProvider(savedProvider);
-
+    // Share suggestion text is always generated with OpenAI; rest of app can use other providers
     this.openaiApiKey = (process.env.REACT_APP_OPENAI_API_KEY || process.env.OPENAI_API_KEY || this.openaiApiKey || '').trim();
-    this.geminiApiKey = (process.env.REACT_APP_GOOGLE_API_KEY || process.env.GOOGLE_API_KEY || this.geminiApiKey || '').trim();
-    this.grokApiKey = (process.env.REACT_APP_GROK_API_KEY || process.env.GROK_API_KEY || this.grokApiKey || '').trim();
-
-    const apiKey = this.getApiKey();
+    const apiKey = this.openaiApiKey;
     if (!apiKey || apiKey.trim() === '') {
-      const providerName = this.apiProvider === 'openai' ? 'OpenAI' : this.apiProvider === 'gemini' ? 'Gemini' : 'Grok';
-      const envKeyName = this.apiProvider === 'openai' ? 'REACT_APP_OPENAI_API_KEY' : this.apiProvider === 'gemini' ? 'REACT_APP_GOOGLE_API_KEY' : 'REACT_APP_GROK_API_KEY';
-      throw new Error(`${providerName} API key is not set. Add ${envKeyName} to .env in the project root, then restart the dev server (npm start).`);
+      throw new Error('OpenAI API key is not set. Add REACT_APP_OPENAI_API_KEY to .env for share suggestions (LinkedIn, X, Reddit).');
     }
 
     const platformLabel = platform === 'x' ? 'X (Twitter)' : platform.charAt(0).toUpperCase() + platform.slice(1);
@@ -1563,33 +1556,14 @@ EVENT: Reading The Three-Body Problem
 Reflection:
 ${(reflection || '').trim()}`;
 
-    let apiUrl, requestBody, headers;
-    if (this.apiProvider === 'openai') {
-      apiUrl = `${this.openaiBaseURL}/chat/completions`;
-      requestBody = {
-        model: this.openaiModelName,
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.5,
-        max_tokens: 2400
-      };
-      headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` };
-    } else if (this.apiProvider === 'grok') {
-      apiUrl = `${this.grokBaseURL}/chat/completions`;
-      requestBody = {
-        model: this.grokModelName,
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.5,
-        max_tokens: 2400
-      };
-      headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` };
-    } else {
-      apiUrl = `${this.geminiBaseURL}/models/${this.geminiModelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
-      requestBody = {
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.5, maxOutputTokens: 2400 }
-      };
-      headers = { 'Content-Type': 'application/json' };
-    }
+    const apiUrl = `${this.openaiBaseURL}/chat/completions`;
+    const requestBody = {
+      model: this.openaiModelName,
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.5,
+      max_tokens: 2400
+    };
+    const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` };
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 45000);
@@ -1607,13 +1581,7 @@ ${(reflection || '').trim()}`;
     }
 
     const data = await response.json();
-    let raw = '';
-    if (this.apiProvider === 'openai' || this.apiProvider === 'grok') {
-      raw = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) ? data.choices[0].message.content : '';
-    } else {
-      raw = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts)
-        ? data.candidates[0].content.parts.map(p => p.text).join('') : '';
-    }
+    const raw = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) ? data.choices[0].message.content : '';
     const trimmed = (raw || '').trim();
     if (!trimmed) return [{ eventLabel: 'Reflection', post: reflection.trim() }];
 
