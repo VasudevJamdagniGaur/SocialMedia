@@ -241,100 +241,86 @@ export default function ShareSuggestionsPage() {
             <Share2 className="w-5 h-5" style={{ color: REDDIT_COLOR }} strokeWidth={2} />
           </button>
         </div>
-        <p className="text-sm font-medium mb-3" style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}>
-          {selectedPlatform ? 'Choose a post to share' : 'Choose a version to share'}
-        </p>
 
-        {selectedPlatform && isLoadingSuggestions ? (
-          <div className="rounded-xl p-6 flex flex-col items-center justify-center mb-8" style={cardStyle}>
-            <div className="flex space-x-1.5 mb-3">
-              <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: HUB.accent, animationDelay: '0ms' }} />
-              <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: HUB.accent, animationDelay: '150ms' }} />
-              <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: HUB.accent, animationDelay: '300ms' }} />
-            </div>
-            <p className="text-sm" style={{ color: isDarkMode ? HUB.textSecondary : '#666' }}>
-              Creating {PLATFORM_LABELS[selectedPlatform]}-style suggestions...
+        {selectedPlatform && (
+          <>
+            <p className="text-sm font-medium mb-3" style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}>
+              Choose a post to share
             </p>
-          </div>
-        ) : selectedPlatform && platformSuggestions.length > 0 ? (
-          <div className="space-y-3 mb-8">
-            {platformSuggestions.map((item, idx) => {
-              const eventLabel = typeof item === 'object' && item?.eventLabel != null ? item.eventLabel : 'Moment';
-              const postText = typeof item === 'object' && item?.post != null ? item.post : String(item);
-              const imageUrl = suggestionImageUrls[idx] || null;
-              return (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => {
-                    setSelectedIndex(idx);
-                    const postText = typeof item === 'object' && item?.post != null ? item.post : String(item);
-                    openSharePanel(postText);
-                  }}
-                  className="w-full text-left rounded-xl overflow-hidden transition-all"
-                  style={{
-                    background: selectedIndex === idx ? (isDarkMode ? `${HUB.accent}20` : 'rgba(168, 85, 247, 0.12)') : (isDarkMode ? HUB.bgSecondary : '#FFFFFF'),
-                    border: `1px solid ${selectedIndex === idx ? HUB.accent : (isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)')}`,
-                  }}
-                >
-                  {imageUrl && (
-                    <div className="w-full aspect-video bg-black/20 flex-shrink-0">
-                      <img
-                        src={imageUrl}
-                        alt=""
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                        referrerPolicy="no-referrer"
-                        onError={(e) => {
-                          console.warn('[Suggestions] Image failed to load:', imageUrl?.slice(0, 60));
-                          e.target.style.display = 'none';
-                        }}
-                      />
-                    </div>
-                  )}
-                  {isLoadingImages && !imageUrl && (
-                    <div className="w-full aspect-video flex items-center justify-center flex-shrink-0" style={{ background: isDarkMode ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.06)' }}>
-                      <div className="flex space-x-1.5">
-                        <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: HUB.accent, animationDelay: '0ms' }} />
-                        <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: HUB.accent, animationDelay: '150ms' }} />
-                        <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: HUB.accent, animationDelay: '300ms' }} />
+            {isLoadingSuggestions ? (
+              <div className="rounded-xl p-6 flex flex-col items-center justify-center mb-8" style={cardStyle}>
+                <div className="flex space-x-1.5 mb-3">
+                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: HUB.accent, animationDelay: '0ms' }} />
+                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: HUB.accent, animationDelay: '150ms' }} />
+                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: HUB.accent, animationDelay: '300ms' }} />
+                </div>
+                <p className="text-sm" style={{ color: isDarkMode ? HUB.textSecondary : '#666' }}>
+                  Creating {PLATFORM_LABELS[selectedPlatform]}-style suggestions...
+                </p>
+              </div>
+            ) : platformSuggestions.length > 0 ? (
+              <div className="space-y-3 mb-8">
+                {platformSuggestions.map((item, idx) => {
+                  const eventLabel = typeof item === 'object' && item?.eventLabel != null ? item.eventLabel : 'Moment';
+                  const postText = typeof item === 'object' && item?.post != null ? item.post : String(item);
+                  const imageUrl = suggestionImageUrls[idx] || null;
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => {
+                        setSelectedIndex(idx);
+                        const postText = typeof item === 'object' && item?.post != null ? item.post : String(item);
+                        openSharePanel(postText);
+                      }}
+                      className="w-full text-left rounded-xl overflow-hidden transition-all"
+                      style={{
+                        background: selectedIndex === idx ? (isDarkMode ? `${HUB.accent}20` : 'rgba(168, 85, 247, 0.12)') : (isDarkMode ? HUB.bgSecondary : '#FFFFFF'),
+                        border: `1px solid ${selectedIndex === idx ? HUB.accent : (isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)')}`,
+                      }}
+                    >
+                      {imageUrl && (
+                        <div className="w-full aspect-video bg-black/20 flex-shrink-0">
+                          <img
+                            src={imageUrl}
+                            alt=""
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                            referrerPolicy="no-referrer"
+                            onError={(e) => {
+                              console.warn('[Suggestions] Image failed to load:', imageUrl?.slice(0, 60));
+                              e.target.style.display = 'none';
+                            }}
+                          />
+                        </div>
+                      )}
+                      {isLoadingImages && !imageUrl && (
+                        <div className="w-full aspect-video flex items-center justify-center flex-shrink-0" style={{ background: isDarkMode ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.06)' }}>
+                          <div className="flex space-x-1.5">
+                            <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: HUB.accent, animationDelay: '0ms' }} />
+                            <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: HUB.accent, animationDelay: '150ms' }} />
+                            <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: HUB.accent, animationDelay: '300ms' }} />
+                          </div>
+                        </div>
+                      )}
+                      <div className="p-4">
+                        {eventLabel ? <p className="text-xs font-semibold mb-1" style={{ color: HUB.accent }}>{eventLabel}</p> : null}
+                        <p className="text-[14px] leading-relaxed" style={{ color: isDarkMode ? HUB.text : '#333' }}>{postText}</p>
                       </div>
-                    </div>
-                  )}
-                  <div className="p-4">
-                    {eventLabel ? <p className="text-xs font-semibold mb-1" style={{ color: HUB.accent }}>{eventLabel}</p> : null}
-                    <p className="text-[14px] leading-relaxed" style={{ color: isDarkMode ? HUB.text : '#333' }}>{postText}</p>
-                  </div>
-                </button>
-              );
-            })}
-            {suggestionError && (
-              <p className="text-xs" style={{ color: isDarkMode ? HUB.textSecondary : '#888' }}>Using reflection after: {suggestionError}</p>
+                    </button>
+                  );
+                })}
+                {suggestionError && (
+                  <p className="text-xs" style={{ color: isDarkMode ? HUB.textSecondary : '#888' }}>Using reflection after: {suggestionError}</p>
+                )}
+              </div>
+            ) : (
+              suggestionError ? (
+                <p className="text-xs mb-8" style={{ color: isDarkMode ? HUB.textSecondary : '#888' }}>Using reflection after: {suggestionError}</p>
+              ) : null
             )}
-          </div>
-        ) : !selectedPlatform ? (
-          <div className="space-y-3 mb-8">
-            {fallbackSuggestions.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => {
-                  const idx = fallbackSuggestions.findIndex((x) => x.id === s.id);
-                  setSelectedIndex(idx);
-                  openSharePanel(s.text);
-                }}
-                className="w-full text-left rounded-xl p-4 transition-all"
-                style={{
-                  background: selectedFallbackId === s.id ? (isDarkMode ? `${HUB.accent}20` : 'rgba(168, 85, 247, 0.12)') : (isDarkMode ? HUB.bgSecondary : '#FFFFFF'),
-                  border: `1px solid ${selectedFallbackId === s.id ? HUB.accent : (isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)')}`,
-                }}
-              >
-                <p className="text-xs font-semibold mb-1" style={{ color: HUB.accent }}>{s.label}</p>
-                <p className="text-[14px] leading-relaxed" style={{ color: isDarkMode ? HUB.text : '#333' }}>{s.text}</p>
-              </button>
-            ))}
-          </div>
-        ) : null}
+          </>
+        )}
 
         {sharePanelOpen && (
           <div
