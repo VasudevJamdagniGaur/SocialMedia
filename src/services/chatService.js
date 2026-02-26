@@ -1623,7 +1623,43 @@ ${(reflection || '').trim()}`;
     return result;
   }
 
-  // ---------- Image: Gemini NER + Gemini image model (one image per post, base64 → data URL) ----------
+  // ---------- Image: content-based prompt + Gemini image model (one image per post, base64 → data URL) ----------
+
+  /**
+   * Turn post content into a short image prompt (scene/mood). No entity extraction.
+   * @param {string} postText - Full post text
+   * @returns {Promise<string|null>} - One-sentence image description or null
+   */
+  async _getImagePromptFromContent(postText) {
+    const apiKey = (this.geminiApiKey || process.env.REACT_APP_GOOGLE_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
+    const text = (postText || '').trim();
+    if (!apiKey || !text) return null;
+
+    const prompt = `Read this social media post and describe in ONE short sentence an image that would illustrate it. Describe only the scene, mood, or setting (e.g. "Someone focused on work in a quiet library", "Person reading a book thoughtfully"). Do not mention famous names or specific people. Output only that one sentence, nothing else. No quotes.
+
+Post:
+${text.slice(0, 800)}`;
+
+    try {
+      const apiUrl = `${this.geminiBaseURL}/models/${this.geminiModelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const res = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.3, maxOutputTokens: 80 }
+        })
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      const raw = (data.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '').trim();
+      const sentence = raw.replace(/^["']|["']$/g, '').trim().slice(0, 200);
+      return sentence || null;
+    } catch (e) {
+      console.warn('[Image prompt] Content prompt failed:', e.message);
+      return null;
+    }
+  }
 
   /**
    * Use Gemini to extract named entities (people, place, events) from text before any image routing.
@@ -1776,7 +1812,7 @@ ${text}`;
 
   /**
    * Generate one image per post using Gemini (gemini-3-pro-image-preview). Returns a data URL for the frontend.
-   * Uses entity extraction to build the image prompt; no Serper.
+   * Uses post content to create an image prompt (no entity/famous-person extraction).
    * @param {string} postText - Full post text
    * @returns {Promise<string|null>} - data:image/png;base64,... or null
    */
@@ -1790,10 +1826,12 @@ ${text}`;
     }
 
     const fullText = postText.trim();
-    const entities = await this.extractEntitiesWithNER(fullText);
-    const imagePrompt = this._getImagePromptFromEntities(entities);
-
-    console.log('[Image] Entities:', JSON.stringify(entities), '→ Prompt:', imagePrompt ?? '(none)');
+    let imagePrompt = await this._getImagePromptFromContent(fullText);
+    if (!imagePrompt) {
+      const firstSentence = fullText.split(/[.!?]/)[0]?.trim().slice(0, 120) || fullText.slice(0, 120);
+      imagePrompt = firstSentence ? `${firstSentence}. Professional, minimal text.` : null;
+    }
+    console.log('[Image] Content-based prompt:', imagePrompt ?? '(none)');
     if (!imagePrompt) return null;
 
     try {
@@ -1804,7 +1842,7 @@ ${text}`;
         body: JSON.stringify({
           contents: [{
             parts: [{
-              text: `Generate a single image for a LinkedIn post. Style: like a YouTube thumbnail but suitable for LinkedIn — professional, eye-catching, minimal text on the image. Combine all mentioned subjects in one scene where relevant (e.g. person with their book, or person at a place). Do not generate a simple headshot when a book or event is also mentioned; feature both in the same image. ${imagePrompt}`
+              text: `Generate a single image for a social post. Professional, eye-catching, minimal text on the image. Style suitable for LinkedIn/Twitter. ${imagePrompt}`
             }]
           }],
           generationConfig: {
@@ -1839,11 +1877,10 @@ ${text}`;
   }
 
   /**
-   * Returns image prompt from entities (no Serper). Kept for compatibility.
+   * Returns image prompt from post content. Kept for compatibility.
    */
   async getImageSearchQueryForPost(postText) {
-    const entities = await this.extractEntitiesWithNER(postText || '');
-    const searchQuery = this._getImagePromptFromEntities(entities);
+    const searchQuery = await this._getImagePromptFromContent(postText || '');
     return { queries: searchQuery ? [searchQuery] : [], useSerper: false };
   }
 
