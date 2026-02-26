@@ -249,7 +249,7 @@ export default function ShareSuggestionsPage() {
           <button
             type="button"
             onClick={() => setSelectedPlatform('linkedin')}
-            className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all hover:opacity-100"
+            className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all hover:opacity-100 overflow-hidden"
             style={{
               background: selectedPlatform === 'linkedin' ? 'rgba(10, 102, 194, 0.35)' : 'rgba(10, 102, 194, 0.2)',
               border: `2px solid ${selectedPlatform === 'linkedin' ? '#0A66C2' : 'rgba(10, 102, 194, 0.4)'}`,
@@ -257,12 +257,12 @@ export default function ShareSuggestionsPage() {
             }}
             title="LinkedIn – get LinkedIn-style post suggestions"
           >
-            <Linkedin className="w-5 h-5" style={{ color: '#0A66C2' }} strokeWidth={2} />
+            <Linkedin className="w-7 h-7" style={{ color: '#0A66C2' }} strokeWidth={2} />
           </button>
           <button
             type="button"
             onClick={() => setSelectedPlatform('x')}
-            className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all hover:opacity-100"
+            className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all hover:opacity-100 overflow-hidden"
             style={{
               background: selectedPlatform === 'x' ? 'rgba(29, 155, 240, 0.35)' : 'rgba(29, 155, 240, 0.2)',
               border: `2px solid ${selectedPlatform === 'x' ? '#1D9BF0' : 'rgba(29, 155, 240, 0.4)'}`,
@@ -270,12 +270,12 @@ export default function ShareSuggestionsPage() {
             }}
             title="X (Twitter) – get X-style post suggestions"
           >
-            <img src="/x-logo.png" alt="X" className="w-5 h-5 object-contain" />
+            <img src="/x-logo.png" alt="X" className="w-7 h-7 object-contain" />
           </button>
           <button
             type="button"
             onClick={() => setSelectedPlatform('reddit')}
-            className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all hover:opacity-100"
+            className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all hover:opacity-100 overflow-hidden"
             style={{
               background: selectedPlatform === 'reddit' ? 'rgba(255, 69, 0, 0.35)' : 'rgba(255, 69, 0, 0.2)',
               border: `2px solid ${selectedPlatform === 'reddit' ? REDDIT_COLOR : 'rgba(255, 69, 0, 0.4)'}`,
@@ -283,7 +283,7 @@ export default function ShareSuggestionsPage() {
             }}
             title="Reddit – get Reddit-style post suggestions"
           >
-            <img src="/reddit-logo.png" alt="Reddit" className="w-5 h-5 object-contain" />
+            <img src="/reddit-logo.png" alt="Reddit" className="w-7 h-7 object-contain" />
           </button>
         </div>
 
