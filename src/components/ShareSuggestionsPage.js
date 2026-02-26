@@ -270,7 +270,7 @@ export default function ShareSuggestionsPage() {
             }}
             title="X (Twitter) – get X-style post suggestions"
           >
-            <img src="/x-logo.png" alt="X" className="object-contain" style={{ width: '44px', height: '44px' }} />
+            <img src="/x-logo.png" alt="X" className="object-contain" style={{ width: '45px', height: '45px' }} />
           </button>
           <button
             type="button"
@@ -283,7 +283,7 @@ export default function ShareSuggestionsPage() {
             }}
             title="Reddit – get Reddit-style post suggestions"
           >
-            <img src="/reddit-logo.png" alt="Reddit" className="object-contain" style={{ width: '44px', height: '44px' }} />
+            <img src="/reddit-logo.png" alt="Reddit" className="object-contain" style={{ width: '45px', height: '45px' }} />
           </button>
         </div>
 
