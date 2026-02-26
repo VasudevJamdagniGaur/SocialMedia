@@ -1511,18 +1511,28 @@ export default function ChatPage() {
             />
           </button>
           
-          <input
+          <textarea
             ref={inputRef}
-            type="text"
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!isLoading && (inputMessage.trim() || selectedImage)) handleSendMessage(e);
+              }
+            }}
             placeholder="Message..."
             disabled={isLoading}
-            className="flex-1 min-w-0 px-4 py-3 rounded-2xl focus:outline-none focus:ring-2 text-white placeholder-gray-400"
+            rows={2}
+            className="flex-1 min-w-0 px-4 py-3 rounded-2xl focus:outline-none focus:ring-2 text-white placeholder-gray-400 resize-none overflow-y-auto"
             style={{
               backgroundColor: isDarkMode ? "#3a3a3a" : "rgba(255,255,255,0.9)",
               border: isDarkMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.08)",
               color: isDarkMode ? "#fff" : "#1a1a1a",
+              minHeight: '48px',
+              maxHeight: '120px',
+              lineHeight: '1.4',
             }}
           />
           
