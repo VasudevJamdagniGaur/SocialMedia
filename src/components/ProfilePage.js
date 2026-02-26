@@ -274,11 +274,12 @@ export default function ProfilePage() {
         console.log('✅ Profile picture removed from localStorage');
       }
 
-      // Update Firestore with display name and other profile data
+      // Update Firestore with display name, profile picture, and other profile data
       try {
         await firestoreService.ensureUser(user.uid, {
           displayName: editData.displayName.trim() || user.displayName || 'User',
-          email: user.email
+          email: user.email,
+          profilePicture: profilePicture || null
         });
         console.log('✅ Profile data updated in Firestore');
       } catch (error) {
@@ -387,12 +388,17 @@ export default function ProfilePage() {
     }
   };
 
-  const handleRemoveProfilePicture = () => {
+  const handleRemoveProfilePicture = async () => {
     setProfilePicture(null);
     if (user) {
       localStorage.removeItem(`user_profile_picture_${user.uid}`);
+      try {
+        await firestoreService.ensureUser(user.uid, { profilePicture: null });
+      } catch (err) {
+        console.error('Error removing profile picture from Firestore:', err);
+      }
+      window.dispatchEvent(new Event('profilePictureUpdated'));
     }
-    window.dispatchEvent(new Event('profilePictureUpdated'));
   };
 
   const getLast2AM = () => {
@@ -519,11 +525,16 @@ const MOOD_KEYWORDS = {
     setIsBioUpdating(false);
   };
 
-  const handleConfirmPicture = () => {
+  const handleConfirmPicture = async () => {
     if (!pendingPicture) return;
     setProfilePicture(pendingPicture);
     if (user) {
       localStorage.setItem(`user_profile_picture_${user.uid}`, pendingPicture);
+      try {
+        await firestoreService.ensureUser(user.uid, { profilePicture: pendingPicture });
+      } catch (err) {
+        console.error('Error saving profile picture to Firestore:', err);
+      }
       window.dispatchEvent(new Event('profilePictureUpdated'));
     }
     setPendingPicture(null);
@@ -545,6 +556,11 @@ const MOOD_KEYWORDS = {
     setProfilePicture(croppedImage);
     if (user) {
       localStorage.setItem(`user_profile_picture_${user.uid}`, croppedImage);
+      try {
+        await firestoreService.ensureUser(user.uid, { profilePicture: croppedImage });
+      } catch (err) {
+        console.error('Error saving profile picture to Firestore:', err);
+      }
       window.dispatchEvent(new Event('profilePictureUpdated'));
     }
     setPendingPicture(null);
