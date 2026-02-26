@@ -262,10 +262,10 @@ export default function ShareSuggestionsPage() {
           <button
             type="button"
             onClick={() => setSelectedPlatform('x')}
-            className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all hover:opacity-100 overflow-hidden"
+            className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all hover:opacity-100"
             style={{
-              background: selectedPlatform === 'x' ? 'rgba(29, 155, 240, 0.35)' : 'rgba(29, 155, 240, 0.2)',
-              border: `2px solid ${selectedPlatform === 'x' ? '#1D9BF0' : 'rgba(29, 155, 240, 0.4)'}`,
+              background: 'transparent',
+              border: 'none',
               opacity: selectedPlatform === null || selectedPlatform === 'x' ? 1 : 0.7,
             }}
             title="X (Twitter) – get X-style post suggestions"
@@ -275,15 +275,15 @@ export default function ShareSuggestionsPage() {
           <button
             type="button"
             onClick={() => setSelectedPlatform('reddit')}
-            className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all hover:opacity-100 overflow-hidden"
+            className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all hover:opacity-100"
             style={{
-              background: selectedPlatform === 'reddit' ? 'rgba(255, 69, 0, 0.35)' : 'rgba(255, 69, 0, 0.2)',
-              border: `2px solid ${selectedPlatform === 'reddit' ? REDDIT_COLOR : 'rgba(255, 69, 0, 0.4)'}`,
+              background: 'transparent',
+              border: 'none',
               opacity: selectedPlatform === null || selectedPlatform === 'reddit' ? 1 : 0.7,
             }}
             title="Reddit – get Reddit-style post suggestions"
           >
-            <img src="/reddit-logo.png" alt="Reddit" className="w-full h-full object-contain" />
+            <img src="/reddit-logo.png" alt="Reddit" className="w-7 h-7 object-contain" />
           </button>
         </div>
 
