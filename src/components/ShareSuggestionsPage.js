@@ -338,21 +338,20 @@ export default function ShareSuggestionsPage() {
 
         {sharePanelOpen && (
           <div
-            className="fixed inset-0 z-50 flex flex-col justify-end"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
             style={{ background: 'rgba(0,0,0,0.5)' }}
             onClick={() => setSharePanelOpen(false)}
             aria-hidden={!sharePanelOpen}
           >
             <div
-              className="rounded-t-2xl w-full max-w-md mx-auto flex flex-col p-4 pb-8"
+              className="rounded-2xl w-full max-w-md max-h-[85vh] flex flex-col p-4 overflow-y-auto"
               style={{
                 background: isDarkMode ? HUB.bgSecondary : '#FFFFFF',
                 border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'}`,
-                borderBottom: 'none',
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              <p className="text-sm font-medium mb-2" style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}>
+              <p className="text-sm font-medium mb-2 flex-shrink-0" style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}>
                 Edit before sharing
               </p>
               <textarea
