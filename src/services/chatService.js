@@ -1519,13 +1519,29 @@ ${text}`;
     }
 
     const platformLabel = platform === 'x' ? 'X (Twitter)' : platform.charAt(0).toUpperCase() + platform.slice(1);
-    const platformStyle = {
-      linkedin: 'LinkedIn: professional but personal, strong hook, clear insight, short paragraphs, 0–3 hashtags.',
-      x: 'X (Twitter): concise, punchy, under 280 characters per post, line breaks for emphasis, 1–2 hashtags.',
-      reddit: 'Reddit: casual, conversational, authentic (r/CasualConversation style).'
+
+    const platformStyleGuide = {
+      linkedin: `LINKEDIN STYLE (strict):
+- Professional, polished tone. Thought-leadership or reflective professional narrative.
+- Strong opening hook (question, observation, or bold line). Short paragraphs (1–3 lines).
+- First person, authentic but career-friendly. Optional light insight or takeaway.
+- End with 0–3 relevant hashtags (e.g. #Learning #Reflection). No emoji overload.`,
+      x: `X (TWITTER) STYLE (strict):
+- Very concise. Each post MUST be under 280 characters (count them).
+- Punchy, direct. Line breaks for emphasis. One clear idea per post.
+- Can be witty, candid, or reflective. 1–2 hashtags max. Emoji sparingly if at all.`,
+      reddit: `REDDIT STYLE (strict):
+- Casual, conversational, like r/CasualConversation or a personal story sub.
+- First-person, relatable, authentic. Can be self-deprecating or funny.
+- Natural paragraph flow. No corporate speak. Feels like talking to a friend.`
     };
+    const styleGuide = platformStyleGuide[platform] || platformStyleGuide.linkedin;
 
     const prompt = `You are turning a day's reflection into separate social posts. You MUST create one standalone post for EACH distinct event or moment mentioned in the reflection.
+
+PLATFORM: ${platformLabel}. Write EVERY post in that platform's native style so it reads like a real ${platformLabel} post.
+
+${styleGuide}
 
 Step 1 – List EVERY main event/moment in the reflection. Include ALL of these when present:
 - Embarrassing or funny moments (e.g. wrong door, mix-up, mistake)
@@ -1539,7 +1555,7 @@ Step 2 – For EACH event you listed, write ONE complete, standalone post that:
 - Focuses only on that single event
 - Expands on the thoughts, emotions, or insights from that moment
 - Feels natural and reflective, like a real social post (not a summary)
-- Is written in ${platformStyle[platform] || platformStyle.linkedin}
+- Is written EXACTLY in the ${platformLabel} style described above (tone, length, structure)
 
 Output format (strict):
 - For each post, first write exactly: EVENT: <short event label>
