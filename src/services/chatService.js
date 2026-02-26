@@ -17,8 +17,6 @@ class ChatService {
     this.visionModelName = 'gpt-4o'; // For OpenAI vision
     // Image generation: Gemini (gemini-3-pro-image-preview / Nano Banana Pro)
     this.geminiImageModelName = 'gemini-3-pro-image-preview';
-    // Serper: real images for famous entities (personality, event, place, brand, object)
-    this.serperApiKey = process.env.REACT_APP_SERPER_API_KEY || process.env.SERPER_API_KEY || null;
 
     // Debug: Log API key status (first 10 chars only for security)
     console.log('🔑 API Keys loaded:');
@@ -1623,10 +1621,10 @@ ${(reflection || '').trim()}`;
     return result;
   }
 
-  // ---------- Image: smart routing — STEP 1 famous entity → Serper; STEP 2 no famous → context + user profile → Gemini ----------
+  // ---------- Image: context + user profile → Gemini (same style for LinkedIn and X) ----------
 
   /**
-   * STEP 1 — Entity detection. Extract famous personality, event, place, brand, object from share suggestion.
+   * Extract famous personality, event, place, brand, object from share suggestion (kept for possible future use; not used for image routing).
    * @param {string} postText - Generated share suggestion text
    * @returns {Promise<{ personality: string[], event: string[], place: string[], brand: string[], object: string[] }>}
    */
@@ -1684,39 +1682,13 @@ ${text.slice(0, 1000)}`;
   }
 
   /**
-   * Fetch most relevant real image from Serper for a query (used when famous entity is detected).
-   * @param {string} query - Search query (e.g. "Bill Gates portrait", "The Three-Body Problem book")
-   * @returns {Promise<string|null>} - First image URL or null
-   */
-  async _fetchImageFromSerper(query) {
-    if (!this.serperApiKey || !query?.trim()) return null;
-    try {
-      const res = await fetch('https://google.serper.dev/images', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-API-KEY': this.serperApiKey },
-        body: JSON.stringify({ q: query.trim(), num: 5 })
-      });
-      if (!res.ok) return null;
-      const data = await res.json();
-      const first = data.images?.[0];
-      const url = first?.imageUrl ?? first?.image ?? first?.url ?? first?.original ?? first?.link;
-      return url && typeof url === 'string' ? url : null;
-    } catch (e) {
-      console.warn('[Image] Serper fetch failed:', e.message);
-      return null;
-    }
-  }
-
-  /**
-   * STEP 2 (no famous entity): Extract context from post and build structured prompt for Gemini.
-   * Uses the full template: analysis (activity, environment, tone, time, setting, body language) + user profile + instructions + scene requirements + structured output.
-   * When platform is 'linkedin', adds professional/polished style so the image fits LinkedIn (not casual/candid).
+   * Extract context from post and build structured prompt for Gemini image generation.
+   * Same instructions for LinkedIn and X: candid, engaging, natural (no platform-specific styling).
    * @param {string} postText - Share suggestion text
    * @param {{ displayName?: string, age?: string, nationality?: string, gender?: string, skinTone?: string, hairstyle?: string, clothingStyle?: string, profession?: string, profileImageUrl?: string }|null} userContext
-   * @param {string} [platform] - 'linkedin' | 'x' | 'reddit' — LinkedIn gets professional style
    * @returns {Promise<string|null>} - Full image generation prompt or null
    */
-  async _buildStructuredPromptForNoFamous(postText, userContext = null, platform = 'x') {
+  async _buildStructuredPromptForNoFamous(postText, userContext = null) {
     const apiKey = (this.geminiApiKey || process.env.REACT_APP_GOOGLE_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
     const text = (postText || '').trim();
     if (!apiKey || !text) return null;
@@ -1768,19 +1740,7 @@ ${text.slice(0, 800)}`;
       const outfit = (c.contextualOutfit || '').trim() || clothingStyle;
       const bodyLanguage = (c.bodyLanguage || '').trim() || 'natural body language';
 
-      const isLinkedIn = (platform || '').toLowerCase() === 'linkedin';
-
-      const platformStyleBlock = isLinkedIn
-        ? `PLATFORM: LinkedIn. The image MUST look professional and suitable for a LinkedIn post:
-- Polished, business-appropriate aesthetic. Not a casual selfie or overly candid snapshot.
-- Prefer professional or smart-casual attire; clean, uncluttered background when possible.
-- Well-lit, high-quality look suitable for a professional feed. Confident, composed posture preferred.
-- Avoid overly casual or silly compositions. Keep the moment authentic but professional.`
-        : `PLATFORM: X (Twitter) or general. The image can be candid, engaging, and natural—suitable for a social feed.`;
-
       const instructions = `You are generating a realistic, context-aware photograph for a social media post.
-
-${platformStyleBlock}
 
 IMAGE GENERATION INSTRUCTIONS:
 1. If the post implies the user is the main subject, generate a person that resembles the user.
@@ -1794,7 +1754,7 @@ SCENE REQUIREMENTS:
 - The scene must directly reflect the story context.
 - No random animals or unrelated elements.
 - Avoid generic stock-photo composition.
-${isLinkedIn ? '- Professional or clean setting; polished, LinkedIn-appropriate composition.' : '- Make it feel like a candid real-life captured moment.'}
+- Make it feel like a candid real-life captured moment.
 - Use natural lighting.
 - Use subtle, believable facial expressions.
 - Realistic human proportions.
@@ -1802,9 +1762,7 @@ ${isLinkedIn ? '- Professional or clean setting; polished, LinkedIn-appropriate 
 - No text overlay in the image.
 - No logos unless mentioned in the post.`;
 
-      const styleSuffix = isLinkedIn
-        ? 'professional DSLR photography, natural lighting, shallow depth of field, polished and business-appropriate, suitable for LinkedIn, clean composition, not staged, not stock photo style.'
-        : 'professional DSLR photography, natural lighting, shallow depth of field, cinematic but realistic, authentic moment, not staged, not stock photo style.';
+      const styleSuffix = 'professional DSLR photography, natural lighting, shallow depth of field, cinematic but realistic, authentic moment, not staged, not stock photo style.';
 
       const structuredPrompt = `A realistic high-detail photograph of a ${age}-year-old ${gender} with ${skinTone} skin tone and ${hairstyle} hair, resembling the user's profile appearance, wearing ${outfit}, ${activity}, in a ${environment}, ${bodyLanguage} reflecting ${tone}, ${styleSuffix}`;
 
@@ -2016,65 +1974,31 @@ ${text}`;
   }
 
   /**
-   * Generate one image per post. Smart routing:
-   * STEP 1 — If famous entity (personality, event, place, brand, object) detected → Serper API (real image). Do NOT call Gemini.
-   * STEP 2 — If no famous entity → extract context + user profile, build structured prompt → Gemini Image Generation.
-   * Image style is platform-aware: LinkedIn = professional/polished; X = candid/engaging; Reddit = not used (no images).
+   * Generate one image per post using Gemini: extract context + user profile, build structured prompt, generate image.
+   * Same instructions used for LinkedIn and X (candid, engaging, natural).
    * @param {string} postText - Full post text (share suggestion)
-   * @param {{ displayName?: string, age?: string, nationality?: string, gender?: string }|null} [userContext] - User profile for STEP 2
-   * @param {string} [platform] - 'linkedin' | 'x' | 'reddit' — affects image style (e.g. LinkedIn = professional)
-   * @returns {Promise<string|null>} - Image URL (Serper) or data URL (Gemini), or null
+   * @param {{ displayName?: string, age?: string, nationality?: string, gender?: string }|null} [userContext] - User profile
+   * @param {string} [platform] - 'linkedin' | 'x' | 'reddit' — Reddit does not use images; LinkedIn and X use same style
+   * @returns {Promise<string|null>} - Data URL (Gemini) or null
    */
   async fetchImageForReflection(postText, userContext = null, platform = 'x') {
     if (!postText?.trim()) return null;
     const fullText = postText.trim();
 
-    // STEP 1 — Entity detection
-    const entities = await this._detectFamousEntities(fullText);
-    const hasFamous =
-      (entities.personality?.length > 0) ||
-      (entities.event?.length > 0) ||
-      (entities.place?.length > 0) ||
-      (entities.brand?.length > 0) ||
-      (entities.object?.length > 0);
-
-    if (hasFamous && this.serperApiKey) {
-      // Use Serper: fetch most relevant real image for the famous entity. For LinkedIn, prefer professional/corporate style.
-      const isLinkedIn = (platform || '').toLowerCase() === 'linkedin';
-      const qualifier = isLinkedIn ? 'professional portrait' : 'high quality portrait';
-      const q =
-        entities.personality?.[0] ? `${entities.personality[0]} ${qualifier}` :
-        entities.event?.[0] ? `${entities.event[0]} high quality` :
-        entities.place?.[0] ? `${entities.place[0]} high quality` :
-        entities.brand?.[0] ? `${entities.brand[0]} official` :
-        entities.object?.[0] ? `${entities.object[0]} high quality` :
-        null;
-      if (q) {
-        console.log('[Image] Famous entity detected → Serper:', q);
-        const serperUrl = await this._fetchImageFromSerper(q);
-        if (serperUrl) return serperUrl;
-      }
-    }
-
-    // STEP 2 — No famous entity (or Serper failed): context + user profile → Gemini
     const geminiKey = (this.geminiApiKey || process.env.REACT_APP_GOOGLE_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
     if (!geminiKey) {
       console.warn('[Image] Gemini API key not set');
       return null;
     }
 
-    const imagePrompt = await this._buildStructuredPromptForNoFamous(fullText, userContext, platform);
+    const imagePrompt = await this._buildStructuredPromptForNoFamous(fullText, userContext);
     if (!imagePrompt) {
       const firstSentence = fullText.split(/[.!?]/)[0]?.trim().slice(0, 100) || fullText.slice(0, 100);
       if (!firstSentence) return null;
-      // Fallback minimal prompt with user cues; style by platform
       const age = (userContext?.age || '').trim() || '30';
       const gender = (userContext?.gender || '').trim().toLowerCase() || 'person';
       const nationality = (userContext?.nationality || 'Indian').trim();
-      const styleSuffix = platform === 'linkedin'
-        ? 'professional LinkedIn-style photograph, polished, business-appropriate, clean background, natural lighting, high detail, not a celebrity, not stock.'
-        : 'natural lighting, high detail, not a celebrity, not stock.';
-      const fallback = `A realistic photograph of a ${age} year old ${gender} (${nationality}), ${firstSentence}, ${styleSuffix}`;
+      const fallback = `A realistic photograph of a ${age} year old ${gender} (${nationality}), ${firstSentence}, natural lighting, high detail, not a celebrity, not stock.`;
       return this._generateImageWithGemini(fallback, geminiKey);
     }
 
@@ -2123,7 +2047,7 @@ ${text}`;
    */
   async getImageSearchQueryForPost(postText) {
     const searchQuery = await this._getImagePromptFromContent(postText || '');
-    return { queries: searchQuery ? [searchQuery] : [], useSerper: false };
+    return { queries: searchQuery ? [searchQuery] : [] };
   }
 
   /** @deprecated Use getImageSearchQueryForPost / fetchImageForReflection. Kept for compatibility. */
