@@ -1617,7 +1617,15 @@ ${(reflection || '').trim()}`;
     const trimmed = (raw || '').trim();
     if (!trimmed) return [{ eventLabel: 'Reflection', post: reflection.trim() }];
 
-    const blocks = trimmed.split(/\n *--- *\n/).map(s => s.trim()).filter(Boolean);
+    // Split by --- first; if only one block but text has multiple "EVENT:", split by EVENT: to get all
+    let blocks = trimmed.split(/\n *--- *\n/).map(s => s.trim()).filter(Boolean);
+    if (blocks.length <= 1 && (trimmed.match(/EVENT:\s*/gi) || []).length >= 2) {
+      const eventParts = trimmed.split(/\s*EVENT:\s*/i);
+      blocks = eventParts
+        .map(p => p.trim())
+        .filter(Boolean)
+        .map(p => (p.match(/^EVENT:/i) ? p : 'EVENT: ' + p));
+    }
     const result = [];
     for (const block of blocks) {
       const eventMatch = block.match(/^EVENT:\s*(.+?)(?:\n|$)/i);
