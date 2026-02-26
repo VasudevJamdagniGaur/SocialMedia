@@ -152,12 +152,51 @@ export default function ShareSuggestionsPage() {
     setSharePanelOpen(true);
   };
 
-  const handleShareToSelectedPlatform = () => {
+  const dataURLtoFile = (dataUrl, filename = 'post-image.png') => {
+    try {
+      const arr = dataUrl.split(',');
+      const mime = (arr[0].match(/:(.*?);/) || [])[1] || 'image/png';
+      const bstr = atob(arr[1]);
+      const u8arr = new Uint8Array(bstr.length);
+      for (let i = 0; i < bstr.length; i++) u8arr[i] = bstr.charCodeAt(i);
+      return new File([u8arr], filename, { type: mime });
+    } catch {
+      return null;
+    }
+  };
+
+  const handleShareToSelectedPlatform = async () => {
     const t = (sharePanelOpen ? editableShareText : selectedText) || '';
     if (!t) return;
+    const imageDataUrl = suggestionImageUrls[selectedIndex] || null;
+    const isDataUrl = imageDataUrl && typeof imageDataUrl === 'string' && imageDataUrl.startsWith('data:image');
+
+    if (isDataUrl && typeof navigator !== 'undefined' && navigator.share && navigator.canShare) {
+      const file = dataURLtoFile(imageDataUrl);
+      if (file && navigator.canShare({ text: t, files: [file] })) {
+        try {
+          await navigator.share({ text: t, files: [file] });
+          recordShare(selectedPlatform, t);
+          setSharePanelOpen(false);
+          return;
+        } catch (err) {
+          if (err.name !== 'AbortError') console.warn('Share with image failed:', err);
+        }
+      }
+    }
+
     if (selectedPlatform === 'linkedin') shareToLinkedIn(t);
     else if (selectedPlatform === 'x') shareToTwitter(t);
     else if (selectedPlatform === 'reddit') shareToReddit(t);
+
+    if (isDataUrl) {
+      try {
+        const a = document.createElement('a');
+        a.href = imageDataUrl;
+        a.download = 'post-image.png';
+        a.click();
+      } catch (_) {}
+    }
     setSharePanelOpen(false);
   };
 
@@ -345,6 +384,18 @@ export default function ShareSuggestionsPage() {
               <p className="text-sm font-medium mb-2 flex-shrink-0" style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}>
                 Edit before sharing
               </p>
+              {suggestionImageUrls[selectedIndex] && (
+                <div className="w-full aspect-video rounded-xl overflow-hidden mb-3 flex-shrink-0 bg-black/10">
+                  <img
+                    src={suggestionImageUrls[selectedIndex]}
+                    alt="Post"
+                    className="w-full h-full object-cover"
+                  />
+                  <p className="text-xs mt-1" style={{ color: isDarkMode ? HUB.textSecondary : '#666' }}>
+                    This image will be shared with your post
+                  </p>
+                </div>
+              )}
               <textarea
                 value={editableShareText}
                 onChange={(e) => setEditableShareText(e.target.value)}
