@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Linkedin, Twitter } from 'lucide-react';
+import { ArrowLeft, Linkedin } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
@@ -264,7 +264,7 @@ export default function ShareSuggestionsPage() {
             }}
             title="X (Twitter) – get X-style post suggestions"
           >
-            <Twitter className="w-5 h-5" style={{ color: '#1D9BF0' }} strokeWidth={2} />
+            <img src="/x-logo.png" alt="X" className="w-5 h-5 object-contain" />
           </button>
           <button
             type="button"
