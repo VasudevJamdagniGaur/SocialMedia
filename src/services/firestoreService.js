@@ -25,7 +25,8 @@ class FirestoreService {
   }
 
   /**
-   * Ensure user document exists
+   * Ensure user document exists. When profilePicture or displayName is in userData,
+   * also updates usersMetadata so getUser() returns the latest (metadata takes precedence).
    */
   async ensureUser(uid, userData = {}) {
     try {
@@ -34,6 +35,17 @@ class FirestoreService {
         createdAt: serverTimestamp(),
         ...userData
       }, { merge: true });
+
+      // Keep usersMetadata in sync so getUser() returns latest profile picture / display name
+      if (userData.hasOwnProperty('profilePicture') || userData.hasOwnProperty('displayName')) {
+        const metadataRef = doc(this.db, `usersMetadata/${uid}`);
+        const metadataPayload = {};
+        if (userData.hasOwnProperty('profilePicture')) metadataPayload.profilePicture = userData.profilePicture;
+        if (userData.hasOwnProperty('displayName')) metadataPayload.displayName = userData.displayName;
+        if (Object.keys(metadataPayload).length > 0) {
+          await setDoc(metadataRef, metadataPayload, { merge: true });
+        }
+      }
       return { success: true };
     } catch (error) {
       console.error('Error ensuring user:', error);
