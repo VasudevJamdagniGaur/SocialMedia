@@ -1530,11 +1530,17 @@ ${text}`;
       reddit: 'Reddit: casual, conversational, authentic (r/CasualConversation style).'
     };
 
-    const prompt = `You are turning a day's reflection into separate social posts. Each post must be based on ONE key event or moment from the day.
+    const prompt = `You are turning a day's reflection into separate social posts. You MUST create one standalone post for EACH distinct event or moment mentioned in the reflection.
 
-Step 1 – Identify the main events/moments in the reflection (e.g. "Meeting my friend Sumit", "Reading the book Source Code"). Pick 2–4 distinct events.
+Step 1 – List EVERY main event/moment in the reflection. Include ALL of these when present:
+- Embarrassing or funny moments (e.g. wrong door, mix-up, mistake)
+- Books, articles, or media mentioned by name (e.g. "The Three-Body Problem", "Source Code", "Crime and Punishment")
+- People you met or talked about
+- Places you went (e.g. library, office, college)
+- Work or projects you did (e.g. deep work, project in the library)
+Do not skip any major event. If the user mentions a book, there must be a post about that book. If they mention a mix-up and a book, output two posts (one per event).
 
-Step 2 – For EACH event, write ONE complete, standalone post that:
+Step 2 – For EACH event you listed, write ONE complete, standalone post that:
 - Focuses only on that single event
 - Expands on the thoughts, emotions, or insights from that moment
 - Feels natural and reflective, like a real social post (not a summary)
@@ -1546,13 +1552,13 @@ Output format (strict):
 - Separate each post with a line that contains only: ---
 - Do NOT use "Option 1", "Option 2", or any option labels. Only EVENT: and the post content.
 
-Example format:
-EVENT: Meeting my friend Sumit
+Example format (reflection mentioned a mix-up AND a book):
+EVENT: The Director's office mix-up
 [Full post about that moment only.]
 
 ---
-EVENT: Reading the book Source Code
-[Full post about that moment only.]
+EVENT: Reading The Three-Body Problem
+[Full post about the book and your thoughts only.]
 
 Reflection:
 ${(reflection || '').trim()}`;
@@ -1564,7 +1570,7 @@ ${(reflection || '').trim()}`;
         model: this.openaiModelName,
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.5,
-        max_tokens: 1200
+        max_tokens: 2400
       };
       headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` };
     } else if (this.apiProvider === 'grok') {
@@ -1573,14 +1579,14 @@ ${(reflection || '').trim()}`;
         model: this.grokModelName,
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.5,
-        max_tokens: 1200
+        max_tokens: 2400
       };
       headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` };
     } else {
       apiUrl = `${this.geminiBaseURL}/models/${this.geminiModelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
       requestBody = {
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.5, maxOutputTokens: 1200 }
+        generationConfig: { temperature: 0.5, maxOutputTokens: 2400 }
       };
       headers = { 'Content-Type': 'application/json' };
     }
