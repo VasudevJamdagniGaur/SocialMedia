@@ -75,7 +75,13 @@ export default function ShareSuggestionsPage() {
         setPlatformSuggestions(posts);
         setSelectedIndex(0);
         setIsLoadingSuggestions(false);
-        // For each suggestion: Gemini generates image (using user context for random people: name, age, Indian)
+        // Do not generate images for Reddit suggestions
+        if (selectedPlatform === 'reddit') {
+          setSuggestionImageUrls(posts.map(() => null));
+          setIsLoadingImages(false);
+          return;
+        }
+        // For LinkedIn/X: Gemini generates image (using user context for random people: name, age, Indian)
         setIsLoadingImages(true);
         const user = getCurrentUser();
         const userContext = user ? {
