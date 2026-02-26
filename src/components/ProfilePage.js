@@ -59,6 +59,7 @@ export default function ProfilePage() {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
+  const [isCropping, setIsCropping] = useState(false);
   const [bioLastUpdated, setBioLastUpdated] = useState(null);
   const [isBioUpdating, setIsBioUpdating] = useState(false);
   const [showBirthdayCalendar, setShowBirthdayCalendar] = useState(false);
@@ -550,24 +551,38 @@ const MOOD_KEYWORDS = {
     setCroppedAreaPixels(areaPixels);
   };
 
-  const handleApplyCrop = async () => {
+  const handleApplyCrop = async (e) => {
+    if (e) e.stopPropagation();
     if (!pendingPicture) return;
-    const croppedImage = await getCroppedImg(pendingPicture, croppedAreaPixels);
-    setProfilePicture(croppedImage);
-    if (user) {
-      localStorage.setItem(`user_profile_picture_${user.uid}`, croppedImage);
-      try {
-        await firestoreService.ensureUser(user.uid, { profilePicture: croppedImage });
-      } catch (err) {
-        console.error('Error saving profile picture to Firestore:', err);
+    setIsCropping(true);
+    try {
+      const croppedImage = await getCroppedImg(pendingPicture, croppedAreaPixels);
+      if (!croppedImage) {
+        alert('Could not process the image. Please try again.');
+        return;
       }
-      window.dispatchEvent(new Event('profilePictureUpdated'));
+      setProfilePicture(croppedImage);
+      if (user) {
+        localStorage.setItem(`user_profile_picture_${user.uid}`, croppedImage);
+        try {
+          await firestoreService.ensureUser(user.uid, { profilePicture: croppedImage });
+        } catch (err) {
+          console.error('Error saving profile picture to Firestore:', err);
+          // Still update local state and dispatch so UI reflects the new picture
+        }
+        window.dispatchEvent(new Event('profilePictureUpdated'));
+      }
+      setPendingPicture(null);
+      setShowCropModal(false);
+      setCroppedAreaPixels(null);
+      setZoom(1);
+      setCrop({ x: 0, y: 0 });
+    } catch (err) {
+      console.error('Crop failed:', err);
+      alert('Failed to crop image. Please try again or choose a different photo.');
+    } finally {
+      setIsCropping(false);
     }
-    setPendingPicture(null);
-    setShowCropModal(false);
-    setCroppedAreaPixels(null);
-    setZoom(1);
-    setCrop({ x: 0, y: 0 });
   };
 
   const handleCancelCrop = () => {
@@ -1601,6 +1616,7 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
             border: `1px solid ${HUB.divider}`,
             boxShadow: "0 25px 50px -12px rgba(0,0,0,0.7)",
           }}
+          onClick={(e) => e.stopPropagation()}
         >
           <h3 className="text-xl font-semibold text-center" style={{ color: HUB.text }}>Adjust your photo</h3>
           <p className="text-center text-sm" style={{ color: HUB.textSecondary }}>
@@ -1633,14 +1649,16 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
               Retake
             </button>
             <button
+              type="button"
               onClick={handleApplyCrop}
-              className="flex-1 py-3 rounded-2xl font-semibold text-black"
+              disabled={isCropping}
+              className="flex-1 py-3 rounded-2xl font-semibold text-black disabled:opacity-60 disabled:cursor-not-allowed"
               style={{
                 backgroundColor: HUB.accent,
                 boxShadow: `0 10px 20px ${HUB.accentShadow}59`,
               }}
             >
-              Crop & Continue
+              {isCropping ? 'Processing...' : 'Crop & Continue'}
             </button>
           </div>
         </div>
