@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Linkedin } from 'lucide-react';
+import { ArrowLeft, Linkedin, Pencil } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
@@ -56,6 +56,7 @@ export default function ShareSuggestionsPage() {
   const [isLoadingImages, setIsLoadingImages] = useState(false);
   const [sharePanelOpen, setSharePanelOpen] = useState(false);
   const [editableShareText, setEditableShareText] = useState('');
+  const imageReplaceInputRef = useRef(null);
 
   const reflectionDate = state.selectedDate ? (state.selectedDate instanceof Date ? state.selectedDate : new Date(state.selectedDate)) : new Date();
   const dateStr = reflectionDate instanceof Date ? getDateId(reflectionDate) : getDateId(new Date(reflectionDate));
@@ -168,6 +169,28 @@ export default function ShareSuggestionsPage() {
   const openSharePanel = (text) => {
     setEditableShareText(text ?? selectedText ?? '');
     setSharePanelOpen(true);
+  };
+
+  const handleReplaceImageClick = () => {
+    imageReplaceInputRef.current?.click();
+  };
+
+  const handleReplaceImageFile = (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const dataUrl = reader.result;
+      if (typeof dataUrl === 'string') {
+        setSuggestionImageUrls((prev) => {
+          const next = [...(prev || [])];
+          next[selectedIndex] = dataUrl;
+          return next;
+        });
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
   const dataURLtoFile = (dataUrl, filename = 'post-image.png') => {
@@ -342,11 +365,11 @@ export default function ShareSuggestionsPage() {
                       }}
                     >
                       {imageUrl && (
-                        <div className="w-full aspect-video bg-black/20 flex-shrink-0">
+                        <div className="w-full aspect-video bg-black/20 flex-shrink-0 flex items-center justify-center min-h-[140px]">
                           <img
                             src={imageUrl}
                             alt=""
-                            className="w-full h-full object-cover"
+                            className="w-full h-full object-contain"
                             loading="lazy"
                             referrerPolicy="no-referrer"
                             onError={(e) => {
@@ -403,14 +426,32 @@ export default function ShareSuggestionsPage() {
                 Edit before sharing
               </p>
               {suggestionImageUrls[selectedIndex] && (
-                <div className="w-full aspect-video rounded-xl overflow-hidden mb-3 flex-shrink-0 bg-black/10">
-                  <img
-                    src={suggestionImageUrls[selectedIndex]}
-                    alt="Post"
-                    className="w-full h-full object-cover"
+                <div className="w-full rounded-xl overflow-hidden mb-3 flex-shrink-0 bg-black/10 relative group">
+                  <div className="w-full min-h-[200px] max-h-[320px] flex items-center justify-center">
+                    <img
+                      src={suggestionImageUrls[selectedIndex]}
+                      alt="Post"
+                      className="max-w-full max-h-[320px] w-auto h-auto object-contain"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleReplaceImageClick}
+                    className="absolute top-2 right-2 rounded-full p-2 shadow-lg transition-opacity hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2"
+                    style={{ background: isDarkMode ? HUB.accent : '#7C3AED', color: '#FFF' }}
+                    aria-label="Change image"
+                  >
+                    <Pencil className="w-4 h-4" strokeWidth={2} />
+                  </button>
+                  <input
+                    ref={imageReplaceInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleReplaceImageFile}
                   />
                   <p className="text-xs mt-1" style={{ color: isDarkMode ? HUB.textSecondary : '#666' }}>
-                    This image will be shared with your post
+                    This image will be shared with your post. Tap the pencil to replace it.
                   </p>
                 </div>
               )}

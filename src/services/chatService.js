@@ -1704,10 +1704,11 @@ ${text.slice(0, 1000)}`;
     const extractPrompt = `Analyze this post and extract context for a single realistic photograph. Return STRICT JSON only, no markdown.
 
 Extract: main activity, environment/location, emotional tone, time of day (if implied), professional or casual setting, body language cues.
+Prefer the SPECIFIC situation: e.g. for "wrong door" story use mainActivity like "standing in a corridor between two office doors, moment of realization" and environment like "college corridor with Director's Office and College Office doors"—not a generic "sitting thoughtfully" or "indoor".
 
 Keys (short phrases; empty string if not clear):
-- mainActivity: what the person is doing (e.g. "reading a book", "working at a desk", "walking in a corridor")
-- environment: location/setting (e.g. "quiet library", "office", "college corridor", "home")
+- mainActivity: the specific situation and action (e.g. "standing in corridor between two doors, wrong-door moment", "reading a book at a desk", "walking in a corridor")
+- environment: the specific location (e.g. "college corridor with two labeled doors", "quiet library", "office", "home")
 - emotionalTone: mood (e.g. "focused", "embarrassed", "calm", "reflective")
 - timeOfDay: "morning" or "afternoon" or "evening" or ""
 - professionalOrCasual: "professional" or "casual" or "mixed" or ""
@@ -1746,12 +1747,18 @@ ${text.slice(0, 2000)}`;
 
       const instructions = `You are generating a realistic, context-aware photograph based strictly on the story provided.
 
+PRIORITY — DEPICT THE SITUATION, NOT A RANDOM PORTRAIT:
+- Do NOT generate a random photo of the user (e.g. a simple headshot, close-up portrait, or upper-body shot with only an expression).
+- The image MUST describe the SITUATION from the post: show the environment, the location, and the moment.
+- Examples: "Director's office mix-up" → show a corridor with two doors (e.g. "Director's Office" and "College Office"), person in that hallway, moment of realization or wrong door; "reading at the library" → show the library setting with the person in it; "wrong room" → show the actual setting and the mistaken moment.
+- The person can be in the scene but the SCENE and SITUATION are the focus. Include the specific place, doors, corridor, or context—not just a face.
+
 Your only priority is to visually represent the events, emotions, and environment described in the text.
 
 CRITICAL: The image must reflect the SPECIFIC story and setting from the post. Use the full content below:
 - If the post describes a mix-up (e.g. wrong door, director's office vs college office), show that setting (e.g. corridor, doors, moment of realization).
 - If it names a place (library, office, college), show that environment.
-- If it describes an emotion (embarrassed, relieved, laughing at myself), show that in expression and body language.
+- If it describes an emotion (embarrassed, relieved, laughing at myself), show that in expression and body language within the situation.
 Do NOT create a generic or unrelated scene. The photograph must look like a candid moment from THIS story.
 
 Do NOT consider:
@@ -2036,7 +2043,7 @@ ${text}`;
       return this._generateImageWithGemini(fallback, geminiKey, referenceImage);
     }
 
-    const strictRules = 'STRICT: The scene and moment must match the story in the post (e.g. wrong door / director\'s office mix-up = corridor, doors, moment of realization; specific place = that environment). Do not generate random or generic images. No animals unless mentioned. Person must look contextually aligned with the story. Avoid famous faces. High realism.';
+    const strictRules = 'STRICT: Depict the SITUATION from the post (e.g. director\'s office mix-up = corridor with doors, person in that hallway; reading a book = person in that setting with the book). Do NOT output a random portrait or headshot—always show the scene, location, and moment. No animals unless mentioned. Avoid famous faces. High realism.';
     const fullPrompt = `${imagePrompt} ${strictRules}`;
     return this._generateImageWithGemini(fullPrompt, geminiKey, referenceImage);
   }
