@@ -1716,8 +1716,10 @@ Keys (short phrases; empty string if not clear):
 
 Format: {"mainActivity":"","environment":"","emotionalTone":"","timeOfDay":"","professionalOrCasual":"","bodyLanguage":"","contextualOutfit":""}
 
+Use the FULL post below (including any paragraphs) to extract context. Capture the specific story, place, and moment (e.g. wrong door, director's office, college corridor, embarrassed relief).
+
 Post:
-${text.slice(0, 800)}`;
+${text.slice(0, 2000)}`;
 
     try {
       const apiUrl = `${this.geminiBaseURL}/models/${this.geminiModelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
@@ -1726,7 +1728,7 @@ ${text.slice(0, 800)}`;
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: extractPrompt }] }],
-          generationConfig: { temperature: 0.2, maxOutputTokens: 250 }
+          generationConfig: { temperature: 0.2, maxOutputTokens: 350 }
         })
       });
       if (!res.ok) return null;
@@ -1746,6 +1748,12 @@ ${text.slice(0, 800)}`;
 
 Your only priority is to visually represent the events, emotions, and environment described in the text.
 
+CRITICAL: The image must reflect the SPECIFIC story and setting from the post. Use the full content below:
+- If the post describes a mix-up (e.g. wrong door, director's office vs college office), show that setting (e.g. corridor, doors, moment of realization).
+- If it names a place (library, office, college), show that environment.
+- If it describes an emotion (embarrassed, relieved, laughing at myself), show that in expression and body language.
+Do NOT create a generic or unrelated scene. The photograph must look like a candid moment from THIS story.
+
 Do NOT consider:
 - The platform where this will be posted
 - Social media aesthetics
@@ -1754,9 +1762,9 @@ Do NOT consider:
 
 Focus only on accurately visualizing the story.
 
-Post:
+Post (use entire content for context):
 """
-${text.slice(0, 1200)}
+${text.slice(0, 2800)}
 """
 
 User profile:
@@ -2028,7 +2036,7 @@ ${text}`;
       return this._generateImageWithGemini(fallback, geminiKey, referenceImage);
     }
 
-    const strictRules = 'STRICT: Do not generate random unrelated visuals. Do not generate animals unless explicitly mentioned. Do not generate generic stock office images. The person must look contextually aligned with the story. Avoid famous faces. Keep realism high.';
+    const strictRules = 'STRICT: The scene and moment must match the story in the post (e.g. wrong door / director\'s office mix-up = corridor, doors, moment of realization; specific place = that environment). Do not generate random or generic images. No animals unless mentioned. Person must look contextually aligned with the story. Avoid famous faces. High realism.';
     const fullPrompt = `${imagePrompt} ${strictRules}`;
     return this._generateImageWithGemini(fullPrompt, geminiKey, referenceImage);
   }
