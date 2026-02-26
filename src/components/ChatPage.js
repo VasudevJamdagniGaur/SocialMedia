@@ -57,6 +57,17 @@ export default function ChatPage() {
   const handleBackRef = useRef(null);
   const fileInputRef = useRef(null);
 
+  // Auto-resize textarea: 1 line when empty, grow up to 4 lines as user types
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    const oneLine = 48;
+    const fourLines = 160;
+    const h = Math.min(Math.max(el.scrollHeight, oneLine), fourLines);
+    el.style.height = `${h}px`;
+  }, [inputMessage]);
+
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -1524,7 +1535,7 @@ export default function ChatPage() {
             }}
             placeholder="Message..."
             disabled={isLoading}
-            rows={4}
+            rows={1}
             className="flex-1 min-w-0 px-4 py-3 rounded-2xl focus:outline-none focus:ring-2 text-white placeholder-gray-400 resize-none overflow-y-auto"
             style={{
               backgroundColor: isDarkMode ? "#3a3a3a" : "rgba(255,255,255,0.9)",
