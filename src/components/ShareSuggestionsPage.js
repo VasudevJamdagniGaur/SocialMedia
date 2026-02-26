@@ -47,10 +47,10 @@ export default function ShareSuggestionsPage() {
   const platformFromState = state.platform; // 'linkedin' | 'x' | 'reddit' when from Dashboard icons
 
   // Selected platform: from navigation state or from tapping an icon (LinkedIn / X / Reddit)
-  const [selectedPlatform, setSelectedPlatform] = useState(platformFromState || null);
+  const [selectedPlatform, setSelectedPlatform] = useState(platformFromState || 'linkedin');
   const [platformSuggestions, setPlatformSuggestions] = useState([]);
   const [suggestionImageUrls, setSuggestionImageUrls] = useState([]); // one image per suggestion (Gemini entities → Gemini image model)
-  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(!!platformFromState);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(true);
   const [suggestionError, setSuggestionError] = useState(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isLoadingImages, setIsLoadingImages] = useState(false);
