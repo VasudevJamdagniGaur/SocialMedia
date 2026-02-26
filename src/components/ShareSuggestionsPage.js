@@ -56,6 +56,7 @@ export default function ShareSuggestionsPage() {
   const [isLoadingImages, setIsLoadingImages] = useState(false);
   const [sharePanelOpen, setSharePanelOpen] = useState(false);
   const [editableShareText, setEditableShareText] = useState('');
+  const [imageEditMenuOpen, setImageEditMenuOpen] = useState(false);
   const imageReplaceInputRef = useRef(null);
 
   const reflectionDate = state.selectedDate ? (state.selectedDate instanceof Date ? state.selectedDate : new Date(state.selectedDate)) : new Date();
@@ -168,11 +169,26 @@ export default function ShareSuggestionsPage() {
 
   const openSharePanel = (text) => {
     setEditableShareText(text ?? selectedText ?? '');
+    setImageEditMenuOpen(false);
     setSharePanelOpen(true);
   };
 
-  const handleReplaceImageClick = () => {
+  const handlePencilClick = () => {
+    setImageEditMenuOpen((prev) => !prev);
+  };
+
+  const handleReplacePhoto = () => {
+    setImageEditMenuOpen(false);
     imageReplaceInputRef.current?.click();
+  };
+
+  const handleRemoveImage = () => {
+    setImageEditMenuOpen(false);
+    setSuggestionImageUrls((prev) => {
+      const next = [...(prev || [])];
+      next[selectedIndex] = null;
+      return next;
+    });
   };
 
   const handleReplaceImageFile = (e) => {
@@ -434,15 +450,43 @@ export default function ShareSuggestionsPage() {
                       className="max-w-full max-h-[320px] w-auto h-auto object-contain"
                     />
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleReplaceImageClick}
-                    className="absolute top-2 right-2 rounded-full p-2 shadow-lg transition-opacity hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2"
-                    style={{ background: isDarkMode ? HUB.accent : '#7C3AED', color: '#FFF' }}
-                    aria-label="Change image"
-                  >
-                    <Pencil className="w-4 h-4" strokeWidth={2} />
-                  </button>
+                  <div className="absolute top-2 right-2 flex flex-col items-end">
+                    <button
+                      type="button"
+                      onClick={handlePencilClick}
+                      className="rounded-full p-2 shadow-lg transition-opacity hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2"
+                      style={{ background: isDarkMode ? HUB.accent : '#7C3AED', color: '#FFF' }}
+                      aria-label="Edit image"
+                    >
+                      <Pencil className="w-4 h-4" strokeWidth={2} />
+                    </button>
+                    {imageEditMenuOpen && (
+                      <div
+                        className="mt-1 py-1 rounded-lg shadow-xl border min-w-[160px]"
+                        style={{
+                          background: isDarkMode ? HUB.bgSecondary : '#FFF',
+                          borderColor: isDarkMode ? HUB.divider : 'rgba(0,0,0,0.1)',
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={handleReplacePhoto}
+                          className="w-full text-left px-4 py-2.5 text-sm hover:opacity-90"
+                          style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}
+                        >
+                          Replace photo
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleRemoveImage}
+                          className="w-full text-left px-4 py-2.5 text-sm hover:opacity-90"
+                          style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}
+                        >
+                          Remove image
+                        </button>
+                      </div>
+                    )}
+                  </div>
                   <input
                     ref={imageReplaceInputRef}
                     type="file"
@@ -451,7 +495,7 @@ export default function ShareSuggestionsPage() {
                     onChange={handleReplaceImageFile}
                   />
                   <p className="text-xs mt-1" style={{ color: isDarkMode ? HUB.textSecondary : '#666' }}>
-                    This image will be shared with your post. Tap the pencil to replace it.
+                    This image will be shared with your post. Tap the pencil to make the changes you want: replace with another photo or remove it.
                   </p>
                 </div>
               )}
