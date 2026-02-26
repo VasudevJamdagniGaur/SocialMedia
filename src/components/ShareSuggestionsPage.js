@@ -54,6 +54,8 @@ export default function ShareSuggestionsPage() {
   const [suggestionError, setSuggestionError] = useState(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isLoadingImages, setIsLoadingImages] = useState(false);
+  const [sharePanelOpen, setSharePanelOpen] = useState(false);
+  const [editableShareText, setEditableShareText] = useState('');
 
   const reflectionDate = state.selectedDate ? (state.selectedDate instanceof Date ? state.selectedDate : new Date(state.selectedDate)) : new Date();
   const dateStr = reflectionDate instanceof Date ? getDateId(reflectionDate) : getDateId(new Date(reflectionDate));
@@ -105,39 +107,58 @@ export default function ShareSuggestionsPage() {
     ? (platformSuggestions[selectedIndex]?.post ?? platformSuggestions[0]?.post ?? reflectionFromState)
     : (fallbackSuggestions[selectedIndex]?.text ?? reflectionFromState);
 
-  const recordShare = (plat) => {
+  const recordShare = (plat, text) => {
     const user = getCurrentUser();
     if (user?.uid) {
       firestoreService.saveSocialShare(user.uid, {
         platform: plat,
         reflectionDate: dateStr,
-        reflectionSnippet: (selectedText || '').slice(0, 200) || undefined,
+        reflectionSnippet: (text || selectedText || '').slice(0, 200) || undefined,
       });
     }
   };
 
-  const shareToLinkedIn = () => {
-    if (!selectedText) return;
+  const textToShare = (sharePanelOpen && editableShareText !== '') ? editableShareText : selectedText;
+
+  const shareToLinkedIn = (text) => {
+    const t = text ?? textToShare;
+    if (!t) return;
     const url = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : 'https://deite.app';
     window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`, '_blank', 'noopener,noreferrer');
-    recordShare('linkedin');
-    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(selectedText);
+    recordShare('linkedin', t);
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(t);
   };
 
-  const shareToTwitter = () => {
-    if (!selectedText) return;
-    window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(selectedText)}`, '_blank', 'noopener,noreferrer');
-    recordShare('x');
+  const shareToTwitter = (text) => {
+    const t = text ?? textToShare;
+    if (!t) return;
+    window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(t)}`, '_blank', 'noopener,noreferrer');
+    recordShare('x', t);
   };
 
-  const shareToReddit = () => {
-    if (!selectedText) return;
+  const shareToReddit = (text) => {
+    const t = text ?? textToShare;
+    if (!t) return;
     window.open(
-      `https://www.reddit.com/submit?title=${encodeURIComponent('My reflection')}&selftext=${encodeURIComponent(selectedText)}`,
+      `https://www.reddit.com/submit?title=${encodeURIComponent('My reflection')}&selftext=${encodeURIComponent(t)}`,
       '_blank',
       'noopener,noreferrer'
     );
-    recordShare('reddit');
+    recordShare('reddit', t);
+  };
+
+  const openSharePanel = (text) => {
+    setEditableShareText(text ?? selectedText ?? '');
+    setSharePanelOpen(true);
+  };
+
+  const handleShareToSelectedPlatform = () => {
+    const t = (sharePanelOpen ? editableShareText : selectedText) || '';
+    if (!t) return;
+    if (selectedPlatform === 'linkedin') shareToLinkedIn(t);
+    else if (selectedPlatform === 'x') shareToTwitter(t);
+    else if (selectedPlatform === 'reddit') shareToReddit(t);
+    setSharePanelOpen(false);
   };
 
   if (!reflectionFromState) {
@@ -245,7 +266,11 @@ export default function ShareSuggestionsPage() {
                 <button
                   key={idx}
                   type="button"
-                  onClick={() => setSelectedIndex(idx)}
+                  onClick={() => {
+                    setSelectedIndex(idx);
+                    const postText = typeof item === 'object' && item?.post != null ? item.post : String(item);
+                    openSharePanel(postText);
+                  }}
                   className="w-full text-left rounded-xl overflow-hidden transition-all"
                   style={{
                     background: selectedIndex === idx ? (isDarkMode ? `${HUB.accent}20` : 'rgba(168, 85, 247, 0.12)') : (isDarkMode ? HUB.bgSecondary : '#FFFFFF'),
@@ -293,7 +318,11 @@ export default function ShareSuggestionsPage() {
               <button
                 key={s.id}
                 type="button"
-                onClick={() => setSelectedIndex(fallbackSuggestions.findIndex((x) => x.id === s.id))}
+                onClick={() => {
+                  const idx = fallbackSuggestions.findIndex((x) => x.id === s.id);
+                  setSelectedIndex(idx);
+                  openSharePanel(s.text);
+                }}
                 className="w-full text-left rounded-xl p-4 transition-all"
                 style={{
                   background: selectedFallbackId === s.id ? (isDarkMode ? `${HUB.accent}20` : 'rgba(168, 85, 247, 0.12)') : (isDarkMode ? HUB.bgSecondary : '#FFFFFF'),
@@ -306,6 +335,65 @@ export default function ShareSuggestionsPage() {
             ))}
           </div>
         ) : null}
+
+        {sharePanelOpen && (
+          <div
+            className="fixed inset-0 z-50 flex flex-col justify-end"
+            style={{ background: 'rgba(0,0,0,0.5)' }}
+            onClick={() => setSharePanelOpen(false)}
+            aria-hidden={!sharePanelOpen}
+          >
+            <div
+              className="rounded-t-2xl w-full max-w-md mx-auto flex flex-col p-4 pb-8"
+              style={{
+                background: isDarkMode ? HUB.bgSecondary : '#FFFFFF',
+                border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'}`,
+                borderBottom: 'none',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p className="text-sm font-medium mb-2" style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}>
+                Edit before sharing
+              </p>
+              <textarea
+                value={editableShareText}
+                onChange={(e) => setEditableShareText(e.target.value)}
+                placeholder="Your post..."
+                rows={5}
+                className="w-full rounded-xl p-3 text-[15px] leading-relaxed resize-none border outline-none focus:ring-2"
+                style={{
+                  background: isDarkMode ? HUB.bg : '#F5F5F5',
+                  borderColor: isDarkMode ? HUB.divider : 'rgba(0,0,0,0.12)',
+                  color: isDarkMode ? HUB.text : '#1A1A1A',
+                }}
+              />
+              <div className="flex gap-3 mt-4">
+                <button
+                  type="button"
+                  onClick={() => setSharePanelOpen(false)}
+                  className="flex-1 py-3 rounded-xl font-medium transition-opacity hover:opacity-90"
+                  style={{ background: isDarkMode ? HUB.divider : '#E5E5E5', color: isDarkMode ? HUB.text : '#333' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleShareToSelectedPlatform}
+                  disabled={!selectedPlatform || !editableShareText.trim()}
+                  className="flex-1 py-3 rounded-xl font-medium transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{
+                    background: selectedPlatform === 'linkedin' ? '#0A66C2' : selectedPlatform === 'x' ? '#1D9BF0' : selectedPlatform === 'reddit' ? REDDIT_COLOR : (isDarkMode ? HUB.divider : '#CCC'),
+                    color: '#FFFFFF',
+                  }}
+                >
+                  {selectedPlatform
+                    ? `Share to ${PLATFORM_LABELS[selectedPlatform]}`
+                    : 'Select a platform above'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
