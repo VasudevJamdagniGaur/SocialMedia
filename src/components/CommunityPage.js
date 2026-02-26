@@ -68,8 +68,15 @@ export default function CommunityPage() {
       }
     };
 
-    const handleProfilePictureUpdate = () => {
-      loadProfilePicture();
+    const handleProfilePictureUpdate = (ev) => {
+      const newUrl = ev && ev.detail && ev.detail.profilePictureUrl;
+      if (newUrl) {
+        setProfilePicture(newUrl);
+        const u = getCurrentUser();
+        if (u) try { localStorage.setItem(`user_profile_picture_${u.uid}`, newUrl); } catch (_) {}
+      } else {
+        loadProfilePicture();
+      }
     };
 
     window.addEventListener('storage', handleStorageChange);

@@ -82,7 +82,15 @@ export default function DashboardPage() {
 
     loadProfilePicture();
 
-    // Listen for storage changes and custom events (when profile picture is updated from ProfilePage)
+    // When profile picture is updated from ProfilePage, read from localStorage only so we don't overwrite with stale Firestore data (Firestore write may fail if image is large)
+    const refreshProfilePictureFromLocalStorage = () => {
+      const user = getCurrentUser();
+      if (user) {
+        const saved = localStorage.getItem(`user_profile_picture_${user.uid}`);
+        setProfilePicture(saved || null);
+      }
+    };
+
     const handleStorageChange = (e) => {
       if (e.key && e.key.startsWith('user_profile_picture_')) {
         loadProfilePicture();
@@ -90,7 +98,7 @@ export default function DashboardPage() {
     };
 
     const handleProfilePictureUpdate = () => {
-      loadProfilePicture();
+      refreshProfilePictureFromLocalStorage();
     };
 
     window.addEventListener('storage', handleStorageChange);

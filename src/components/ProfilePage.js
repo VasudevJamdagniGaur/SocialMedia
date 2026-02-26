@@ -275,12 +275,20 @@ export default function ProfilePage() {
         console.log('✅ Profile picture removed from localStorage');
       }
 
-      // Update Firestore with display name, profile picture, and other profile data
+      // Update Firestore with display name, profile picture, and other profile data (compress image to stay under 1MB)
       try {
+        let pictureForFirestore = profilePicture || null;
+        if (profilePicture && profilePicture.startsWith('data:')) {
+          try {
+            pictureForFirestore = await compressDataUrlForStorage(profilePicture, 800);
+          } catch (_) {
+            pictureForFirestore = profilePicture;
+          }
+        }
         await firestoreService.ensureUser(user.uid, {
           displayName: editData.displayName.trim() || user.displayName || 'User',
           email: user.email,
-          profilePicture: profilePicture || null
+          profilePicture: pictureForFirestore
         });
         console.log('✅ Profile data updated in Firestore');
       } catch (error) {
@@ -532,7 +540,8 @@ const MOOD_KEYWORDS = {
     if (user) {
       localStorage.setItem(`user_profile_picture_${user.uid}`, pendingPicture);
       try {
-        await firestoreService.ensureUser(user.uid, { profilePicture: pendingPicture });
+        const toStore = await compressDataUrlForStorage(pendingPicture, 800);
+        await firestoreService.ensureUser(user.uid, { profilePicture: toStore });
       } catch (err) {
         console.error('Error saving profile picture to Firestore:', err);
       }
@@ -565,10 +574,11 @@ const MOOD_KEYWORDS = {
       if (user) {
         localStorage.setItem(`user_profile_picture_${user.uid}`, croppedImage);
         try {
-          await firestoreService.ensureUser(user.uid, { profilePicture: croppedImage });
+          const toStore = await compressDataUrlForStorage(croppedImage, 800);
+          await firestoreService.ensureUser(user.uid, { profilePicture: toStore });
         } catch (err) {
           console.error('Error saving profile picture to Firestore:', err);
-          // Still update local state and dispatch so UI reflects the new picture
+          // UI still shows new picture from localStorage; other pages will use it via event
         }
         window.dispatchEvent(new Event('profilePictureUpdated'));
       }
@@ -924,6 +934,40 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
   );
 
   return canvas.toDataURL('image/png');
+};
+
+/** Compress a data URL image to stay under Firestore size limit (~1MB). Returns JPEG data URL. */
+const compressDataUrlForStorage = (dataUrl, maxSizeKb = 800) => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const maxDim = 480;
+      let { width, height } = img;
+      if (width > maxDim || height > maxDim) {
+        if (width > height) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        } else {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
+      }
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      let quality = 0.85;
+      let result = canvas.toDataURL('image/jpeg', quality);
+      while (result.length > maxSizeKb * 1024 && quality > 0.2) {
+        quality -= 0.1;
+        result = canvas.toDataURL('image/jpeg', quality);
+      }
+      resolve(result);
+    };
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
 };
 
   const handleSignOut = async () => {

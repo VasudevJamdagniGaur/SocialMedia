@@ -46,6 +46,14 @@ export default function PodGroupChatPage() {
 
     loadProfilePicture();
 
+    const refreshProfilePictureFromLocalStorage = () => {
+      const u = getCurrentUser();
+      if (u) {
+        const saved = localStorage.getItem(`user_profile_picture_${u.uid}`);
+        setProfilePicture(saved || null);
+      }
+    };
+
     const handleStorageChange = (e) => {
       if (e.key && e.key.startsWith('user_profile_picture_')) {
         loadProfilePicture();
@@ -53,7 +61,7 @@ export default function PodGroupChatPage() {
     };
 
     const handleProfilePictureUpdate = () => {
-      loadProfilePicture();
+      refreshProfilePictureFromLocalStorage();
     };
 
     window.addEventListener('storage', handleStorageChange);
