@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Linkedin, Twitter, Share2 } from 'lucide-react';
+import { ArrowLeft, Linkedin, Twitter } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
@@ -238,7 +238,7 @@ export default function ShareSuggestionsPage() {
             }}
             title="Reddit – get Reddit-style post suggestions"
           >
-            <Share2 className="w-5 h-5" style={{ color: REDDIT_COLOR }} strokeWidth={2} />
+            <img src="/reddit-logo.png" alt="Reddit" className="w-5 h-5 object-contain" />
           </button>
         </div>
 
