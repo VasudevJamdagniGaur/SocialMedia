@@ -87,7 +87,8 @@ export default function ShareSuggestionsPage() {
         const userContext = user ? {
           displayName: localStorage.getItem(`user_display_name_${user.uid}`) || user.displayName || '',
           age: localStorage.getItem(`user_age_${user.uid}`) || '',
-          nationality: localStorage.getItem(`user_nationality_${user.uid}`) || 'Indian'
+          nationality: localStorage.getItem(`user_nationality_${user.uid}`) || 'Indian',
+          gender: localStorage.getItem(`user_gender_${user.uid}`) || ''
         } : null;
         Promise.all(
           posts.map((item) => {

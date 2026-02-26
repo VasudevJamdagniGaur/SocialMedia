@@ -17,6 +17,8 @@ class ChatService {
     this.visionModelName = 'gpt-4o'; // For OpenAI vision
     // Image generation: Gemini (gemini-3-pro-image-preview / Nano Banana Pro)
     this.geminiImageModelName = 'gemini-3-pro-image-preview';
+    // Serper: real images for famous entities (personality, event, place, brand, object)
+    this.serperApiKey = process.env.REACT_APP_SERPER_API_KEY || process.env.SERPER_API_KEY || null;
 
     // Debug: Log API key status (first 10 chars only for security)
     console.log('🔑 API Keys loaded:');
@@ -1605,7 +1607,150 @@ ${(reflection || '').trim()}`;
     return result;
   }
 
-  // ---------- Image: content-based prompt + Gemini image model (one image per post, base64 → data URL) ----------
+  // ---------- Image: smart routing — STEP 1 famous entity → Serper; STEP 2 no famous → context + user profile → Gemini ----------
+
+  /**
+   * STEP 1 — Entity detection. Extract famous personality, event, place, brand, object from share suggestion.
+   * @param {string} postText - Generated share suggestion text
+   * @returns {Promise<{ personality: string[], event: string[], place: string[], brand: string[], object: string[] }>}
+   */
+  async _detectFamousEntities(postText) {
+    const apiKey = (this.geminiApiKey || process.env.REACT_APP_GOOGLE_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
+    const text = (postText || '').trim();
+    const empty = { personality: [], event: [], place: [], brand: [], object: [] };
+    if (!apiKey || !text) return empty;
+
+    const prompt = `Extract ONLY famous or well-known entities from the text. Return STRICT JSON, no markdown.
+
+Rules:
+- personality: famous people (celebrities, leaders, authors, historical figures). NOT personal contacts or friends.
+- event: famous events, named books, films, conferences, awards (e.g. "The Three-Body Problem", "Source Code" book, "Oscars").
+- place: famous or iconic places, landmarks, cities, venues.
+- brand: famous brands, companies, products.
+- object: famous objects, artworks, monuments (e.g. Mona Lisa, Eiffel Tower as object).
+
+Return format (use exactly):
+{"personality":[],"event":[],"place":[],"brand":[],"object":[]}
+
+If nothing famous, return empty arrays. Output only the JSON.
+
+Text:
+${text.slice(0, 1000)}`;
+
+    try {
+      const apiUrl = `${this.geminiBaseURL}/models/${this.geminiModelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const res = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 300 }
+        })
+      });
+      if (!res.ok) return empty;
+      const data = await res.json();
+      let raw = (data.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '').trim();
+      raw = raw.replace(/```json?/gi, '').replace(/```/g, '').trim();
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) return empty;
+      const parsed = JSON.parse(jsonMatch[0]);
+      return {
+        personality: Array.isArray(parsed.personality) ? parsed.personality.filter(s => typeof s === 'string' && s.trim().length > 0).slice(0, 3) : [],
+        event: Array.isArray(parsed.event) ? parsed.event.filter(s => typeof s === 'string' && s.trim().length > 0).slice(0, 3) : [],
+        place: Array.isArray(parsed.place) ? parsed.place.filter(s => typeof s === 'string' && s.trim().length > 0).slice(0, 3) : [],
+        brand: Array.isArray(parsed.brand) ? parsed.brand.filter(s => typeof s === 'string' && s.trim().length > 0).slice(0, 3) : [],
+        object: Array.isArray(parsed.object) ? parsed.object.filter(s => typeof s === 'string' && s.trim().length > 0).slice(0, 3) : []
+      };
+    } catch (e) {
+      console.warn('[Image] Famous entity detection failed:', e.message);
+      return empty;
+    }
+  }
+
+  /**
+   * Fetch most relevant real image from Serper for a query (used when famous entity is detected).
+   * @param {string} query - Search query (e.g. "Bill Gates portrait", "The Three-Body Problem book")
+   * @returns {Promise<string|null>} - First image URL or null
+   */
+  async _fetchImageFromSerper(query) {
+    if (!this.serperApiKey || !query?.trim()) return null;
+    try {
+      const res = await fetch('https://google.serper.dev/images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-API-KEY': this.serperApiKey },
+        body: JSON.stringify({ q: query.trim(), num: 5 })
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      const first = data.images?.[0];
+      const url = first?.imageUrl ?? first?.image ?? first?.url ?? first?.original ?? first?.link;
+      return url && typeof url === 'string' ? url : null;
+    } catch (e) {
+      console.warn('[Image] Serper fetch failed:', e.message);
+      return null;
+    }
+  }
+
+  /**
+   * STEP 2 (no famous entity): Extract context from post and build structured prompt for Gemini.
+   * @param {string} postText - Share suggestion text
+   * @param {{ displayName?: string, age?: string, nationality?: string, gender?: string }|null} userContext
+   * @returns {Promise<string|null>} - Structured image prompt or null
+   */
+  async _buildStructuredPromptForNoFamous(postText, userContext = null) {
+    const apiKey = (this.geminiApiKey || process.env.REACT_APP_GOOGLE_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
+    const text = (postText || '').trim();
+    if (!apiKey || !text) return null;
+
+    const age = (userContext?.age || '').trim() || '30';
+    const gender = (userContext?.gender || '').trim().toLowerCase() || 'person';
+    const nationality = (userContext?.nationality || 'Indian').trim();
+
+    const prompt = `From this social post, extract context for a single realistic photograph. Return STRICT JSON only, no markdown.
+
+Keys (short phrases, empty string if not clear):
+- mainActivity: what the person is doing (e.g. "reading a book", "working at a desk", "walking in a corridor")
+- environment: location/setting (e.g. "quiet library", "office", "college corridor", "home")
+- emotionalTone: mood (e.g. "focused", "embarrassed", "calm", "reflective")
+- timeOfDay: "morning" or "afternoon" or "evening" or ""
+- outfit: clothing style (e.g. "casual", "professional", "smart casual") or ""
+- professionalSetting: "yes" or "no" if in a work/office context
+
+Format: {"mainActivity":"","environment":"","emotionalTone":"","timeOfDay":"","outfit":"","professionalSetting":""}
+
+Post:
+${text.slice(0, 800)}`;
+
+    try {
+      const apiUrl = `${this.geminiBaseURL}/models/${this.geminiModelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const res = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.2, maxOutputTokens: 200 }
+        })
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      let raw = (data.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '').trim();
+      raw = raw.replace(/```json?/gi, '').replace(/```/g, '').trim();
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) return null;
+      const c = JSON.parse(jsonMatch[0]);
+      const activity = (c.mainActivity || '').trim() || 'sitting thoughtfully';
+      const environment = (c.environment || '').trim() || 'neutral indoor setting';
+      const tone = (c.emotionalTone || '').trim() || 'natural';
+      const timeOfDay = (c.timeOfDay || '').trim();
+      const outfit = (c.outfit || '').trim() || 'casual';
+      const timeStr = timeOfDay ? `, ${timeOfDay} light` : '';
+
+      return `A realistic photograph of a ${age} year old ${gender} who resembles the user's profile (${nationality}), ${activity}, in a ${environment}${timeStr}, wearing ${outfit}, natural body language, expressive but subtle emotion reflecting ${tone}, professional photography, natural lighting, high detail, not a celebrity, not stock image style. Do not generate animals unless explicitly mentioned. Do not generate generic stock office cliché. Person must look contextually aligned with the story. Avoid famous faces. High realism.`;
+    } catch (e) {
+      console.warn('[Image] Context extraction failed:', e.message);
+      return null;
+    }
+  }
 
   /**
    * Turn post content into a short image prompt (scene/mood). No entity extraction.
@@ -1808,72 +1953,97 @@ ${text}`;
   }
 
   /**
-   * Generate one image per post using Gemini (gemini-3-pro-image-preview). Returns a data URL for the frontend.
-   * Uses post content to create an image prompt (no entity/famous-person extraction). When depicting a random person, uses user details (name, age, nationality) or defaults to Indian.
-   * @param {string} postText - Full post text
-   * @param {{ displayName?: string, age?: string, nationality?: string }|null} [userContext] - Optional user details for the person in the image
-   * @returns {Promise<string|null>} - data:image/png;base64,... or null
+   * Generate one image per post. Smart routing:
+   * STEP 1 — If famous entity (personality, event, place, brand, object) detected → Serper API (real image). Do NOT call Gemini.
+   * STEP 2 — If no famous entity → extract context + user profile, build structured prompt → Gemini Image Generation.
+   * @param {string} postText - Full post text (share suggestion)
+   * @param {{ displayName?: string, age?: string, nationality?: string, gender?: string }|null} [userContext] - User profile for STEP 2
+   * @returns {Promise<string|null>} - Image URL (Serper) or data URL (Gemini), or null
    */
   async fetchImageForReflection(postText, userContext = null) {
     if (!postText?.trim()) return null;
+    const fullText = postText.trim();
 
-    const apiKey = (this.geminiApiKey || process.env.REACT_APP_GOOGLE_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
-    if (!apiKey) {
+    // STEP 1 — Entity detection
+    const entities = await this._detectFamousEntities(fullText);
+    const hasFamous =
+      (entities.personality?.length > 0) ||
+      (entities.event?.length > 0) ||
+      (entities.place?.length > 0) ||
+      (entities.brand?.length > 0) ||
+      (entities.object?.length > 0);
+
+    if (hasFamous && this.serperApiKey) {
+      // Use Serper: fetch most relevant real image for the famous entity. Do NOT call Gemini. Do NOT use Pexels.
+      const q =
+        entities.personality?.[0] ? `${entities.personality[0]} high quality portrait` :
+        entities.event?.[0] ? `${entities.event[0]} high quality` :
+        entities.place?.[0] ? `${entities.place[0]} high quality` :
+        entities.brand?.[0] ? `${entities.brand[0]} official` :
+        entities.object?.[0] ? `${entities.object[0]} high quality` :
+        null;
+      if (q) {
+        console.log('[Image] Famous entity detected → Serper:', q);
+        const serperUrl = await this._fetchImageFromSerper(q);
+        if (serperUrl) return serperUrl;
+      }
+    }
+
+    // STEP 2 — No famous entity (or Serper failed): context + user profile → Gemini
+    const geminiKey = (this.geminiApiKey || process.env.REACT_APP_GOOGLE_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
+    if (!geminiKey) {
       console.warn('[Image] Gemini API key not set');
       return null;
     }
 
-    const fullText = postText.trim();
-    let imagePrompt = await this._getImagePromptFromContent(fullText, userContext);
+    const imagePrompt = await this._buildStructuredPromptForNoFamous(fullText, userContext);
     if (!imagePrompt) {
-      const firstSentence = fullText.split(/[.!?]/)[0]?.trim().slice(0, 120) || fullText.slice(0, 120);
-      imagePrompt = firstSentence ? `${firstSentence}. Professional, minimal text.` : null;
+      const firstSentence = fullText.split(/[.!?]/)[0]?.trim().slice(0, 100) || fullText.slice(0, 100);
+      if (!firstSentence) return null;
+      // Fallback minimal prompt with user cues
+      const age = (userContext?.age || '').trim() || '30';
+      const gender = (userContext?.gender || '').trim().toLowerCase() || 'person';
+      const nationality = (userContext?.nationality || 'Indian').trim();
+      const fallback = `A realistic photograph of a ${age} year old ${gender} (${nationality}), ${firstSentence}, natural lighting, high detail, not a celebrity, not stock.`;
+      return this._generateImageWithGemini(fallback, geminiKey);
     }
-    const nationality = (userContext?.nationality || 'Indian').trim();
-    const personInstruction = userContext?.displayName || userContext?.age
-      ? ` Depict any non-famous person as ${nationality}${userContext?.displayName ? ` (similar to someone named ${userContext.displayName})` : ''}${userContext?.age ? `, around ${userContext.age} years old` : ''}.`
-      : ` Depict any non-famous person as ${nationality}.`;
-    console.log('[Image] Content-based prompt:', imagePrompt ?? '(none)');
-    if (!imagePrompt) return null;
 
+    const strictRules = 'STRICT: Do not generate random unrelated visuals. Do not generate animals unless explicitly mentioned. Do not generate generic stock office images. The person must look contextually aligned with the story. Avoid famous faces. Keep realism high.';
+    return this._generateImageWithGemini(`${imagePrompt} ${strictRules}`, geminiKey);
+  }
+
+  /**
+   * Call Gemini Image Generation API; returns data URL or null.
+   * @param {string} prompt - Full image prompt
+   * @param {string} apiKey - Gemini API key
+   * @returns {Promise<string|null>}
+   */
+  async _generateImageWithGemini(prompt, apiKey) {
     try {
       const apiUrl = `${this.geminiBaseURL}/models/${this.geminiImageModelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
       const res = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{
-            parts: [{
-              text: `Generate a single image for a social post. The image must clearly reflect the specific content discussed (e.g. if it's about a book, show that book or its theme; if about a place or event, show that). Do not show a generic person in a generic setting—match the post's topic. Professional, eye-catching, minimal text on the image. Style suitable for LinkedIn/Twitter.${personInstruction} ${imagePrompt}`
-            }]
-          }],
+          contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
             responseModalities: ['TEXT', 'IMAGE'],
             imageConfig: { aspectRatio: '1:1', imageSize: '2K' }
           }
         })
       });
-
       if (!res.ok) {
-        const errBody = await res.text();
-        console.warn('[Image] Gemini image API error:', res.status, errBody);
+        console.warn('[Image] Gemini image API error:', res.status, await res.text());
         return null;
       }
-
       const data = await res.json();
       const parts = data.candidates?.[0]?.content?.parts ?? [];
       const imagePart = parts.find(p => p.inlineData && p.inlineData.data);
-      if (!imagePart?.inlineData) {
-        console.warn('[Image] No image in response, parts:', parts.length);
-        return null;
-      }
-
+      if (!imagePart?.inlineData) return null;
       const { mimeType = 'image/png', data: base64 } = imagePart.inlineData;
-      const dataUrl = `data:${mimeType};base64,${base64}`;
-      console.log('[Image] Generated data URL length:', dataUrl.length);
-      return dataUrl;
+      return `data:${mimeType};base64,${base64}`;
     } catch (e) {
-      console.warn('[Image] Generation failed:', e.message);
+      console.warn('[Image] Gemini generation failed:', e.message);
       return null;
     }
   }
