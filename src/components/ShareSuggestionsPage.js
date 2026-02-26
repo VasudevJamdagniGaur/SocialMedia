@@ -22,7 +22,7 @@ const REDDIT_COLOR = '#FF4500';
 
 const PLATFORM_LABELS = {
   linkedin: 'LinkedIn',
-  x: 'X (Twitter)',
+  x: 'X',
   reddit: 'Reddit',
 };
 
