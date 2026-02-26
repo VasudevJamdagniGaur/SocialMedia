@@ -1641,15 +1641,22 @@ ${(reflection || '').trim()}`;
 
   /**
    * Turn post content into a short image prompt (scene/mood). No entity extraction.
+   * When the scene includes a non-famous person, use user details (name, age, nationality) or default to Indian.
    * @param {string} postText - Full post text
+   * @param {{ displayName?: string, age?: string, nationality?: string }|null} [userContext] - Optional user details for depicting the person
    * @returns {Promise<string|null>} - One-sentence image description or null
    */
-  async _getImagePromptFromContent(postText) {
+  async _getImagePromptFromContent(postText, userContext = null) {
     const apiKey = (this.geminiApiKey || process.env.REACT_APP_GOOGLE_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
     const text = (postText || '').trim();
     if (!apiKey || !text) return null;
 
-    const prompt = `Read this social media post and describe in ONE short sentence an image that would illustrate it. Describe only the scene, mood, or setting (e.g. "Someone focused on work in a quiet library", "Person reading a book thoughtfully"). Do not mention famous names or specific people. Output only that one sentence, nothing else. No quotes.
+    const nationality = (userContext?.nationality || 'Indian').trim();
+    const userHint = userContext?.displayName || userContext?.age
+      ? ` When the image includes a person (not a famous celebrity), describe them as ${nationality}${userContext?.displayName ? `, similar to a person named ${userContext.displayName}` : ''}${userContext?.age ? `, around ${userContext.age} years old` : ''}.`
+      : ` When the image includes a person (not a famous celebrity), describe them as ${nationality}.`;
+
+    const prompt = `Read this social media post and describe in ONE short sentence an image that would illustrate it. Describe only the scene, mood, or setting (e.g. "Someone focused on work in a quiet library", "Person reading a book thoughtfully"). Do not mention famous names or specific celebrities.${userHint} Output only that one sentence, nothing else. No quotes.
 
 Post:
 ${text.slice(0, 800)}`;
@@ -1826,11 +1833,12 @@ ${text}`;
 
   /**
    * Generate one image per post using Gemini (gemini-3-pro-image-preview). Returns a data URL for the frontend.
-   * Uses post content to create an image prompt (no entity/famous-person extraction).
+   * Uses post content to create an image prompt (no entity/famous-person extraction). When depicting a random person, uses user details (name, age, nationality) or defaults to Indian.
    * @param {string} postText - Full post text
+   * @param {{ displayName?: string, age?: string, nationality?: string }|null} [userContext] - Optional user details for the person in the image
    * @returns {Promise<string|null>} - data:image/png;base64,... or null
    */
-  async fetchImageForReflection(postText) {
+  async fetchImageForReflection(postText, userContext = null) {
     if (!postText?.trim()) return null;
 
     const apiKey = (this.geminiApiKey || process.env.REACT_APP_GOOGLE_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
@@ -1840,11 +1848,15 @@ ${text}`;
     }
 
     const fullText = postText.trim();
-    let imagePrompt = await this._getImagePromptFromContent(fullText);
+    let imagePrompt = await this._getImagePromptFromContent(fullText, userContext);
     if (!imagePrompt) {
       const firstSentence = fullText.split(/[.!?]/)[0]?.trim().slice(0, 120) || fullText.slice(0, 120);
       imagePrompt = firstSentence ? `${firstSentence}. Professional, minimal text.` : null;
     }
+    const nationality = (userContext?.nationality || 'Indian').trim();
+    const personInstruction = userContext?.displayName || userContext?.age
+      ? ` Depict any non-famous person as ${nationality}${userContext?.displayName ? ` (similar to someone named ${userContext.displayName})` : ''}${userContext?.age ? `, around ${userContext.age} years old` : ''}.`
+      : ` Depict any non-famous person as ${nationality}.`;
     console.log('[Image] Content-based prompt:', imagePrompt ?? '(none)');
     if (!imagePrompt) return null;
 
@@ -1856,7 +1868,7 @@ ${text}`;
         body: JSON.stringify({
           contents: [{
             parts: [{
-              text: `Generate a single image for a social post. Professional, eye-catching, minimal text on the image. Style suitable for LinkedIn/Twitter. ${imagePrompt}`
+              text: `Generate a single image for a social post. Professional, eye-catching, minimal text on the image. Style suitable for LinkedIn/Twitter.${personInstruction} ${imagePrompt}`
             }]
           }],
           generationConfig: {

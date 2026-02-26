@@ -75,12 +75,18 @@ export default function ShareSuggestionsPage() {
         setPlatformSuggestions(posts);
         setSelectedIndex(0);
         setIsLoadingSuggestions(false);
-        // For each suggestion: Gemini extracts entities → Gemini image model generates one image → show with that post
+        // For each suggestion: Gemini generates image (using user context for random people: name, age, Indian)
         setIsLoadingImages(true);
+        const user = getCurrentUser();
+        const userContext = user ? {
+          displayName: localStorage.getItem(`user_display_name_${user.uid}`) || user.displayName || '',
+          age: localStorage.getItem(`user_age_${user.uid}`) || '',
+          nationality: localStorage.getItem(`user_nationality_${user.uid}`) || 'Indian'
+        } : null;
         Promise.all(
           posts.map((item) => {
             const postText = typeof item === 'object' && item?.post != null ? item.post : String(item);
-            return chatService.fetchImageForReflection(postText).catch(() => null);
+            return chatService.fetchImageForReflection(postText, userContext).catch(() => null);
           })
         ).then((urls) => {
           if (!cancelled) {
