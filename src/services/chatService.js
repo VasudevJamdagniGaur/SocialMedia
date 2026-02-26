@@ -1656,7 +1656,15 @@ ${(reflection || '').trim()}`;
       ? ` When the image includes a person (not a famous celebrity), describe them as ${nationality}${userContext?.displayName ? `, similar to a person named ${userContext.displayName}` : ''}${userContext?.age ? `, around ${userContext.age} years old` : ''}.`
       : ` When the image includes a person (not a famous celebrity), describe them as ${nationality}.`;
 
-    const prompt = `Read this social media post and describe in ONE short sentence an image that would illustrate it. Describe only the scene, mood, or setting (e.g. "Someone focused on work in a quiet library", "Person reading a book thoughtfully"). Do not mention famous names or specific celebrities.${userHint} Output only that one sentence, nothing else. No quotes.
+    const prompt = `Read this social media post and describe in ONE short sentence an image that would illustrate it.
+
+IMPORTANT: The image must reflect the SPECIFIC content discussed in the post. Use the actual subjects mentioned:
+- If the post discusses a specific book (e.g. "The Three-Body Problem", "Source Code", "Crime and Punishment"), the image should include that book or clearly show someone reading it, or the book's theme (e.g. sci-fi for Three-Body Problem).
+- If the post discusses a place (e.g. library, director's office, college), include that setting.
+- If the post discusses an event or moment (e.g. mix-up, meeting someone), show that context.
+Do NOT describe a generic person in a generic setting. Always reference the specific book title, place, or topic from the post so the image matches what is discussed. Do not mention famous celebrity names.${userHint}
+
+Output only that one sentence, nothing else. No quotes.
 
 Post:
 ${text.slice(0, 800)}`;
@@ -1868,7 +1876,7 @@ ${text}`;
         body: JSON.stringify({
           contents: [{
             parts: [{
-              text: `Generate a single image for a social post. Professional, eye-catching, minimal text on the image. Style suitable for LinkedIn/Twitter.${personInstruction} ${imagePrompt}`
+              text: `Generate a single image for a social post. The image must clearly reflect the specific content discussed (e.g. if it's about a book, show that book or its theme; if about a place or event, show that). Do not show a generic person in a generic setting—match the post's topic. Professional, eye-catching, minimal text on the image. Style suitable for LinkedIn/Twitter.${personInstruction} ${imagePrompt}`
             }]
           }],
           generationConfig: {
