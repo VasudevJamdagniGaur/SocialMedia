@@ -325,8 +325,8 @@ export default function ShareSuggestionsPage() {
                       }}
                       className="w-full text-left rounded-xl overflow-hidden transition-all"
                       style={{
-                        background: selectedIndex === idx ? (isDarkMode ? `${HUB.accent}20` : 'rgba(168, 85, 247, 0.12)') : (isDarkMode ? HUB.bgSecondary : '#FFFFFF'),
-                        border: `1px solid ${selectedIndex === idx ? HUB.accent : (isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)')}`,
+                        background: isDarkMode ? HUB.bgSecondary : '#FFFFFF',
+                        border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'}`,
                       }}
                     >
                       {imageUrl && (
