@@ -270,7 +270,7 @@ export default function ShareSuggestionsPage() {
             }}
             title="X (Twitter) – get X-style post suggestions"
           >
-            <img src="/x-logo.png" alt="X" className="w-7 h-7 object-contain" />
+            <img src="/x-logo.png" alt="X" className="w-8 h-8 object-contain" />
           </button>
           <button
             type="button"
@@ -283,7 +283,7 @@ export default function ShareSuggestionsPage() {
             }}
             title="Reddit – get Reddit-style post suggestions"
           >
-            <img src="/reddit-logo.png" alt="Reddit" className="w-7 h-7 object-contain" />
+            <img src="/reddit-logo.png" alt="Reddit" className="w-8 h-8 object-contain" />
           </button>
         </div>
 
