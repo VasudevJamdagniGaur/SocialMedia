@@ -98,7 +98,7 @@ export default function ShareSuggestionsPage() {
         Promise.all(
           posts.map((item) => {
             const postText = typeof item === 'object' && item?.post != null ? item.post : String(item);
-            return chatService.fetchImageForReflection(postText, userContext).catch(() => null);
+            return chatService.fetchImageForReflection(postText, userContext, selectedPlatform).catch(() => null);
           })
         ).then((urls) => {
           if (!cancelled) {

@@ -1710,11 +1710,13 @@ ${text.slice(0, 1000)}`;
   /**
    * STEP 2 (no famous entity): Extract context from post and build structured prompt for Gemini.
    * Uses the full template: analysis (activity, environment, tone, time, setting, body language) + user profile + instructions + scene requirements + structured output.
+   * When platform is 'linkedin', adds professional/polished style so the image fits LinkedIn (not casual/candid).
    * @param {string} postText - Share suggestion text
    * @param {{ displayName?: string, age?: string, nationality?: string, gender?: string, skinTone?: string, hairstyle?: string, clothingStyle?: string, profession?: string, profileImageUrl?: string }|null} userContext
+   * @param {string} [platform] - 'linkedin' | 'x' | 'reddit' — LinkedIn gets professional style
    * @returns {Promise<string|null>} - Full image generation prompt or null
    */
-  async _buildStructuredPromptForNoFamous(postText, userContext = null) {
+  async _buildStructuredPromptForNoFamous(postText, userContext = null, platform = 'x') {
     const apiKey = (this.geminiApiKey || process.env.REACT_APP_GOOGLE_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
     const text = (postText || '').trim();
     if (!apiKey || !text) return null;
@@ -1766,7 +1768,19 @@ ${text.slice(0, 800)}`;
       const outfit = (c.contextualOutfit || '').trim() || clothingStyle;
       const bodyLanguage = (c.bodyLanguage || '').trim() || 'natural body language';
 
+      const isLinkedIn = (platform || '').toLowerCase() === 'linkedin';
+
+      const platformStyleBlock = isLinkedIn
+        ? `PLATFORM: LinkedIn. The image MUST look professional and suitable for a LinkedIn post:
+- Polished, business-appropriate aesthetic. Not a casual selfie or overly candid snapshot.
+- Prefer professional or smart-casual attire; clean, uncluttered background when possible.
+- Well-lit, high-quality look suitable for a professional feed. Confident, composed posture preferred.
+- Avoid overly casual or silly compositions. Keep the moment authentic but professional.`
+        : `PLATFORM: X (Twitter) or general. The image can be candid, engaging, and natural—suitable for a social feed.`;
+
       const instructions = `You are generating a realistic, context-aware photograph for a social media post.
+
+${platformStyleBlock}
 
 IMAGE GENERATION INSTRUCTIONS:
 1. If the post implies the user is the main subject, generate a person that resembles the user.
@@ -1780,7 +1794,7 @@ SCENE REQUIREMENTS:
 - The scene must directly reflect the story context.
 - No random animals or unrelated elements.
 - Avoid generic stock-photo composition.
-- Make it feel like a candid real-life captured moment.
+${isLinkedIn ? '- Professional or clean setting; polished, LinkedIn-appropriate composition.' : '- Make it feel like a candid real-life captured moment.'}
 - Use natural lighting.
 - Use subtle, believable facial expressions.
 - Realistic human proportions.
@@ -1788,7 +1802,11 @@ SCENE REQUIREMENTS:
 - No text overlay in the image.
 - No logos unless mentioned in the post.`;
 
-      const structuredPrompt = `A realistic high-detail photograph of a ${age}-year-old ${gender} with ${skinTone} skin tone and ${hairstyle} hair, resembling the user's profile appearance, wearing ${outfit}, ${activity}, in a ${environment}, ${bodyLanguage} reflecting ${tone}, professional DSLR photography, natural lighting, shallow depth of field, cinematic but realistic, authentic moment, not staged, not stock photo style.`;
+      const styleSuffix = isLinkedIn
+        ? 'professional DSLR photography, natural lighting, shallow depth of field, polished and business-appropriate, suitable for LinkedIn, clean composition, not staged, not stock photo style.'
+        : 'professional DSLR photography, natural lighting, shallow depth of field, cinematic but realistic, authentic moment, not staged, not stock photo style.';
+
+      const structuredPrompt = `A realistic high-detail photograph of a ${age}-year-old ${gender} with ${skinTone} skin tone and ${hairstyle} hair, resembling the user's profile appearance, wearing ${outfit}, ${activity}, in a ${environment}, ${bodyLanguage} reflecting ${tone}, ${styleSuffix}`;
 
       return `${instructions}\n\nGenerate the following image:\n\n${structuredPrompt}`;
     } catch (e) {
@@ -2001,11 +2019,13 @@ ${text}`;
    * Generate one image per post. Smart routing:
    * STEP 1 — If famous entity (personality, event, place, brand, object) detected → Serper API (real image). Do NOT call Gemini.
    * STEP 2 — If no famous entity → extract context + user profile, build structured prompt → Gemini Image Generation.
+   * Image style is platform-aware: LinkedIn = professional/polished; X = candid/engaging; Reddit = not used (no images).
    * @param {string} postText - Full post text (share suggestion)
    * @param {{ displayName?: string, age?: string, nationality?: string, gender?: string }|null} [userContext] - User profile for STEP 2
+   * @param {string} [platform] - 'linkedin' | 'x' | 'reddit' — affects image style (e.g. LinkedIn = professional)
    * @returns {Promise<string|null>} - Image URL (Serper) or data URL (Gemini), or null
    */
-  async fetchImageForReflection(postText, userContext = null) {
+  async fetchImageForReflection(postText, userContext = null, platform = 'x') {
     if (!postText?.trim()) return null;
     const fullText = postText.trim();
 
@@ -2019,9 +2039,11 @@ ${text}`;
       (entities.object?.length > 0);
 
     if (hasFamous && this.serperApiKey) {
-      // Use Serper: fetch most relevant real image for the famous entity. Do NOT call Gemini. Do NOT use Pexels.
+      // Use Serper: fetch most relevant real image for the famous entity. For LinkedIn, prefer professional/corporate style.
+      const isLinkedIn = (platform || '').toLowerCase() === 'linkedin';
+      const qualifier = isLinkedIn ? 'professional portrait' : 'high quality portrait';
       const q =
-        entities.personality?.[0] ? `${entities.personality[0]} high quality portrait` :
+        entities.personality?.[0] ? `${entities.personality[0]} ${qualifier}` :
         entities.event?.[0] ? `${entities.event[0]} high quality` :
         entities.place?.[0] ? `${entities.place[0]} high quality` :
         entities.brand?.[0] ? `${entities.brand[0]} official` :
@@ -2041,15 +2063,18 @@ ${text}`;
       return null;
     }
 
-    const imagePrompt = await this._buildStructuredPromptForNoFamous(fullText, userContext);
+    const imagePrompt = await this._buildStructuredPromptForNoFamous(fullText, userContext, platform);
     if (!imagePrompt) {
       const firstSentence = fullText.split(/[.!?]/)[0]?.trim().slice(0, 100) || fullText.slice(0, 100);
       if (!firstSentence) return null;
-      // Fallback minimal prompt with user cues
+      // Fallback minimal prompt with user cues; style by platform
       const age = (userContext?.age || '').trim() || '30';
       const gender = (userContext?.gender || '').trim().toLowerCase() || 'person';
       const nationality = (userContext?.nationality || 'Indian').trim();
-      const fallback = `A realistic photograph of a ${age} year old ${gender} (${nationality}), ${firstSentence}, natural lighting, high detail, not a celebrity, not stock.`;
+      const styleSuffix = platform === 'linkedin'
+        ? 'professional LinkedIn-style photograph, polished, business-appropriate, clean background, natural lighting, high detail, not a celebrity, not stock.'
+        : 'natural lighting, high detail, not a celebrity, not stock.';
+      const fallback = `A realistic photograph of a ${age} year old ${gender} (${nationality}), ${firstSentence}, ${styleSuffix}`;
       return this._generateImageWithGemini(fallback, geminiKey);
     }
 
