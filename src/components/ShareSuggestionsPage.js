@@ -88,7 +88,12 @@ export default function ShareSuggestionsPage() {
           displayName: localStorage.getItem(`user_display_name_${user.uid}`) || user.displayName || '',
           age: localStorage.getItem(`user_age_${user.uid}`) || '',
           nationality: localStorage.getItem(`user_nationality_${user.uid}`) || 'Indian',
-          gender: localStorage.getItem(`user_gender_${user.uid}`) || ''
+          gender: localStorage.getItem(`user_gender_${user.uid}`) || '',
+          skinTone: localStorage.getItem(`user_skin_tone_${user.uid}`) || '',
+          hairstyle: localStorage.getItem(`user_hairstyle_${user.uid}`) || '',
+          clothingStyle: localStorage.getItem(`user_clothing_style_${user.uid}`) || '',
+          profession: localStorage.getItem(`user_profession_${user.uid}`) || '',
+          profileImageUrl: localStorage.getItem(`user_profile_picture_${user.uid}`) || ''
         } : null;
         Promise.all(
           posts.map((item) => {

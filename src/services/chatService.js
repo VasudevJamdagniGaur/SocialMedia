@@ -1693,9 +1693,10 @@ ${text.slice(0, 1000)}`;
 
   /**
    * STEP 2 (no famous entity): Extract context from post and build structured prompt for Gemini.
+   * Uses the full template: analysis (activity, environment, tone, time, setting, body language) + user profile + instructions + scene requirements + structured output.
    * @param {string} postText - Share suggestion text
-   * @param {{ displayName?: string, age?: string, nationality?: string, gender?: string }|null} userContext
-   * @returns {Promise<string|null>} - Structured image prompt or null
+   * @param {{ displayName?: string, age?: string, nationality?: string, gender?: string, skinTone?: string, hairstyle?: string, clothingStyle?: string, profession?: string, profileImageUrl?: string }|null} userContext
+   * @returns {Promise<string|null>} - Full image generation prompt or null
    */
   async _buildStructuredPromptForNoFamous(postText, userContext = null) {
     const apiKey = (this.geminiApiKey || process.env.REACT_APP_GOOGLE_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
@@ -1703,20 +1704,25 @@ ${text.slice(0, 1000)}`;
     if (!apiKey || !text) return null;
 
     const age = (userContext?.age || '').trim() || '30';
-    const gender = (userContext?.gender || '').trim().toLowerCase() || 'person';
-    const nationality = (userContext?.nationality || 'Indian').trim();
+    const gender = (userContext?.gender || '').trim() || 'person';
+    const skinTone = (userContext?.skinTone || '').trim() || 'natural';
+    const hairstyle = (userContext?.hairstyle || '').trim() || 'natural';
+    const clothingStyle = (userContext?.clothingStyle || '').trim() || 'context-appropriate';
+    const profession = (userContext?.profession || '').trim() || 'not specified';
+    const profileImageUrl = (userContext?.profileImageUrl || '').trim();
 
-    const prompt = `From this social post, extract context for a single realistic photograph. Return STRICT JSON only, no markdown.
+    const extractPrompt = `Analyze this post and extract context for a single realistic photograph. Return STRICT JSON only, no markdown.
 
-Keys (short phrases, empty string if not clear):
+Keys (short phrases; empty string if not clear):
 - mainActivity: what the person is doing (e.g. "reading a book", "working at a desk", "walking in a corridor")
 - environment: location/setting (e.g. "quiet library", "office", "college corridor", "home")
 - emotionalTone: mood (e.g. "focused", "embarrassed", "calm", "reflective")
 - timeOfDay: "morning" or "afternoon" or "evening" or ""
-- outfit: clothing style (e.g. "casual", "professional", "smart casual") or ""
-- professionalSetting: "yes" or "no" if in a work/office context
+- professionalOrCasual: "professional" or "casual" or "mixed" or ""
+- bodyLanguage: body language cues (e.g. "relaxed posture", "slightly embarrassed", "focused on task") or ""
+- contextualOutfit: clothing that fits the scene (e.g. "casual", "smart casual", "professional attire") or ""
 
-Format: {"mainActivity":"","environment":"","emotionalTone":"","timeOfDay":"","outfit":"","professionalSetting":""}
+Format: {"mainActivity":"","environment":"","emotionalTone":"","timeOfDay":"","professionalOrCasual":"","bodyLanguage":"","contextualOutfit":""}
 
 Post:
 ${text.slice(0, 800)}`;
@@ -1727,8 +1733,8 @@ ${text.slice(0, 800)}`;
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.2, maxOutputTokens: 200 }
+          contents: [{ parts: [{ text: extractPrompt }] }],
+          generationConfig: { temperature: 0.2, maxOutputTokens: 250 }
         })
       });
       if (!res.ok) return null;
@@ -1741,11 +1747,34 @@ ${text.slice(0, 800)}`;
       const activity = (c.mainActivity || '').trim() || 'sitting thoughtfully';
       const environment = (c.environment || '').trim() || 'neutral indoor setting';
       const tone = (c.emotionalTone || '').trim() || 'natural';
-      const timeOfDay = (c.timeOfDay || '').trim();
-      const outfit = (c.outfit || '').trim() || 'casual';
-      const timeStr = timeOfDay ? `, ${timeOfDay} light` : '';
+      const outfit = (c.contextualOutfit || '').trim() || clothingStyle;
+      const bodyLanguage = (c.bodyLanguage || '').trim() || 'natural body language';
 
-      return `A realistic photograph of a ${age} year old ${gender} who resembles the user's profile (${nationality}), ${activity}, in a ${environment}${timeStr}, wearing ${outfit}, natural body language, expressive but subtle emotion reflecting ${tone}, professional photography, natural lighting, high detail, not a celebrity, not stock image style. Do not generate animals unless explicitly mentioned. Do not generate generic stock office cliché. Person must look contextually aligned with the story. Avoid famous faces. High realism.`;
+      const instructions = `You are generating a realistic, context-aware photograph for a social media post.
+
+IMAGE GENERATION INSTRUCTIONS:
+1. If the post implies the user is the main subject, generate a person that resembles the user.
+2. If a profile image URL is provided, use it as a visual reference for facial structure, hair style, skin tone, and general appearance.
+3. Do NOT replicate the face exactly.
+4. Do NOT generate a celebrity look.
+5. The generated person should look like the same individual but as a naturally photographed version in a real-world scene.
+6. If the user is not the subject of the post, generate a context-appropriate person matching the story.
+
+SCENE REQUIREMENTS:
+- The scene must directly reflect the story context.
+- No random animals or unrelated elements.
+- Avoid generic stock-photo composition.
+- Make it feel like a candid real-life captured moment.
+- Use natural lighting.
+- Use subtle, believable facial expressions.
+- Realistic human proportions.
+- No exaggerated AI-art style.
+- No text overlay in the image.
+- No logos unless mentioned in the post.`;
+
+      const structuredPrompt = `A realistic high-detail photograph of a ${age}-year-old ${gender} with ${skinTone} skin tone and ${hairstyle} hair, resembling the user's profile appearance, wearing ${outfit}, ${activity}, in a ${environment}, ${bodyLanguage} reflecting ${tone}, professional DSLR photography, natural lighting, shallow depth of field, cinematic but realistic, authentic moment, not staged, not stock photo style.`;
+
+      return `${instructions}\n\nGenerate the following image:\n\n${structuredPrompt}`;
     } catch (e) {
       console.warn('[Image] Context extraction failed:', e.message);
       return null;
