@@ -2010,11 +2010,12 @@ ${text}`;
   }
 
   /**
-   * Generate one image per post using Gemini: extract context + user profile, build structured prompt, generate image.
-   * Same instructions used for LinkedIn and X (candid, engaging, natural).
+   * Generate one image per post using Gemini.
+   * X: always scene/situation-based, optional profile reference; no face close-up.
+   * LinkedIn: if post contains famous book/person/event/place → entity-centered image (no profile ref); else same as X. Do NOT default to user portrait.
    * @param {string} postText - Full post text (share suggestion)
-   * @param {{ displayName?: string, age?: string, nationality?: string, gender?: string }|null} [userContext] - User profile
-   * @param {string} [platform] - 'linkedin' | 'x' | 'reddit' — Reddit does not use images; LinkedIn and X use same style
+   * @param {{ displayName?: string, age?: string, ... profileImageUrl?: string }|null} [userContext] - User profile
+   * @param {string} [platform] - 'linkedin' | 'x' | 'reddit' — Reddit does not use images
    * @returns {Promise<string|null>} - Data URL (Gemini) or null
    */
   async fetchImageForReflection(postText, userContext = null, platform = 'x') {
@@ -2027,7 +2028,22 @@ ${text}`;
       return null;
     }
 
-    // When user has a profile image, resolve it for use as visual reference so the generated person resembles them
+    const isLinkedIn = (platform || '').toLowerCase() === 'linkedin';
+
+    // LinkedIn only: if post has famous book/person/event/place → image centered on those entities; no profile reference; do NOT default to user portrait
+    if (isLinkedIn) {
+      const entities = await this._extractEntitiesForImage(fullText);
+      const hasFamous = (entities.persons?.length > 0) || (entities.places?.length > 0) || (entities.events?.length > 0);
+      if (hasFamous) {
+        const entityPrompt = this._getImagePromptFromEntities(entities);
+        if (entityPrompt) {
+          const strictRules = 'STRICT: Image centered on the famous entity/entities (book, person, event, or place). Do NOT show a user portrait or default to a face shot. Professional, high quality.';
+          return this._generateImageWithGemini(`${entityPrompt} ${strictRules}`, geminiKey, null);
+        }
+      }
+    }
+
+    // X (and LinkedIn when no famous entities): scene/situation-based; optional profile reference; never default to user portrait
     let referenceImage = null;
     if (userContext?.profileImageUrl) {
       referenceImage = await this._getProfileImageAsBase64(userContext.profileImageUrl);
