@@ -1301,59 +1301,57 @@ const compressDataUrlForStorage = (dataUrl, maxSizeKb = 800) => {
       </div>
     </div>
 
-    {/* Threads-style Edit Profile Modal */}
+    {/* Edit Profile — full-screen Threads-style */}
     {isEditing && (
-      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" style={{ zIndex: 999 }}>
-        <div className="absolute inset-0 bg-black/60" onClick={handleCancel} />
+      <div className="fixed inset-0 z-50 flex flex-col" style={{ backgroundColor: HUB.bg, zIndex: 999 }}>
+        {/* Header */}
         <div
-          className="relative z-10 w-full max-w-md rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col"
-          style={{
-            backgroundColor: HUB.bgSecondary,
-            maxHeight: '90vh',
-            border: `1px solid ${HUB.divider}`,
-          }}
-          onClick={(e) => e.stopPropagation()}
+          className="flex items-center justify-between px-4 flex-shrink-0"
+          style={{ paddingTop: 'max(14px, env(safe-area-inset-top, 14px))', paddingBottom: '14px' }}
         >
-          {/* Header: X ... Edit profile ... Done */}
-          <div
-            className="flex items-center justify-between px-5 py-4"
-            style={{ borderBottom: `1px solid ${HUB.divider}` }}
+          <button onClick={handleCancel} className="p-1" style={{ color: HUB.text }}>
+            <X className="w-6 h-6" />
+          </button>
+          <span className="text-base font-bold" style={{ color: HUB.text }}>Edit profile</span>
+          <button
+            onClick={handleSave}
+            disabled={loading}
+            className="text-base font-semibold disabled:opacity-50"
+            style={{ color: HUB.accent }}
           >
-            <button onClick={handleCancel} className="p-1" style={{ color: HUB.text }}>
-              <X className="w-6 h-6" />
-            </button>
-            <span className="text-base font-semibold" style={{ color: HUB.text }}>Edit profile</span>
-            <button
-              onClick={handleSave}
-              disabled={loading}
-              className="text-base font-semibold disabled:opacity-50"
-              style={{ color: HUB.accent }}
-            >
-              {loading ? 'Saving...' : 'Done'}
-            </button>
-          </div>
+            {loading ? 'Saving...' : 'Done'}
+          </button>
+        </div>
 
-          {/* Scrollable fields */}
-          <div className="flex-1 overflow-y-auto px-5 py-2">
-            {/* Name row with profile picture on right (like Threads) */}
+        {/* Scrollable content */}
+        <div className="flex-1 overflow-y-auto px-4 pb-8">
+          {/* Card container — like Threads edit profile card */}
+          <div
+            className="rounded-2xl overflow-hidden mt-6"
+            style={{
+              backgroundColor: isDarkMode ? HUB.bgSecondary : '#fff',
+              border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'}`,
+            }}
+          >
+            {/* Name + profile picture */}
             <div
-              className="flex items-center py-4"
-              style={{ borderBottom: `1px solid ${HUB.divider}` }}
+              className="flex items-start px-4 py-4"
+              style={{ borderBottom: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.06)'}` }}
             >
               <div className="flex-1 min-w-0">
-                <span className="text-sm font-semibold block mb-1" style={{ color: HUB.text }}>Name</span>
+                <span className="text-sm font-bold block" style={{ color: isDarkMode ? HUB.text : '#111' }}>Name</span>
                 <input
                   type="text"
                   value={editData.displayName}
                   onChange={(e) => setEditData({ ...editData, displayName: e.target.value })}
                   placeholder="Enter display name"
-                  className="w-full bg-transparent text-sm focus:outline-none placeholder-gray-500"
+                  className="w-full bg-transparent text-sm mt-1 focus:outline-none placeholder-gray-500"
                   style={{ color: HUB.textSecondary }}
                 />
               </div>
               <button
                 className="ml-4 flex-shrink-0 w-14 h-14 rounded-full overflow-hidden flex items-center justify-center"
-                style={{ backgroundColor: HUB.divider }}
+                style={{ backgroundColor: isDarkMode ? HUB.divider : '#e5e7eb' }}
                 onClick={() => setShowAvatarModal(true)}
                 title="Change profile picture"
               >
@@ -1365,10 +1363,24 @@ const compressDataUrlForStorage = (dataUrl, maxSizeKb = 800) => {
               </button>
             </div>
 
-            {/* Age (read-only, calculated from birthday) */}
-            <div className="py-4" style={{ borderBottom: `1px solid ${HUB.divider}` }}>
-              <span className="text-sm font-semibold block mb-1" style={{ color: HUB.text }}>Age</span>
-              <span className="text-sm" style={{ color: HUB.textSecondary }}>
+            {/* Bio */}
+            <div
+              className="px-4 py-4"
+              style={{ borderBottom: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.06)'}` }}
+            >
+              <span className="text-sm font-bold block" style={{ color: isDarkMode ? HUB.text : '#111' }}>Bio</span>
+              <p className="text-sm mt-1" style={{ color: HUB.textSecondary }}>
+                {editData.bio || '+ Write bio'}
+              </p>
+            </div>
+
+            {/* Age */}
+            <div
+              className="px-4 py-4"
+              style={{ borderBottom: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.06)'}` }}
+            >
+              <span className="text-sm font-bold block" style={{ color: isDarkMode ? HUB.text : '#111' }}>Age</span>
+              <span className="text-sm mt-1 block" style={{ color: HUB.textSecondary }}>
                 {editData.birthday
                   ? `${calculateAgeFromBirthday(editData.birthday) || 'Calculating...'} years old`
                   : editData.age
@@ -1378,26 +1390,28 @@ const compressDataUrlForStorage = (dataUrl, maxSizeKb = 800) => {
             </div>
 
             {/* Birthday */}
-            <div className="py-4" style={{ borderBottom: `1px solid ${HUB.divider}` }}>
-              <span className="text-sm font-semibold block mb-1" style={{ color: HUB.text }}>Birthday</span>
-              <button
-                type="button"
-                onClick={() => {
-                  const date = getBirthdayDate();
-                  setBirthdayDate(date);
-                  setShowBirthdayCalendar(true);
-                }}
-                className="w-full text-left text-sm flex items-center justify-between"
-                style={{ color: HUB.textSecondary }}
-              >
-                <span>{formatDateDisplay(editData.birthday) || '+ Set birthday'}</span>
-                <ChevronRight className="w-4 h-4" style={{ color: HUB.textSecondary }} />
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const date = getBirthdayDate();
+                setBirthdayDate(date);
+                setShowBirthdayCalendar(true);
+              }}
+              className="w-full text-left px-4 py-4 flex items-center justify-between"
+              style={{ borderBottom: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.06)'}` }}
+            >
+              <div>
+                <span className="text-sm font-bold block" style={{ color: isDarkMode ? HUB.text : '#111' }}>Birthday</span>
+                <span className="text-sm mt-1 block" style={{ color: HUB.textSecondary }}>
+                  {formatDateDisplay(editData.birthday) || '+ Set birthday'}
+                </span>
+              </div>
+              <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: HUB.textSecondary }} />
+            </button>
 
             {/* Gender */}
-            <div className="py-4" style={{ borderBottom: `1px solid ${HUB.divider}` }}>
-              <span className="text-sm font-semibold block mb-2" style={{ color: HUB.text }}>Gender</span>
+            <div className="px-4 py-4">
+              <span className="text-sm font-bold block mb-3" style={{ color: isDarkMode ? HUB.text : '#111' }}>Gender</span>
               <div className="flex gap-2">
                 {[
                   { value: 'female', label: 'Female', emoji: '👩' },
@@ -1410,7 +1424,7 @@ const compressDataUrlForStorage = (dataUrl, maxSizeKb = 800) => {
                     className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-all"
                     style={{
                       backgroundColor: editData.gender === option.value ? `${HUB.accent}25` : 'transparent',
-                      border: `1.5px solid ${editData.gender === option.value ? HUB.accent : HUB.divider}`,
+                      border: `1.5px solid ${editData.gender === option.value ? HUB.accent : (isDarkMode ? HUB.divider : 'rgba(0,0,0,0.12)')}`,
                       color: editData.gender === option.value ? HUB.accent : HUB.textSecondary,
                     }}
                   >
@@ -1419,23 +1433,18 @@ const compressDataUrlForStorage = (dataUrl, maxSizeKb = 800) => {
                 ))}
               </div>
             </div>
-
-            {/* Remove picture option (only when picture exists) */}
-            {profilePicture && (
-              <div className="py-4">
-                <button
-                  onClick={handleRemoveProfilePicture}
-                  className="text-sm font-medium"
-                  style={{ color: 'rgba(242, 139, 130, 0.9)' }}
-                >
-                  Remove profile picture
-                </button>
-              </div>
-            )}
-
-            {/* Bottom spacer for safe area */}
-            <div style={{ height: 'env(safe-area-inset-bottom, 16px)' }} />
           </div>
+
+          {/* Remove profile picture — below the card */}
+          {profilePicture && (
+            <button
+              onClick={handleRemoveProfilePicture}
+              className="mt-5 px-4 text-sm font-medium"
+              style={{ color: 'rgba(242, 139, 130, 0.9)' }}
+            >
+              Remove profile picture
+            </button>
+          )}
         </div>
       </div>
     )}
