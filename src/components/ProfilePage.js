@@ -29,7 +29,8 @@ import {
   Image as ImageIcon,
   Gift,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  ChevronDown
 } from 'lucide-react';
 
 // Theme matching Dashboard / Community / Pod (HUB)
@@ -68,6 +69,7 @@ export default function ProfilePage() {
   const [birthdayDate, setBirthdayDate] = useState(null);
   const [isCrewEnrolled, setIsCrewEnrolled] = useState(false);
   const [showAvatarModal, setShowAvatarModal] = useState(false);
+  const [helpExpanded, setHelpExpanded] = useState(false);
   const fileInputRef = useRef(null);
   
   // Helper function to format date for display
@@ -1188,35 +1190,41 @@ const compressDataUrlForStorage = (dataUrl, maxSizeKb = 800) => {
             </button>
           </div>
 
-          {/* Call Founders */}
-          <button
-            onClick={() => window.open('tel:9536138120', '_self')}
-            className="w-full flex items-center gap-4 px-5 py-4 text-left transition-opacity hover:opacity-70"
-            style={ROW_STYLE}
-          >
-            <Phone className="w-6 h-6 flex-shrink-0" style={{ color: isDarkMode ? HUB.text : '#111' }} strokeWidth={1.5} />
-            <span className="text-[15px]" style={{ color: isDarkMode ? HUB.text : '#111' }}>Call Founders</span>
-          </button>
-
-          {/* WhatsApp */}
-          <button
-            onClick={() => window.open('https://wa.me/919536138120', '_blank')}
-            className="w-full flex items-center gap-4 px-5 py-4 text-left transition-opacity hover:opacity-70"
-            style={ROW_STYLE}
-          >
-            <MessageCircle className="w-6 h-6 flex-shrink-0" style={{ color: isDarkMode ? HUB.text : '#111' }} strokeWidth={1.5} />
-            <span className="text-[15px]" style={{ color: isDarkMode ? HUB.text : '#111' }}>WhatsApp Support</span>
-          </button>
-
-          {/* Help */}
-          <button
-            onClick={() => window.open('https://wa.me/919536138120', '_blank')}
-            className="w-full flex items-center gap-4 px-5 py-4 text-left transition-opacity hover:opacity-70"
-            style={ROW_STYLE}
-          >
-            <Shield className="w-6 h-6 flex-shrink-0" style={{ color: isDarkMode ? HUB.text : '#111' }} strokeWidth={1.5} />
-            <span className="text-[15px]" style={{ color: isDarkMode ? HUB.text : '#111' }}>Help</span>
-          </button>
+          {/* Help & Support — collapsible */}
+          <div style={ROW_STYLE}>
+            <button
+              onClick={() => setHelpExpanded((v) => !v)}
+              className="w-full flex items-center gap-4 px-5 py-4 text-left transition-opacity hover:opacity-70"
+            >
+              <Shield className="w-6 h-6 flex-shrink-0" style={{ color: isDarkMode ? HUB.text : '#111' }} strokeWidth={1.5} />
+              <span className="flex-1 text-[15px]" style={{ color: isDarkMode ? HUB.text : '#111' }}>Help & Support</span>
+              <ChevronDown
+                className="w-5 h-5 flex-shrink-0 transition-transform duration-200"
+                style={{ color: HUB.textSecondary, transform: helpExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                strokeWidth={1.5}
+              />
+            </button>
+            {helpExpanded && (
+              <div>
+                <button
+                  onClick={() => window.open('tel:9536138120', '_self')}
+                  className="w-full flex items-center gap-4 pl-14 pr-5 py-3.5 text-left transition-opacity hover:opacity-70"
+                  style={{ borderTop: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.04)'}` }}
+                >
+                  <Phone className="w-5 h-5 flex-shrink-0" style={{ color: HUB.textSecondary }} strokeWidth={1.5} />
+                  <span className="text-[14px]" style={{ color: isDarkMode ? HUB.text : '#111' }}>Call Support</span>
+                </button>
+                <button
+                  onClick={() => window.open('https://wa.me/919536138120', '_blank')}
+                  className="w-full flex items-center gap-4 pl-14 pr-5 py-3.5 text-left transition-opacity hover:opacity-70"
+                  style={{ borderTop: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.04)'}` }}
+                >
+                  <MessageCircle className="w-5 h-5 flex-shrink-0" style={{ color: HUB.textSecondary }} strokeWidth={1.5} />
+                  <span className="text-[14px]" style={{ color: isDarkMode ? HUB.text : '#111' }}>WhatsApp Support</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Log out */}
