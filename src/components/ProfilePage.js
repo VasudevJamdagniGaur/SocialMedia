@@ -1132,8 +1132,9 @@ const compressDataUrlForStorage = (dataUrl, maxSizeKb = 800) => {
         <div className="flex items-center gap-4 px-5 py-5" style={ROW_STYLE}>
           <div className="relative flex-shrink-0">
             <div
-              className="w-16 h-16 rounded-full flex items-center justify-center text-lg font-bold overflow-hidden"
+              className="w-16 h-16 rounded-full flex items-center justify-center text-lg font-bold overflow-hidden cursor-pointer"
               style={{ backgroundColor: HUB.divider }}
+              onClick={() => profilePicture ? setShowPhotoPreviewModal(true) : setShowAvatarModal(true)}
             >
               {profilePicture ? (
                 <img src={profilePicture} alt="Profile" className="w-full h-full object-cover" />
