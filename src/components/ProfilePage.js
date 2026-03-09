@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
 import { getCurrentUser, signOutUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
-import { updateProfile } from 'firebase/auth';
+import { updateProfile, deleteUser } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import Cropper from 'react-easy-crop';
 import {
@@ -52,6 +52,8 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showFullDeleteConfirm, setShowFullDeleteConfirm] = useState(false);
+  const [fullDeleteLoading, setFullDeleteLoading] = useState(false);
   const [profilePicture, setProfilePicture] = useState(null);
   const [pendingPicture, setPendingPicture] = useState(null);
   const [showPicturePreview, setShowPicturePreview] = useState(false);
@@ -1023,6 +1025,50 @@ const compressDataUrlForStorage = (dataUrl, maxSizeKb = 800) => {
     }
   };
 
+  const handleFullDeleteAccount = async () => {
+    if (!user) return;
+    setFullDeleteLoading(true);
+    try {
+      const uid = user.uid;
+
+      // Clear all localStorage for this user
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.includes(uid)) keysToRemove.push(key);
+      }
+      keysToRemove.forEach((k) => localStorage.removeItem(k));
+
+      // Delete Firestore user documents
+      try {
+        const { doc, deleteDoc } = await import('firebase/firestore');
+        const { db } = await import('../firebase/config');
+        await deleteDoc(doc(db, `users/${uid}`)).catch(() => {});
+        await deleteDoc(doc(db, `usersMetadata/${uid}`)).catch(() => {});
+      } catch (e) {
+        console.warn('Could not delete Firestore docs:', e.message);
+      }
+
+      // Delete the Firebase Auth account
+      const currentAuthUser = auth.currentUser;
+      if (currentAuthUser) {
+        await deleteUser(currentAuthUser);
+      }
+
+      navigate('/landing');
+    } catch (error) {
+      console.error('Error deleting account:', error);
+      if (error.code === 'auth/requires-recent-login') {
+        alert('For security, please sign out and sign back in before deleting your account.');
+      } else {
+        alert('Error deleting account. Please try again.');
+      }
+    } finally {
+      setFullDeleteLoading(false);
+      setShowFullDeleteConfirm(false);
+    }
+  };
+
   const getGenderEmoji = (gender) => {
     switch (gender) {
       case 'female': return '👩';
@@ -1193,22 +1239,19 @@ const compressDataUrlForStorage = (dataUrl, maxSizeKb = 800) => {
             className="rounded-lg overflow-hidden"
             style={{ border: `1px solid ${isDarkMode ? 'rgba(239,68,68,0.4)' : 'rgba(239,68,68,0.35)'}` }}
           >
-            {/* Clear account data row */}
-            <div
-              className="flex items-center justify-between gap-4 px-4 py-4"
-              style={{ borderBottom: `1px solid ${isDarkMode ? 'rgba(239,68,68,0.2)' : 'rgba(239,68,68,0.15)'}` }}
-            >
+            {/* Delete account row */}
+            <div className="flex items-center justify-between gap-4 px-4 py-4">
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold" style={{ color: isDarkMode ? HUB.text : '#111' }}>
-                  Clear account data
+                  Delete account
                 </p>
                 <p className="text-xs mt-0.5" style={{ color: HUB.textSecondary }}>
-                  This will clear your profile data. Your account will remain active.
+                  Permanently delete your account and all associated data. This cannot be undone.
                 </p>
               </div>
-              {!showDeleteConfirm ? (
+              {!showFullDeleteConfirm ? (
                 <button
-                  onClick={() => setShowDeleteConfirm(true)}
+                  onClick={() => setShowFullDeleteConfirm(true)}
                   className="flex-shrink-0 px-3 py-1.5 rounded-md text-xs font-medium transition-opacity hover:opacity-80"
                   style={{
                     color: isDarkMode ? '#f87171' : '#dc2626',
@@ -1216,23 +1259,23 @@ const compressDataUrlForStorage = (dataUrl, maxSizeKb = 800) => {
                     backgroundColor: isDarkMode ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.05)',
                   }}
                 >
-                  Clear data
+                  Delete account
                 </button>
               ) : (
                 <div className="flex-shrink-0 flex items-center gap-2">
                   <button
-                    onClick={handleDeleteAccount}
-                    disabled={deleteLoading}
+                    onClick={handleFullDeleteAccount}
+                    disabled={fullDeleteLoading}
                     className="px-3 py-1.5 rounded-md text-xs font-medium transition-opacity hover:opacity-80 disabled:opacity-50"
                     style={{
                       color: '#fff',
                       backgroundColor: isDarkMode ? 'rgba(239,68,68,0.8)' : '#dc2626',
                     }}
                   >
-                    {deleteLoading ? 'Clearing...' : 'Confirm'}
+                    {fullDeleteLoading ? 'Deleting...' : 'Confirm delete'}
                   </button>
                   <button
-                    onClick={() => setShowDeleteConfirm(false)}
+                    onClick={() => setShowFullDeleteConfirm(false)}
                     className="px-3 py-1.5 rounded-md text-xs font-medium"
                     style={{
                       color: HUB.textSecondary,
