@@ -70,6 +70,7 @@ export default function ProfilePage() {
   const [isCrewEnrolled, setIsCrewEnrolled] = useState(false);
   const [showAvatarModal, setShowAvatarModal] = useState(false);
   const [helpExpanded, setHelpExpanded] = useState(false);
+  const [showPhotoPreviewModal, setShowPhotoPreviewModal] = useState(false);
   const fileInputRef = useRef(null);
   
   // Helper function to format date for display
@@ -1352,8 +1353,8 @@ const compressDataUrlForStorage = (dataUrl, maxSizeKb = 800) => {
               <button
                 className="ml-4 flex-shrink-0 w-14 h-14 rounded-full overflow-hidden flex items-center justify-center"
                 style={{ backgroundColor: isDarkMode ? HUB.divider : '#e5e7eb' }}
-                onClick={() => setShowAvatarModal(true)}
-                title="Change profile picture"
+                onClick={() => profilePicture ? setShowPhotoPreviewModal(true) : setShowAvatarModal(true)}
+                title="View profile picture"
               >
                 {profilePicture ? (
                   <img src={profilePicture} alt="" className="w-full h-full object-cover" />
@@ -1445,6 +1446,94 @@ const compressDataUrlForStorage = (dataUrl, maxSizeKb = 800) => {
               Remove profile picture
             </button>
           )}
+        </div>
+      </div>
+    )}
+
+    {/* Full photo preview with circular highlight + Edit / Remove options */}
+    {showPhotoPreviewModal && profilePicture && (
+      <div
+        className="fixed inset-0 z-50 flex flex-col"
+        style={{ backgroundColor: 'rgba(0,0,0,0.92)', zIndex: 1001 }}
+        onClick={() => setShowPhotoPreviewModal(false)}
+      >
+        {/* Close button */}
+        <div className="flex justify-end px-4" style={{ paddingTop: 'max(14px, env(safe-area-inset-top, 14px))' }}>
+          <button
+            onClick={() => setShowPhotoPreviewModal(false)}
+            className="p-2 rounded-full"
+            style={{ color: '#fff' }}
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        {/* Image area */}
+        <div
+          className="flex-1 flex items-center justify-center px-6"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="relative">
+            {/* Full image */}
+            <img
+              src={profilePicture}
+              alt="Profile"
+              className="max-w-full max-h-[60vh] object-contain rounded-lg"
+              style={{ display: 'block' }}
+            />
+            {/* Circular overlay highlight — shows the visible crop area */}
+            <div
+              className="absolute inset-0 flex items-center justify-center pointer-events-none"
+            >
+              <div
+                className="rounded-full"
+                style={{
+                  width: 'min(260px, 70vw)',
+                  height: 'min(260px, 70vw)',
+                  border: '3px solid rgba(255,255,255,0.6)',
+                  boxShadow: '0 0 0 9999px rgba(0,0,0,0.45)',
+                }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom action buttons */}
+        <div
+          className="flex items-center justify-center gap-8 pb-4 pt-6"
+          style={{ paddingBottom: 'max(20px, env(safe-area-inset-bottom, 20px))' }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={() => {
+              setShowPhotoPreviewModal(false);
+              setShowAvatarModal(true);
+            }}
+            className="flex flex-col items-center gap-1.5"
+          >
+            <div
+              className="w-12 h-12 rounded-full flex items-center justify-center"
+              style={{ backgroundColor: 'rgba(255,255,255,0.12)' }}
+            >
+              <Edit3 className="w-5 h-5" style={{ color: '#fff' }} />
+            </div>
+            <span className="text-xs font-medium" style={{ color: '#fff' }}>Edit photo</span>
+          </button>
+          <button
+            onClick={() => {
+              handleRemoveProfilePicture();
+              setShowPhotoPreviewModal(false);
+            }}
+            className="flex flex-col items-center gap-1.5"
+          >
+            <div
+              className="w-12 h-12 rounded-full flex items-center justify-center"
+              style={{ backgroundColor: 'rgba(239,68,68,0.15)' }}
+            >
+              <Trash2 className="w-5 h-5" style={{ color: '#f87171' }} />
+            </div>
+            <span className="text-xs font-medium" style={{ color: '#f87171' }}>Remove photo</span>
+          </button>
         </div>
       </div>
     )}
