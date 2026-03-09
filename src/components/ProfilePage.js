@@ -71,6 +71,7 @@ export default function ProfilePage() {
   const [showAvatarModal, setShowAvatarModal] = useState(false);
   const [helpExpanded, setHelpExpanded] = useState(false);
   const [showPhotoPreviewModal, setShowPhotoPreviewModal] = useState(false);
+  const [previewImgSize, setPreviewImgSize] = useState({ w: 0, h: 0 });
   const fileInputRef = useRef(null);
   
   // Helper function to format date for display
@@ -1473,28 +1474,34 @@ const compressDataUrlForStorage = (dataUrl, maxSizeKb = 800) => {
           className="flex-1 flex items-center justify-center px-6"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="relative">
-            {/* Full image */}
+          <div className="relative inline-block">
             <img
               src={profilePicture}
               alt="Profile"
-              className="max-w-full max-h-[60vh] object-contain rounded-lg"
+              className="max-w-full max-h-[60vh] object-contain"
               style={{ display: 'block' }}
+              onLoad={(e) => {
+                const { offsetWidth, offsetHeight } = e.currentTarget;
+                setPreviewImgSize({ w: offsetWidth, h: offsetHeight });
+              }}
             />
-            {/* Circular overlay highlight — shows the visible crop area */}
-            <div
-              className="absolute inset-0 flex items-center justify-center pointer-events-none"
-            >
-              <div
-                className="rounded-full"
-                style={{
-                  width: 'min(260px, 70vw)',
-                  height: 'min(260px, 70vw)',
-                  border: '3px solid rgba(255,255,255,0.6)',
-                  boxShadow: '0 0 0 9999px rgba(0,0,0,0.45)',
-                }}
-              />
-            </div>
+            {/* Dark overlay with circular cutout = exactly the inscribed circle (what the profile avatar shows) */}
+            {previewImgSize.w > 0 && (() => {
+              const d = Math.min(previewImgSize.w, previewImgSize.h);
+              return (
+                <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                  <div
+                    className="rounded-full flex-shrink-0"
+                    style={{
+                      width: d,
+                      height: d,
+                      border: '2.5px solid rgba(255,255,255,0.7)',
+                      boxShadow: '0 0 0 9999px rgba(0,0,0,0.55)',
+                    }}
+                  />
+                </div>
+              );
+            })()}
           </div>
         </div>
 
