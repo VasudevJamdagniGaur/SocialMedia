@@ -30,7 +30,9 @@ import {
   Gift,
   ChevronLeft,
   ChevronRight,
-  ChevronDown
+  ChevronDown,
+  Share2,
+  Download
 } from 'lucide-react';
 
 // Theme matching Dashboard / Community / Pod (HUB)
@@ -72,6 +74,8 @@ export default function ProfilePage() {
   const [helpExpanded, setHelpExpanded] = useState(false);
   const [showPhotoPreviewModal, setShowPhotoPreviewModal] = useState(false);
   const [previewImgSize, setPreviewImgSize] = useState({ w: 0, h: 0 });
+  const [showPhotoEditMenu, setShowPhotoEditMenu] = useState(false);
+  const [showPhotoShareMenu, setShowPhotoShareMenu] = useState(false);
   const fileInputRef = useRef(null);
   
   // Helper function to format date for display
@@ -1451,96 +1455,168 @@ const compressDataUrlForStorage = (dataUrl, maxSizeKb = 800) => {
       </div>
     )}
 
-    {/* Full photo preview with circular highlight + Edit / Remove options */}
+    {/* Full-screen profile photo viewer (WhatsApp style) */}
     {showPhotoPreviewModal && profilePicture && (
       <div
         className="fixed inset-0 z-50 flex flex-col"
-        style={{ backgroundColor: 'rgba(0,0,0,0.92)', zIndex: 1001 }}
-        onClick={() => setShowPhotoPreviewModal(false)}
+        style={{ backgroundColor: '#000', zIndex: 1001 }}
       >
-        {/* Close button */}
-        <div className="flex justify-end px-4" style={{ paddingTop: 'max(14px, env(safe-area-inset-top, 14px))' }}>
+        {/* Top bar: back arrow, name, pencil, share */}
+        <div
+          className="flex items-center gap-3 px-3 flex-shrink-0"
+          style={{ paddingTop: 'max(10px, env(safe-area-inset-top, 10px))', paddingBottom: '10px' }}
+        >
           <button
-            onClick={() => setShowPhotoPreviewModal(false)}
-            className="p-2 rounded-full"
+            onClick={() => { setShowPhotoPreviewModal(false); setShowPhotoEditMenu(false); setShowPhotoShareMenu(false); }}
+            className="p-2"
             style={{ color: '#fff' }}
           >
-            <X className="w-6 h-6" />
+            <ArrowLeft className="w-6 h-6" />
           </button>
-        </div>
-
-        {/* Image area */}
-        <div
-          className="flex-1 flex items-center justify-center px-6"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="relative inline-block">
-            <img
-              src={profilePicture}
-              alt="Profile"
-              className="max-w-full max-h-[60vh] object-contain"
-              style={{ display: 'block' }}
-              onLoad={(e) => {
-                const { offsetWidth, offsetHeight } = e.currentTarget;
-                setPreviewImgSize({ w: offsetWidth, h: offsetHeight });
-              }}
-            />
-            {/* Dark overlay with circular cutout = exactly the inscribed circle (what the profile avatar shows) */}
-            {previewImgSize.w > 0 && (() => {
-              const d = Math.min(previewImgSize.w, previewImgSize.h);
-              return (
-                <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                  <div
-                    className="rounded-full flex-shrink-0"
-                    style={{
-                      width: d,
-                      height: d,
-                      border: '2.5px solid rgba(255,255,255,0.7)',
-                      boxShadow: '0 0 0 9999px rgba(0,0,0,0.55)',
-                    }}
-                  />
-                </div>
-              );
-            })()}
+          <span className="flex-1 text-base font-medium truncate" style={{ color: '#fff' }}>
+            {editData.displayName || user?.displayName || 'Profile Photo'}
+          </span>
+          <div className="relative">
+            <button
+              onClick={() => setShowPhotoEditMenu((v) => !v)}
+              className="p-2"
+              style={{ color: '#fff' }}
+            >
+              <Edit3 className="w-5 h-5" />
+            </button>
+            {/* Pencil dropdown: Camera / Gallery / Remove */}
+            {showPhotoEditMenu && (
+              <div
+                className="absolute right-0 top-full mt-1 rounded-xl py-1 min-w-[160px] z-10"
+                style={{
+                  backgroundColor: HUB.bgSecondary,
+                  border: `1px solid ${HUB.divider}`,
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                }}
+              >
+                <button
+                  onClick={() => {
+                    setShowPhotoEditMenu(false);
+                    setShowPhotoPreviewModal(false);
+                    if (fileInputRef.current) {
+                      fileInputRef.current.setAttribute('capture', 'environment');
+                      fileInputRef.current.click();
+                      setTimeout(() => fileInputRef.current?.removeAttribute('capture'), 500);
+                    }
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left transition-opacity hover:opacity-70"
+                >
+                  <Camera className="w-5 h-5" style={{ color: '#fff' }} />
+                  <span className="text-sm" style={{ color: '#fff' }}>Camera</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setShowPhotoEditMenu(false);
+                    setShowPhotoPreviewModal(false);
+                    if (fileInputRef.current) {
+                      fileInputRef.current.removeAttribute('capture');
+                      fileInputRef.current.click();
+                    }
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left transition-opacity hover:opacity-70"
+                  style={{ borderTop: `1px solid ${HUB.divider}` }}
+                >
+                  <ImageIcon className="w-5 h-5" style={{ color: '#fff' }} />
+                  <span className="text-sm" style={{ color: '#fff' }}>Gallery</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setShowPhotoEditMenu(false);
+                    handleRemoveProfilePicture();
+                    setShowPhotoPreviewModal(false);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left transition-opacity hover:opacity-70"
+                  style={{ borderTop: `1px solid ${HUB.divider}` }}
+                >
+                  <Trash2 className="w-5 h-5" style={{ color: '#f87171' }} />
+                  <span className="text-sm" style={{ color: '#f87171' }}>Remove photo</span>
+                </button>
+              </div>
+            )}
+          </div>
+          <div className="relative">
+            <button
+              onClick={() => { setShowPhotoShareMenu((v) => !v); setShowPhotoEditMenu(false); }}
+              className="p-2"
+              style={{ color: '#fff' }}
+            >
+              <Share2 className="w-5 h-5" />
+            </button>
+            {showPhotoShareMenu && (
+              <div
+                className="absolute right-0 top-full mt-1 rounded-xl py-1 min-w-[180px] z-10"
+                style={{
+                  backgroundColor: HUB.bgSecondary,
+                  border: `1px solid ${HUB.divider}`,
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                }}
+              >
+                <button
+                  onClick={() => {
+                    setShowPhotoShareMenu(false);
+                    try {
+                      const link = document.createElement('a');
+                      link.href = profilePicture;
+                      link.download = `profile-photo-${Date.now()}.jpg`;
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    } catch (e) {
+                      console.warn('Download failed:', e.message);
+                    }
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left transition-opacity hover:opacity-70"
+                >
+                  <Download className="w-5 h-5" style={{ color: '#fff' }} />
+                  <span className="text-sm" style={{ color: '#fff' }}>Save to device</span>
+                </button>
+                <button
+                  onClick={async () => {
+                    setShowPhotoShareMenu(false);
+                    try {
+                      if (navigator.share) {
+                        const blob = await fetch(profilePicture).then((r) => r.blob());
+                        const file = new File([blob], 'profile.jpg', { type: blob.type || 'image/jpeg' });
+                        await navigator.share({ files: [file], title: 'Profile Photo' });
+                      } else {
+                        const link = document.createElement('a');
+                        link.href = profilePicture;
+                        link.download = `profile-photo-${Date.now()}.jpg`;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                      }
+                    } catch (e) {
+                      console.warn('Share failed:', e.message);
+                    }
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left transition-opacity hover:opacity-70"
+                  style={{ borderTop: `1px solid ${HUB.divider}` }}
+                >
+                  <Share2 className="w-5 h-5" style={{ color: '#fff' }} />
+                  <span className="text-sm" style={{ color: '#fff' }}>Share to...</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Bottom action buttons */}
+        {/* Full-screen image */}
         <div
-          className="flex items-center justify-center gap-8 pb-4 pt-6"
-          style={{ paddingBottom: 'max(20px, env(safe-area-inset-bottom, 20px))' }}
-          onClick={(e) => e.stopPropagation()}
+          className="flex-1 flex items-center justify-center"
+          onClick={() => { setShowPhotoEditMenu(false); setShowPhotoShareMenu(false); }}
         >
-          <button
-            onClick={() => {
-              setShowPhotoPreviewModal(false);
-              setShowAvatarModal(true);
-            }}
-            className="flex flex-col items-center gap-1.5"
-          >
-            <div
-              className="w-12 h-12 rounded-full flex items-center justify-center"
-              style={{ backgroundColor: 'rgba(255,255,255,0.12)' }}
-            >
-              <Edit3 className="w-5 h-5" style={{ color: '#fff' }} />
-            </div>
-            <span className="text-xs font-medium" style={{ color: '#fff' }}>Edit photo</span>
-          </button>
-          <button
-            onClick={() => {
-              handleRemoveProfilePicture();
-              setShowPhotoPreviewModal(false);
-            }}
-            className="flex flex-col items-center gap-1.5"
-          >
-            <div
-              className="w-12 h-12 rounded-full flex items-center justify-center"
-              style={{ backgroundColor: 'rgba(239,68,68,0.15)' }}
-            >
-              <Trash2 className="w-5 h-5" style={{ color: '#f87171' }} />
-            </div>
-            <span className="text-xs font-medium" style={{ color: '#f87171' }}>Remove photo</span>
-          </button>
+          <img
+            src={profilePicture}
+            alt="Profile"
+            className="w-full h-full object-contain"
+            style={{ display: 'block' }}
+          />
         </div>
       </div>
     )}
