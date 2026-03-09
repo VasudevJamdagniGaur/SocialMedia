@@ -1054,598 +1054,340 @@ const compressDataUrlForStorage = (dataUrl, maxSizeKb = 800) => {
 
   if (!user) return null;
 
+  const ROW_STYLE = { borderBottom: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.06)'}` };
+
   return (
     <>
     <div
-      className="min-h-screen relative overflow-hidden"
-      style={{
-        background: isDarkMode ? HUB.bg : '#F5F5F5',
-      }}
+      className="min-h-screen"
+      style={{ background: isDarkMode ? HUB.bg : '#F5F5F5' }}
     >
-      {/* Subtle accent decorations */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-8 opacity-10">
-          <Heart className="w-6 h-6" style={{ color: HUB.accent }} />
-        </div>
-        <div className="absolute top-16 right-12 opacity-10">
-          <Sparkles className="w-7 h-7" style={{ color: HUB.accentHighlight }} />
-        </div>
-        <div className="absolute bottom-24 left-16 opacity-10">
-          <Star className="w-5 h-5" style={{ color: HUB.accent }} />
-        </div>
-      </div>
+      <div className="max-w-lg mx-auto" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))', paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }}>
 
-      <div className="relative z-10 max-w-2xl mx-auto p-6 space-y-6">
-        {/* Header */}
-        <div className="flex items-center gap-4 mb-8">
-          <button
-            onClick={handleBack}
-            className="w-10 h-10 rounded-full flex items-center justify-center hover:opacity-80 transition-opacity"
-            style={{
-              backgroundColor: HUB.bgSecondary,
-              border: `1px solid ${HUB.divider}`,
-            }}
-          >
-            <ArrowLeft className="w-5 h-5" style={{ color: HUB.accent }} strokeWidth={1.5} />
+        {/* Header — clean, like Threads Settings */}
+        <div className="flex items-center gap-4 px-4 py-3">
+          <button onClick={handleBack} className="p-1 hover:opacity-70 transition-opacity">
+            <ArrowLeft className="w-6 h-6" style={{ color: isDarkMode ? HUB.text : '#111' }} strokeWidth={2} />
           </button>
-          <h1 className="text-3xl font-bold" style={{ color: HUB.accent }}>
-            Your Profile
+          <h1 className="text-xl font-bold" style={{ color: isDarkMode ? HUB.text : '#111' }}>
+            Settings
           </h1>
         </div>
 
-        {/* Profile Card */}
-        <div
-          className="rounded-2xl p-6"
-          style={{
-            backgroundColor: isDarkMode ? HUB.bgSecondary : '#FFFFFF',
-            boxShadow: isDarkMode ? '0 4px 20px rgba(0,0,0,0.3)' : '0 4px 16px rgba(0,0,0,0.08)',
-            border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'}`,
-          }}
-        >
-          {/* Profile Header */}
-          <div className="text-center pb-6" style={{ borderBottom: `1px solid ${HUB.divider}` }}>
-            <div className="flex justify-center mb-4">
-              <div className="relative">
-                <div
-                  className="w-24 h-24 rounded-full flex items-center justify-center text-2xl font-bold relative overflow-hidden"
-                  style={{
-                    backgroundColor: HUB.divider,
-                    border: `1px solid ${HUB.divider}`,
-                  }}
-                >
-                  {profilePicture ? (
-                    <img 
-                      src={profilePicture} 
-                      alt="Profile" 
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    getInitials(user.displayName)
-                  )}
-                </div>
-                {/* Change Picture Button - Always available */}
-                <button
-                  className="absolute bottom-0 right-0 w-8 h-8 rounded-full flex items-center justify-center cursor-pointer transition-all hover:scale-110"
-                  style={{
-                    backgroundColor: HUB.accent,
-                    border: `2px solid ${HUB.bgSecondary}`,
-                  }}
-                  title="Change profile picture"
-                  onClick={() => setShowAvatarModal(true)}
-                >
-                  <Camera className="w-4 h-4" style={{ color: '#FFFFFF' }} />
-                </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleProfilePictureChange}
-                  className="hidden"
-                />
-                {/* Remove Picture Button - Only show in edit mode and if picture exists */}
-                {isEditing && profilePicture && (
-                  <button
-                    onClick={handleRemoveProfilePicture}
-                    className="absolute top-0 right-0 w-6 h-6 rounded-full flex items-center justify-center cursor-pointer transition-all hover:scale-110"
-                    style={{
-                      backgroundColor: "rgba(242, 139, 130, 0.9)",
-                      boxShadow: "0 2px 8px rgba(0, 0, 0, 0.2)",
-                    }}
-                    title="Remove picture"
-                  >
-                    <X className="w-3 h-3" style={{ color: '#FFFFFF' }} />
-                  </button>
-                )}
-              </div>
+        {/* Profile summary row */}
+        <div className="flex items-center gap-4 px-5 py-5" style={ROW_STYLE}>
+          <div className="relative flex-shrink-0">
+            <div
+              className="w-16 h-16 rounded-full flex items-center justify-center text-lg font-bold overflow-hidden"
+              style={{ backgroundColor: HUB.divider }}
+            >
+              {profilePicture ? (
+                <img src={profilePicture} alt="Profile" className="w-full h-full object-cover" />
+              ) : (
+                getInitials(user.displayName)
+              )}
             </div>
-            <h2 className="text-2xl font-bold mb-2" style={{ color: HUB.text }}>
-              {user.displayName || 'User'}
-            </h2>
-            <p className="text-sm" style={{ color: HUB.textSecondary }}>
-              {user.email}
-            </p>
+            <button
+              className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full flex items-center justify-center"
+              style={{ backgroundColor: HUB.accent, border: `2px solid ${isDarkMode ? HUB.bg : '#F5F5F5'}` }}
+              title="Change picture"
+              onClick={() => setShowAvatarModal(true)}
+            >
+              <Camera className="w-3 h-3" style={{ color: '#fff' }} />
+            </button>
+            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleProfilePictureChange} className="hidden" />
           </div>
-
-          {!isEditing ? (
-            <>
-              {/* Display Mode */}
-              <div className="space-y-4 mt-6">
-                <div
-                  className="p-4 rounded-xl"
-                  style={{
-                    backgroundColor: isDarkMode ? HUB.bg : 'rgba(0,0,0,0.04)',
-                    border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'}`,
-                  }}
-                >
-                  <div className="flex items-center gap-3 mb-2">
-                    <User className="w-5 h-5" style={{ color: HUB.accent }} />
-                    <span className="font-medium" style={{ color: HUB.textSecondary }}>Display Name</span>
-                  </div>
-                  <p className="text-lg font-semibold" style={{ color: HUB.text }}>
-                    {user.displayName || 'Not set'}
-                  </p>
-                </div>
-
-                <div
-                  className="p-4 rounded-xl"
-                  style={{
-                    backgroundColor: isDarkMode ? HUB.bg : 'rgba(0,0,0,0.04)',
-                    border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'}`,
-                  }}
-                >
-                  <div className="flex items-center gap-3 mb-2">
-                    <Calendar className="w-5 h-5" style={{ color: HUB.accent }} />
-                    <span className="font-medium" style={{ color: HUB.textSecondary }}>Age</span>
-                  </div>
-                  <p className="text-lg font-semibold" style={{ color: HUB.text }}>
-                    {editData.birthday 
-                      ? `${calculateAgeFromBirthday(editData.birthday) || editData.age || 'Calculating...'} years old`
-                      : editData.age 
-                        ? `${editData.age} years old`
-                        : 'Not set'}
-                  </p>
-                </div>
-
-                <div
-                  className="p-4 rounded-xl"
-                  style={{
-                    backgroundColor: isDarkMode ? HUB.bg : 'rgba(0,0,0,0.04)',
-                    border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'}`,
-                  }}
-                >
-                  <div className="flex items-center gap-3 mb-2">
-                    <Gift className="w-5 h-5" style={{ color: HUB.accent }} />
-                    <span className="font-medium" style={{ color: HUB.textSecondary }}>Birthday</span>
-                  </div>
-                  <p className="text-lg font-semibold" style={{ color: HUB.text }}>
-                    {formatBirthdayDisplay(editData.birthday)}
-                  </p>
-                </div>
-
-                <div
-                  className="p-4 rounded-xl"
-                  style={{
-                    backgroundColor: isDarkMode ? HUB.bg : 'rgba(0,0,0,0.04)',
-                    border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'}`,
-                  }}
-                >
-                  <div className="flex items-center gap-3 mb-2">
-                    <User className="w-5 h-5" style={{ color: HUB.accent }} />
-                    <span className="font-medium" style={{ color: HUB.textSecondary }}>Gender</span>
-                  </div>
-                  <p className="text-lg font-semibold" style={{ color: HUB.text }}>
-                    {getGenderEmoji(editData.gender)} {editData.gender || 'Not set'}
-                  </p>
-                </div>
-
-              </div>
-
-              <button
-                onClick={() => setIsEditing(true)}
-                className="w-full mt-6 py-3 px-4 rounded-xl font-semibold hover:opacity-90 transition-all duration-300"
-                style={{
-                  backgroundColor: HUB.bgSecondary,
-                  color: HUB.text,
-                  border: `1px solid ${HUB.divider}`,
-                }}
-              >
-                <Edit3 className="w-4 h-4 inline mr-2" />
-                Edit Profile
-              </button>
-            </>
-          ) : (
-            <>
-              {/* Edit Mode */}
-              <div className="space-y-4 mt-6">
-                <div>
-                  <label className="block mb-2 font-medium" style={{ color: HUB.textSecondary }}>Display Name</label>
-                  <input
-                    type="text"
-                    value={editData.displayName}
-                    onChange={(e) => setEditData({ ...editData, displayName: e.target.value })}
-                    placeholder="Enter your display name"
-                    className="w-full px-3 py-2 rounded-xl placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-0"
-                    style={{
-                      backgroundColor: HUB.bgSecondary,
-                      border: `1px solid ${HUB.divider}`,
-                      color: HUB.text,
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <label className="block mb-2 font-medium" style={{ color: HUB.textSecondary }}>Age</label>
-                  <div
-                    className="w-full px-3 py-2 rounded-xl"
-                    style={{
-                      backgroundColor: HUB.bgSecondary,
-                      border: `1px solid ${HUB.divider}`,
-                      color: HUB.text,
-                    }}
-                  >
-                    {editData.birthday 
-                      ? `${calculateAgeFromBirthday(editData.birthday) || 'Calculating...'} years old`
-                      : editData.age 
-                        ? `${editData.age} years old`
-                        : 'Enter your birthday to calculate age'}
-                  </div>
-                  <p className="text-xs mt-1" style={{ color: HUB.textSecondary }}>
-                    Age is automatically calculated from your birthday
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block mb-2 font-medium" style={{ color: HUB.textSecondary }}>Birthday</label>
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const date = getBirthdayDate();
-                        setBirthdayDate(date);
-                        setShowBirthdayCalendar(true);
-                      }}
-                      className="w-full px-3 py-2 rounded-xl placeholder-gray-400 focus:outline-none focus:ring-2 text-left"
-                      style={{
-                        backgroundColor: HUB.bgSecondary,
-                        border: `1px solid ${HUB.divider}`,
-                        color: HUB.text,
-                      }}
-                    >
-                      {formatDateDisplay(editData.birthday) || 'Select your birthday'}
-                    </button>
-                    <div
-                      onClick={() => {
-                        const date = getBirthdayDate();
-                        setBirthdayDate(date);
-                        setShowBirthdayCalendar(true);
-                      }}
-                      style={{
-                        position: 'absolute',
-                        right: '12px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: HUB.textSecondary,
-                        cursor: 'pointer',
-                        pointerEvents: 'auto'
-                      }}
-                    >
-                      <Calendar size={20} />
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block mb-3 font-medium" style={{ color: HUB.textSecondary }}>Gender</label>
-                  <div className="space-y-2">
-                    {[
-                      { value: 'female', label: 'Female 👩' },
-                      { value: 'male', label: 'Male 👨' },
-                      { value: 'other', label: 'Other 🌈' },
-                    ].map((option) => (
-                      <label key={option.value} className="cursor-pointer block">
-                        <input
-                          type="radio"
-                          name="gender"
-                          value={option.value}
-                          checked={editData.gender === option.value}
-                          onChange={(e) => setEditData({ ...editData, gender: e.target.value })}
-                          className="sr-only"
-                        />
-                        <div
-                          className={`p-3 text-center rounded-xl border-2 transition-all duration-300 font-medium ${
-                            editData.gender === option.value ? '' : ''
-                          }`}
-                          style={{
-                            backgroundColor: editData.gender === option.value ? `${HUB.accent}20` : HUB.bgSecondary,
-                            borderColor: editData.gender === option.value ? HUB.accent : HUB.divider,
-                            color: HUB.text,
-                          }}
-                        >
-                          {option.label}
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex gap-3 mt-6">
-                <button
-                  onClick={handleSave}
-                  disabled={loading}
-                  className="flex-1 py-3 px-4 rounded-xl font-semibold transition-all duration-300 disabled:opacity-50"
-                  style={{
-                    backgroundColor: HUB.accent,
-                    color: '#FFFFFF',
-                    border: `1px solid ${HUB.accent}`,
-                  }}
-                >
-                  <Save className="w-4 h-4 inline mr-2" />
-                  {loading ? 'Saving...' : 'Save Changes'}
-                </button>
-                <button
-                  onClick={handleCancel}
-                  className="flex-1 py-3 px-4 rounded-xl font-semibold transition-all duration-300"
-                  style={{
-                    color: HUB.textSecondary,
-                    border: `1px solid ${HUB.divider}`,
-                    backgroundColor: HUB.bgSecondary,
-                  }}
-                >
-                  <X className="w-4 h-4 inline mr-2" />
-                  Cancel
-                </button>
-              </div>
-            </>
-          )}
+          <div className="flex-1 min-w-0">
+            <p className="text-base font-semibold truncate" style={{ color: isDarkMode ? HUB.text : '#111' }}>
+              {user.displayName || 'User'}
+            </p>
+            <p className="text-sm truncate" style={{ color: HUB.textSecondary }}>{user.email}</p>
+          </div>
+          <button
+            onClick={() => setIsEditing(true)}
+            className="px-4 py-1.5 rounded-lg text-sm font-semibold transition-opacity hover:opacity-80"
+            style={{ border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.15)'}`, color: isDarkMode ? HUB.text : '#111' }}
+          >
+            Edit
+          </button>
         </div>
 
-        {/* Static About Me Section */}
-        <div
-          className="backdrop-blur-lg border-2 rounded-2xl p-6"
-          style={{
-            backgroundColor: isDarkMode ? HUB.bgSecondary : 'rgba(0,0,0,0.04)',
-            boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-            border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'}`,
-          }}
-        >
-          <div className="flex items-center gap-3 mb-2">
-            <Mail className="w-5 h-5" style={{ color: HUB.accent }} />
-            <span className="font-medium" style={{ color: HUB.textSecondary }}>About Me</span>
-          </div>
-          <p className="mb-2" style={{ color: HUB.text }}>
-            {editData.bio || 'No bio added yet'}
-          </p>
-          <p className="text-xs mb-4" style={{ color: HUB.textSecondary }}>
-            Automatically refreshed daily at 02:00 AM to reflect your latest overall vibe.
-          </p>
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <span className="text-xs" style={{ color: HUB.textSecondary }}>
-              Last updated:{' '}
-              {bioLastUpdated
-                ? new Date(bioLastUpdated).toLocaleString()
-                : 'Never'}
+        {/* Menu rows */}
+        <div className="mt-2">
+          {/* About Me */}
+          <button
+            onClick={handleManualBioUpdate}
+            disabled={isBioUpdating}
+            className="w-full flex items-center gap-4 px-5 py-4 text-left transition-opacity hover:opacity-70 disabled:opacity-50"
+            style={ROW_STYLE}
+          >
+            <Mail className="w-6 h-6 flex-shrink-0" style={{ color: isDarkMode ? HUB.text : '#111' }} strokeWidth={1.5} />
+            <span className="text-[15px]" style={{ color: isDarkMode ? HUB.text : '#111' }}>
+              {isBioUpdating ? 'Updating About Me...' : 'About Me'}
             </span>
+          </button>
+
+          {/* Enroll for Crew */}
+          <div className="flex items-center gap-4 px-5 py-4" style={ROW_STYLE}>
+            <Users className="w-6 h-6 flex-shrink-0" style={{ color: isDarkMode ? HUB.text : '#111' }} strokeWidth={1.5} />
+            <span className="flex-1 text-[15px]" style={{ color: isDarkMode ? HUB.text : '#111' }}>Enroll for Crew</span>
             <button
-              onClick={handleManualBioUpdate}
-              disabled={isBioUpdating}
-              className="px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-300 disabled:opacity-40"
-              style={{
-                backgroundColor: `${HUB.accent}30`,
-                border: `1px solid ${HUB.divider}`,
-                color: HUB.text,
-              }}
+              onClick={handleCrewEnrollmentToggle}
+              className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus:outline-none"
+              style={{ backgroundColor: isCrewEnrolled ? HUB.accent : 'rgba(107, 114, 128, 0.4)' }}
+              role="switch"
+              aria-checked={isCrewEnrolled}
             >
-              {isBioUpdating ? 'Updating...' : 'Update summary now'}
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 ${isCrewEnrolled ? 'translate-x-6' : 'translate-x-1'}`} />
             </button>
           </div>
-        </div>
-        {/* Actions Card */}
-        <div
-          className="backdrop-blur-lg border rounded-2xl p-6 space-y-4"
-          style={{
-            backgroundColor: isDarkMode ? HUB.bgSecondary : 'rgba(0,0,0,0.04)',
-            border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'}`,
-          }}
-        >
-          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2" style={{ color: HUB.text }}>
-            <Settings className="w-5 h-5" style={{ color: HUB.accent }} />
-            Account Actions
-          </h3>
 
+          {/* Call Founders */}
           <button
-            onClick={handleSignOut}
-            className="w-full p-4 rounded-xl text-left hover:opacity-80 transition-all duration-300"
-            style={{
-              backgroundColor: isDarkMode ? HUB.bg : 'rgba(0,0,0,0.06)',
-              border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'}`,
-            }}
+            onClick={() => window.open('tel:9536138120', '_self')}
+            className="w-full flex items-center gap-4 px-5 py-4 text-left transition-opacity hover:opacity-70"
+            style={ROW_STYLE}
           >
-            <div className="flex items-center gap-3">
-              <LogOut className="w-5 h-5" style={{ color: HUB.text }} />
-              <div>
-                <p className="font-medium" style={{ color: HUB.text }}>Sign Out</p>
-                <p className="text-sm" style={{ color: HUB.textSecondary }}>Sign out of your account</p>
-              </div>
-            </div>
+            <Phone className="w-6 h-6 flex-shrink-0" style={{ color: isDarkMode ? HUB.text : '#111' }} strokeWidth={1.5} />
+            <span className="text-[15px]" style={{ color: isDarkMode ? HUB.text : '#111' }}>Call Founders</span>
           </button>
 
-          {/* Crew Enrollment Toggle */}
-          <div
-            className="w-full p-4 rounded-xl"
-            style={{
-              backgroundColor: isDarkMode ? HUB.bg : 'rgba(0,0,0,0.06)',
-              border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'}`,
-            }}
+          {/* WhatsApp */}
+          <button
+            onClick={() => window.open('https://wa.me/919536138120', '_blank')}
+            className="w-full flex items-center gap-4 px-5 py-4 text-left transition-opacity hover:opacity-70"
+            style={ROW_STYLE}
           >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3 flex-1">
-                <Users className="w-5 h-5" style={{ color: HUB.text }} />
-                <div>
-                  <p className="font-medium" style={{ color: HUB.text }}>Enroll for Crew</p>
-                  <p className="text-sm" style={{ color: HUB.textSecondary }}>
-                    {isCrewEnrolled ? 'Enrolled in crew features' : 'Not enrolled in crew'}
-                  </p>
-                </div>
+            <MessageCircle className="w-6 h-6 flex-shrink-0" style={{ color: isDarkMode ? HUB.text : '#111' }} strokeWidth={1.5} />
+            <span className="text-[15px]" style={{ color: isDarkMode ? HUB.text : '#111' }}>WhatsApp Support</span>
+          </button>
+
+          {/* Help */}
+          <button
+            onClick={() => window.open('https://wa.me/919536138120', '_blank')}
+            className="w-full flex items-center gap-4 px-5 py-4 text-left transition-opacity hover:opacity-70"
+            style={ROW_STYLE}
+          >
+            <Shield className="w-6 h-6 flex-shrink-0" style={{ color: isDarkMode ? HUB.text : '#111' }} strokeWidth={1.5} />
+            <span className="text-[15px]" style={{ color: isDarkMode ? HUB.text : '#111' }}>Help</span>
+          </button>
+        </div>
+
+        {/* Log out */}
+        <div className="mt-6 px-5">
+          <button
+            onClick={handleSignOut}
+            className="text-[15px] font-medium transition-opacity hover:opacity-70"
+            style={{ color: '#3B82F6' }}
+          >
+            Log out
+          </button>
+        </div>
+
+        {/* Danger Zone — GitHub-style bordered section */}
+        <div className="mt-8 mx-5">
+          <h3 className="text-base font-semibold mb-3" style={{ color: isDarkMode ? HUB.text : '#111' }}>
+            Danger Zone
+          </h3>
+          <div
+            className="rounded-lg overflow-hidden"
+            style={{ border: `1px solid ${isDarkMode ? 'rgba(239,68,68,0.4)' : 'rgba(239,68,68,0.35)'}` }}
+          >
+            {/* Clear account data row */}
+            <div
+              className="flex items-center justify-between gap-4 px-4 py-4"
+              style={{ borderBottom: `1px solid ${isDarkMode ? 'rgba(239,68,68,0.2)' : 'rgba(239,68,68,0.15)'}` }}
+            >
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold" style={{ color: isDarkMode ? HUB.text : '#111' }}>
+                  Clear account data
+                </p>
+                <p className="text-xs mt-0.5" style={{ color: HUB.textSecondary }}>
+                  This will clear your profile data. Your account will remain active.
+                </p>
               </div>
-              <button
-                onClick={handleCrewEnrollmentToggle}
-                className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-transparent"
-                style={{
-                  backgroundColor: isCrewEnrolled ? HUB.accent : 'rgba(107, 114, 128, 0.5)',
-                  ...(isCrewEnrolled && { boxShadow: `0 0 0 2px ${HUB.accent}` }),
-                }}
-                role="switch"
-                aria-checked={isCrewEnrolled}
-              >
-                <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 ${
-                    isCrewEnrolled ? 'translate-x-6' : 'translate-x-1'
-                  }`}
-                />
-              </button>
+              {!showDeleteConfirm ? (
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="flex-shrink-0 px-3 py-1.5 rounded-md text-xs font-medium transition-opacity hover:opacity-80"
+                  style={{
+                    color: isDarkMode ? '#f87171' : '#dc2626',
+                    border: `1px solid ${isDarkMode ? 'rgba(239,68,68,0.4)' : 'rgba(239,68,68,0.35)'}`,
+                    backgroundColor: isDarkMode ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.05)',
+                  }}
+                >
+                  Clear data
+                </button>
+              ) : (
+                <div className="flex-shrink-0 flex items-center gap-2">
+                  <button
+                    onClick={handleDeleteAccount}
+                    disabled={deleteLoading}
+                    className="px-3 py-1.5 rounded-md text-xs font-medium transition-opacity hover:opacity-80 disabled:opacity-50"
+                    style={{
+                      color: '#fff',
+                      backgroundColor: isDarkMode ? 'rgba(239,68,68,0.8)' : '#dc2626',
+                    }}
+                  >
+                    {deleteLoading ? 'Clearing...' : 'Confirm'}
+                  </button>
+                  <button
+                    onClick={() => setShowDeleteConfirm(false)}
+                    className="px-3 py-1.5 rounded-md text-xs font-medium"
+                    style={{
+                      color: HUB.textSecondary,
+                      border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.15)'}`,
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Helpdesk Section */}
+      </div>
+    </div>
+
+    {/* Threads-style Edit Profile Modal */}
+    {isEditing && (
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" style={{ zIndex: 999 }}>
+        <div className="absolute inset-0 bg-black/60" onClick={handleCancel} />
         <div
-          className="backdrop-blur-lg border rounded-2xl p-6 space-y-4"
+          className="relative z-10 w-full max-w-md rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col"
           style={{
-            backgroundColor: isDarkMode ? HUB.bgSecondary : 'rgba(0,0,0,0.04)',
-            border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'}`,
+            backgroundColor: HUB.bgSecondary,
+            maxHeight: '90vh',
+            border: `1px solid ${HUB.divider}`,
           }}
+          onClick={(e) => e.stopPropagation()}
         >
-          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2" style={{ color: HUB.text }}>
-            <MessageCircle className="w-5 h-5" style={{ color: HUB.accent }} />
-            Helpdesk
-          </h3>
-          <p className="text-sm mb-4" style={{ color: HUB.textSecondary }}>
-            Contact our founders for support and assistance
-          </p>
-
-          <button
-            onClick={() => window.open('tel:9536138120', '_self')}
-            className="w-full p-4 rounded-xl text-left hover:opacity-80 transition-all duration-300"
-            style={{
-              backgroundColor: isDarkMode ? HUB.bg : 'rgba(0,0,0,0.06)',
-              border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'}`,
-            }}
+          {/* Header: X ... Edit profile ... Done */}
+          <div
+            className="flex items-center justify-between px-5 py-4"
+            style={{ borderBottom: `1px solid ${HUB.divider}` }}
           >
-            <div className="flex items-center gap-3">
-              <Phone className="w-5 h-5" style={{ color: HUB.text }} />
-              <div>
-                <p className="font-medium" style={{ color: HUB.text }}>Call Founders</p>
-                <p className="text-sm" style={{ color: HUB.textSecondary }}>Call us at +91 9536138120</p>
-              </div>
-            </div>
-          </button>
+            <button onClick={handleCancel} className="p-1" style={{ color: HUB.text }}>
+              <X className="w-6 h-6" />
+            </button>
+            <span className="text-base font-semibold" style={{ color: HUB.text }}>Edit profile</span>
+            <button
+              onClick={handleSave}
+              disabled={loading}
+              className="text-base font-semibold disabled:opacity-50"
+              style={{ color: HUB.accent }}
+            >
+              {loading ? 'Saving...' : 'Done'}
+            </button>
+          </div>
 
-          <button
-            onClick={() => window.open('https://wa.me/919536138120', '_blank')}
-            className="w-full p-4 rounded-xl text-left hover:opacity-80 transition-all duration-300"
-            style={{
-              backgroundColor: isDarkMode ? HUB.bg : 'rgba(0,0,0,0.06)',
-              border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'}`,
-            }}
-          >
-            <div className="flex items-center gap-3">
-              <MessageCircle className="w-5 h-5" style={{ color: HUB.text }} />
-              <div>
-                <p className="font-medium" style={{ color: HUB.text }}>WhatsApp Message</p>
-                <p className="text-sm" style={{ color: HUB.textSecondary }}>Send us a message on WhatsApp</p>
+          {/* Scrollable fields */}
+          <div className="flex-1 overflow-y-auto px-5 py-2">
+            {/* Name row with profile picture on right (like Threads) */}
+            <div
+              className="flex items-center py-4"
+              style={{ borderBottom: `1px solid ${HUB.divider}` }}
+            >
+              <div className="flex-1 min-w-0">
+                <span className="text-sm font-semibold block mb-1" style={{ color: HUB.text }}>Name</span>
+                <input
+                  type="text"
+                  value={editData.displayName}
+                  onChange={(e) => setEditData({ ...editData, displayName: e.target.value })}
+                  placeholder="Enter display name"
+                  className="w-full bg-transparent text-sm focus:outline-none placeholder-gray-500"
+                  style={{ color: HUB.textSecondary }}
+                />
               </div>
-            </div>
-          </button>
-        </div>
-
-        {/* Danger Zone */}
-        <div
-          className="backdrop-blur-lg border-2 rounded-2xl p-6"
-          style={{
-            backgroundColor: isDarkMode ? HUB.bgSecondary : 'rgba(0,0,0,0.04)',
-            border: "1px solid rgba(242, 139, 130, 0.25)",
-            boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-          }}
-        >
-          <div className="text-center">
-            <div className="flex justify-center mb-4">
-              <div 
-                className="w-16 h-16 rounded-full flex items-center justify-center"
-                style={{
-                  backgroundColor: "rgba(242, 139, 130, 0.8)",
-                  boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-                  border: `1px solid ${HUB.divider}`,
-                }}
-              >
-                <AlertTriangle className="w-8 h-8" style={{ color: '#FFFFFF' }} />
-              </div>
-            </div>
-            <h3 className="text-xl font-bold mb-2" style={{ color: HUB.text }}>Danger Zone</h3>
-            <p className="mb-6" style={{ color: HUB.textSecondary }}>
-              Clear your account data permanently
-            </p>
-
-            {!showDeleteConfirm ? (
               <button
-                onClick={() => setShowDeleteConfirm(true)}
-                className="px-6 py-3 rounded-xl font-semibold hover:opacity-90 transition-all duration-300"
-                style={{
-                  backgroundColor: "rgba(242, 139, 130, 0.8)",
-                  border: `1px solid ${HUB.divider}`,
-                  color: '#FFFFFF',
-                }}
+                className="ml-4 flex-shrink-0 w-14 h-14 rounded-full overflow-hidden flex items-center justify-center"
+                style={{ backgroundColor: HUB.divider }}
+                onClick={() => setShowAvatarModal(true)}
+                title="Change profile picture"
               >
-                <Trash2 className="w-4 h-4 inline mr-2" />
-                Clear Account Data
+                {profilePicture ? (
+                  <img src={profilePicture} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <User className="w-7 h-7" style={{ color: HUB.textSecondary }} />
+                )}
               </button>
-            ) : (
-              <div className="space-y-4">
-                <div
-                  className="p-4 rounded-xl border-2 border-dashed"
-                  style={{
-                    backgroundColor: "rgba(242, 139, 130, 0.08)",
-                    borderColor: "rgba(242, 139, 130, 0.35)",
-                  }}
+            </div>
+
+            {/* Age (read-only, calculated from birthday) */}
+            <div className="py-4" style={{ borderBottom: `1px solid ${HUB.divider}` }}>
+              <span className="text-sm font-semibold block mb-1" style={{ color: HUB.text }}>Age</span>
+              <span className="text-sm" style={{ color: HUB.textSecondary }}>
+                {editData.birthday
+                  ? `${calculateAgeFromBirthday(editData.birthday) || 'Calculating...'} years old`
+                  : editData.age
+                    ? `${editData.age} years old`
+                    : 'Set your birthday below'}
+              </span>
+            </div>
+
+            {/* Birthday */}
+            <div className="py-4" style={{ borderBottom: `1px solid ${HUB.divider}` }}>
+              <span className="text-sm font-semibold block mb-1" style={{ color: HUB.text }}>Birthday</span>
+              <button
+                type="button"
+                onClick={() => {
+                  const date = getBirthdayDate();
+                  setBirthdayDate(date);
+                  setShowBirthdayCalendar(true);
+                }}
+                className="w-full text-left text-sm flex items-center justify-between"
+                style={{ color: HUB.textSecondary }}
+              >
+                <span>{formatDateDisplay(editData.birthday) || '+ Set birthday'}</span>
+                <ChevronRight className="w-4 h-4" style={{ color: HUB.textSecondary }} />
+              </button>
+            </div>
+
+            {/* Gender */}
+            <div className="py-4" style={{ borderBottom: `1px solid ${HUB.divider}` }}>
+              <span className="text-sm font-semibold block mb-2" style={{ color: HUB.text }}>Gender</span>
+              <div className="flex gap-2">
+                {[
+                  { value: 'female', label: 'Female', emoji: '👩' },
+                  { value: 'male', label: 'Male', emoji: '👨' },
+                  { value: 'other', label: 'Other', emoji: '🌈' },
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    onClick={() => setEditData({ ...editData, gender: option.value })}
+                    className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-all"
+                    style={{
+                      backgroundColor: editData.gender === option.value ? `${HUB.accent}25` : 'transparent',
+                      border: `1.5px solid ${editData.gender === option.value ? HUB.accent : HUB.divider}`,
+                      color: editData.gender === option.value ? HUB.accent : HUB.textSecondary,
+                    }}
+                  >
+                    {option.emoji} {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Remove picture option (only when picture exists) */}
+            {profilePicture && (
+              <div className="py-4">
+                <button
+                  onClick={handleRemoveProfilePicture}
+                  className="text-sm font-medium"
+                  style={{ color: 'rgba(242, 139, 130, 0.9)' }}
                 >
-                  <p className="text-sm text-red-300 mb-4">
-                    <strong>Warning:</strong> This will clear your profile data, but your account will remain active. You can always add new information later.
-                  </p>
-                  <div className="flex gap-3">
-                    <button
-                      onClick={handleDeleteAccount}
-                      disabled={deleteLoading}
-                      className="flex-1 py-2 px-4 rounded-xl font-medium transition-all duration-300 disabled:opacity-50"
-                      style={{
-                        backgroundColor: "rgba(242, 139, 130, 0.8)",
-                        border: `1px solid ${HUB.divider}`,
-                        color: '#FFFFFF',
-                      }}
-                    >
-                      {deleteLoading ? 'Clearing...' : 'Yes, Clear Data'}
-                    </button>
-                    <button
-                      onClick={() => setShowDeleteConfirm(false)}
-                      className="flex-1 py-2 px-4 rounded-xl font-medium transition-all duration-300"
-                      style={{
-                        color: HUB.textSecondary,
-                        border: `1px solid ${HUB.divider}`,
-                        backgroundColor: HUB.bgSecondary,
-                      }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
+                  Remove profile picture
+                </button>
               </div>
             )}
+
+            {/* Bottom spacer for safe area */}
+            <div style={{ height: 'env(safe-area-inset-bottom, 16px)' }} />
           </div>
         </div>
       </div>
-    </div>
+    )}
 
     {showCropModal && pendingPicture && (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
