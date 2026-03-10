@@ -1,15 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
-import { MessageCircle, Heart, User, Sun, Moon, Send, X, Plus, XCircle, Image, Link, Share2, Repeat } from 'lucide-react';
+import { MessageCircle, Heart, User, Sun, Moon, Send, X, Plus, XCircle, Image, Link, Share2, Repeat, Bookmark } from 'lucide-react';
 import { getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
 import { collection, addDoc, query, orderBy, getDocs, serverTimestamp, doc, setDoc, updateDoc, increment, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/config';
+import { userEventService } from '../services/userEventService';
 
 export default function CommunityPage() {
   const navigate = useNavigate();
   const { isDarkMode, toggleTheme } = useTheme();
+  // --- Feed event tracking (impression/view/scroll/dwell + engagement events) ---
+  const sessionIdRef = useRef(null);
+  const observerRef = useRef(null);
+  const observedElsRef = useRef(new Map()); // postId -> element
+  const dwellStartRef = useRef(new Map()); // postId -> ms timestamp
+  const impressionOnceRef = useRef(new Set()); // postId
+  const feedPositionsRef = useRef(new Map()); // postId -> position (1-indexed)
   const [profilePicture, setProfilePicture] = useState(null);
   const [likes, setLikes] = useState(24);
   const [isLiked, setIsLiked] = useState(false);
@@ -38,6 +46,16 @@ export default function CommunityPage() {
   const [postsTodayCount, setPostsTodayCount] = useState(0);
   const [activeTab, setActiveTab] = useState('explore'); // 'mySpace' | 'following' | 'explore'
   const [followingIds, setFollowingIds] = useState([]);
+
+  useEffect(() => {
+    // New session for each feed open (per requirements)
+    sessionIdRef.current = userEventService.startSession();
+    return () => {
+      try {
+        userEventService.flush();
+      } catch (_) {}
+    };
+  }, []);
   const [tabTransition, setTabTransition] = useState(false);
   const [tabTouchStart, setTabTouchStart] = useState(null);
   const TAB_ORDER = ['mySpace', 'following', 'explore'];
@@ -172,6 +190,8 @@ export default function CommunityPage() {
             profilePicture: commenterProfilePicture || null,
             createdAt: serverTimestamp()
           });
+          // Track engagement: comment (reply)
+          logEngagement('comment', postId);
           
           // Clear reply input and reset replyingTo
           setReplyText('');
@@ -192,6 +212,8 @@ export default function CommunityPage() {
             profilePicture: commenterProfilePicture || null,
             createdAt: serverTimestamp()
           });
+          // Track engagement: comment
+          logEngagement('comment', postId);
           
           // Clear the comment input
           setPostComments({
@@ -497,6 +519,125 @@ export default function CommunityPage() {
     return communityPosts; // explore: all posts
   })();
 
+  // Update position mapping for tracking
+  useEffect(() => {
+    const m = new Map();
+    filteredPosts.forEach((p, idx) => {
+      if (p?.id) m.set(p.id, idx + 1);
+    });
+    feedPositionsRef.current = m;
+  }, [filteredPosts]);
+
+  // IntersectionObserver: impression (once), dwell timer, then view/scroll on exit
+  useEffect(() => {
+    const currentUser = getCurrentUser();
+    if (!currentUser) return;
+
+    if (!observerRef.current) {
+      observerRef.current = new IntersectionObserver(
+        (entries) => {
+          const nowMs = Date.now();
+          for (const entry of entries) {
+            const el = entry.target;
+            const postId = el?.dataset?.postId;
+            if (!postId) continue;
+            const position_in_feed = feedPositionsRef.current.get(postId) || null;
+
+            const visibleEnough = entry.isIntersecting && entry.intersectionRatio >= 0.6;
+            if (visibleEnough) {
+              if (!impressionOnceRef.current.has(postId)) {
+                impressionOnceRef.current.add(postId);
+                userEventService.logEvent({
+                  user_id: currentUser.uid,
+                  post_id: postId,
+                  event_type: 'impression',
+                  position_in_feed
+                });
+              }
+              if (!dwellStartRef.current.has(postId)) {
+                dwellStartRef.current.set(postId, nowMs);
+              }
+            } else {
+              if (dwellStartRef.current.has(postId)) {
+                const startMs = dwellStartRef.current.get(postId);
+                const dwell = Math.max(0, nowMs - (startMs || nowMs));
+                dwellStartRef.current.delete(postId);
+
+                if (dwell >= 2000) {
+                  userEventService.logEvent({
+                    user_id: currentUser.uid,
+                    post_id: postId,
+                    event_type: 'view',
+                    dwell_time_ms: dwell,
+                    position_in_feed
+                  });
+                } else {
+                  userEventService.logEvent({
+                    user_id: currentUser.uid,
+                    post_id: postId,
+                    event_type: 'scroll',
+                    position_in_feed
+                  });
+                }
+              }
+            }
+          }
+        },
+        { threshold: [0, 0.6, 1] }
+      );
+    }
+
+    const observer = observerRef.current;
+    for (const [, el] of observedElsRef.current.entries()) {
+      try {
+        observer.observe(el);
+      } catch (_) {}
+    }
+
+    return () => {
+      try {
+        observer.disconnect();
+      } catch (_) {}
+      observerRef.current = null;
+      observedElsRef.current = new Map();
+      dwellStartRef.current = new Map();
+      impressionOnceRef.current = new Set();
+    };
+  }, [activeTab]);
+
+  const registerPostElement = (postId, el) => {
+    if (!postId) return;
+    if (!el) {
+      const prev = observedElsRef.current.get(postId);
+      if (prev && observerRef.current) {
+        try {
+          observerRef.current.unobserve(prev);
+        } catch (_) {}
+      }
+      observedElsRef.current.delete(postId);
+      return;
+    }
+    el.dataset.postId = postId;
+    observedElsRef.current.set(postId, el);
+    if (observerRef.current) {
+      try {
+        observerRef.current.observe(el);
+      } catch (_) {}
+    }
+  };
+
+  const logEngagement = (event_type, postId) => {
+    const currentUser = getCurrentUser();
+    if (!currentUser || !postId) return;
+    const position_in_feed = feedPositionsRef.current.get(postId) || null;
+    userEventService.logEvent({
+      user_id: currentUser.uid,
+      post_id: postId,
+      event_type,
+      position_in_feed
+    });
+  };
+
   const mySpacePostDates = new Set(
     (activeTab === 'mySpace' && user ? filteredPosts : [])
       .map((p) => normalizeReflectionDate(p.reflectionDate))
@@ -677,6 +818,8 @@ export default function CommunityPage() {
           createdAt: serverTimestamp()
         });
         console.log(`✅ Successfully liked post ${postId}`);
+        // Track engagement: like
+        logEngagement('like', postId);
         
         // Manually update state as fallback (in case listener is slow)
         setPostLikes(prev => ({
@@ -924,6 +1067,7 @@ export default function CommunityPage() {
             return (
               <div
                 key={post.id}
+                ref={(el) => registerPostElement(post.id, el)}
                 className="relative transition-[background,transform] duration-150 hover:bg-white/[0.03] active:scale-[0.99] fadeIn"
                 style={{
                   borderTop: index === 0 ? 'none' : `1px solid ${THREADS.divider}`,
@@ -1013,11 +1157,19 @@ export default function CommunityPage() {
                     <MessageCircle className="w-4 h-4" style={{ color: THREADS.textSecondary }} />
                     <span className="text-xs" style={{ color: THREADS.textSecondary }}>{postCommentsData.comments.length}</span>
                   </button>
-                  <button className="flex items-center gap-1.5 transition-transform hover:opacity-80 active:scale-95">
-                    <Repeat className="w-4 h-4" style={{ color: THREADS.textSecondary }} />
+                  <button
+                    onClick={() => logEngagement('save', post.id)}
+                    className="flex items-center gap-1.5 transition-transform hover:opacity-80 active:scale-95"
+                    title="Save"
+                  >
+                    <Bookmark className="w-4 h-4" style={{ color: THREADS.textSecondary }} />
                     <span className="text-xs" style={{ color: THREADS.textSecondary }}>0</span>
                   </button>
-                  <button className="flex items-center gap-1.5 transition-transform hover:opacity-80 active:scale-95">
+                  <button
+                    onClick={() => logEngagement('share', post.id)}
+                    className="flex items-center gap-1.5 transition-transform hover:opacity-80 active:scale-95"
+                    title="Share"
+                  >
                     <Send className="w-4 h-4" style={{ color: THREADS.textSecondary }} />
                     <span className="text-xs" style={{ color: THREADS.textSecondary }}>0</span>
                   </button>
