@@ -1,0 +1,10 @@
+firebase-admin
+google-cloud-firestore
+numpy
+requests
+pillow
+torch
+transformers
+sentence-transformers
+faiss-cpu
+scikit-learn
