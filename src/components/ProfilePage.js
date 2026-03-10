@@ -76,6 +76,7 @@ export default function ProfilePage() {
   const [previewImgSize, setPreviewImgSize] = useState({ w: 0, h: 0 });
   const [showPhotoEditMenu, setShowPhotoEditMenu] = useState(false);
   const [showPhotoShareMenu, setShowPhotoShareMenu] = useState(false);
+  const [showAboutMeScreen, setShowAboutMeScreen] = useState(false);
   const fileInputRef = useRef(null);
   
   // Helper function to format date for display
@@ -1171,14 +1172,13 @@ const compressDataUrlForStorage = (dataUrl, maxSizeKb = 800) => {
         <div className="mt-2">
           {/* About Me */}
           <button
-            onClick={handleManualBioUpdate}
-            disabled={isBioUpdating}
             className="w-full flex items-center gap-4 px-5 py-4 text-left transition-opacity hover:opacity-70 disabled:opacity-50"
             style={ROW_STYLE}
+            onClick={() => setShowAboutMeScreen(true)}
           >
             <Mail className="w-6 h-6 flex-shrink-0" style={{ color: isDarkMode ? HUB.text : '#111' }} strokeWidth={1.5} />
             <span className="text-[15px]" style={{ color: isDarkMode ? HUB.text : '#111' }}>
-              {isBioUpdating ? 'Updating About Me...' : 'About Me'}
+              About Me
             </span>
           </button>
 
@@ -1452,6 +1452,53 @@ const compressDataUrlForStorage = (dataUrl, maxSizeKb = 800) => {
               Remove profile picture
             </button>
           )}
+        </div>
+      </div>
+    )}
+
+    {/* About Me — full-screen (like Edit) */}
+    {showAboutMeScreen && (
+      <div className="fixed inset-0 z-50 flex flex-col" style={{ backgroundColor: HUB.bg, zIndex: 999 }}>
+        {/* Header */}
+        <div
+          className="flex items-center justify-between px-4 flex-shrink-0"
+          style={{ paddingTop: 'max(14px, env(safe-area-inset-top, 14px))', paddingBottom: '14px' }}
+        >
+          <button onClick={() => setShowAboutMeScreen(false)} className="p-1" style={{ color: HUB.text }}>
+            <X className="w-6 h-6" />
+          </button>
+          <span className="text-base font-bold" style={{ color: HUB.text }}>About Me</span>
+          <div style={{ width: 40 }} />
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 pb-8">
+          <div
+            className="rounded-2xl overflow-hidden mt-6"
+            style={{
+              backgroundColor: isDarkMode ? HUB.bgSecondary : '#fff',
+              border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'}`,
+            }}
+          >
+            <div className="px-4 py-4">
+              <p className="text-sm leading-relaxed" style={{ color: HUB.textSecondary }}>
+                {editData.bio || 'No bio yet.'}
+              </p>
+            </div>
+            <div style={{ borderTop: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.06)'}` }}>
+              <button
+                onClick={handleManualBioUpdate}
+                disabled={isBioUpdating}
+                className="w-full px-4 py-4 text-left transition-opacity hover:opacity-70 disabled:opacity-50"
+              >
+                <span className="text-[15px] font-medium" style={{ color: HUB.text }}>
+                  {isBioUpdating ? 'Updating…' : 'Update summary now'}
+                </span>
+                <p className="text-xs mt-1" style={{ color: HUB.textSecondary }}>
+                  Last updated: {bioLastUpdated ? new Date(bioLastUpdated).toLocaleString() : 'Never'}
+                </p>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     )}
