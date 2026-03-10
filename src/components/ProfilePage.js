@@ -70,6 +70,9 @@ export default function ProfilePage() {
   const [showBirthdayCalendar, setShowBirthdayCalendar] = useState(false);
   const [birthdayDate, setBirthdayDate] = useState(null);
   const [isCrewEnrolled, setIsCrewEnrolled] = useState(false);
+  const [showCrewLeaveModal, setShowCrewLeaveModal] = useState(false);
+  const [crewLeaveReason, setCrewLeaveReason] = useState('');
+  const [crewLeaveOtherText, setCrewLeaveOtherText] = useState('');
   const [showAvatarModal, setShowAvatarModal] = useState(false);
   const [helpExpanded, setHelpExpanded] = useState(false);
   const [showPhotoPreviewModal, setShowPhotoPreviewModal] = useState(false);
@@ -193,10 +196,25 @@ export default function ProfilePage() {
       }
 
       // Load crew enrollment status
-      const savedCrewEnrollment = localStorage.getItem(`user_crew_enrolled_${currentUser.uid}`);
-      if (savedCrewEnrollment !== null) {
-        setIsCrewEnrolled(savedCrewEnrollment === 'true');
-      }
+      (async () => {
+        try {
+          const res = await firestoreService.getUser(currentUser.uid);
+          const fromFs = res.success && res.data ? res.data.enrolled_for_crew : undefined;
+          const enrolled = fromFs === false ? false : true; // default ON
+          setIsCrewEnrolled(enrolled);
+          localStorage.setItem(`user_crew_enrolled_${currentUser.uid}`, enrolled.toString());
+          // Ensure default ON is persisted for all users
+          if (fromFs === undefined) {
+            await firestoreService.updateCrewEnrollment(currentUser.uid, true);
+          }
+        } catch (e) {
+          // fallback: localStorage, default ON
+          const savedCrewEnrollment = localStorage.getItem(`user_crew_enrolled_${currentUser.uid}`);
+          const enrolled = savedCrewEnrollment === null ? true : savedCrewEnrollment === 'true';
+          setIsCrewEnrolled(enrolled);
+          localStorage.setItem(`user_crew_enrolled_${currentUser.uid}`, enrolled.toString());
+        }
+      })();
     } else {
       navigate('/signup');
     }
@@ -993,20 +1011,21 @@ const compressDataUrlForStorage = (dataUrl, maxSizeKb = 800) => {
 
   const handleCrewEnrollmentToggle = async () => {
     if (!user) return;
-    const newValue = !isCrewEnrolled;
-    setIsCrewEnrolled(newValue);
-    localStorage.setItem(`user_crew_enrolled_${user.uid}`, newValue.toString());
-    
-    // Update user metadata in Firestore
+    // Turning OFF requires confirmation modal
+    if (isCrewEnrolled) {
+      setCrewLeaveReason('');
+      setCrewLeaveOtherText('');
+      setShowCrewLeaveModal(true);
+      return;
+    }
+
+    // Turning ON immediately: write true and clear opt-out fields
+    setIsCrewEnrolled(true);
+    localStorage.setItem(`user_crew_enrolled_${user.uid}`, 'true');
     try {
-      const savedPicture = localStorage.getItem(`user_profile_picture_${user.uid}`);
-      await firestoreService.updateUserMetadata(user.uid, {
-        displayName: user.displayName || 'User',
-        profilePicture: savedPicture,
-        crewEnrolled: newValue
-      });
+      await firestoreService.updateCrewEnrollment(user.uid, true);
     } catch (error) {
-      console.error('Error updating user metadata:', error);
+      console.error('Error updating crew enrollment:', error);
     }
   };
 
@@ -1665,6 +1684,102 @@ const compressDataUrlForStorage = (dataUrl, maxSizeKb = 800) => {
             className="w-full h-full object-contain"
             style={{ display: 'block' }}
           />
+        </div>
+      </div>
+    )}
+
+    {/* Leave Crew confirmation modal */}
+    {showCrewLeaveModal && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ zIndex: 1200 }}>
+        <div
+          className="absolute inset-0 bg-black/60"
+          onClick={() => { setShowCrewLeaveModal(false); }}
+        />
+        <div
+          className="relative z-10 w-full max-w-sm rounded-2xl overflow-hidden"
+          style={{ backgroundColor: HUB.bgSecondary, border: `1px solid ${HUB.divider}` }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="px-5 py-4" style={{ borderBottom: `1px solid ${HUB.divider}` }}>
+            <h3 className="text-base font-semibold" style={{ color: HUB.text }}>Leave Crew?</h3>
+            <p className="text-sm mt-1" style={{ color: HUB.textSecondary }}>
+              We’d love to know why you're opting out.
+            </p>
+          </div>
+
+          <div className="px-5 py-4 space-y-2">
+            {[
+              'Too many notifications',
+              'Not interested anymore',
+              'Hackathon ended',
+              'Other',
+            ].map((r) => (
+              <button
+                key={r}
+                onClick={() => setCrewLeaveReason(r)}
+                className="w-full text-left px-4 py-3 rounded-xl transition-opacity hover:opacity-80"
+                style={{
+                  border: `1px solid ${crewLeaveReason === r ? HUB.accent : HUB.divider}`,
+                  backgroundColor: crewLeaveReason === r ? `${HUB.accent}25` : 'transparent',
+                  color: HUB.text
+                }}
+              >
+                <span className="text-sm font-medium">{r}</span>
+              </button>
+            ))}
+
+            {crewLeaveReason === 'Other' && (
+              <input
+                value={crewLeaveOtherText}
+                onChange={(e) => setCrewLeaveOtherText(e.target.value)}
+                placeholder="Tell us more..."
+                className="w-full mt-2 px-4 py-3 rounded-xl focus:outline-none"
+                style={{
+                  backgroundColor: HUB.bg,
+                  border: `1px solid ${HUB.divider}`,
+                  color: HUB.text
+                }}
+              />
+            )}
+          </div>
+
+          <div className="px-5 py-4 flex gap-3" style={{ borderTop: `1px solid ${HUB.divider}` }}>
+            <button
+              onClick={() => {
+                setShowCrewLeaveModal(false);
+                // keep toggle ON
+                setIsCrewEnrolled(true);
+                if (user) localStorage.setItem(`user_crew_enrolled_${user.uid}`, 'true');
+              }}
+              className="flex-1 py-3 rounded-xl font-semibold"
+              style={{ border: `1px solid ${HUB.divider}`, color: HUB.textSecondary, backgroundColor: 'transparent' }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={async () => {
+                if (!user) return;
+                const reason = crewLeaveReason === 'Other'
+                  ? (crewLeaveOtherText || 'Other').trim() || 'Other'
+                  : (crewLeaveReason || '').trim();
+                if (!reason) return;
+
+                setShowCrewLeaveModal(false);
+                setIsCrewEnrolled(false);
+                localStorage.setItem(`user_crew_enrolled_${user.uid}`, 'false');
+                try {
+                  await firestoreService.updateCrewEnrollment(user.uid, false, reason);
+                } catch (e) {
+                  console.error('Opt-out update failed:', e);
+                }
+              }}
+              disabled={!crewLeaveReason || (crewLeaveReason === 'Other' && !crewLeaveOtherText.trim())}
+              className="flex-1 py-3 rounded-xl font-semibold disabled:opacity-50"
+              style={{ backgroundColor: HUB.accent, color: '#fff' }}
+            >
+              Confirm Leave
+            </button>
+          </div>
         </div>
       </div>
     )}

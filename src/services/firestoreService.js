@@ -13,7 +13,8 @@ import {
   where,
   increment,
   deleteDoc,
-  onSnapshot
+  onSnapshot,
+  deleteField
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { getDateId } from '../utils/dateUtils';
@@ -1443,8 +1444,8 @@ class FirestoreService {
 
         const userData = userDoc.data();
         
-        // Check if user is enrolled in crew
-        const isEnrolled = userData.crewEnrolled === true;
+        // Check if user is enrolled in crew (default ON; support old `crewEnrolled` too)
+        const isEnrolled = userData.enrolled_for_crew !== false && userData.crewEnrolled !== false;
         if (!isEnrolled) continue;
 
         // Check if user was active in last 7 days
@@ -1679,6 +1680,50 @@ class FirestoreService {
       return { success: true };
     } catch (error) {
       console.error('Error updating user metadata:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Update crew enrollment state.
+   * Requirements:
+   * - Persist to users/{uid}: enrolled_for_crew
+   * - If opting out, persist reason + timestamp
+   * - If opting back in, clear reason fields
+   * Also mirrors into usersMetadata/{uid} for any existing crew matching logic.
+   */
+  async updateCrewEnrollment(uid, enrolled, optOutReason = null) {
+    try {
+      const userRef = doc(this.db, `users/${uid}`);
+      const metaRef = doc(this.db, `usersMetadata/${uid}`);
+
+      if (enrolled) {
+        const payload = {
+          enrolled_for_crew: true,
+          crew_opt_out_reason: deleteField(),
+          crew_opt_out_timestamp: deleteField(),
+          updatedAt: serverTimestamp()
+        };
+        await Promise.all([
+          setDoc(userRef, payload, { merge: true }),
+          setDoc(metaRef, { ...payload, lastActive: serverTimestamp() }, { merge: true })
+        ]);
+      } else {
+        const payload = {
+          enrolled_for_crew: false,
+          crew_opt_out_reason: optOutReason || 'Other',
+          crew_opt_out_timestamp: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        };
+        await Promise.all([
+          setDoc(userRef, payload, { merge: true }),
+          setDoc(metaRef, { ...payload, lastActive: serverTimestamp() }, { merge: true })
+        ]);
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating crew enrollment:', error);
       return { success: false, error: error.message };
     }
   }
