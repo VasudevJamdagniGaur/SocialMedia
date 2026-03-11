@@ -2011,8 +2011,7 @@ ${text}`;
 
   /**
    * Generate one image per post using Gemini.
-   * X: always scene/situation-based, optional profile reference; no face close-up.
-   * LinkedIn: if post contains famous book/person/event/place → entity-centered image (no profile ref); else same as X. Do NOT default to user portrait.
+   * X / LinkedIn: same logic — scene/situation-based, optional profile reference; no face close-up.
    * @param {string} postText - Full post text (share suggestion)
    * @param {{ displayName?: string, age?: string, ... profileImageUrl?: string }|null} [userContext] - User profile
    * @param {string} [platform] - 'linkedin' | 'x' | 'reddit' — Reddit does not use images
@@ -2028,22 +2027,7 @@ ${text}`;
       return null;
     }
 
-    const isLinkedIn = (platform || '').toLowerCase() === 'linkedin';
-
-    // LinkedIn only: if post has famous book/person/event/place → image centered on those entities; no profile reference; do NOT default to user portrait
-    if (isLinkedIn) {
-      const entities = await this._extractEntitiesForImage(fullText);
-      const hasFamous = (entities.persons?.length > 0) || (entities.places?.length > 0) || (entities.events?.length > 0);
-      if (hasFamous) {
-        const entityPrompt = this._getImagePromptFromEntities(entities);
-        if (entityPrompt) {
-          const strictRules = 'STRICT: Image centered on the famous entity/entities (book, person, event, or place). Do NOT show a user portrait or default to a face shot. Professional, high quality.';
-          return this._generateImageWithGemini(`${entityPrompt} ${strictRules}`, geminiKey, null);
-        }
-      }
-    }
-
-    // X (and LinkedIn when no famous entities): scene/situation-based; optional profile reference; never default to user portrait
+    // Scene/situation-based; optional profile reference; never default to user portrait
     let referenceImage = null;
     if (userContext?.profileImageUrl) {
       referenceImage = await this._getProfileImageAsBase64(userContext.profileImageUrl);
