@@ -151,7 +151,7 @@ export default function LandingPage() {
             }}
           >
             <img
-              src="/Gemini_Generated_Image_ib3dfuib3dfuib3d.png"
+              src="/DEITECIrc.png"
               alt="DeTea"
               className="w-full h-full relative z-10 object-cover"
             />
