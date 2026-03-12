@@ -581,9 +581,9 @@ export default function DashboardPage() {
             }}
           >
             <img
-              src="/DeteaIcon.png"
+              src="/Gemini_Generated_Image_ib3dfuib3dfuib3d.png"
               alt="Detea"
-              className="w-9 h-9 object-contain"
+              className="w-full h-full object-cover"
             />
           </div>
 

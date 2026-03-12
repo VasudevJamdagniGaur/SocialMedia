@@ -4153,9 +4153,9 @@ Return in this JSON format:
                         }}
                       >
                         <img
-                          src="/DeteaIcon.png"
+                          src="/Gemini_Generated_Image_ib3dfuib3dfuib3d.png"
                           alt="Detea"
-                          className="w-5 h-5 object-contain"
+                          className="w-full h-full object-cover"
                         />
                       </div>
                       <h4 className="font-semibold text-gray-100 group-hover:text-white transition-colors duration-300">

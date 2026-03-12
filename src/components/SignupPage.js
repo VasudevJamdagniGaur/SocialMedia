@@ -86,9 +86,9 @@ const SignupPage = () => {
             }}
           >
             <img
-              src="/DeteaIcon.png"
+              src="/Gemini_Generated_Image_ib3dfuib3dfuib3d.png"
               alt="Detea"
-              className="w-20 h-20 object-contain"
+              className="w-full h-full object-cover"
             />
           </div>
           </div>

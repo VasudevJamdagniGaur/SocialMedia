@@ -126,9 +126,9 @@ export default function BottomNavigation() {
           className="flex items-center justify-center flex-1 h-full transition-all duration-200 active:opacity-70"
         >
           <img
-            src="/DeteaIcon.png"
+            src="/Gemini_Generated_Image_ib3dfuib3dfuib3d.png"
             alt="Detea"
-            className="w-12 h-12 object-contain"
+            className="w-full h-full object-cover"
             style={{
               opacity: isCommunityActive ? 1 : (isDarkMode ? 2.0 : 0.65),
               filter: isCommunityActive 
