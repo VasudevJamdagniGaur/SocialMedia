@@ -579,13 +579,13 @@ export default function DashboardPage() {
             } : {
               boxShadow: "0 0 0 1px rgba(168, 85, 247, 0.2), 0 4px 12px rgba(126, 34, 206, 0.25)",
             }}
-          >
-            <img
-              src="/DEITECIrc.png"
-              alt="DeTea"
-              className="w-12 h-12 object-contain"
-            />
-          </div>
+        >
+          <img
+            src="/DEITECIrc.png"
+            alt="DeTea"
+            className="w-full h-full object-cover"
+          />
+        </div>
 
           {/* Right icon - Profile */}
           <div
