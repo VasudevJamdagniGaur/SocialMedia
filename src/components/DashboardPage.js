@@ -743,7 +743,7 @@ export default function DashboardPage() {
             }}
           >
             <MessageCircle className="w-5 h-5" style={{ color: HUB.accent }} />
-            <span>Chat with Detea</span>
+            <span>Spill day's tea</span>
           </button>
 
           <button
