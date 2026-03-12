@@ -125,22 +125,13 @@ export default function BottomNavigation() {
           onClick={() => navigate('/community')}
           className="flex items-center justify-center flex-1 h-full transition-all duration-200 active:opacity-70"
         >
-          <img
-            src="/Gemini_Generated_Image_ib3dfuib3dfuib3d.png"
-            alt="DeTea"
-            className="w-full h-full object-cover"
-            style={{
-              opacity: isCommunityActive ? 1 : (isDarkMode ? 2.0 : 0.65),
-              filter: isCommunityActive 
-                ? (isDarkMode ? 'brightness(0) invert(1)' : 'brightness(0)')
-                : 'none',
-              WebkitFilter: isCommunityActive 
-                ? (isDarkMode ? 'brightness(0) invert(1)' : 'brightness(0)')
-                : 'none',
-              imageRendering: 'crisp-edges',
-              WebkitImageRendering: 'crisp-edges'
-            }}
-          />
+          <div className="w-14 h-14 rounded-full flex items-center justify-center overflow-hidden">
+            <img
+              src="/Gemini_Generated_Image_5f1pdr5f1pdr5f1p.png"
+              alt="DeTea community"
+              className="w-12 h-12 object-contain"
+            />
+          </div>
         </button>
       </div>
     </nav>

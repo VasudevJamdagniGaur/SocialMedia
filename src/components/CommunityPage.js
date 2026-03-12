@@ -924,7 +924,11 @@ export default function CommunityPage() {
             {isDarkMode ? <Moon className="w-5 h-5" strokeWidth={2} style={{ color: THREADS.accent }} /> : <Sun className="w-5 h-5" strokeWidth={2} style={{ color: THREADS.accent }} />}
           </button>
           <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ background: THREADS.bgSecondary }}>
-            <img src="/DeteaIcon.png" alt="DeTea" className="object-contain w-6 h-6 invert" />
+            <img
+              src="/Gemini_Generated_Image_ib3dfuib3dfuib3d.png"
+              alt="DeTea"
+              className="w-8 h-8 object-contain"
+            />
           </div>
           <button
             onClick={handleProfileClick}
