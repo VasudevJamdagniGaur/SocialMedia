@@ -173,6 +173,26 @@ export default function ShareSuggestionsPage() {
     setSharePanelOpen(true);
   };
 
+  const handleShareToOtherPlatforms = async () => {
+    const text = (editableShareText || selectedText || '').trim();
+    if (!text) return;
+
+    const shareData = { text };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+        recordShare('other', text);
+      } else if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        alert('Text copied to clipboard. You can paste it into any app to share.');
+        recordShare('other', text);
+      }
+    } catch (error) {
+      console.error('Share to other platforms failed:', error);
+    }
+  };
+
   const handlePencilClick = () => {
     setImageEditMenuOpen((prev) => !prev);
   };
@@ -425,22 +445,29 @@ export default function ShareSuggestionsPage() {
 
         {sharePanelOpen && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 z-50"
             style={{ background: 'rgba(0,0,0,0.5)' }}
-            onClick={() => setSharePanelOpen(false)}
             aria-hidden={!sharePanelOpen}
           >
             <div
-              className="rounded-2xl w-full max-w-md max-h-[85vh] flex flex-col p-4 overflow-y-auto"
+              className="h-full w-full flex flex-col p-4 overflow-y-auto"
               style={{
                 background: isDarkMode ? HUB.bgSecondary : '#FFFFFF',
-                border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'}`,
               }}
-              onClick={(e) => e.stopPropagation()}
             >
-              <p className="text-sm font-medium mb-2 flex-shrink-0" style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}>
-                Edit before sharing
-              </p>
+              <div className="flex items-center mb-3 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setSharePanelOpen(false)}
+                  className="p-2 rounded-full hover:bg-white/10 focus:outline-none"
+                  aria-label="Back"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+                <p className="text-sm font-medium flex-shrink-0" style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}>
+                  Edit before sharing
+                </p>
+              </div>
               {suggestionImageUrls[selectedIndex] && (
                 <div className="w-full rounded-xl overflow-hidden mb-3 flex-shrink-0 bg-black/10 relative group">
                   <div className="w-full min-h-[200px] max-h-[320px] flex items-center justify-center">
@@ -514,11 +541,11 @@ export default function ShareSuggestionsPage() {
               <div className="flex gap-3 mt-4">
                 <button
                   type="button"
-                  onClick={() => setSharePanelOpen(false)}
+                  onClick={handleShareToOtherPlatforms}
                   className="flex-1 py-3 rounded-xl font-medium transition-opacity hover:opacity-90"
                   style={{ background: isDarkMode ? HUB.divider : '#E5E5E5', color: isDarkMode ? HUB.text : '#333' }}
                 >
-                  Cancel
+                  Share to other platforms
                 </button>
                 <button
                   type="button"
