@@ -127,7 +127,7 @@ export default function BottomNavigation() {
         >
           <div className="w-14 h-14 rounded-full flex items-center justify-center overflow-hidden">
             <img
-              src="/Gemini_Generated_Image_5f1pdr5f1pdr5f1p.png"
+              src="/Gemini_Generated_Image_enm22aenm22aenm2.png"
               alt="DeTea community"
               className="w-12 h-12 object-contain"
             />
