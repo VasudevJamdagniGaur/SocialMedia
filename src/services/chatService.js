@@ -2021,6 +2021,27 @@ ${text}`;
     if (!postText?.trim()) return null;
     const fullText = postText.trim();
 
+    // Simple cache: avoid regenerating the same image for identical text + platform
+    const cacheKey = (() => {
+      try {
+        const keyText = fullText.length > 300 ? fullText.slice(0, 300) : fullText;
+        return `detea_image_cache_v1::${platform}::${keyText}`;
+      } catch {
+        return null;
+      }
+    })();
+
+    if (cacheKey && typeof localStorage !== 'undefined') {
+      try {
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) {
+          return cached;
+        }
+      } catch (e) {
+        console.warn('[Image] Failed to read image cache:', e.message);
+      }
+    }
+
     const geminiKey = (this.geminiApiKey || process.env.REACT_APP_GOOGLE_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
     if (!geminiKey) {
       console.warn('[Image] Gemini API key not set');
@@ -2041,12 +2062,28 @@ ${text}`;
       const gender = (userContext?.gender || '').trim().toLowerCase() || 'person';
       const nationality = (userContext?.nationality || 'Indian').trim();
       const fallback = `A realistic photograph of a ${age} year old ${gender} (${nationality}), ${firstSentence}, natural lighting, high detail, not a celebrity, not stock.`;
-      return this._generateImageWithGemini(fallback, geminiKey, referenceImage);
+      const generated = await this._generateImageWithGemini(fallback, geminiKey, referenceImage);
+      if (generated && cacheKey && typeof localStorage !== 'undefined') {
+        try {
+          localStorage.setItem(cacheKey, generated);
+        } catch (e) {
+          console.warn('[Image] Failed to write image cache:', e.message);
+        }
+      }
+      return generated;
     }
 
     const strictRules = 'STRICT: Same image logic for all platforms. Depict the SITUATION from the post (e.g. director\'s office mix-up = corridor with doors; reading a book = person in setting with the book visible). Do NOT focus on the face—use a medium or wide shot with scene and environment. No portrait or face-close-up. No animals unless mentioned. Avoid famous faces. High realism.';
     const fullPrompt = `${imagePrompt} ${strictRules}`;
-    return this._generateImageWithGemini(fullPrompt, geminiKey, referenceImage);
+    const generated = await this._generateImageWithGemini(fullPrompt, geminiKey, referenceImage);
+    if (generated && cacheKey && typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem(cacheKey, generated);
+      } catch (e) {
+        console.warn('[Image] Failed to write image cache:', e.message);
+      }
+    }
+    return generated;
   }
 
   /**
