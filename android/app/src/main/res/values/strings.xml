@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Deite : AI Therapist</string>
-    <string name="title_activity_main">Deite : AI Therapist</string>
+    <string name="app_name">Detea : AI Therapist</string>
+    <string name="title_activity_main">Detea : AI Therapist</string>
     <string name="package_name">therapist.deite.app</string>
     <string name="custom_url_scheme">therapist.deite.app</string>
 </resources>

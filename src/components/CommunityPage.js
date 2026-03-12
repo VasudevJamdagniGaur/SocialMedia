@@ -907,7 +907,7 @@ export default function CommunityPage() {
       }}
     >
       <div className="relative z-10 mx-auto w-full max-w-[600px] px-4 sm:px-5">
-        {/* Sticky header: Theme | Deite logo | Profile */}
+        {/* Sticky header: Theme | Detea logo | Profile */}
         <header
           className="sticky top-0 z-20 flex items-center justify-between px-1 py-3 min-h-[52px]"
           style={{
@@ -924,7 +924,7 @@ export default function CommunityPage() {
             {isDarkMode ? <Moon className="w-5 h-5" strokeWidth={2} style={{ color: THREADS.accent }} /> : <Sun className="w-5 h-5" strokeWidth={2} style={{ color: THREADS.accent }} />}
           </button>
           <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ background: THREADS.bgSecondary }}>
-            <img src="/hub-icon.png" alt="Deite" className="object-contain w-6 h-6 invert" />
+            <img src="/hub-icon.png" alt="Detea" className="object-contain w-6 h-6 invert" />
           </div>
           <button
             onClick={handleProfileClick}
@@ -1394,7 +1394,7 @@ export default function CommunityPage() {
         </div>
       </div>
 
-      {/* FAB - Threads style with Deite accent */}
+      {/* FAB - Threads style with Detea accent */}
       <button
         onClick={() => setShowCreatePost(true)}
         className={`fixed bottom-20 right-4 z-40 w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-105 active:scale-95 ${

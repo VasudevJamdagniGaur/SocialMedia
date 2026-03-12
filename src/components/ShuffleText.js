@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Shuffle from './Shuffle';
 
 const ShuffleText = () => {
-  const words = ['Feel', 'Reflect', 'Heal', 'Deite'];
+  const words = ['Feel', 'Reflect', 'Heal', 'Detea'];
   const [currentIndex, setCurrentIndex] = useState(0);
 
   useEffect(() => {

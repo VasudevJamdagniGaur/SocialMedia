@@ -143,7 +143,7 @@ export default function ShareSuggestionsPage() {
   const shareToLinkedIn = (text) => {
     const t = text ?? textToShare;
     if (!t) return;
-    const url = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : 'https://deite.app';
+    const url = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : 'https://detea.app';
     window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`, '_blank', 'noopener,noreferrer');
     recordShare('linkedin', t);
     if (navigator.clipboard?.writeText) navigator.clipboard.writeText(t);

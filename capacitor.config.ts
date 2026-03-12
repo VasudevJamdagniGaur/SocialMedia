@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'therapist.deite.app',
-  appName: 'Deite : AI Journel',
+  appName: 'Detea : AI Journel',
   webDir: 'build',
   plugins: {
     FirebaseAuthentication: {

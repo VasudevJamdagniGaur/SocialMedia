@@ -360,7 +360,7 @@ export default function DashboardPage() {
       
       if (messagesResult.messages.length === 0) {
         console.log('📝 No messages found for date:', dateId);
-        console.log('📝 User can chat with Deite to generate messages for this date');
+        console.log('📝 User can chat with Detea to generate messages for this date');
         setIsLoadingReflection(false);
         return;
       }
@@ -743,7 +743,7 @@ export default function DashboardPage() {
             }}
           >
             <MessageCircle className="w-5 h-5" style={{ color: HUB.accent }} />
-            <span>Chat with Deite</span>
+            <span>Chat with Detea</span>
           </button>
 
           <button
