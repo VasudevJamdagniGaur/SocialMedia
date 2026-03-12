@@ -156,7 +156,7 @@ export default function LandingPage() {
 
         <div className="space-y-4">
           <h1 className="text-4xl font-bold text-white">Detea</h1>
-          <p className="text-lg text-gray-300 max-w-md">Embark your emotional journey</p>
+          <p className="text-lg text-gray-300 max-w-md">Your Social Tea</p>
         </div>
 
         <div className="mt-12">
