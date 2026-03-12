@@ -462,7 +462,7 @@ export default function ShareSuggestionsPage() {
                   className="p-2 rounded-full hover:bg-white/10 focus:outline-none"
                   aria-label="Back"
                 >
-                  <ArrowLeft className="w-5 h-5" />
+                  <ArrowLeft className="w-5 h-5" style={{ color: '#FFFFFF' }} />
                 </button>
                 <p className="text-sm font-medium flex-shrink-0" style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}>
                   Edit before sharing
