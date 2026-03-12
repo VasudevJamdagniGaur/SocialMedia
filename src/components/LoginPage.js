@@ -140,7 +140,7 @@ const LoginPage = () => {
             >
               <img
                 src="/Gemini_Generated_Image_ib3dfuib3dfuib3d.png"
-                alt="Detea"
+                alt="DeTea"
                 className="w-full h-full object-cover"
               />
             </div>

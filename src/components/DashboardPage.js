@@ -360,7 +360,7 @@ export default function DashboardPage() {
       
       if (messagesResult.messages.length === 0) {
         console.log('📝 No messages found for date:', dateId);
-        console.log('📝 User can chat with Detea to generate messages for this date');
+        console.log('📝 User can chat with DeTea to generate messages for this date');
         setIsLoadingReflection(false);
         return;
       }
@@ -582,7 +582,7 @@ export default function DashboardPage() {
           >
             <img
               src="/Gemini_Generated_Image_ib3dfuib3dfuib3d.png"
-              alt="Detea"
+              alt="DeTea"
               className="w-full h-full object-cover"
             />
           </div>

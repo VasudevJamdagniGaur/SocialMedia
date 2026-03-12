@@ -441,7 +441,7 @@ export default function ChatPage() {
     if (isInstagramReel) {
       const loadingMessage = {
         id: 'instagram-loading-' + Date.now(),
-        text: '👀 Detea is enjoying the reel',
+        text: '👀 DeTea is enjoying the reel',
         sender: 'ai',
         timestamp: new Date(),
         isProcessingReel: true, // Special flag for Instagram reel processing
@@ -1028,7 +1028,7 @@ export default function ChatPage() {
       if (isWhisperMode) {
         welcomeText = "Welcome to your Whisper Session. This is a private, fresh space just for you. What would you like to share in confidence today?";
       } else {
-        welcomeText = "Hi, I'm Detea. How was your day?";
+        welcomeText = "Hi, I'm DeTea. How was your day?";
       }
       
       const welcomeMessage = {
@@ -1274,13 +1274,13 @@ export default function ChatPage() {
           >
             <img
               src="/Gemini_Generated_Image_ib3dfuib3dfuib3d.png"
-              alt="Detea"
+              alt="DeTea"
               className="w-full h-full object-cover"
             />
           </div>
           <div>
             <h1 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-              {isWhisperMode ? 'Whisper Session' : 'Detea'}
+              {isWhisperMode ? 'Whisper Session' : 'DeTea'}
             </h1>
           </div>
         </div>

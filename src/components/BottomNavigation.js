@@ -127,7 +127,7 @@ export default function BottomNavigation() {
         >
           <img
             src="/Gemini_Generated_Image_ib3dfuib3dfuib3d.png"
-            alt="Detea"
+            alt="DeTea"
             className="w-full h-full object-cover"
             style={{
               opacity: isCommunityActive ? 1 : (isDarkMode ? 2.0 : 0.65),

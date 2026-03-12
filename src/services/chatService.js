@@ -1170,7 +1170,7 @@ Be thorough and detailed. This description will be used to generate a response.`
         // Check if API failed and we should just respond with emojis
         if (imageDescription === 'EMOJI_ONLY_RESPONSE') {
           // Content unavailable: respond therapeutically about the intention behind sharing
-          simplePrompt = `You are Detea, a compassionate therapist-like companion who prioritizes emotional safety and validation.${userContext}
+      simplePrompt = `You are DeTea, a compassionate therapist-like companion who prioritizes emotional safety and validation.${userContext}
 
 The user just shared an Instagram link, but the content could not be accessed. Even without seeing the media, respond in 3-4 gentle sentences that:
 - Acknowledge you couldn't view the link while keeping focus on the user
@@ -1188,7 +1188,7 @@ Assistant:`;
           
           if (isInstagramData) {
             // Special handling for Instagram posts with comments
-            simplePrompt = `You are Detea, a calm, empathetic therapist-like friend. The user just shared an Instagram post/reel, and here's what it contains:${userContext}
+            simplePrompt = `You are DeTea, a calm, empathetic therapist-like friend. The user just shared an Instagram post/reel, and here's what it contains:${userContext}
 
 📸 INSTAGRAM POST DATA:
 ${imageDescription}
@@ -1207,7 +1207,7 @@ ${conversationContext}Human: ${userMessage || 'Check this out!'}
 Assistant:`;
         } else {
           // Regular image/meme handling
-            simplePrompt = `You are Detea, a supportive therapist-like confidante. The user just shared an image/meme, and here's what it contains:${userContext}
+            simplePrompt = `You are DeTea, a supportive therapist-like confidante. The user just shared an image/meme, and here's what it contains:${userContext}
 
 📸 IMAGE ANALYSIS:
 ${imageDescription}
@@ -1227,7 +1227,7 @@ Assistant:`;
         }
       } else {
         // Regular message prompt - therapist mode
-        simplePrompt = `You are Detea, a compassionate therapist-like companion who offers a safe, validating space.${userContext}
+        simplePrompt = `You are DeTea, a compassionate therapist-like companion who offers a safe, validating space.${userContext}
 
 CORE THERAPIST GUIDELINES:
 - Listen for the emotion beneath the words and name it with care
@@ -2224,7 +2224,7 @@ ${text}`;
         ? `\n\nCRITICAL CHARACTER LIMIT: The response must NEVER exceed ${maxReflectionCharacters} characters (which is 2x the ${actualUserCharacterCount} characters the user wrote on this day). Always stay within this strict character limit.`
         : '';
       
-      const prompt = `You are Detea — a compassionate AI therapist and emotional analyst.
+      const prompt = `You are DeTea — a compassionate AI therapist and emotional analyst.
 You are analyzing a user's emotional wellbeing based on their daily reflections, moods, and emotional summaries.
 
 ${type === 'best' ? `

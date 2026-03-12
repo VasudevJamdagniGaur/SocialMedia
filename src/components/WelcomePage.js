@@ -99,13 +99,13 @@ export default function WelcomePage() {
           >
             <img
               src="/Gemini_Generated_Image_ib3dfuib3dfuib3d.png"
-              alt="Detea"
+              alt="DeTea"
               className="w-full h-full relative z-10 object-cover"
             />
           </div>
         </div>
 
-        <h1 className="text-3xl font-bold text-white mb-8">Welcome to Detea</h1>
+        <h1 className="text-3xl font-bold text-white mb-8">Welcome to DeTea</h1>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-2xl mb-8">
           <div
