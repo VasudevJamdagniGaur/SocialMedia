@@ -10,7 +10,6 @@ import chatService from '../services/chatService';
 import firestoreService from '../services/firestoreService';
 import { getDateId } from '../utils/dateUtils';
 import { 
-  Brain, 
   Heart, 
   Star, 
   Smile,
@@ -4148,12 +4147,16 @@ Return in this JSON format:
                   >
                     <div className="flex items-center space-x-3 mb-3">
                       <div
-                        className="w-8 h-8 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-300"
+                        className="w-8 h-8 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-300 overflow-hidden"
                         style={{
                           backgroundColor: "#F28B82",
                         }}
                       >
-                        <Brain className="w-4 h-4 text-white" />
+                        <img
+                          src="/DeteaIcon.png"
+                          alt="Detea"
+                          className="w-5 h-5 object-contain"
+                        />
                       </div>
                       <h4 className="font-semibold text-gray-100 group-hover:text-white transition-colors duration-300">
                         Build Patterns

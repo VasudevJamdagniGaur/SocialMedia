@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
-import { Brain, MessageCircle, Calendar, Heart, Sparkles, User, Sun, Moon, ChevronRight, Share2 } from "lucide-react";
+import { MessageCircle, Calendar, Heart, Sparkles, User, Sun, Moon, ChevronRight, Share2 } from "lucide-react";
 import { useTheme } from '../contexts/ThemeContext';
 import CalendarPopup from './CalendarPopup';
 import reflectionService from '../services/reflectionService';
@@ -569,7 +569,7 @@ export default function DashboardPage() {
 
           {/* Center brain icon - absolutely positioned */}
           <div
-            className={`absolute left-1/2 transform -translate-x-1/2 w-14 h-14 rounded-full flex items-center justify-center ${
+            className={`absolute left-1/2 transform -translate-x-1/2 w-14 h-14 rounded-full flex items-center justify-center overflow-hidden ${
               isDarkMode ? 'backdrop-blur-md' : 'bg-white'
             }`}
             style={isDarkMode ? {
@@ -580,7 +580,11 @@ export default function DashboardPage() {
               boxShadow: "0 0 0 1px rgba(168, 85, 247, 0.2), 0 4px 12px rgba(126, 34, 206, 0.25)",
             }}
           >
-            <Brain className="w-7 h-7" style={{ color: HUB.accent }} strokeWidth={1.5} />
+            <img
+              src="/DeteaIcon.png"
+              alt="Detea"
+              className="w-9 h-9 object-contain"
+            />
           </div>
 
           {/* Right icon - Profile */}

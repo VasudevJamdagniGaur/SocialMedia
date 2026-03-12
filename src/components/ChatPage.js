@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Brain, Send, ArrowLeft, User, AlertTriangle, Image as ImageIcon, X, Eye } from "lucide-react";
+import { Send, ArrowLeft, User, AlertTriangle, Image as ImageIcon, X, Eye } from "lucide-react";
 import { useTheme } from '../contexts/ThemeContext';
 import chatService from '../services/chatService';
 import reflectionService from '../services/reflectionService';
@@ -1272,7 +1272,11 @@ export default function ChatPage() {
               boxShadow: "0 2px 8px rgba(134, 169, 107, 0.15)",
             }}
           >
-            <Brain className="w-5 h-5" style={{ color: isDarkMode ? "#FDD663" : "#87A96B" }} strokeWidth={1.5} />
+            <img
+              src="/DeteaIcon.png"
+              alt="Detea"
+              className="w-6 h-6 object-contain"
+            />
           </div>
           <div>
             <h1 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>

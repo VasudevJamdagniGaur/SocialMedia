@@ -1,6 +1,6 @@
 import React from "react";
 import { useNavigate } from 'react-router-dom';
-import { Brain, Heart, Star, Shield, TrendingUp, BookOpen, Users } from "lucide-react";
+import { Heart, Star, Shield, TrendingUp, BookOpen, Users } from "lucide-react";
 
 export default function WelcomePage() {
   const navigate = useNavigate();
@@ -97,7 +97,11 @@ export default function WelcomePage() {
               border: "1px solid rgba(168, 85, 247, 0.3)",
             }}
           >
-            <Brain className="w-10 h-10 relative z-10" style={{ color: "#A855F7" }} strokeWidth={1.5} />
+            <img
+              src="/DeteaIcon.png"
+              alt="Detea"
+              className="w-14 h-14 relative z-10 object-contain"
+            />
           </div>
         </div>
 

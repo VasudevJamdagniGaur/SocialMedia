@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { onAuthStateChange, signInUser, sendPasswordReset } from '../services/authService';
-import { Brain } from 'lucide-react';
 import LaserFlow from './LaserFlow';
 
 const LoginPage = () => {
@@ -131,7 +130,7 @@ const LoginPage = () => {
         <div className="w-full max-w-sm">
           <div className="flex justify-center mb-8">
             <div
-              className="rounded-full flex items-center justify-center"
+              className="rounded-full flex items-center justify-center overflow-hidden"
               style={{
                 width: '72px',
                 height: '72px',
@@ -139,7 +138,11 @@ const LoginPage = () => {
                 border: '1px solid rgba(255, 255, 255, 0.08)',
               }}
             >
-              <Brain className="w-9 h-9" style={{ color: '#8AB4F8' }} strokeWidth={1.5} />
+              <img
+                src="/DeteaIcon.png"
+                alt="Detea"
+                className="w-12 h-12 object-contain"
+              />
             </div>
           </div>
 

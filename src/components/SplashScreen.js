@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from 'react-router-dom';
-import { Brain, Heart, Star } from "lucide-react";
+import { Heart, Star } from "lucide-react";
 import { getCurrentUser, onAuthStateChange } from '../services/authService';
 
 export default function SplashScreen() {
@@ -218,7 +218,11 @@ export default function SplashScreen() {
             border: "1px solid rgba(168, 85, 247, 0.3)",
           }}
         >
-          <Brain className="w-12 h-12 relative z-10" style={{ color: "#A855F7" }} strokeWidth={1.5} />
+          <img
+            src="/DeteaIcon.png"
+            alt="Detea"
+            className="w-16 h-16 relative z-10 object-contain"
+          />
         </div>
         
         {/* Loading indicator */}

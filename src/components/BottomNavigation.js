@@ -126,8 +126,8 @@ export default function BottomNavigation() {
           className="flex items-center justify-center flex-1 h-full transition-all duration-200 active:opacity-70"
         >
           <img
-            src="/hub-icon.png"
-            alt="HUB"
+            src="/DeteaIcon.png"
+            alt="Detea"
             className="w-12 h-12 object-contain"
             style={{
               opacity: isCommunityActive ? 1 : (isDarkMode ? 2.0 : 0.65),

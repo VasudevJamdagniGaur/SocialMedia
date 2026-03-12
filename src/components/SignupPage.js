@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { onAuthStateChange, signInWithGoogle } from '../services/authService';
-import { Brain } from 'lucide-react';
 import LaserFlow from './LaserFlow';
 
 const SignupPage = () => {
@@ -86,7 +85,11 @@ const SignupPage = () => {
               backdropFilter: 'blur(10px)',
             }}
           >
-            <Brain className="w-14 h-14" style={{ color: "#8AB4F8" }} strokeWidth={1.5} />
+            <img
+              src="/DeteaIcon.png"
+              alt="Detea"
+              className="w-20 h-20 object-contain"
+            />
           </div>
           </div>
         </div>
