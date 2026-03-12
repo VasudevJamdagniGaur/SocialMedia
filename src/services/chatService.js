@@ -2021,11 +2021,11 @@ ${text}`;
     if (!postText?.trim()) return null;
     const fullText = postText.trim();
 
-    // Simple cache: avoid regenerating the same image for identical text + platform
+    // Simple cache: avoid regenerating the same image for identical text
     const cacheKey = (() => {
       try {
         const keyText = fullText.length > 300 ? fullText.slice(0, 300) : fullText;
-        return `detea_image_cache_v1::${platform}::${keyText}`;
+        return `post_image_cache_v2::${keyText}`;
       } catch {
         return null;
       }
@@ -2033,9 +2033,17 @@ ${text}`;
 
     if (cacheKey && typeof localStorage !== 'undefined') {
       try {
-        const cached = localStorage.getItem(cacheKey);
-        if (cached) {
-          return cached;
+        const raw = localStorage.getItem(cacheKey);
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (parsed && parsed.text === fullText && typeof parsed.image === 'string') {
+              return parsed.image;
+            }
+          } catch {
+            // Legacy entries (plain string) – treat as image only if present
+            return raw;
+          }
         }
       } catch (e) {
         console.warn('[Image] Failed to read image cache:', e.message);
@@ -2065,7 +2073,7 @@ ${text}`;
       const generated = await this._generateImageWithGemini(fallback, geminiKey, referenceImage);
       if (generated && cacheKey && typeof localStorage !== 'undefined') {
         try {
-          localStorage.setItem(cacheKey, generated);
+          localStorage.setItem(cacheKey, JSON.stringify({ text: fullText, image: generated }));
         } catch (e) {
           console.warn('[Image] Failed to write image cache:', e.message);
         }
@@ -2078,7 +2086,7 @@ ${text}`;
     const generated = await this._generateImageWithGemini(fullPrompt, geminiKey, referenceImage);
     if (generated && cacheKey && typeof localStorage !== 'undefined') {
       try {
-        localStorage.setItem(cacheKey, generated);
+        localStorage.setItem(cacheKey, JSON.stringify({ text: fullText, image: generated }));
       } catch (e) {
         console.warn('[Image] Failed to write image cache:', e.message);
       }

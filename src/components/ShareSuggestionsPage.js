@@ -26,6 +26,39 @@ const PLATFORM_LABELS = {
   reddit: 'Reddit',
 };
 
+// Local image cache key builder (must stay in sync with chatService)
+const buildImageCacheKey = (text) => {
+  try {
+    const full = (text || '').trim();
+    if (!full) return null;
+    const keyText = full.length > 300 ? full.slice(0, 300) : full;
+    return `post_image_cache_v2::${keyText}`;
+  } catch {
+    return null;
+  }
+};
+
+const getCachedImageForPost = (text) => {
+  if (typeof localStorage === 'undefined') return null;
+  const key = buildImageCacheKey(text);
+  if (!key) return null;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.text === (text || '').trim() && typeof parsed.image === 'string') {
+        return parsed.image;
+      }
+      return typeof raw === 'string' ? raw : null;
+    } catch {
+      return raw;
+    }
+  } catch {
+    return null;
+  }
+};
+
 function buildFallbackSuggestions(original) {
   const t = (original || '').trim();
   if (!t) return [];
@@ -83,7 +116,28 @@ export default function ShareSuggestionsPage() {
           setIsLoadingImages(false);
           return;
         }
-        // For LinkedIn/X: Gemini generates image (using user context for random people: name, age, Indian)
+        // For LinkedIn/X: Try local cache first so we don't re-generate images unnecessarily
+        const postsWithText = posts.map((item) =>
+          (typeof item === 'object' && item?.post != null ? item.post : String(item || '')).trim()
+        );
+
+        const cachedImages = postsWithText.map((text) =>
+          getCachedImageForPost(text)
+        );
+
+        setSuggestionImageUrls(cachedImages);
+
+        const indicesNeedingFetch = postsWithText
+          .map((text, idx) => (cachedImages[idx] ? null : idx))
+          .filter((idx) => idx !== null);
+
+        if (!indicesNeedingFetch.length) {
+          // Everything came from cache; no need to hit the image API
+          setIsLoadingImages(false);
+          return;
+        }
+
+        // For LinkedIn/X: Gemini generates image only for posts without cached images
         setIsLoadingImages(true);
         const user = getCurrentUser();
         const userContext = user ? {
@@ -98,15 +152,23 @@ export default function ShareSuggestionsPage() {
           profileImageUrl: localStorage.getItem(`user_profile_picture_${user.uid}`) || ''
         } : null;
         Promise.all(
-          posts.map((item) => {
-            const postText = typeof item === 'object' && item?.post != null ? item.post : String(item);
-            return chatService.fetchImageForReflection(postText, userContext, selectedPlatform).catch(() => null);
+          indicesNeedingFetch.map((idx) => {
+            const postText = postsWithText[idx];
+            return chatService
+              .fetchImageForReflection(postText, userContext, selectedPlatform)
+              .catch(() => null);
           })
         ).then((urls) => {
-          if (!cancelled) {
-            setSuggestionImageUrls(Array.isArray(urls) ? urls : []);
-            setIsLoadingImages(false);
-          }
+          if (cancelled) return;
+          const merged = [...cachedImages];
+          urls.forEach((url, i) => {
+            const idx = indicesNeedingFetch[i];
+            if (idx != null && url) {
+              merged[idx] = url;
+            }
+          });
+          setSuggestionImageUrls(merged);
+          setIsLoadingImages(false);
         });
       })
       .catch((err) => {
