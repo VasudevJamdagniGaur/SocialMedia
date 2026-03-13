@@ -77,6 +77,12 @@ service cloud.firestore {
       allow write: if request.auth != null && request.auth.uid == userId;
     }
 
+    // USER EVENTS (analytics / feed signals – CommunityPage impression tracking)
+    match /user_events/{eventId} {
+      allow create: if request.auth != null && request.resource.data.user_id == request.auth.uid;
+      allow read, update, delete: if false;
+    }
+
     // REFLECTION IMAGE CACHE (load from Firebase instead of re-calling Gemini)
     // Allow read when doc does not exist (resource == null) or user owns the doc
     match /reflectionImageCache/{docId} {
