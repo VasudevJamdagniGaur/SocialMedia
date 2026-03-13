@@ -127,6 +127,7 @@ export default function ShareSuggestionsPage() {
   const [editableShareText, setEditableShareText] = useState('');
   const [imageEditMenuOpen, setImageEditMenuOpen] = useState(false);
   const [linkedInCaptionToastVisible, setLinkedInCaptionToastVisible] = useState(false);
+  const [shareConfirmation, setShareConfirmation] = useState({ open: false, index: null, platform: null });
   const imageReplaceInputRef = useRef(null);
   const tweetCardRef = useRef(null);
 
@@ -239,6 +240,15 @@ export default function ShareSuggestionsPage() {
   };
 
   const textToShare = (sharePanelOpen && editableShareText !== '') ? editableShareText : selectedText;
+
+  const triggerPostShareConfirmation = () => {
+    if (!selectedPlatform || !['linkedin', 'x', 'reddit'].includes(selectedPlatform)) return;
+    setShareConfirmation({
+      open: true,
+      index: selectedIndex,
+      platform: selectedPlatform,
+    });
+  };
 
   const copyCaptionToClipboardForLinkedIn = async (text) => {
     if (!text) return;
@@ -460,6 +470,7 @@ export default function ShareSuggestionsPage() {
                     dialogTitle: 'Share to…',
                   });
                   recordShare('x', t);
+                  triggerPostShareConfirmation();
                   debugLog(
                     'HX',
                     'ShareSuggestionsPage.js:handleShareToSelectedPlatform:xCard:nativeSuccess',
@@ -485,6 +496,7 @@ export default function ShareSuggestionsPage() {
                 try {
                   await navigator.share({ files: [file] });
                   recordShare('x', t);
+                  triggerPostShareConfirmation();
                   debugLog(
                     'HX',
                     'ShareSuggestionsPage.js:handleShareToSelectedPlatform:xCard:webSuccess',
@@ -510,7 +522,7 @@ export default function ShareSuggestionsPage() {
               a.download = 'tweet-card.png';
               a.click();
             } catch (_) {}
-
+            triggerPostShareConfirmation();
             setSharePanelOpen(false);
             return;
           }
@@ -526,6 +538,7 @@ export default function ShareSuggestionsPage() {
 
       // Absolute fallback if card generation/sharing failed: fall back to existing X text-only share
       shareToTwitter(t);
+      triggerPostShareConfirmation();
       setSharePanelOpen(false);
       return;
     }
@@ -573,6 +586,7 @@ export default function ShareSuggestionsPage() {
           'ShareSuggestionsPage.js:handleShareToSelectedPlatform:nativeShare:success',
           'Native share completed'
         );
+        triggerPostShareConfirmation();
         setSharePanelOpen(false);
         return;
       } catch (err) {
@@ -609,6 +623,7 @@ export default function ShareSuggestionsPage() {
             'ShareSuggestionsPage.js:handleShareToSelectedPlatform:webShare:success',
             'Web share completed'
           );
+          triggerPostShareConfirmation();
           setSharePanelOpen(false);
           return;
         } catch (err) {
@@ -644,6 +659,7 @@ export default function ShareSuggestionsPage() {
         // ignore download errors
       }
     }
+    triggerPostShareConfirmation();
     setSharePanelOpen(false);
   };
 
@@ -684,6 +700,79 @@ export default function ShareSuggestionsPage() {
             }}
           >
             📋 Caption copied! Paste it in LinkedIn
+          </div>
+        </div>
+      )}
+      {shareConfirmation.open && (
+        <div className="fixed inset-x-0 bottom-20 flex justify-center pointer-events-none z-50">
+          <div
+            className="rounded-2xl shadow-lg text-sm pointer-events-auto px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3"
+            style={{
+              background: isDarkMode ? 'rgba(15,23,42,0.98)' : 'rgba(17,24,39,0.98)',
+              color: '#FFFFFF',
+              maxWidth: '360px',
+              width: '100%',
+            }}
+          >
+            <span className="flex-1 text-xs sm:text-sm">
+              {`Did that look good on ${
+                shareConfirmation.platform === 'linkedin'
+                  ? 'LinkedIn'
+                  : shareConfirmation.platform === 'x'
+                  ? 'X'
+                  : 'Reddit'
+              }?`}
+            </span>
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                className="text-xs sm:text-sm px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/15 transition-colors"
+                onClick={() => {
+                  // Oops, let them try again: just reopen panel for that suggestion
+                  const idx = shareConfirmation.index ?? 0;
+                  const item = platformSuggestions[idx];
+                  const post =
+                    typeof item === 'object' && item?.post != null ? item.post : String(item || '');
+                  setSelectedIndex(idx);
+                  openSharePanel(post);
+                  setShareConfirmation({ open: false, index: null, platform: null });
+                }}
+              >
+                Oops, try again
+              </button>
+              <button
+                type="button"
+                className="text-xs sm:text-sm px-3 py-1.5 rounded-full bg-white text-gray-900 font-medium hover:bg-gray-100 transition-colors"
+                onClick={() => {
+                  const idx = shareConfirmation.index ?? 0;
+                  setPlatformSuggestions((prev) => {
+                    if (!prev || idx < 0 || idx >= prev.length) return prev;
+                    const next = [...prev];
+                    const [item] = next.splice(idx, 1);
+                    const normalized =
+                      typeof item === 'object'
+                        ? { ...item, posted: true }
+                        : { eventLabel: 'Reflection', post: String(item || ''), posted: true };
+                    next.push(normalized);
+                    return next;
+                  });
+                  setSuggestionImageUrls((prev) => {
+                    if (!prev || idx < 0 || idx >= prev.length) return prev;
+                    const next = [...prev];
+                    const [img] = next.splice(idx, 1);
+                    next.push(img || null);
+                    return next;
+                  });
+                  setSelectedIndex((prevIdx) => {
+                    const total = platformSuggestions.length;
+                    return total > 0 ? total - 1 : prevIdx;
+                  });
+                  setShareConfirmation({ open: false, index: null, platform: null });
+                }}
+              >
+                Yes, I posted!
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -797,6 +886,7 @@ export default function ShareSuggestionsPage() {
                     typeof item === 'object' && item?.post != null ? item.post : String(item);
                   const imageUrl = suggestionImageUrls[idx] || null;
                   const isSelected = idx === selectedIndex;
+                  const isPosted = typeof item === 'object' && item?.posted;
 
                   return (
                     <button
@@ -817,6 +907,8 @@ export default function ShareSuggestionsPage() {
                           ? '0 0 0 1px rgba(168, 85, 247, 0.5), 0 12px 30px rgba(15, 23, 42, 0.6)'
                           : 'none',
                         transform: isSelected ? 'translateY(-2px)' : 'none',
+                        filter: isPosted ? 'grayscale(100%)' : 'none',
+                        opacity: isPosted && !isSelected ? 0.7 : 1,
                       }}
                     >
                       {selectedPlatform === 'x' && imageUrl ? (
