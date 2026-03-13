@@ -400,6 +400,22 @@ export default function ShareSuggestionsPage() {
       }
     );
 
+    // 0) Special case: X (Twitter) must always use intent URL, no Capacitor/Web Share
+    if (selectedPlatform === 'x') {
+      debugLog(
+        'HX',
+        'ShareSuggestionsPage.js:handleShareToSelectedPlatform:xIntent',
+        'Using Twitter intent URL instead of native/web share',
+        {
+          hasImage: !!imageDataUrl,
+          textLength: t.length,
+        }
+      );
+      shareToTwitter(t);
+      setSharePanelOpen(false);
+      return;
+    }
+
     // 1) Native share via Capacitor (Android/iOS app) – text + image
     if (isNative() && isDataUrl) {
       try {
