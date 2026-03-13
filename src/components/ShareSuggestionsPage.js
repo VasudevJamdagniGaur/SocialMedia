@@ -230,79 +230,69 @@ export default function ShareSuggestionsPage() {
     ? (platformSuggestions[selectedIndex]?.post ?? platformSuggestions[0]?.post ?? reflectionFromState)
     : (fallbackSuggestions[selectedIndex]?.text ?? reflectionFromState);
 
-  const recordShare = (plat, text) => {
+  /** Persist share to Firestore so the post stays in My Presence after app reopen. Returns a Promise. */
+  const recordShare = async (plat, text) => {
     const user = getCurrentUser();
     const content = (text || selectedText || '').trim();
     if (!user?.uid || !content) return;
 
     // 1) Save lightweight social share record (for platform badges in My Presence)
-    firestoreService.saveSocialShare(user.uid, {
+    await firestoreService.saveSocialShare(user.uid, {
       platform: plat,
       reflectionDate: dateStr,
       reflectionSnippet: content.slice(0, 200) || undefined,
     });
 
-    // 2) Also create a Community "My Presence" post for this share (fire-and-forget)
-    (async () => {
-      try {
-        const profileImage =
-          (typeof localStorage !== 'undefined' &&
-            localStorage.getItem(`user_profile_picture_${user.uid}`)) ||
-          null;
-        const imageForPost =
-          Array.isArray(suggestionImageUrls) && suggestionImageUrls[selectedIndex]
-            ? suggestionImageUrls[selectedIndex]
-            : null;
+    const profileImage =
+      (typeof localStorage !== 'undefined' &&
+        localStorage.getItem(`user_profile_picture_${user.uid}`)) ||
+      null;
+    const imageForPost =
+      Array.isArray(suggestionImageUrls) && suggestionImageUrls[selectedIndex]
+        ? suggestionImageUrls[selectedIndex]
+        : null;
 
-        const postData = {
-          author: user.displayName || 'Anonymous',
-          authorId: user.uid,
-          content,
-          createdAt: serverTimestamp(),
-          likes: 0,
-          comments: [],
-          profilePicture: profileImage,
-          image: imageForPost,
-          source: 'social_share',
-          sharedPlatform: plat,
-          reflectionDate: (() => {
-            try {
-              const d =
-                typeof dateStr === 'string'
-                  ? new Date(dateStr)
-                  : reflectionDate instanceof Date
-                  ? reflectionDate
-                  : new Date();
-              return d.toISOString();
-            } catch {
-              return new Date().toISOString();
-            }
-          })(),
-        };
+    // 2) Create Community "My Presence" post first and WAIT so it is in Firestore before we close the panel
+    const postData = {
+      author: user.displayName || 'Anonymous',
+      authorId: user.uid,
+      content,
+      createdAt: serverTimestamp(),
+      likes: 0,
+      comments: [],
+      profilePicture: profileImage,
+      image: imageForPost,
+      source: 'social_share',
+      sharedPlatform: plat,
+      reflectionDate: (() => {
+        try {
+          const d =
+            typeof dateStr === 'string'
+              ? new Date(dateStr)
+              : reflectionDate instanceof Date
+              ? reflectionDate
+              : new Date();
+          return d.toISOString();
+        } catch {
+          return new Date().toISOString();
+        }
+      })(),
+    };
 
-        await addDoc(collection(db, 'communityPosts'), postData);
-      } catch (err) {
-        console.error('Error creating community post from social share:', err);
-      }
-    })();
+    try {
+      await addDoc(collection(db, 'communityPosts'), postData);
+    } catch (err) {
+      console.error('Error creating community post from social share:', err);
+      throw err;
+    }
 
-    // 3) Create scalable social post record (users/posts/userPosts/shareHistory)
-    (async () => {
-      try {
-        const imageForPost =
-          Array.isArray(suggestionImageUrls) && suggestionImageUrls[selectedIndex]
-            ? suggestionImageUrls[selectedIndex]
-            : null;
-        await firestoreService.createPostForShare({
-          uid: user.uid,
-          caption: content,
-          imageDataUrl: imageForPost,
-          platform: plat,
-        });
-      } catch (err) {
-        console.error('Error creating scalable social post for share:', err);
-      }
-    })();
+    // 3) Create scalable social post record (fire-and-forget; optional for analytics)
+    firestoreService.createPostForShare({
+      uid: user.uid,
+      caption: content,
+      imageDataUrl: imageForPost,
+      platform: plat,
+    }).catch((err) => console.error('Error creating scalable social post for share:', err));
   };
 
   const textToShare = (sharePanelOpen && editableShareText !== '') ? editableShareText : selectedText;
@@ -330,12 +320,10 @@ export default function ShareSuggestionsPage() {
     }
   };
 
+  /** Only copies caption and shows toast. Persistence is done by caller via recordShare. */
   const shareToLinkedIn = (text) => {
     const t = text ?? textToShare;
     if (!t) return;
-    // For LinkedIn we now rely purely on the native / web share sheet,
-    // and only track + copy the caption here. No fallback to LinkedIn web.
-    recordShare('linkedin', t);
     copyCaptionToClipboardForLinkedIn(t);
   };
 
@@ -343,7 +331,6 @@ export default function ShareSuggestionsPage() {
     const t = text ?? textToShare;
     if (!t) return;
     window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(t)}`, '_blank', 'noopener,noreferrer');
-    recordShare('x', t);
   };
 
   const shareToReddit = (text) => {
@@ -354,7 +341,6 @@ export default function ShareSuggestionsPage() {
       '_blank',
       'noopener,noreferrer'
     );
-    recordShare('reddit', t);
   };
 
   const openSharePanel = (text) => {
@@ -581,7 +567,7 @@ export default function ShareSuggestionsPage() {
                     title: 'Share reflection',
                     dialogTitle: 'Share to…',
                   });
-                  recordShare('x', t);
+                  await recordShare('x', t);
                   triggerPostShareConfirmation();
                   debugLog(
                     'HX',
@@ -607,7 +593,7 @@ export default function ShareSuggestionsPage() {
               if (file && navigator.canShare({ files: [file] })) {
                 try {
                   await navigator.share({ files: [file] });
-                  recordShare('x', t);
+                  await recordShare('x', t);
                   triggerPostShareConfirmation();
                   debugLog(
                     'HX',
@@ -634,6 +620,7 @@ export default function ShareSuggestionsPage() {
               a.download = 'tweet-card.png';
               a.click();
             } catch (_) {}
+            await recordShare('x', t);
             triggerPostShareConfirmation();
             setSharePanelOpen(false);
             return;
@@ -689,7 +676,7 @@ export default function ShareSuggestionsPage() {
             dialogTitle: 'Share to…',
           });
         }
-        recordShare(selectedPlatform, t);
+        await recordShare(selectedPlatform, t);
         if (selectedPlatform === 'linkedin') {
           copyCaptionToClipboardForLinkedIn(t);
         }
@@ -726,7 +713,7 @@ export default function ShareSuggestionsPage() {
             { selectedPlatform }
           );
           await navigator.share({ text: t, files: [file] });
-          recordShare(selectedPlatform, t);
+          await recordShare(selectedPlatform, t);
           if (selectedPlatform === 'linkedin') {
             copyCaptionToClipboardForLinkedIn(t);
           }
@@ -757,6 +744,11 @@ export default function ShareSuggestionsPage() {
       'Using URL-based fallback share',
       { selectedPlatform, hasImage: !!imageDataUrl, isDataUrl }
     );
+    try {
+      await recordShare(selectedPlatform, t);
+    } catch (err) {
+      console.error('Failed to save post to My Presence:', err);
+    }
     if (selectedPlatform === 'linkedin') shareToLinkedIn(t);
     else if (selectedPlatform === 'x') shareToTwitter(t);
     else if (selectedPlatform === 'reddit') shareToReddit(t);
