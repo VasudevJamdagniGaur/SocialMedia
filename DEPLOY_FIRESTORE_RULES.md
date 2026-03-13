@@ -33,12 +33,27 @@
 ## What the Rules Do
 
 The security rules allow:
+- ✅ **reflectionImageCache**: Authenticated users to read/write only documents where `userId` matches their `request.auth.uid` (used so reflection images are loaded from Firebase instead of re-calling the API).
 - ✅ Authenticated users to **read** the `users` collection (for counting active members)
 - ✅ Users to **create/update** their own user document
 - ✅ Authenticated users to **read** `usersMetadata` (for crew matching)
 - ✅ Users to **read/write** their own subcollections (days, chats, reflections)
 - ✅ Authenticated users to **read** community posts
 - ✅ Users to **create** community posts and **update/delete** their own posts
+
+## Fixing "Missing or insufficient permissions" for reflectionImageCache
+
+If you see `getReflectionImageUrl failed: FirebaseError: Missing or insufficient permissions`, your Firestore rules do not yet allow access to the `reflectionImageCache` collection. Add this block to your existing rules (Firebase Console → Firestore Database → Rules):
+
+```
+match /reflectionImageCache/{docId} {
+  allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+  allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+  allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+}
+```
+
+Then click **Publish**. After that, the app can read/write reflection image cache so it doesn’t re-call the Gemini API.
 
 ## After Deploying
 
