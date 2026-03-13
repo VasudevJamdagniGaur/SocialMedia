@@ -300,6 +300,71 @@ class FirestoreService {
   }
 
   /**
+   * Stable cache key from post text for reflection image cache (no API re-calls).
+   */
+  hashForReflectionCache(postText) {
+    const s = (postText || '').trim().slice(0, 500);
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+    return Math.abs(h).toString(36);
+  }
+
+  /**
+   * Upload compressed reflection image to Storage (reflectionCache path).
+   * Used so we can load the image from Firebase instead of calling Gemini again.
+   */
+  async uploadReflectionImageFile(uid, file, cacheKey) {
+    if (!uid || !file || !(file instanceof File) || !cacheKey) return null;
+    try {
+      const ext = file.name && file.name.includes('.') ? file.name.split('.').pop() : 'jpg';
+      const path = `reflectionCache/${uid}/${cacheKey}.${ext}`;
+      const storageRef = ref(this.storage, path);
+      await uploadBytes(storageRef, file);
+      return await getDownloadURL(storageRef);
+    } catch (error) {
+      console.error('Error uploading reflection cache image:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get stored reflection image URL for this user + post text (avoids re-calling Gemini).
+   * @returns {Promise<string|null>}
+   */
+  async getReflectionImageUrl(uid, postText) {
+    if (!uid || !postText?.trim()) return null;
+    try {
+      const key = this.hashForReflectionCache(postText);
+      const docRef = doc(this.db, 'reflectionImageCache', `${uid}_${key}`);
+      const snap = await getDoc(docRef);
+      if (snap.exists() && snap.data().imageUrl) return snap.data().imageUrl;
+      return null;
+    } catch (error) {
+      console.warn('getReflectionImageUrl failed:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Save reflection image URL to Firestore so we load from Firebase instead of calling the API again.
+   */
+  async saveReflectionImageUrl(uid, postText, imageUrl) {
+    if (!uid || !postText?.trim() || !imageUrl) return;
+    try {
+      const key = this.hashForReflectionCache(postText);
+      const docRef = doc(this.db, 'reflectionImageCache', `${uid}_${key}`);
+      await setDoc(docRef, {
+        userId: uid,
+        postTextSnippet: postText.trim().slice(0, 300),
+        imageUrl,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+    } catch (error) {
+      console.warn('saveReflectionImageUrl failed:', error);
+    }
+  }
+
+  /**
    * Create a DeTea social post record for a shared suggestion.
    * - Creates a document in `posts`
    * - Adds an entry under `userPosts/{uid}/posts/{postId}`

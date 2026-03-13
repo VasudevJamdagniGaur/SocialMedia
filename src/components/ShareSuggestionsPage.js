@@ -146,7 +146,7 @@ export default function ShareSuggestionsPage() {
     setSuggestionImageUrls([]);
     chatService
       .generateSocialPostSuggestions(reflectionFromState, selectedPlatform)
-      .then((list) => {
+      .then(async (list) => {
         if (cancelled) return;
         const posts = Array.isArray(list) && list.length ? list : [{ eventLabel: 'Reflection', post: reflectionFromState }];
         setPlatformSuggestions(posts);
@@ -158,13 +158,20 @@ export default function ShareSuggestionsPage() {
           setIsLoadingImages(false);
           return;
         }
-        // For LinkedIn/X: Try local cache first so we don't re-generate images unnecessarily
+        // For LinkedIn/X: Prefer Firebase cache (no API re-calls), then localStorage, then Gemini
         const postsWithText = posts.map((item) =>
           (typeof item === 'object' && item?.post != null ? item.post : String(item || '')).trim()
         );
 
-        const cachedImages = postsWithText.map((text) =>
-          getCachedImageForPost(text)
+        const user = getCurrentUser();
+
+        // 1) Try Firebase first – load stored reflection image URLs so we never re-call the API
+        const firebaseUrls = user
+          ? await Promise.all(postsWithText.map((text) => firestoreService.getReflectionImageUrl(user.uid, text)))
+          : postsWithText.map(() => null);
+
+        const cachedImages = postsWithText.map((text, idx) =>
+          firebaseUrls[idx] || getCachedImageForPost(text)
         );
 
         setSuggestionImageUrls(cachedImages);
@@ -174,14 +181,12 @@ export default function ShareSuggestionsPage() {
           .filter((idx) => idx !== null);
 
         if (!indicesNeedingFetch.length) {
-          // Everything came from cache; no need to hit the image API
           setIsLoadingImages(false);
           return;
         }
 
-        // For LinkedIn/X: Gemini generates image only for posts without cached images
+        // 2) Only for missing images: call Gemini once, then compress + save to Firebase
         setIsLoadingImages(true);
-        const user = getCurrentUser();
         const userContext = user ? {
           displayName: localStorage.getItem(`user_display_name_${user.uid}`) || user.displayName || '',
           age: localStorage.getItem(`user_age_${user.uid}`) || '',
@@ -200,16 +205,35 @@ export default function ShareSuggestionsPage() {
               .fetchImageForReflection(postText, userContext, selectedPlatform)
               .catch(() => null);
           })
-        ).then((urls) => {
+        ).then(async (urls) => {
           if (cancelled) return;
           const merged = [...cachedImages];
           urls.forEach((url, i) => {
             const idx = indicesNeedingFetch[i];
-            if (idx != null && url) {
-              merged[idx] = url;
-            }
+            if (idx != null && url) merged[idx] = url;
           });
           setSuggestionImageUrls(merged);
+
+          // 3) Compress (< 0.6MB), upload to Storage, save URL in Firestore – next time we load from Firebase
+          if (!user) {
+            setIsLoadingImages(false);
+            return;
+          }
+          for (let i = 0; i < indicesNeedingFetch.length; i++) {
+            const idx = indicesNeedingFetch[i];
+            const dataUrl = merged[idx];
+            if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image')) continue;
+            try {
+              const file = await compressReflectionImage(dataUrl);
+              if (!file) continue;
+              const postText = postsWithText[idx];
+              const cacheKey = firestoreService.hashForReflectionCache(postText);
+              const imageUrl = await firestoreService.uploadReflectionImageFile(user.uid, file, cacheKey);
+              if (imageUrl) await firestoreService.saveReflectionImageUrl(user.uid, postText, imageUrl);
+            } catch (e) {
+              console.warn('Failed to save reflection image to Firebase:', e);
+            }
+          }
           setIsLoadingImages(false);
         });
       })
@@ -496,6 +520,26 @@ export default function ShareSuggestionsPage() {
       return compressed;
     } catch (err) {
       console.warn('Image compression failed, skipping upload:', err);
+      return null;
+    }
+  };
+
+  /** Compress to < 0.6MB with minimal visual change (for reflection cache – no API re-calls). */
+  const compressReflectionImage = async (dataUrl) => {
+    if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image')) return null;
+    try {
+      const file = dataURLtoFile(dataUrl, 'reflection-cache.png');
+      if (!file) return null;
+      const options = {
+        maxSizeMB: 0.6,
+        maxWidthOrHeight: 1080,
+        useWebWorker: true,
+        initialQuality: 0.92,
+      };
+      const compressed = await imageCompression(file, options);
+      return compressed;
+    } catch (err) {
+      console.warn('Reflection image compression failed:', err);
       return null;
     }
   };
