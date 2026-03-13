@@ -20,155 +20,138 @@ const TweetShareCard = React.forwardRef(function TweetShareCard(props, ref) {
   const numericHeight =
     typeof height === 'number' ? height : Math.round((numericWidth * 10) / 7);
 
-  // Top section (header + text): ~22% of card height; image: ~73%; watermark: ~5%
-  const topSectionHeight = Math.round(numericHeight * 0.22);
-  const imageSectionHeight = Math.round(numericHeight * 0.73);
-  const watermarkHeight = Math.round(numericHeight * 0.05);
-
   return (
     <div
       ref={ref}
       style={{
         width: numericWidth,
-        height: numericHeight,
-        borderRadius: 40,
-        border: '1px solid #D1D5DB',
+        minHeight: numericHeight,
+        height: 'auto',
+        borderRadius: 24,
+        border: '1px solid #E5E7EB',
         backgroundColor: '#FFFFFF',
-        padding: 36,
+        padding: 20,
         boxSizing: 'border-box',
         fontFamily:
           '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
         display: 'flex',
         flexDirection: 'column',
-        overflow: 'hidden',
       }}
     >
-        {/* Top: Header + tweet text — ~20–25% of card (like reference) */}
+        {/* Header */}
         <div
           style={{
-            flex: '0 0 auto',
-            height: topSectionHeight,
             display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'flex-start',
-            minHeight: 0,
+            alignItems: 'center',
+            gap: 12,
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
-            <div
-              style={{
-                width: 72,
-                height: 72,
-                borderRadius: '50%',
-                overflow: 'hidden',
-                marginRight: 20,
-                background:
-                  'linear-gradient(135deg, rgba(37,99,235,0.4), rgba(79,70,229,0.5))',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-              }}
-            >
-              {profileImageUrl ? (
-                <img
-                  src={profileImageUrl}
-                  alt={displayName}
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                />
-              ) : (
-                <span
-                  style={{
-                    fontSize: 28,
-                    fontWeight: 700,
-                    color: '#FFFFFF',
-                  }}
-                >
-                  {displayName.charAt(0).toUpperCase()}
-                </span>
-              )}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div
+          <div
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: '50%',
+              overflow: 'hidden',
+              backgroundColor: '#EFF3F4',
+              flexShrink: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            {profileImageUrl ? (
+              <img
+                src={profileImageUrl}
+                alt={displayName}
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              />
+            ) : (
+              <span
                 style={{
-                  fontSize: 30,
+                  fontSize: 18,
                   fontWeight: 700,
                   color: '#0F1419',
-                  lineHeight: 1.2,
                 }}
               >
-                {displayName}
-              </div>
-              <div
-                style={{
-                  marginTop: 4,
-                  fontSize: 24,
-                  color: '#536471',
-                }}
-              >
-                @{username}
-              </div>
-            </div>
+                {displayName.charAt(0).toUpperCase()}
+              </span>
+            )}
           </div>
           <div
             style={{
-              fontSize: 28,
-              lineHeight: 1.5,
-              color: '#0F1419',
-              whiteSpace: 'pre-wrap',
-              overflow: 'hidden',
-              display: '-webkit-box',
-              WebkitLineClamp: 4,
-              WebkitBoxOrient: 'vertical',
+              display: 'flex',
+              flexDirection: 'column',
+              minWidth: 0,
             }}
           >
-            {text}
+            <span
+              style={{
+                fontSize: 18,
+                fontWeight: 700,
+                color: '#0F1419',
+              }}
+            >
+              {displayName}
+            </span>
+            <span
+              style={{
+                marginTop: 2,
+                fontSize: 14,
+                color: '#536471',
+              }}
+            >
+              @{username}
+            </span>
           </div>
         </div>
 
-        {/* Image — ~75–80% of card; always show area so layout is consistent */}
+        {/* Tweet text — no line clamp so full text is visible */}
         <div
           style={{
-            flex: '1 1 auto',
-            minHeight: imageSectionHeight,
-            marginTop: 16,
-            borderRadius: 24,
-            overflow: 'hidden',
-            border: '1px solid #D1D5DB',
-            backgroundColor: imageUrl ? 'transparent' : '#F3F4F6',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            fontSize: 16,
+            lineHeight: 1.45,
+            color: '#0F1419',
+            marginTop: 12,
+            marginBottom: 16,
+            whiteSpace: 'normal',
+            wordBreak: 'break-word',
           }}
         >
-          {imageUrl ? (
+          {text}
+        </div>
+
+        {/* Image */}
+        {imageUrl && (
+          <div
+            style={{
+              width: '100%',
+              borderRadius: 16,
+              overflow: 'hidden',
+            }}
+          >
             <img
               src={imageUrl}
               alt=""
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              style={{
+                width: '100%',
+                height: 'auto',
+                objectFit: 'cover',
+                display: 'block',
+              }}
             />
-          ) : null}
-        </div>
+          </div>
+        )}
 
         {/* Watermark */}
         <div
           style={{
-            flex: '0 0 auto',
-            height: watermarkHeight,
             marginTop: 12,
-            display: 'flex',
-            justifyContent: 'flex-end',
-            alignItems: 'center',
+            fontSize: 12,
+            color: '#8B98A5',
+            textAlign: 'center',
           }}
         >
-          <span
-            style={{
-              fontSize: 20,
-              color: '#6B7280',
-            }}
-          >
-            Created with DeTea
-          </span>
+          Created with Deite
         </div>
     </div>
   );
