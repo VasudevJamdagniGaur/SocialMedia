@@ -18,24 +18,15 @@ const TweetShareCard = React.forwardRef(function TweetShareCard(props, ref) {
       ref={ref}
       style={{
         width: 1080,
-        backgroundColor: '#E7ECF0',
+        borderRadius: 40,
+        border: '1px solid #D1D5DB',
+        backgroundColor: '#FFFFFF',
+        padding: 36,
+        boxSizing: 'border-box',
         fontFamily:
           '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-        padding: 48,
-        boxSizing: 'border-box',
       }}
     >
-      <div
-        style={{
-          maxWidth: 960,
-          margin: '0 auto',
-          borderRadius: 40,
-          border: '1px solid #D1D5DB',
-          backgroundColor: '#FFFFFF',
-          padding: 36,
-          boxSizing: 'border-box',
-        }}
-      >
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: 24 }}>
           <div
@@ -142,7 +133,6 @@ const TweetShareCard = React.forwardRef(function TweetShareCard(props, ref) {
             Created with DeTea
           </span>
         </div>
-      </div>
     </div>
   );
 });
