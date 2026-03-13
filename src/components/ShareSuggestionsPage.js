@@ -292,23 +292,34 @@ export default function ShareSuggestionsPage() {
         const compressed = await compressImageForStorage(imageToStore);
         if (compressed) {
           imageFile = compressed;
+        } else {
+          imageUrl = await firestoreService.uploadPostImage(user.uid, imageToStore);
         }
       } else if (imageToStore.startsWith('http://') || imageToStore.startsWith('https://')) {
         imageUrl = imageToStore;
       }
     }
     if (!imageUrl && content) {
-      const suggestionText = selectedText || content;
-      const cached = await firestoreService.getReflectionImageUrl(user.uid, suggestionText);
-      if (cached) imageUrl = cached;
-      if (!imageUrl && suggestionText !== content) {
+      const suggestionPostText = platformSuggestions[selectedIndex]?.post;
+      if (suggestionPostText) {
+        const cached = await firestoreService.getReflectionImageUrl(user.uid, suggestionPostText);
+        if (cached) imageUrl = cached;
+      }
+      if (!imageUrl) {
+        const suggestionText = selectedText || content;
+        const cached = await firestoreService.getReflectionImageUrl(user.uid, suggestionText);
+        if (cached) imageUrl = cached;
+      }
+      if (!imageUrl && content !== (selectedText || '')) {
         const cachedByContent = await firestoreService.getReflectionImageUrl(user.uid, content);
         if (cachedByContent) imageUrl = cachedByContent;
       }
     }
 
     // #region agent log
-    fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6a85fb'},body:JSON.stringify({sessionId:'6a85fb',location:'ShareSuggestionsPage.js:recordShare:beforeCreatePost',message:'image inputs',data:{hasImageFile:!!imageFile,hasImageUrl:!!imageUrl,imageUrlPrefix:imageUrl?imageUrl.slice(0,80):null},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
+    const _log = { hasImageFile: !!imageFile, hasImageUrl: !!imageUrl, imageUrlPrefix: imageUrl ? imageUrl.slice(0, 80) : null };
+    console.warn('[recordShare] before createPostForShare', _log);
+    fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6a85fb'},body:JSON.stringify({sessionId:'6a85fb',location:'ShareSuggestionsPage.js:recordShare:beforeCreatePost',message:'image inputs',data:_log,timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
     // #endregion
 
     // 3) Create post: upload image to Storage → Firestore stores only metadata + imageUrl (posts, userPosts, shareHistory)
@@ -322,7 +333,9 @@ export default function ShareSuggestionsPage() {
     const finalImageUrl = result?.imageUrl || imageUrl || null;
 
     // #region agent log
-    fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6a85fb'},body:JSON.stringify({sessionId:'6a85fb',location:'ShareSuggestionsPage.js:recordShare:afterCreatePost',message:'createPost result',data:{success:!!result?.success,resultImageUrl:result?.imageUrl?result.imageUrl.slice(0,80):null,finalImageUrl:finalImageUrl?finalImageUrl.slice(0,80):null},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
+    const _log2 = { success: !!result?.success, resultImageUrl: result?.imageUrl ? result.imageUrl.slice(0, 80) : null, finalImageUrl: finalImageUrl ? finalImageUrl.slice(0, 80) : null };
+    console.warn('[recordShare] after createPostForShare', _log2);
+    fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6a85fb'},body:JSON.stringify({sessionId:'6a85fb',location:'ShareSuggestionsPage.js:recordShare:afterCreatePost',message:'createPost result',data:_log2,timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
     // #endregion
 
     // 4) Create Community "My Presence" entry with URL only (for feed that reads from communityPosts)
@@ -353,7 +366,9 @@ export default function ShareSuggestionsPage() {
     };
 
     // #region agent log
-    fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6a85fb'},body:JSON.stringify({sessionId:'6a85fb',location:'ShareSuggestionsPage.js:recordShare:beforeAddDoc',message:'postData.image',data:{postDataHasImage:!!postData.image,postDataImagePrefix:postData.image?String(postData.image).slice(0,80):null},timestamp:Date.now(),hypothesisId:'H3'})}).catch(()=>{});
+    const _log3 = { postDataHasImage: !!postData.image, postDataImagePrefix: postData.image ? String(postData.image).slice(0, 80) : null };
+    console.warn('[recordShare] before addDoc communityPosts', _log3);
+    fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6a85fb'},body:JSON.stringify({sessionId:'6a85fb',location:'ShareSuggestionsPage.js:recordShare:beforeAddDoc',message:'postData.image',data:_log3,timestamp:Date.now(),hypothesisId:'H3'})}).catch(()=>{});
     // #endregion
 
     try {
