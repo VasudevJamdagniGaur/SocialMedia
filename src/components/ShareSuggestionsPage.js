@@ -543,6 +543,15 @@ export default function ShareSuggestionsPage() {
       return;
     }
 
+    // Special case: LinkedIn should go directly to LinkedIn (app or browser),
+    // not through the generic native share sheet.
+    if (selectedPlatform === 'linkedin') {
+      shareToLinkedIn(t);
+      triggerPostShareConfirmation();
+      setSharePanelOpen(false);
+      return;
+    }
+
     // 1) Native share via Capacitor (Android/iOS app) – text + image
     if (isNative() && isDataUrl) {
       try {
