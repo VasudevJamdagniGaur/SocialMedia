@@ -279,12 +279,9 @@ export default function ShareSuggestionsPage() {
         )}&title=${encodeURIComponent('My reflection')}&summary=${encodeURIComponent(t)}`;
         await App.openUrl({ url: deepLink });
       } catch (err) {
-        console.warn('LinkedIn deep link failed, falling back to web URL:', err);
-        window.open(
-          `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`,
-          '_blank',
-          'noopener,noreferrer'
-        );
+        // On native we do NOT fall back to web; if the deep link fails
+        // we simply log and let the user try again or use another option.
+        console.warn('LinkedIn deep link failed (no web fallback on native):', err);
       }
     } else {
       // Web / PWA: use standard LinkedIn share URL
