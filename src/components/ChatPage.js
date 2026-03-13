@@ -1275,8 +1275,7 @@ export default function ChatPage() {
             <img
               src="/DEITECIrc.png"
               alt="DeTea"
-              className="w-full h-full object-contain"
-              style={{ padding: 2 }}
+              className="w-full h-full object-cover"
             />
           </div>
           <div>
