@@ -909,76 +909,94 @@ export default function ShareSuggestionsPage() {
                   Edit before sharing
                 </p>
               </div>
-              {suggestionImageUrls[selectedIndex] && (
-                <div className="w-full rounded-xl overflow-hidden mb-3 flex-shrink-0 bg-black/10 relative group">
-                  <div className="w-full min-h-[200px] max-h-[320px] flex items-center justify-center">
-                    <img
-                      src={suggestionImageUrls[selectedIndex]}
-                      alt="Post"
-                      className="max-w-full max-h-[320px] w-auto h-auto object-contain"
+              {/* X with image: show only the image card (no separate image, no separate text) */}
+              {selectedPlatform === 'x' && suggestionImageUrls[selectedIndex] ? (
+                <div className="w-full flex justify-center mb-4 flex-1 min-h-0">
+                  <div className="w-full max-w-[360px] mx-auto">
+                    <TweetShareCard
+                      width={360}
+                      displayName={tweetDisplayName}
+                      username={tweetUsername}
+                      text={editableShareText || selectedText || ''}
+                      imageUrl={suggestionImageUrls[selectedIndex]}
+                      profileImageUrl={tweetProfileImage}
                     />
                   </div>
-                  <div className="absolute top-2 right-2 flex flex-col items-end">
-                    <button
-                      type="button"
-                      onClick={handlePencilClick}
-                      className="rounded-full p-2 shadow-lg transition-opacity hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2"
-                      style={{ background: isDarkMode ? HUB.accent : '#7C3AED', color: '#FFF' }}
-                      aria-label="Edit image"
-                    >
-                      <Pencil className="w-4 h-4" strokeWidth={2} />
-                    </button>
-                    {imageEditMenuOpen && (
-                      <div
-                        className="mt-1 py-1 rounded-lg shadow-xl border min-w-[160px]"
-                        style={{
-                          background: isDarkMode ? HUB.bgSecondary : '#FFF',
-                          borderColor: isDarkMode ? HUB.divider : 'rgba(0,0,0,0.1)',
-                        }}
-                      >
-                        <button
-                          type="button"
-                          onClick={handleReplacePhoto}
-                          className="w-full text-left px-4 py-2.5 text-sm hover:opacity-90"
-                          style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}
-                        >
-                          Replace photo
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleRemoveImage}
-                          className="w-full text-left px-4 py-2.5 text-sm hover:opacity-90"
-                          style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}
-                        >
-                          Remove image
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                  <input
-                    ref={imageReplaceInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleReplaceImageFile}
-                  />
-                  <p className="text-xs mt-1" style={{ color: isDarkMode ? HUB.textSecondary : '#666' }}>
-                    This image will be shared with your post. Tap the pencil to make the changes you want: replace with another photo or remove it.
-                  </p>
                 </div>
+              ) : (
+                <>
+                  {suggestionImageUrls[selectedIndex] && (
+                    <div className="w-full rounded-xl overflow-hidden mb-3 flex-shrink-0 bg-black/10 relative group">
+                      <div className="w-full min-h-[200px] max-h-[320px] flex items-center justify-center">
+                        <img
+                          src={suggestionImageUrls[selectedIndex]}
+                          alt="Post"
+                          className="max-w-full max-h-[320px] w-auto h-auto object-contain"
+                        />
+                      </div>
+                      <div className="absolute top-2 right-2 flex flex-col items-end">
+                        <button
+                          type="button"
+                          onClick={handlePencilClick}
+                          className="rounded-full p-2 shadow-lg transition-opacity hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2"
+                          style={{ background: isDarkMode ? HUB.accent : '#7C3AED', color: '#FFF' }}
+                          aria-label="Edit image"
+                        >
+                          <Pencil className="w-4 h-4" strokeWidth={2} />
+                        </button>
+                        {imageEditMenuOpen && (
+                          <div
+                            className="mt-1 py-1 rounded-lg shadow-xl border min-w-[160px]"
+                            style={{
+                              background: isDarkMode ? HUB.bgSecondary : '#FFF',
+                              borderColor: isDarkMode ? HUB.divider : 'rgba(0,0,0,0.1)',
+                            }}
+                          >
+                            <button
+                              type="button"
+                              onClick={handleReplacePhoto}
+                              className="w-full text-left px-4 py-2.5 text-sm hover:opacity-90"
+                              style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}
+                            >
+                              Replace photo
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleRemoveImage}
+                              className="w-full text-left px-4 py-2.5 text-sm hover:opacity-90"
+                              style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}
+                            >
+                              Remove image
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      <input
+                        ref={imageReplaceInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleReplaceImageFile}
+                      />
+                      <p className="text-xs mt-1" style={{ color: isDarkMode ? HUB.textSecondary : '#666' }}>
+                        This image will be shared with your post. Tap the pencil to make the changes you want: replace with another photo or remove it.
+                      </p>
+                    </div>
+                  )}
+                  <textarea
+                    value={editableShareText}
+                    onChange={(e) => setEditableShareText(e.target.value)}
+                    placeholder="Your post..."
+                    rows={5}
+                    className="w-full rounded-xl p-3 text-[15px] leading-relaxed resize-none border outline-none focus:ring-2"
+                    style={{
+                      background: isDarkMode ? HUB.bg : '#F5F5F5',
+                      borderColor: isDarkMode ? HUB.divider : 'rgba(0,0,0,0.12)',
+                      color: isDarkMode ? HUB.text : '#1A1A1A',
+                    }}
+                  />
+                </>
               )}
-              <textarea
-                value={editableShareText}
-                onChange={(e) => setEditableShareText(e.target.value)}
-                placeholder="Your post..."
-                rows={5}
-                className="w-full rounded-xl p-3 text-[15px] leading-relaxed resize-none border outline-none focus:ring-2"
-                style={{
-                  background: isDarkMode ? HUB.bg : '#F5F5F5',
-                  borderColor: isDarkMode ? HUB.divider : 'rgba(0,0,0,0.12)',
-                  color: isDarkMode ? HUB.text : '#1A1A1A',
-                }}
-              />
               <div className="flex gap-3 mt-4">
                 <button
                   type="button"
