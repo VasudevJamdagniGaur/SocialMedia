@@ -415,9 +415,10 @@ class FirestoreService {
       });
       const postId = postDocRef.id;
 
-      // Step 4: Add to userPosts for fast profile loading
+      // Step 4: Add to userPosts for fast profile loading (include userId for queries)
       const userPostRef = doc(this.db, `userPosts/${uid}/posts/${postId}`);
       await setDoc(userPostRef, {
+        userId: uid,
         postId,
         createdAt: serverTimestamp(),
       });
