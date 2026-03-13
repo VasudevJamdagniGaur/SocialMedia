@@ -324,7 +324,16 @@ export default function CommunityPage() {
           createdAt: data.createdAt?.toDate?.() || new Date()
         });
       });
-      
+
+      // #region agent log
+      const socialSharePosts = posts.filter((p) => p.source === 'social_share');
+      if (socialSharePosts.length > 0) {
+        socialSharePosts.slice(0, 3).forEach((p, i) => {
+          fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6a85fb'},body:JSON.stringify({sessionId:'6a85fb',location:'CommunityPage.js:onSnapshot:post',message:'feed post image',data:{postId:p.id,hasImage:!!p.image,imagePrefix:p.image?String(p.image).slice(0,80):null,index:i},timestamp:Date.now(),hypothesisId:'H4'})}).catch(()=>{});
+        });
+      }
+      // #endregion
+
       setCommunityPosts(posts);
       
       // Calculate posts created today (using local timezone)
