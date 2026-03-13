@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Linkedin, Pencil } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { Share } from '@capacitor/share';
+import { Filesystem, Directory } from '@capacitor/filesystem';
 import { useTheme } from '../contexts/ThemeContext';
 import { getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
@@ -27,6 +28,31 @@ const PLATFORM_LABELS = {
   x: 'X',
   reddit: 'Reddit',
 };
+
+// #region agent log helper
+const debugLog = (hypothesisId, location, message, data = {}, runId = 'pre-fix') => {
+  try {
+    fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Debug-Session-Id': '6a85fb',
+      },
+      body: JSON.stringify({
+        sessionId: '6a85fb',
+        runId,
+        hypothesisId,
+        location,
+        message,
+        data,
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+  } catch {
+    // ignore logging failures
+  }
+};
+// #endregion
 
 // Local image cache key builder (must stay in sync with chatService)
 const buildImageCacheKey = (text) => {
@@ -312,27 +338,119 @@ export default function ShareSuggestionsPage() {
     }
   };
 
+  const writeImageToCacheFile = async (dataUrl) => {
+    try {
+      if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image')) {
+        return null;
+      }
+      const parts = dataUrl.split(',');
+      if (parts.length < 2) return null;
+      const base64Data = parts[1];
+      const path = `share-post-${Date.now()}.png`;
+
+      debugLog(
+        'H4',
+        'ShareSuggestionsPage.js:writeImageToCacheFile:start',
+        'Writing image to Capacitor Filesystem cache',
+        { path }
+      );
+
+      const result = await Filesystem.writeFile({
+        path,
+        data: base64Data,
+        directory: Directory.Cache,
+        recursive: false,
+      });
+
+      const uri = result.uri || result.path || null;
+      debugLog(
+        'H4',
+        'ShareSuggestionsPage.js:writeImageToCacheFile:success',
+        'Image written to cache',
+        { hasUri: !!uri }
+      );
+      return uri;
+    } catch (e) {
+      debugLog(
+        'H4',
+        'ShareSuggestionsPage.js:writeImageToCacheFile:error',
+        'Failed to write image to cache',
+        { name: e?.name || 'Error' }
+      );
+      return null;
+    }
+  };
+
   const handleShareToSelectedPlatform = async () => {
     const t = (sharePanelOpen ? editableShareText : selectedText) || '';
     if (!t) return;
     const imageDataUrl = suggestionImageUrls[selectedIndex] || null;
     const isDataUrl = imageDataUrl && typeof imageDataUrl === 'string' && imageDataUrl.startsWith('data:image');
 
+    debugLog(
+      'H1',
+      'ShareSuggestionsPage.js:handleShareToSelectedPlatform:entry',
+      'Entered share handler',
+      {
+        selectedPlatform,
+        hasImage: !!imageDataUrl,
+        isDataUrl,
+        textLength: t.length,
+        isNative: isNative(),
+      }
+    );
+
     // 1) Native share via Capacitor (Android/iOS app) – text + image
     if (isNative() && isDataUrl) {
       try {
-        await Share.share({
-          text: t,
-          url: imageDataUrl,
-          title: 'Share reflection',
-          dialogTitle: 'Share to…',
-        });
+        debugLog(
+          'H1',
+          'ShareSuggestionsPage.js:handleShareToSelectedPlatform:nativeShare',
+          'Attempting native Share.share with image (using Filesystem)',
+          {
+            selectedPlatform,
+          }
+        );
+        let fileUri = null;
+        try {
+          fileUri = await writeImageToCacheFile(imageDataUrl);
+        } catch {
+          fileUri = null;
+        }
+
+        if (fileUri) {
+          await Share.share({
+            text: t,
+            files: [fileUri],
+            title: 'Share reflection',
+            dialogTitle: 'Share to…',
+          });
+        } else {
+          // Fallback: share data URL directly if file could not be created
+          await Share.share({
+            text: t,
+            url: imageDataUrl,
+            title: 'Share reflection',
+            dialogTitle: 'Share to…',
+          });
+        }
         recordShare(selectedPlatform, t);
+        debugLog(
+          'H1',
+          'ShareSuggestionsPage.js:handleShareToSelectedPlatform:nativeShare:success',
+          'Native share completed'
+        );
         setSharePanelOpen(false);
         return;
       } catch (err) {
         if (err?.name !== 'AbortError') {
           console.warn('Native share failed, falling back to web share:', err);
+          debugLog(
+            'H1',
+            'ShareSuggestionsPage.js:handleShareToSelectedPlatform:nativeShare:error',
+            'Native share threw error',
+            { name: err?.name || 'UnknownError' }
+          );
         }
       }
     }
@@ -342,17 +460,40 @@ export default function ShareSuggestionsPage() {
       const file = dataURLtoFile(imageDataUrl);
       if (file && navigator.canShare({ text: t, files: [file] })) {
         try {
+          debugLog(
+            'H2',
+            'ShareSuggestionsPage.js:handleShareToSelectedPlatform:webShare',
+            'Attempting navigator.share with file',
+            { selectedPlatform }
+          );
           await navigator.share({ text: t, files: [file] });
           recordShare(selectedPlatform, t);
+          debugLog(
+            'H2',
+            'ShareSuggestionsPage.js:handleShareToSelectedPlatform:webShare:success',
+            'Web share completed'
+          );
           setSharePanelOpen(false);
           return;
         } catch (err) {
           if (err.name !== 'AbortError') console.warn('Share with image failed:', err);
+          debugLog(
+            'H2',
+            'ShareSuggestionsPage.js:handleShareToSelectedPlatform:webShare:error',
+            'Web share threw error',
+            { name: err?.name || 'UnknownError' }
+          );
         }
       }
     }
 
     // 3) Fallback: platform-specific share URLs (text only) + optional download
+    debugLog(
+      'H3',
+      'ShareSuggestionsPage.js:handleShareToSelectedPlatform:fallback',
+      'Using URL-based fallback share',
+      { selectedPlatform, hasImage: !!imageDataUrl, isDataUrl }
+    );
     if (selectedPlatform === 'linkedin') shareToLinkedIn(t);
     else if (selectedPlatform === 'x') shareToTwitter(t);
     else if (selectedPlatform === 'reddit') shareToReddit(t);
