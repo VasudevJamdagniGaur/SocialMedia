@@ -5,11 +5,13 @@ import { Capacitor } from '@capacitor/core';
 import { Share } from '@capacitor/share';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { toPng } from 'html-to-image';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useTheme } from '../contexts/ThemeContext';
 import { getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
 import chatService from '../services/chatService';
 import { getDateId } from '../utils/dateUtils';
+import { db } from '../firebase/config';
 import TweetShareCard from './TweetShareCard';
 
 const HUB = {
@@ -230,13 +232,59 @@ export default function ShareSuggestionsPage() {
 
   const recordShare = (plat, text) => {
     const user = getCurrentUser();
-    if (user?.uid) {
-      firestoreService.saveSocialShare(user.uid, {
-        platform: plat,
-        reflectionDate: dateStr,
-        reflectionSnippet: (text || selectedText || '').slice(0, 200) || undefined,
-      });
-    }
+    const content = (text || selectedText || '').trim();
+    if (!user?.uid || !content) return;
+
+    // 1) Save lightweight social share record (for platform badges in My Presence)
+    firestoreService.saveSocialShare(user.uid, {
+      platform: plat,
+      reflectionDate: dateStr,
+      reflectionSnippet: content.slice(0, 200) || undefined,
+    });
+
+    // 2) Also create a Community "My Presence" post for this share (fire-and-forget)
+    (async () => {
+      try {
+        const profileImage =
+          (typeof localStorage !== 'undefined' &&
+            localStorage.getItem(`user_profile_picture_${user.uid}`)) ||
+          null;
+        const imageForPost =
+          Array.isArray(suggestionImageUrls) && suggestionImageUrls[selectedIndex]
+            ? suggestionImageUrls[selectedIndex]
+            : null;
+
+        const postData = {
+          author: user.displayName || 'Anonymous',
+          authorId: user.uid,
+          content,
+          createdAt: serverTimestamp(),
+          likes: 0,
+          comments: [],
+          profilePicture: profileImage,
+          image: imageForPost,
+          source: 'social_share',
+          sharedPlatform: plat,
+          reflectionDate: (() => {
+            try {
+              const d =
+                typeof dateStr === 'string'
+                  ? new Date(dateStr)
+                  : reflectionDate instanceof Date
+                  ? reflectionDate
+                  : new Date();
+              return d.toISOString();
+            } catch {
+              return new Date().toISOString();
+            }
+          })(),
+        };
+
+        await addDoc(collection(db, 'communityPosts'), postData);
+      } catch (err) {
+        console.error('Error creating community post from social share:', err);
+      }
+    })();
   };
 
   const textToShare = (sharePanelOpen && editableShareText !== '') ? editableShareText : selectedText;
