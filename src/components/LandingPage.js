@@ -153,7 +153,8 @@ export default function LandingPage() {
             <img
               src="/DEITECIrc.png"
               alt="DeTea"
-              className="w-full h-full relative z-10 object-cover"
+              className="w-full h-full relative z-10 object-contain"
+              style={{ padding: 4 }}
             />
           </div>
         </div>
