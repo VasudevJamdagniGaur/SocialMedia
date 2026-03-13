@@ -11,13 +11,14 @@ const TweetShareCard = React.forwardRef(function TweetShareCard(props, ref) {
     text,
     imageUrl,
     profileImageUrl,
+    width = 1080,
   } = props;
 
   return (
     <div
       ref={ref}
       style={{
-        width: 1080,
+        width,
         borderRadius: 40,
         border: '1px solid #D1D5DB',
         backgroundColor: '#FFFFFF',
