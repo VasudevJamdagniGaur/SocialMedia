@@ -793,6 +793,7 @@ export default function ShareSuggestionsPage() {
                           ) : null}
                           <TweetShareCard
                             width={360}
+                            height={360}
                             displayName={tweetDisplayName}
                             username={tweetUsername}
                             text={postText}
