@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
 import { getCurrentUser, signOutUser } from '../services/authService';
@@ -592,6 +593,35 @@ const MOOD_KEYWORDS = {
   const handleApplyCrop = async (e) => {
     if (e) e.stopPropagation();
     if (!pendingPicture) return;
+
+    // On native (APK) we skip the canvas crop step, which can fail in WebView,
+    // and instead use the original captured image so the user is never blocked.
+    if (Capacitor?.isNativePlatform?.() === true) {
+      try {
+        setIsCropping(true);
+        const finalImage = pendingPicture;
+        setProfilePicture(finalImage);
+        if (user) {
+          localStorage.setItem(`user_profile_picture_${user.uid}`, finalImage);
+          try {
+            const toStore = await compressDataUrlForStorage(finalImage, 800);
+            await firestoreService.ensureUser(user.uid, { profilePicture: toStore });
+          } catch (err) {
+            console.error('Error saving native profile picture to Firestore:', err);
+          }
+          window.dispatchEvent(new Event('profilePictureUpdated'));
+        }
+        setPendingPicture(null);
+        setShowCropModal(false);
+        setCroppedAreaPixels(null);
+        setZoom(1);
+        setCrop({ x: 0, y: 0 });
+      } finally {
+        setIsCropping(false);
+      }
+      return;
+    }
+
     setIsCropping(true);
     try {
       const croppedImage = await getCroppedImg(pendingPicture, croppedAreaPixels);
