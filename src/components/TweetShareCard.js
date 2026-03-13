@@ -12,15 +12,20 @@ const TweetShareCard = React.forwardRef(function TweetShareCard(props, ref) {
     imageUrl,
     profileImageUrl,
     width = 1080,
-    height, // optional; when provided we force this height
+    height, // optional; if omitted we derive from width using 7:10 aspect ratio
   } = props;
+
+  // Normalize numeric width/height and enforce width : height = 7 : 10 when height is not provided
+  const numericWidth = typeof width === 'number' ? width : 1080;
+  const numericHeight =
+    typeof height === 'number' ? height : Math.round((numericWidth * 10) / 7);
 
   return (
     <div
       ref={ref}
       style={{
-        width,
-        height: typeof height === 'number' ? `${height}px` : height,
+        width: numericWidth,
+        height: numericHeight,
         borderRadius: 40,
         border: '1px solid #D1D5DB',
         backgroundColor: '#FFFFFF',

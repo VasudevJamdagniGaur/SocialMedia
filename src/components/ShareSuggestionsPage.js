@@ -419,9 +419,13 @@ export default function ShareSuggestionsPage() {
       try {
         const node = tweetCardRef.current;
         if (node) {
+          // Match TweetShareCard's 7:10 aspect ratio: height = width * 10 / 7
+          const exportWidth = 1080;
+          const exportHeight = Math.round((exportWidth * 10) / 7);
+
           const cardDataUrl = await toPng(node, {
-            width: 1080,
-            height: 1080, // 1:1 aspect ratio for exported card
+            width: exportWidth,
+            height: exportHeight,
             pixelRatio: 2,
           });
 
@@ -654,8 +658,7 @@ export default function ShareSuggestionsPage() {
           <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
             <TweetShareCard
               ref={tweetCardRef}
-              width={1080}
-              height={1080} // enforce 1:1 export canvas
+              width={1080} // height will be derived to keep 7:10 aspect ratio
               displayName={tweetDisplayName}
               username={tweetUsername}
               text={selectedText || reflectionFromState}
@@ -791,9 +794,9 @@ export default function ShareSuggestionsPage() {
                               {eventLabel}
                             </p>
                           ) : null}
+                          {/* Width can vary; height will be derived to keep 7:10 aspect ratio */}
                           <TweetShareCard
                             width={360}
-                            height={360}
                             displayName={tweetDisplayName}
                             username={tweetUsername}
                             text={postText}
