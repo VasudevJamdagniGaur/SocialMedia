@@ -133,10 +133,15 @@ export default function ShareSuggestionsPage() {
         );
 
         const user = getCurrentUser();
+        const reflectionKey = firestoreService.hashForReflectionCache(reflectionFromState);
 
-        // 1) Try Firebase first – load stored reflection image URLs so we never re-call the API
+        // 1) Single round: Firebase by index only (fast), then localStorage – no second round of text-based reads
         const firebaseUrls = user
-          ? await Promise.all(postsWithText.map((text) => firestoreService.getReflectionImageUrl(user.uid, text)))
+          ? await Promise.all(
+              postsWithText.map((_, idx) =>
+                firestoreService.getReflectionImageUrlByIndex(user.uid, selectedPlatform, reflectionKey, idx)
+              )
+            )
           : postsWithText.map(() => null);
 
         const cachedImages = postsWithText.map((text, idx) =>
@@ -195,9 +200,23 @@ export default function ShareSuggestionsPage() {
             try {
               const file = await compressReflectionImage(dataUrl);
               if (!file) continue;
+              const imageUrl = await firestoreService.uploadReflectionImageFileByIndex(
+                user.uid,
+                file,
+                reflectionKey,
+                selectedPlatform,
+                idx
+              );
+              if (imageUrl) {
+                await firestoreService.saveReflectionImageUrlByIndex(
+                  user.uid,
+                  selectedPlatform,
+                  reflectionKey,
+                  idx,
+                  imageUrl
+                );
+              }
               const postText = postsWithText[idx];
-              const cacheKey = firestoreService.hashForReflectionCache(postText);
-              const imageUrl = await firestoreService.uploadReflectionImageFile(user.uid, file, cacheKey);
               if (imageUrl) await firestoreService.saveReflectionImageUrl(user.uid, postText, imageUrl);
             } catch (e) {
               console.warn('Failed to save reflection image to Firebase:', e);

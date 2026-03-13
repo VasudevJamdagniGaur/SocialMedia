@@ -336,6 +336,64 @@ class FirestoreService {
   }
 
   /**
+   * Get stored reflection image URL by position (reflection + platform + index).
+   * Use this for "Choose a post to share" so cache hits even when suggestion API returns slightly different text.
+   * @returns {Promise<string|null>}
+   */
+  async getReflectionImageUrlByIndex(uid, platform, reflectionKey, index) {
+    if (!uid || !platform || reflectionKey == null || index == null) return null;
+    try {
+      const docId = `${uid}_${platform}_${reflectionKey}_${index}`;
+      const docRef = doc(this.db, 'reflectionImageCache', docId);
+      const snap = await getDoc(docRef);
+      if (snap.exists() && snap.data().imageUrl) return snap.data().imageUrl;
+      return null;
+    } catch (error) {
+      console.warn('getReflectionImageUrlByIndex failed:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Save reflection image URL by index (so reload uses same slot without depending on exact post text).
+   */
+  async saveReflectionImageUrlByIndex(uid, platform, reflectionKey, index, imageUrl) {
+    if (!uid || !platform || reflectionKey == null || index == null || !imageUrl) return;
+    try {
+      const docId = `${uid}_${platform}_${reflectionKey}_${index}`;
+      const docRef = doc(this.db, 'reflectionImageCache', docId);
+      await setDoc(docRef, {
+        userId: uid,
+        platform,
+        reflectionKey,
+        index,
+        imageUrl,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+    } catch (error) {
+      console.warn('saveReflectionImageUrlByIndex failed:', error);
+    }
+  }
+
+  /**
+   * Upload compressed reflection image to Storage by index (stable path for same reflection+platform+index).
+   */
+  async uploadReflectionImageFileByIndex(uid, file, reflectionKey, platform, index) {
+    const isFileOrBlob = file && (file instanceof File || file instanceof Blob);
+    if (!uid || !isFileOrBlob || reflectionKey == null || !platform || index == null) return null;
+    try {
+      const ext = file instanceof File && file.name && file.name.includes('.') ? file.name.split('.').pop() : 'jpg';
+      const path = `reflectionCache/${uid}/${reflectionKey}_${platform}_${index}.${ext}`;
+      const storageRef = ref(this.storage, path);
+      await uploadBytes(storageRef, file);
+      return await getDownloadURL(storageRef);
+    } catch (error) {
+      console.error('Error uploading reflection cache image by index:', error);
+      return null;
+    }
+  }
+
+  /**
    * Upload compressed reflection image to Storage (reflectionCache path).
    * Used so we can load the image from Firebase instead of calling Gemini again.
    */
