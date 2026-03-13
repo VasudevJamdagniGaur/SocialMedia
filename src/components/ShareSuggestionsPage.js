@@ -285,6 +285,24 @@ export default function ShareSuggestionsPage() {
         console.error('Error creating community post from social share:', err);
       }
     })();
+
+    // 3) Create scalable social post record (users/posts/userPosts/shareHistory)
+    (async () => {
+      try {
+        const imageForPost =
+          Array.isArray(suggestionImageUrls) && suggestionImageUrls[selectedIndex]
+            ? suggestionImageUrls[selectedIndex]
+            : null;
+        await firestoreService.createPostForShare({
+          uid: user.uid,
+          caption: content,
+          imageDataUrl: imageForPost,
+          platform: plat,
+        });
+      } catch (err) {
+        console.error('Error creating scalable social post for share:', err);
+      }
+    })();
   };
 
   const textToShare = (sharePanelOpen && editableShareText !== '') ? editableShareText : selectedText;

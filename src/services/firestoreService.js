@@ -1,13 +1,13 @@
-import { 
-  doc, 
-  setDoc, 
-  getDoc, 
-  addDoc, 
-  collection, 
+import {
+  doc,
+  setDoc,
+  getDoc,
+  addDoc,
+  collection,
   collectionGroup,
-  query, 
-  orderBy, 
-  limit, 
+  query,
+  orderBy,
+  limit,
   getDocs,
   serverTimestamp,
   where,
@@ -16,6 +16,7 @@ import {
   onSnapshot,
   deleteField
 } from 'firebase/firestore';
+import { getStorage, ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { db } from '../firebase/config';
 import { getDateId } from '../utils/dateUtils';
 import { getCurrentUser } from '../services/authService';
@@ -23,6 +24,7 @@ import { getCurrentUser } from '../services/authService';
 class FirestoreService {
   constructor() {
     this.db = db;
+    this.storage = getStorage();
   }
 
   /**
@@ -248,6 +250,99 @@ class FirestoreService {
       return { success: true };
     } catch (error) {
       console.error('Error saving social share:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Upload a base64 data URL image to Firebase Storage for social posts.
+   * Returns the public download URL or null on failure.
+   */
+  async uploadPostImage(uid, dataUrl) {
+    if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image')) {
+      return null;
+    }
+    try {
+      const path = `posts/${uid}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.png`;
+      const storageRef = ref(this.storage, path);
+      await uploadString(storageRef, dataUrl, 'data_url');
+      const downloadUrl = await getDownloadURL(storageRef);
+      return downloadUrl;
+    } catch (error) {
+      console.error('Error uploading post image:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Create a DeTea social post record for a shared suggestion.
+   * - Creates a document in `posts`
+   * - Adds an entry under `userPosts/{uid}/posts/{postId}`
+   * - Records an entry in `shareHistory`
+   *
+   * NOTE: This is internal to DeTea and does not depend on external platform IDs.
+   *
+   * @param {object} params
+   * @param {string} params.uid
+   * @param {string} params.caption
+   * @param {string|null} params.imageDataUrl - Optional base64 image to upload
+   * @param {'x'|'linkedin'|'reddit'|'whatsapp'|'other'} params.platform
+   * @returns {Promise<{ success: boolean, postId?: string, imageUrl?: string, error?: string }>}
+   */
+  async createPostForShare({ uid, caption, imageDataUrl, platform }) {
+    if (!uid || !caption) {
+      return { success: false, error: 'Missing uid or caption' };
+    }
+
+    try {
+      // Ensure user doc exists; avoid duplicating profile data in posts
+      const currentUser = getCurrentUser();
+      await this.ensureUser(uid, {
+        userId: uid,
+        displayName: currentUser?.displayName || undefined,
+        username: currentUser?.email ? currentUser.email.split('@')[0] : undefined,
+        updatedAt: serverTimestamp(),
+      });
+
+      // Step 2: Upload share image (if provided) to Storage
+      let imageUrl = null;
+      if (imageDataUrl) {
+        imageUrl = await this.uploadPostImage(uid, imageDataUrl);
+      }
+
+      // Step 3: Create posts entry
+      const postsRef = collection(this.db, 'posts');
+      const postDocRef = await addDoc(postsRef, {
+        userId: uid,
+        caption,
+        imageUrl: imageUrl || null,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        likesCount: 0,
+        commentsCount: 0,
+        shareCount: 1,
+      });
+      const postId = postDocRef.id;
+
+      // Step 4: Add to userPosts for fast profile loading
+      const userPostRef = doc(this.db, `userPosts/${uid}/posts/${postId}`);
+      await setDoc(userPostRef, {
+        postId,
+        createdAt: serverTimestamp(),
+      });
+
+      // Step 5: Record share history
+      const shareRef = collection(this.db, 'shareHistory');
+      await addDoc(shareRef, {
+        postId,
+        userId: uid,
+        platform,
+        sharedAt: serverTimestamp(),
+      });
+
+      return { success: true, postId, imageUrl: imageUrl || null };
+    } catch (error) {
+      console.error('Error creating post for share:', error);
       return { success: false, error: error.message };
     }
   }
