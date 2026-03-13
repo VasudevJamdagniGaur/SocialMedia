@@ -5,6 +5,7 @@ import { Capacitor } from '@capacitor/core';
 import { Share } from '@capacitor/share';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { toPng } from 'html-to-image';
+import imageCompression from 'browser-image-compression';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useTheme } from '../contexts/ThemeContext';
 import { getCurrentUser } from '../services/authService';
@@ -230,8 +231,14 @@ export default function ShareSuggestionsPage() {
     ? (platformSuggestions[selectedIndex]?.post ?? platformSuggestions[0]?.post ?? reflectionFromState)
     : (fallbackSuggestions[selectedIndex]?.text ?? reflectionFromState);
 
-  /** Persist share to Firestore so the post stays in My Presence after app reopen. Returns a Promise. */
-  const recordShare = async (plat, text) => {
+  /**
+   * Persist share to Firestore so the post stays in My Presence after app reopen.
+   * Dual-image pipeline: high-quality image is used for sharing; compressed copy is uploaded and only the URL is stored.
+   * @param {string} plat - Platform: 'linkedin' | 'x' | 'reddit' | 'other'
+   * @param {string} text - Caption text
+   * @param {{ imageDataUrlForStorage?: string | null }} [options] - High-quality image (card or suggestion) to compress, upload, and store as URL only
+   */
+  const recordShare = async (plat, text, options = {}) => {
     const user = getCurrentUser();
     const content = (text || selectedText || '').trim();
     if (!user?.uid || !content) return;
@@ -251,8 +258,18 @@ export default function ShareSuggestionsPage() {
       Array.isArray(suggestionImageUrls) && suggestionImageUrls[selectedIndex]
         ? suggestionImageUrls[selectedIndex]
         : null;
+    const imageToStore = options.imageDataUrlForStorage ?? imageForPost;
 
-    // 2) Create Community "My Presence" post first and WAIT so it is in Firestore before we close the panel
+    // 2) Compress and upload only the stored version; keep sharing pipeline high-quality
+    let imageUrl = null;
+    if (imageToStore && typeof imageToStore === 'string' && imageToStore.startsWith('data:image')) {
+      const compressedFile = await compressImageForStorage(imageToStore);
+      if (compressedFile) {
+        imageUrl = await firestoreService.uploadPostImageFromFile(user.uid, compressedFile);
+      }
+    }
+
+    // 3) Create Community "My Presence" post with URL only (no base64), so feed stays light
     const postData = {
       author: user.displayName || 'Anonymous',
       authorId: user.uid,
@@ -261,7 +278,7 @@ export default function ShareSuggestionsPage() {
       likes: 0,
       comments: [],
       profilePicture: profileImage,
-      image: imageForPost,
+      image: imageUrl,
       source: 'social_share',
       sharedPlatform: plat,
       reflectionDate: (() => {
@@ -286,11 +303,11 @@ export default function ShareSuggestionsPage() {
       throw err;
     }
 
-    // 3) Create scalable social post record (fire-and-forget; optional for analytics)
+    // 4) Create scalable social post record with URL only (fire-and-forget)
     firestoreService.createPostForShare({
       uid: user.uid,
       caption: content,
-      imageDataUrl: imageForPost,
+      imageUrl,
       platform: plat,
     }).catch((err) => console.error('Error creating scalable social post for share:', err));
   };
@@ -464,6 +481,25 @@ export default function ShareSuggestionsPage() {
     }
   };
 
+  /** Compress image for Storage (dual-image pipeline: share high-quality, store compressed). */
+  const compressImageForStorage = async (dataUrl) => {
+    if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image')) return null;
+    try {
+      const file = dataURLtoFile(dataUrl, 'post-image.png');
+      if (!file) return null;
+      const options = {
+        maxSizeMB: 0.4,
+        maxWidthOrHeight: 1080,
+        useWebWorker: true,
+      };
+      const compressed = await imageCompression(file, options);
+      return compressed;
+    } catch (err) {
+      console.warn('Image compression failed, skipping upload:', err);
+      return null;
+    }
+  };
+
   const writeImageToCacheFile = async (dataUrl) => {
     try {
       if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image')) {
@@ -567,7 +603,7 @@ export default function ShareSuggestionsPage() {
                     title: 'Share reflection',
                     dialogTitle: 'Share to…',
                   });
-                  await recordShare('x', t);
+                  await recordShare('x', t, { imageDataUrlForStorage: cardDataUrl });
                   triggerPostShareConfirmation();
                   debugLog(
                     'HX',
@@ -593,7 +629,7 @@ export default function ShareSuggestionsPage() {
               if (file && navigator.canShare({ files: [file] })) {
                 try {
                   await navigator.share({ files: [file] });
-                  await recordShare('x', t);
+                  await recordShare('x', t, { imageDataUrlForStorage: cardDataUrl });
                   triggerPostShareConfirmation();
                   debugLog(
                     'HX',
@@ -620,7 +656,7 @@ export default function ShareSuggestionsPage() {
               a.download = 'tweet-card.png';
               a.click();
             } catch (_) {}
-            await recordShare('x', t);
+            await recordShare('x', t, { imageDataUrlForStorage: cardDataUrl });
             triggerPostShareConfirmation();
             setSharePanelOpen(false);
             return;
@@ -676,7 +712,7 @@ export default function ShareSuggestionsPage() {
             dialogTitle: 'Share to…',
           });
         }
-        await recordShare(selectedPlatform, t);
+        await recordShare(selectedPlatform, t, { imageDataUrlForStorage: imageDataUrl || null });
         if (selectedPlatform === 'linkedin') {
           copyCaptionToClipboardForLinkedIn(t);
         }
@@ -713,7 +749,7 @@ export default function ShareSuggestionsPage() {
             { selectedPlatform }
           );
           await navigator.share({ text: t, files: [file] });
-          await recordShare(selectedPlatform, t);
+          await recordShare(selectedPlatform, t, { imageDataUrlForStorage: imageDataUrl || null });
           if (selectedPlatform === 'linkedin') {
             copyCaptionToClipboardForLinkedIn(t);
           }
@@ -744,8 +780,9 @@ export default function ShareSuggestionsPage() {
       'Using URL-based fallback share',
       { selectedPlatform, hasImage: !!imageDataUrl, isDataUrl }
     );
+    const fallbackImage = isDataUrl ? imageDataUrl : (suggestionImageUrls[selectedIndex] || null);
     try {
-      await recordShare(selectedPlatform, t);
+      await recordShare(selectedPlatform, t, { imageDataUrlForStorage: fallbackImage });
     } catch (err) {
       console.error('Failed to save post to My Presence:', err);
     }

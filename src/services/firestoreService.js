@@ -16,7 +16,7 @@ import {
   onSnapshot,
   deleteField
 } from 'firebase/firestore';
-import { getStorage, ref, uploadString, getDownloadURL } from 'firebase/storage';
+import { getStorage, ref, uploadString, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db } from '../firebase/config';
 import { getDateId } from '../utils/dateUtils';
 import { getCurrentUser } from '../services/authService';
@@ -257,6 +257,7 @@ class FirestoreService {
   /**
    * Upload a base64 data URL image to Firebase Storage for social posts.
    * Returns the public download URL or null on failure.
+   * @deprecated Prefer uploadPostImageFromFile with compressed File for smaller storage.
    */
   async uploadPostImage(uid, dataUrl) {
     if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image')) {
@@ -275,21 +276,46 @@ class FirestoreService {
   }
 
   /**
+   * Upload a compressed image File to Firebase Storage (dual-image pipeline: store compressed only).
+   * Returns the public download URL or null on failure.
+   * @param {string} uid - User ID
+   * @param {File} file - Compressed image file (e.g. from browser-image-compression)
+   * @returns {Promise<string|null>}
+   */
+  async uploadPostImageFromFile(uid, file) {
+    if (!uid || !file || !(file instanceof File)) {
+      return null;
+    }
+    try {
+      const ext = file.name && file.name.includes('.') ? file.name.split('.').pop() : 'jpg';
+      const path = `posts/${uid}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const storageRef = ref(this.storage, path);
+      await uploadBytes(storageRef, file);
+      const downloadUrl = await getDownloadURL(storageRef);
+      return downloadUrl;
+    } catch (error) {
+      console.error('Error uploading post image file:', error);
+      return null;
+    }
+  }
+
+  /**
    * Create a DeTea social post record for a shared suggestion.
    * - Creates a document in `posts`
    * - Adds an entry under `userPosts/{uid}/posts/{postId}`
    * - Records an entry in `shareHistory`
    *
-   * NOTE: This is internal to DeTea and does not depend on external platform IDs.
+   * Prefer passing imageUrl (from compressed upload); imageDataUrl is legacy and uploads uncompressed.
    *
    * @param {object} params
    * @param {string} params.uid
    * @param {string} params.caption
-   * @param {string|null} params.imageDataUrl - Optional base64 image to upload
+   * @param {string|null} [params.imageUrl] - Optional Storage URL (from uploadPostImageFromFile)
+   * @param {string|null} [params.imageDataUrl] - Optional base64 (legacy; uploads uncompressed)
    * @param {'x'|'linkedin'|'reddit'|'whatsapp'|'other'} params.platform
    * @returns {Promise<{ success: boolean, postId?: string, imageUrl?: string, error?: string }>}
    */
-  async createPostForShare({ uid, caption, imageDataUrl, platform }) {
+  async createPostForShare({ uid, caption, imageUrl: imageUrlParam, imageDataUrl, platform }) {
     if (!uid || !caption) {
       return { success: false, error: 'Missing uid or caption' };
     }
@@ -304,9 +330,9 @@ class FirestoreService {
         updatedAt: serverTimestamp(),
       });
 
-      // Step 2: Upload share image (if provided) to Storage
-      let imageUrl = null;
-      if (imageDataUrl) {
+      // Use pre-uploaded URL (dual-image pipeline) or legacy: upload from data URL
+      let imageUrl = imageUrlParam || null;
+      if (!imageUrl && imageDataUrl) {
         imageUrl = await this.uploadPostImage(uid, imageDataUrl);
       }
 
