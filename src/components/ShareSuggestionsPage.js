@@ -126,6 +126,7 @@ export default function ShareSuggestionsPage() {
   const [sharePanelOpen, setSharePanelOpen] = useState(false);
   const [editableShareText, setEditableShareText] = useState('');
   const [imageEditMenuOpen, setImageEditMenuOpen] = useState(false);
+  const [linkedInCaptionToastVisible, setLinkedInCaptionToastVisible] = useState(false);
   const imageReplaceInputRef = useRef(null);
   const tweetCardRef = useRef(null);
 
@@ -239,13 +240,27 @@ export default function ShareSuggestionsPage() {
 
   const textToShare = (sharePanelOpen && editableShareText !== '') ? editableShareText : selectedText;
 
+  const copyCaptionToClipboardForLinkedIn = async (text) => {
+    if (!text) return;
+    if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setLinkedInCaptionToastVisible(true);
+      setTimeout(() => {
+        setLinkedInCaptionToastVisible(false);
+      }, 2500);
+    } catch {
+      // Silently ignore clipboard failures
+    }
+  };
+
   const shareToLinkedIn = (text) => {
     const t = text ?? textToShare;
     if (!t) return;
     const url = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : 'https://detea.app';
     window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`, '_blank', 'noopener,noreferrer');
     recordShare('linkedin', t);
-    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(t);
+    copyCaptionToClipboardForLinkedIn(t);
   };
 
   const shareToTwitter = (text) => {
@@ -550,6 +565,9 @@ export default function ShareSuggestionsPage() {
           });
         }
         recordShare(selectedPlatform, t);
+        if (selectedPlatform === 'linkedin') {
+          copyCaptionToClipboardForLinkedIn(t);
+        }
         debugLog(
           'H1',
           'ShareSuggestionsPage.js:handleShareToSelectedPlatform:nativeShare:success',
@@ -583,6 +601,9 @@ export default function ShareSuggestionsPage() {
           );
           await navigator.share({ text: t, files: [file] });
           recordShare(selectedPlatform, t);
+          if (selectedPlatform === 'linkedin') {
+            copyCaptionToClipboardForLinkedIn(t);
+          }
           debugLog(
             'H2',
             'ShareSuggestionsPage.js:handleShareToSelectedPlatform:webShare:success',
@@ -650,8 +671,22 @@ export default function ShareSuggestionsPage() {
   return (
     <div
       className="min-h-screen flex flex-col px-4 py-6 pb-10"
-      style={{ background: isDarkMode ? HUB.bg : '#F5F5F5' }}
+      style={{ background: isDarkMode ? HUB.bg : '#F5F5F5', position: 'relative' }}
     >
+      {/* LinkedIn caption copied toast */}
+      {linkedInCaptionToastVisible && (
+        <div className="fixed inset-x-0 bottom-6 flex justify-center pointer-events-none z-50">
+          <div
+            className="px-4 py-2 rounded-full shadow-md text-sm pointer-events-auto"
+            style={{
+              background: isDarkMode ? 'rgba(15,23,42,0.95)' : 'rgba(17,24,39,0.95)',
+              color: '#FFFFFF',
+            }}
+          >
+            📋 Caption copied! Paste it in LinkedIn
+          </div>
+        </div>
+      )}
       <div className="max-w-md w-full mx-auto flex flex-col flex-1">
         {/* Off-screen tweet card for X sharing – only when image has been generated */}
         {selectedPlatform === 'x' && suggestionImageUrls[selectedIndex] && (
