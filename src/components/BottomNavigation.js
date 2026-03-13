@@ -130,6 +130,17 @@ export default function BottomNavigation() {
               src="/Gemini_Generated_Image_enm22aenm22aenm2.png"
               alt="DeTea community"
               className="w-12 h-12 object-contain"
+              style={{
+                opacity: isCommunityActive ? 1 : 0.4,
+                filter: isCommunityActive
+                  ? (isDarkMode ? 'brightness(0) invert(1)' : 'brightness(0)')
+                  : (isDarkMode ? 'none' : 'brightness(0) saturate(0)'),
+                WebkitFilter: isCommunityActive
+                  ? (isDarkMode ? 'brightness(0) invert(1)' : 'brightness(0)')
+                  : (isDarkMode ? 'none' : 'brightness(0) saturate(0)'),
+                imageRendering: 'crisp-edges',
+                WebkitImageRendering: 'crisp-edges',
+              }}
             />
           </div>
         </button>
