@@ -646,6 +646,8 @@ export default function ShareSuggestionsPage() {
             width: exportWidth,
             height: exportHeight,
             pixelRatio: 2,
+            skipFonts: true,
+            cacheBust: false,
           });
 
           const isCardDataUrl =
@@ -729,6 +731,9 @@ export default function ShareSuggestionsPage() {
           'Failed to generate tweet card',
           { name: err?.name || 'Error' }
         );
+        if (err?.name === 'SecurityError' || (err?.message && err.message.includes('cssRules'))) {
+          await recordShare('x', t, { imageDataUrlForStorage: imageDataUrl || null });
+        }
       }
 
       // Absolute fallback if card generation/sharing failed: fall back to existing X text-only share
