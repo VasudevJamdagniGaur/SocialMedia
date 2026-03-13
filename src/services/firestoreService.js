@@ -325,9 +325,11 @@ class FirestoreService {
 
   /**
    * Stable cache key from post text for reflection image cache (no API re-calls).
+   * Normalizes whitespace so save/load use the same key.
    */
   hashForReflectionCache(postText) {
-    const s = (postText || '').trim().slice(0, 500);
+    const raw = (postText || '').trim().slice(0, 500);
+    const s = raw.replace(/\s+/g, ' ').trim();
     let h = 0;
     for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
     return Math.abs(h).toString(36);

@@ -127,13 +127,7 @@ export default function ShareSuggestionsPage() {
         setPlatformSuggestions(posts);
         setSelectedIndex(0);
         setIsLoadingSuggestions(false);
-        // Do not generate images for Reddit suggestions
-        if (selectedPlatform === 'reddit') {
-          setSuggestionImageUrls(posts.map(() => null));
-          setIsLoadingImages(false);
-          return;
-        }
-        // For LinkedIn/X: Prefer Firebase cache (no API re-calls), then localStorage, then Gemini
+        // For LinkedIn, X, and Reddit: Prefer Firebase cache (no API re-calls), then localStorage, then Gemini; save to Firebase after generation
         const postsWithText = posts.map((item) =>
           (typeof item === 'object' && item?.post != null ? item.post : String(item || '')).trim()
         );
