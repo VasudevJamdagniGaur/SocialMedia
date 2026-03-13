@@ -2073,9 +2073,10 @@ ${text}`;
       const generated = await this._generateImageWithGemini(fallback, geminiKey, referenceImage);
       if (generated && cacheKey && typeof localStorage !== 'undefined') {
         try {
-          localStorage.setItem(cacheKey, JSON.stringify({ text: fullText, image: generated }));
+          const payload = JSON.stringify({ text: fullText, image: generated });
+          if (payload.length <= 2 * 1024 * 1024) localStorage.setItem(cacheKey, payload);
         } catch (e) {
-          console.warn('[Image] Failed to write image cache:', e.message);
+          // QuotaExceeded or other; image still returned, Firebase will persist
         }
       }
       return generated;
@@ -2086,9 +2087,10 @@ ${text}`;
     const generated = await this._generateImageWithGemini(fullPrompt, geminiKey, referenceImage);
     if (generated && cacheKey && typeof localStorage !== 'undefined') {
       try {
-        localStorage.setItem(cacheKey, JSON.stringify({ text: fullText, image: generated }));
+        const payload = JSON.stringify({ text: fullText, image: generated });
+        if (payload.length <= 2 * 1024 * 1024) localStorage.setItem(cacheKey, payload);
       } catch (e) {
-        console.warn('[Image] Failed to write image cache:', e.message);
+        // QuotaExceeded or other; image still returned, Firebase will persist
       }
     }
     return generated;
