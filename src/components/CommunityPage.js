@@ -1184,6 +1184,7 @@ export default function CommunityPage() {
                     const sharedIg = platforms.includes('instagram');
                     const sharedReddit = platforms.includes('reddit');
                     const sharedWa = platforms.includes('whatsapp');
+                    const sharedLinkedIn = platforms.includes('linkedin');
                     const socialGreen = THREADS.accent;
                     const socialGrey = THREADS.textSecondary;
                     return (
@@ -1198,6 +1199,14 @@ export default function CommunityPage() {
                             <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
                             <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
                             <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
+                          </svg>
+                        </span>
+                        <span className="w-4 h-4 flex items-center justify-center" title={sharedLinkedIn ? 'Shared to LinkedIn' : 'Not shared to LinkedIn'}>
+                          <svg className="w-4 h-4" viewBox="0 0 24 24" aria-hidden>
+                            <path
+                              fill={sharedLinkedIn ? socialGreen : socialGrey}
+                              d="M4.98 3.5C4.98 4.88 3.88 6 2.5 6S0 4.88 0 3.5 1.12 1 2.5 1 4.98 2.12 4.98 3.5zM.25 8.25h4.5V24h-4.5V8.25zM8.75 8.25h4.31v2.14h.06c.6-1.14 2.06-2.34 4.24-2.34 4.54 0 5.38 2.99 5.38 6.88V24h-4.5v-7.16c0-1.71-.03-3.9-2.38-3.9-2.38 0-2.75 1.86-2.75 3.78V24h-4.5V8.25z"
+                            />
                           </svg>
                         </span>
                         <span className="w-4 h-4 flex items-center justify-center" title={sharedReddit ? 'Shared to Reddit' : 'Not shared to Reddit'}>
