@@ -295,9 +295,7 @@ class FirestoreService {
       const downloadUrl = await getDownloadURL(storageRef);
       return downloadUrl;
     } catch (error) {
-      const errInfo = { code: error?.code, message: error?.message };
-      console.warn('[uploadPostImageFromFile] failed', errInfo);
-      if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6a85fb'},body:JSON.stringify({sessionId:'6a85fb',location:'firestoreService.js:uploadPostImageFromFile',message:'upload failed',data:errInfo,timestamp:Date.now(),hypothesisId:'H-upload'})}).catch(()=>{});
+      console.error('Error uploading post image file:', error);
       return null;
     }
   }
@@ -320,9 +318,7 @@ class FirestoreService {
       await uploadBytes(storageRef, file);
       return await getDownloadURL(storageRef);
     } catch (error) {
-      const errInfo = { code: error?.code, message: error?.message, path: `posts/${uid}/${postId}` };
-      console.warn('[uploadPostImageToPath] failed', errInfo);
-      if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6a85fb'},body:JSON.stringify({sessionId:'6a85fb',location:'firestoreService.js:uploadPostImageToPath',message:'upload failed',data:errInfo,timestamp:Date.now(),hypothesisId:'H-upload'})}).catch(()=>{});
+      console.error('Error uploading post image to path:', error);
       return null;
     }
   }
@@ -428,45 +424,14 @@ class FirestoreService {
       let imageUrl = imageUrlParam || null;
 
       // Upload image to Firebase Storage (never store image in Firestore)
-      // #region agent log
-      const _fileLog = {
-        hasImageFile: !!imageFile,
-        isFile: !!(imageFile && imageFile instanceof File),
-        isBlob: !!(imageFile && imageFile instanceof Blob),
-        fileType: imageFile ? (typeof imageFile.constructor !== 'undefined' ? imageFile.constructor.name : 'unknown') : null,
-      };
-      console.warn('[createPostForShare] upload branch', _fileLog);
-      if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6a85fb'},body:JSON.stringify({sessionId:'6a85fb',location:'firestoreService.js:createPostForShare:uploadBranch',message:'file check',data:_fileLog,timestamp:Date.now(),hypothesisId:'H-upload'})}).catch(()=>{});
-      // #endregion
       if (imageFile && (imageFile instanceof File || imageFile instanceof Blob)) {
-        let pathResult = null;
-        let pathError = null;
-        try {
-          pathResult = await this.uploadPostImageToPath(uid, postId, imageFile);
-        } catch (e) {
-          pathError = { code: e?.code, message: e?.message };
-          console.warn('[createPostForShare] uploadPostImageToPath error', pathError);
-        }
-        // #region agent log
-        console.warn('[createPostForShare] uploadPostImageToPath result', { pathResult: pathResult ? pathResult.slice(0, 60) : null, pathError });
-        // #endregion
-        if (!pathResult) {
+        imageUrl = await this.uploadPostImageToPath(uid, postId, imageFile);
+        if (!imageUrl) {
           imageUrl = await this.uploadPostImageFromFile(uid, imageFile);
-          // #region agent log
-          console.warn('[createPostForShare] uploadPostImageFromFile result', { imageUrl: imageUrl ? imageUrl.slice(0, 60) : null });
-          // #endregion
-        } else {
-          imageUrl = pathResult;
         }
       } else if (!imageUrl && imageDataUrl) {
         imageUrl = await this.uploadPostImage(uid, imageDataUrl);
       }
-
-      // #region agent log
-      const _log = { postId, hasImageUrl: !!imageUrl, imageUrlPrefix: imageUrl ? imageUrl.slice(0, 80) : null };
-      console.warn('[createPostForShare] after upload', _log);
-      if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6a85fb'},body:JSON.stringify({sessionId:'6a85fb',location:'firestoreService.js:createPostForShare:afterUpload',message:'imageUrl after upload',data:_log,timestamp:Date.now(),hypothesisId:'H5'})}).catch(()=>{});
-      // #endregion
 
       // Create post document: metadata + imageUrl only (no base64)
       await setDoc(postDocRef, {

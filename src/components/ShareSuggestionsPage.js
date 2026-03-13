@@ -34,31 +34,6 @@ const PLATFORM_LABELS = {
   reddit: 'Reddit',
 };
 
-// #region agent log helper
-const debugLog = (hypothesisId, location, message, data = {}, runId = 'pre-fix') => {
-  try {
-    fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Debug-Session-Id': '6a85fb',
-      },
-      body: JSON.stringify({
-        sessionId: '6a85fb',
-        runId,
-        hypothesisId,
-        location,
-        message,
-        data,
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-  } catch {
-    // ignore logging failures
-  }
-};
-// #endregion
-
 // Local image cache key builder (must stay in sync with chatService)
 const buildImageCacheKey = (text) => {
   try {
@@ -316,12 +291,6 @@ export default function ShareSuggestionsPage() {
       }
     }
 
-    // #region agent log
-    const _log = { hasImageFile: !!imageFile, hasImageUrl: !!imageUrl, imageUrlPrefix: imageUrl ? imageUrl.slice(0, 80) : null };
-    console.warn('[recordShare] before createPostForShare', _log);
-    fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6a85fb'},body:JSON.stringify({sessionId:'6a85fb',location:'ShareSuggestionsPage.js:recordShare:beforeCreatePost',message:'image inputs',data:_log,timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
-    // #endregion
-
     // 3) Create post: upload image to Storage → Firestore stores only metadata + imageUrl (posts, userPosts, shareHistory)
     const result = await firestoreService.createPostForShare({
       uid: user.uid,
@@ -331,12 +300,6 @@ export default function ShareSuggestionsPage() {
       platform: plat,
     });
     const finalImageUrl = result?.imageUrl || imageUrl || null;
-
-    // #region agent log
-    const _log2 = { success: !!result?.success, resultImageUrl: result?.imageUrl ? result.imageUrl.slice(0, 80) : null, finalImageUrl: finalImageUrl ? finalImageUrl.slice(0, 80) : null };
-    console.warn('[recordShare] after createPostForShare', _log2);
-    fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6a85fb'},body:JSON.stringify({sessionId:'6a85fb',location:'ShareSuggestionsPage.js:recordShare:afterCreatePost',message:'createPost result',data:_log2,timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
-    // #endregion
 
     // 4) Create Community "My Presence" entry with URL only (for feed that reads from communityPosts)
     const postData = {
@@ -364,12 +327,6 @@ export default function ShareSuggestionsPage() {
         }
       })(),
     };
-
-    // #region agent log
-    const _log3 = { postDataHasImage: !!postData.image, postDataImagePrefix: postData.image ? String(postData.image).slice(0, 80) : null };
-    console.warn('[recordShare] before addDoc communityPosts', _log3);
-    fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6a85fb'},body:JSON.stringify({sessionId:'6a85fb',location:'ShareSuggestionsPage.js:recordShare:beforeAddDoc',message:'postData.image',data:_log3,timestamp:Date.now(),hypothesisId:'H3'})}).catch(()=>{});
-    // #endregion
 
     try {
       await addDoc(collection(db, 'communityPosts'), postData);
@@ -597,13 +554,6 @@ export default function ShareSuggestionsPage() {
       const base64Data = parts[1];
       const path = `share-post-${Date.now()}.png`;
 
-      debugLog(
-        'H4',
-        'ShareSuggestionsPage.js:writeImageToCacheFile:start',
-        'Writing image to Capacitor Filesystem cache',
-        { path }
-      );
-
       const result = await Filesystem.writeFile({
         path,
         data: base64Data,
@@ -612,20 +562,8 @@ export default function ShareSuggestionsPage() {
       });
 
       const uri = result.uri || result.path || null;
-      debugLog(
-        'H4',
-        'ShareSuggestionsPage.js:writeImageToCacheFile:success',
-        'Image written to cache',
-        { hasUri: !!uri }
-      );
       return uri;
     } catch (e) {
-      debugLog(
-        'H4',
-        'ShareSuggestionsPage.js:writeImageToCacheFile:error',
-        'Failed to write image to cache',
-        { name: e?.name || 'Error' }
-      );
       return null;
     }
   };
@@ -636,32 +574,9 @@ export default function ShareSuggestionsPage() {
     const imageDataUrl = suggestionImageUrls[selectedIndex] || null;
     const isDataUrl = imageDataUrl && typeof imageDataUrl === 'string' && imageDataUrl.startsWith('data:image');
 
-    debugLog(
-      'H1',
-      'ShareSuggestionsPage.js:handleShareToSelectedPlatform:entry',
-      'Entered share handler',
-      {
-        selectedPlatform,
-        hasImage: !!imageDataUrl,
-        isDataUrl,
-        textLength: t.length,
-        isNative: isNative(),
-      }
-    );
-
     // 0) Special case: X (Twitter) → generate tweet-style image card and share that,
     // but only if an AI image has been generated for the selected suggestion
     if (selectedPlatform === 'x' && isDataUrl) {
-      debugLog(
-        'HX',
-        'ShareSuggestionsPage.js:handleShareToSelectedPlatform:xCard:start',
-        'Generating tweet-style image card for X share',
-        {
-          hasImage: !!imageDataUrl,
-          textLength: t.length,
-        }
-      );
-
       try {
         const node = tweetCardRef.current;
         if (node) {
@@ -694,21 +609,11 @@ export default function ShareSuggestionsPage() {
                   });
                   await recordShare('x', t, { imageDataUrlForStorage: cardDataUrl });
                   triggerPostShareConfirmation();
-                  debugLog(
-                    'HX',
-                    'ShareSuggestionsPage.js:handleShareToSelectedPlatform:xCard:nativeSuccess',
-                    'Shared tweet card via native Share'
-                  );
                   setSharePanelOpen(false);
                   return;
                 }
               } catch (err) {
-                debugLog(
-                  'HX',
-                  'ShareSuggestionsPage.js:handleShareToSelectedPlatform:xCard:nativeError',
-                  'Native tweet card share failed',
-                  { name: err?.name || 'Error' }
-                );
+                // Native share failed, fall through
               }
             }
 
@@ -720,20 +625,10 @@ export default function ShareSuggestionsPage() {
                   await navigator.share({ files: [file] });
                   await recordShare('x', t, { imageDataUrlForStorage: cardDataUrl });
                   triggerPostShareConfirmation();
-                  debugLog(
-                    'HX',
-                    'ShareSuggestionsPage.js:handleShareToSelectedPlatform:xCard:webSuccess',
-                    'Shared tweet card via Web Share'
-                  );
                   setSharePanelOpen(false);
                   return;
                 } catch (err) {
-                  debugLog(
-                    'HX',
-                    'ShareSuggestionsPage.js:handleShareToSelectedPlatform:xCard:webError',
-                    'Web Share tweet card failed',
-                    { name: err?.name || 'Error' }
-                  );
+                  // Web Share failed, fall through to download fallback
                 }
               }
             }
@@ -752,12 +647,6 @@ export default function ShareSuggestionsPage() {
           }
         }
       } catch (err) {
-        debugLog(
-          'HX',
-          'ShareSuggestionsPage.js:handleShareToSelectedPlatform:xCard:renderError',
-          'Failed to generate tweet card',
-          { name: err?.name || 'Error' }
-        );
         if (err?.name === 'SecurityError' || (err?.message && err.message.includes('cssRules'))) {
           await recordShare('x', t, { imageDataUrlForStorage: imageDataUrl || null });
         }
@@ -773,14 +662,6 @@ export default function ShareSuggestionsPage() {
     // 1) Native share via Capacitor (Android/iOS app) – text + image
     if (isNative() && isDataUrl) {
       try {
-        debugLog(
-          'H1',
-          'ShareSuggestionsPage.js:handleShareToSelectedPlatform:nativeShare',
-          'Attempting native Share.share with image (using Filesystem)',
-          {
-            selectedPlatform,
-          }
-        );
         let fileUri = null;
         try {
           fileUri = await writeImageToCacheFile(imageDataUrl);
@@ -808,23 +689,12 @@ export default function ShareSuggestionsPage() {
         if (selectedPlatform === 'linkedin') {
           copyCaptionToClipboardForLinkedIn(t);
         }
-        debugLog(
-          'H1',
-          'ShareSuggestionsPage.js:handleShareToSelectedPlatform:nativeShare:success',
-          'Native share completed'
-        );
         triggerPostShareConfirmation();
         setSharePanelOpen(false);
         return;
       } catch (err) {
         if (err?.name !== 'AbortError') {
           console.warn('Native share failed, falling back to web share:', err);
-          debugLog(
-            'H1',
-            'ShareSuggestionsPage.js:handleShareToSelectedPlatform:nativeShare:error',
-            'Native share threw error',
-            { name: err?.name || 'UnknownError' }
-          );
         }
       }
     }
@@ -834,44 +704,21 @@ export default function ShareSuggestionsPage() {
       const file = dataURLtoFile(imageDataUrl);
       if (file && navigator.canShare({ text: t, files: [file] })) {
         try {
-          debugLog(
-            'H2',
-            'ShareSuggestionsPage.js:handleShareToSelectedPlatform:webShare',
-            'Attempting navigator.share with file',
-            { selectedPlatform }
-          );
           await navigator.share({ text: t, files: [file] });
           await recordShare(selectedPlatform, t, { imageDataUrlForStorage: imageDataUrl || null });
           if (selectedPlatform === 'linkedin') {
             copyCaptionToClipboardForLinkedIn(t);
           }
-          debugLog(
-            'H2',
-            'ShareSuggestionsPage.js:handleShareToSelectedPlatform:webShare:success',
-            'Web share completed'
-          );
           triggerPostShareConfirmation();
           setSharePanelOpen(false);
           return;
         } catch (err) {
           if (err.name !== 'AbortError') console.warn('Share with image failed:', err);
-          debugLog(
-            'H2',
-            'ShareSuggestionsPage.js:handleShareToSelectedPlatform:webShare:error',
-            'Web share threw error',
-            { name: err?.name || 'UnknownError' }
-          );
         }
       }
     }
 
     // 3) Fallback: platform-specific share URLs (text only) + optional download
-    debugLog(
-      'H3',
-      'ShareSuggestionsPage.js:handleShareToSelectedPlatform:fallback',
-      'Using URL-based fallback share',
-      { selectedPlatform, hasImage: !!imageDataUrl, isDataUrl }
-    );
     const fallbackImage = isDataUrl ? imageDataUrl : (suggestionImageUrls[selectedIndex] || null);
     try {
       await recordShare(selectedPlatform, t, { imageDataUrlForStorage: fallbackImage });
