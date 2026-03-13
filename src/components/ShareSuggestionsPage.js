@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Linkedin, Pencil } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
+import { Share } from '@capacitor/share';
 import { useTheme } from '../contexts/ThemeContext';
 import { getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
@@ -58,6 +60,12 @@ const getCachedImageForPost = (text) => {
     return null;
   }
 };
+
+const isNative = () =>
+  typeof window !== 'undefined' &&
+  typeof Capacitor !== 'undefined' &&
+  typeof Capacitor.isNativePlatform === 'function' &&
+  Capacitor.isNativePlatform();
 
 function buildFallbackSuggestions(original) {
   const t = (original || '').trim();
@@ -310,6 +318,26 @@ export default function ShareSuggestionsPage() {
     const imageDataUrl = suggestionImageUrls[selectedIndex] || null;
     const isDataUrl = imageDataUrl && typeof imageDataUrl === 'string' && imageDataUrl.startsWith('data:image');
 
+    // 1) Native share via Capacitor (Android/iOS app) – text + image
+    if (isNative() && isDataUrl) {
+      try {
+        await Share.share({
+          text: t,
+          url: imageDataUrl,
+          title: 'Share reflection',
+          dialogTitle: 'Share to…',
+        });
+        recordShare(selectedPlatform, t);
+        setSharePanelOpen(false);
+        return;
+      } catch (err) {
+        if (err?.name !== 'AbortError') {
+          console.warn('Native share failed, falling back to web share:', err);
+        }
+      }
+    }
+
+    // 2) Web Share API with files (PWA / supported mobile browsers)
     if (isDataUrl && typeof navigator !== 'undefined' && navigator.share && navigator.canShare) {
       const file = dataURLtoFile(imageDataUrl);
       if (file && navigator.canShare({ text: t, files: [file] })) {
@@ -324,6 +352,7 @@ export default function ShareSuggestionsPage() {
       }
     }
 
+    // 3) Fallback: platform-specific share URLs (text only) + optional download
     if (selectedPlatform === 'linkedin') shareToLinkedIn(t);
     else if (selectedPlatform === 'x') shareToTwitter(t);
     else if (selectedPlatform === 'reddit') shareToReddit(t);
@@ -334,7 +363,9 @@ export default function ShareSuggestionsPage() {
         a.href = imageDataUrl;
         a.download = 'post-image.png';
         a.click();
-      } catch (_) {}
+      } catch (_) {
+        // ignore download errors
+      }
     }
     setSharePanelOpen(false);
   };
