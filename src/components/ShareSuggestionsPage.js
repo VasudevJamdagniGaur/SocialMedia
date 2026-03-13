@@ -421,7 +421,7 @@ export default function ShareSuggestionsPage() {
         if (node) {
           const cardDataUrl = await toPng(node, {
             width: 1080,
-            height: 1350,
+            height: 1080, // 1:1 aspect ratio for exported card
             pixelRatio: 2,
           });
 
@@ -655,7 +655,7 @@ export default function ShareSuggestionsPage() {
             <TweetShareCard
               ref={tweetCardRef}
               width={1080}
-              height={1350}
+              height={1080} // enforce 1:1 export canvas
               displayName={tweetDisplayName}
               username={tweetUsername}
               text={selectedText || reflectionFromState}
