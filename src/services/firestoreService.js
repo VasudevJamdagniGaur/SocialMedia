@@ -300,6 +300,28 @@ class FirestoreService {
   }
 
   /**
+   * Upload image file to Firebase Storage at posts/{userId}/{postId}.jpg.
+   * Used when creating a post so the path includes the Firestore postId.
+   * @param {string} uid - User ID
+   * @param {string} postId - Firestore post document ID
+   * @param {File} file - Image file (PNG/JPG)
+   * @returns {Promise<string|null>} Download URL or null
+   */
+  async uploadPostImageToPath(uid, postId, file) {
+    if (!uid || !postId || !file || !(file instanceof File)) return null;
+    try {
+      const ext = file.name && file.name.includes('.') ? file.name.split('.').pop() : 'jpg';
+      const path = `posts/${uid}/${postId}.${ext}`;
+      const storageRef = ref(this.storage, path);
+      await uploadBytes(storageRef, file);
+      return await getDownloadURL(storageRef);
+    } catch (error) {
+      console.error('Error uploading post image to path:', error);
+      return null;
+    }
+  }
+
+  /**
    * Stable cache key from post text for reflection image cache (no API re-calls).
    */
   hashForReflectionCache(postText) {
@@ -365,28 +387,24 @@ class FirestoreService {
   }
 
   /**
-   * Create a DeTea social post record for a shared suggestion.
-   * - Creates a document in `posts`
-   * - Adds an entry under `userPosts/{uid}/posts/{postId}`
-   * - Records an entry in `shareHistory`
-   *
-   * Prefer passing imageUrl (from compressed upload); imageDataUrl is legacy and uploads uncompressed.
+   * Create a DeTea social post: image in Storage, only metadata + imageUrl in Firestore.
+   * Flow: generate postId → upload image to posts/{userId}/{postId}.jpg (if file) → create posts doc → userPosts ref → shareHistory.
    *
    * @param {object} params
    * @param {string} params.uid
    * @param {string} params.caption
-   * @param {string|null} [params.imageUrl] - Optional Storage URL (from uploadPostImageFromFile)
-   * @param {string|null} [params.imageDataUrl] - Optional base64 (legacy; uploads uncompressed)
+   * @param {File|null} [params.imageFile] - Image file to upload to Storage at posts/{uid}/{postId}.jpg
+   * @param {string|null} [params.imageUrl] - Already-uploaded image URL (e.g. from reflection cache); no upload
+   * @param {string|null} [params.imageDataUrl] - Legacy base64; uploads via uploadPostImage (avoid if possible)
    * @param {'x'|'linkedin'|'reddit'|'whatsapp'|'other'} params.platform
    * @returns {Promise<{ success: boolean, postId?: string, imageUrl?: string, error?: string }>}
    */
-  async createPostForShare({ uid, caption, imageUrl: imageUrlParam, imageDataUrl, platform }) {
+  async createPostForShare({ uid, caption, imageFile, imageUrl: imageUrlParam, imageDataUrl, platform }) {
     if (!uid || !caption) {
       return { success: false, error: 'Missing uid or caption' };
     }
 
     try {
-      // Ensure user doc exists; avoid duplicating profile data in posts
       const currentUser = getCurrentUser();
       await this.ensureUser(uid, {
         userId: uid,
@@ -395,41 +413,47 @@ class FirestoreService {
         updatedAt: serverTimestamp(),
       });
 
-      // Use pre-uploaded URL (dual-image pipeline) or legacy: upload from data URL
+      // Generate postId first so we can use it in Storage path: posts/{userId}/{postId}.jpg
+      const postsRef = collection(this.db, 'posts');
+      const postDocRef = doc(postsRef);
+      const postId = postDocRef.id;
+
       let imageUrl = imageUrlParam || null;
-      if (!imageUrl && imageDataUrl) {
+
+      // Upload image to Firebase Storage at posts/{userId}/{postId}.jpg (never store image in Firestore)
+      if (imageFile && imageFile instanceof File) {
+        imageUrl = await this.uploadPostImageToPath(uid, postId, imageFile);
+      } else if (!imageUrl && imageDataUrl) {
         imageUrl = await this.uploadPostImage(uid, imageDataUrl);
       }
 
-      // Step 3: Create posts entry
-      const postsRef = collection(this.db, 'posts');
-      const postDocRef = await addDoc(postsRef, {
+      // Create post document: metadata + imageUrl only (no base64)
+      await setDoc(postDocRef, {
         userId: uid,
         caption,
         imageUrl: imageUrl || null,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-        likesCount: 0,
-        commentsCount: 0,
-        shareCount: 1,
+        likeCount: 0,
+        commentCount: 0,
       });
-      const postId = postDocRef.id;
 
-      // Step 4: Add to userPosts for fast profile loading (include userId for queries)
+      // Profile feed reference for "My Presence"
       const userPostRef = doc(this.db, `userPosts/${uid}/posts/${postId}`);
       await setDoc(userPostRef, {
         userId: uid,
         postId,
         createdAt: serverTimestamp(),
+        postRef: `posts/${postId}`,
       });
 
-      // Step 5: Record share history
+      // Share analytics
       const shareRef = collection(this.db, 'shareHistory');
       await addDoc(shareRef, {
-        postId,
         userId: uid,
+        postId,
         platform,
-        sharedAt: serverTimestamp(),
+        createdAt: serverTimestamp(),
       });
 
       return { success: true, postId, imageUrl: imageUrl || null };

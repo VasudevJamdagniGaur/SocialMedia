@@ -284,32 +284,40 @@ export default function ShareSuggestionsPage() {
         : null;
     const imageToStore = options.imageDataUrlForStorage ?? imageForPost;
 
-    // 2) Compress and upload only the stored version; keep sharing pipeline high-quality
+    // 2) Prepare image: File for upload to Storage at posts/{uid}/{postId}.jpg, or existing URL
+    let imageFile = null;
     let imageUrl = null;
     if (imageToStore && typeof imageToStore === 'string') {
       if (imageToStore.startsWith('data:image')) {
-        const compressedFile = await compressImageForStorage(imageToStore);
-        if (compressedFile) {
-          imageUrl = await firestoreService.uploadPostImageFromFile(user.uid, compressedFile);
+        const compressed = await compressImageForStorage(imageToStore);
+        if (compressed) {
+          imageFile = compressed;
         }
       } else if (imageToStore.startsWith('http://') || imageToStore.startsWith('https://')) {
-        // Image already stored in Firebase (e.g. from reflectionImageCache); use URL as-is so My Presence has the image
         imageUrl = imageToStore;
       }
     }
-
-    // 2b) Fallback: if we still have no image URL (e.g. UI hadn't loaded it yet or upload failed), try reflection cache by shared text
     if (!imageUrl && content) {
       const suggestionText = selectedText || content;
-      const cachedUrl = await firestoreService.getReflectionImageUrl(user.uid, suggestionText);
-      if (cachedUrl) imageUrl = cachedUrl;
+      const cached = await firestoreService.getReflectionImageUrl(user.uid, suggestionText);
+      if (cached) imageUrl = cached;
       if (!imageUrl && suggestionText !== content) {
         const cachedByContent = await firestoreService.getReflectionImageUrl(user.uid, content);
         if (cachedByContent) imageUrl = cachedByContent;
       }
     }
 
-    // 3) Create Community "My Presence" post with URL only (no base64), so feed stays light
+    // 3) Create post: upload image to Storage → Firestore stores only metadata + imageUrl (posts, userPosts, shareHistory)
+    const result = await firestoreService.createPostForShare({
+      uid: user.uid,
+      caption: content,
+      imageFile: imageFile || undefined,
+      imageUrl: imageUrl || undefined,
+      platform: plat,
+    });
+    const finalImageUrl = result?.imageUrl || imageUrl || null;
+
+    // 4) Create Community "My Presence" entry with URL only (for feed that reads from communityPosts)
     const postData = {
       author: user.displayName || 'Anonymous',
       authorId: user.uid,
@@ -318,7 +326,7 @@ export default function ShareSuggestionsPage() {
       likes: 0,
       comments: [],
       profilePicture: profileImage,
-      image: imageUrl,
+      image: finalImageUrl,
       source: 'social_share',
       sharedPlatform: plat,
       reflectionDate: (() => {
@@ -342,14 +350,6 @@ export default function ShareSuggestionsPage() {
       console.error('Error creating community post from social share:', err);
       throw err;
     }
-
-    // 4) Create scalable social post record with URL only (fire-and-forget)
-    firestoreService.createPostForShare({
-      uid: user.uid,
-      caption: content,
-      imageUrl,
-      platform: plat,
-    }).catch((err) => console.error('Error creating scalable social post for share:', err));
   };
 
   const textToShare = (sharePanelOpen && editableShareText !== '') ? editableShareText : selectedText;
