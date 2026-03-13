@@ -283,11 +283,12 @@ class FirestoreService {
    * @returns {Promise<string|null>}
    */
   async uploadPostImageFromFile(uid, file) {
-    if (!uid || !file || !(file instanceof File)) {
+    const isFileOrBlob = file && (file instanceof File || file instanceof Blob);
+    if (!uid || !isFileOrBlob) {
       return null;
     }
     try {
-      const ext = file.name && file.name.includes('.') ? file.name.split('.').pop() : 'jpg';
+      const ext = file instanceof File && file.name && file.name.includes('.') ? file.name.split('.').pop() : 'jpg';
       const path = `posts/${uid}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
       const storageRef = ref(this.storage, path);
       await uploadBytes(storageRef, file);
@@ -310,9 +311,10 @@ class FirestoreService {
    * @returns {Promise<string|null>} Download URL or null
    */
   async uploadPostImageToPath(uid, postId, file) {
-    if (!uid || !postId || !file || !(file instanceof File)) return null;
+    const isFileOrBlob = file && (file instanceof File || file instanceof Blob);
+    if (!uid || !postId || !isFileOrBlob) return null;
     try {
-      const ext = file.name && file.name.includes('.') ? file.name.split('.').pop() : 'jpg';
+      const ext = file instanceof File && file.name && file.name.includes('.') ? file.name.split('.').pop() : 'jpg';
       const path = `posts/${uid}/${postId}.${ext}`;
       const storageRef = ref(this.storage, path);
       await uploadBytes(storageRef, file);
@@ -340,9 +342,10 @@ class FirestoreService {
    * Used so we can load the image from Firebase instead of calling Gemini again.
    */
   async uploadReflectionImageFile(uid, file, cacheKey) {
-    if (!uid || !file || !(file instanceof File) || !cacheKey) return null;
+    const isFileOrBlob = file && (file instanceof File || file instanceof Blob);
+    if (!uid || !isFileOrBlob || !cacheKey) return null;
     try {
-      const ext = file.name && file.name.includes('.') ? file.name.split('.').pop() : 'jpg';
+      const ext = file instanceof File && file.name && file.name.includes('.') ? file.name.split('.').pop() : 'jpg';
       const path = `reflectionCache/${uid}/${cacheKey}.${ext}`;
       const storageRef = ref(this.storage, path);
       await uploadBytes(storageRef, file);
@@ -429,12 +432,13 @@ class FirestoreService {
       const _fileLog = {
         hasImageFile: !!imageFile,
         isFile: !!(imageFile && imageFile instanceof File),
+        isBlob: !!(imageFile && imageFile instanceof Blob),
         fileType: imageFile ? (typeof imageFile.constructor !== 'undefined' ? imageFile.constructor.name : 'unknown') : null,
       };
       console.warn('[createPostForShare] upload branch', _fileLog);
       if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6a85fb'},body:JSON.stringify({sessionId:'6a85fb',location:'firestoreService.js:createPostForShare:uploadBranch',message:'file check',data:_fileLog,timestamp:Date.now(),hypothesisId:'H-upload'})}).catch(()=>{});
       // #endregion
-      if (imageFile && imageFile instanceof File) {
+      if (imageFile && (imageFile instanceof File || imageFile instanceof Blob)) {
         let pathResult = null;
         let pathError = null;
         try {
