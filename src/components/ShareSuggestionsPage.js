@@ -298,6 +298,17 @@ export default function ShareSuggestionsPage() {
       }
     }
 
+    // 2b) Fallback: if we still have no image URL (e.g. UI hadn't loaded it yet or upload failed), try reflection cache by shared text
+    if (!imageUrl && content) {
+      const suggestionText = selectedText || content;
+      const cachedUrl = await firestoreService.getReflectionImageUrl(user.uid, suggestionText);
+      if (cachedUrl) imageUrl = cachedUrl;
+      if (!imageUrl && suggestionText !== content) {
+        const cachedByContent = await firestoreService.getReflectionImageUrl(user.uid, content);
+        if (cachedByContent) imageUrl = cachedByContent;
+      }
+    }
+
     // 3) Create Community "My Presence" post with URL only (no base64), so feed stays light
     const postData = {
       author: user.displayName || 'Anonymous',

@@ -1136,6 +1136,7 @@ export default function CommunityPage() {
                           src={post.image}
                           alt=""
                           className="w-full max-h-80 object-cover"
+                          referrerPolicy="no-referrer"
                           onError={(e) => { e.target.style.display = 'none'; }}
                         />
                       </div>
