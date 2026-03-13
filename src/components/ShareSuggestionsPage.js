@@ -264,11 +264,37 @@ export default function ShareSuggestionsPage() {
     }
   };
 
-  const shareToLinkedIn = (text) => {
+  const shareToLinkedIn = async (text) => {
     const t = text ?? textToShare;
     if (!t) return;
     const url = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : 'https://detea.app';
-    window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`, '_blank', 'noopener,noreferrer');
+
+    // On native (APK), try to open the LinkedIn app directly via deep link.
+    if (isNative()) {
+      try {
+        const { App } = await import('@capacitor/app');
+        // Use LinkedIn's shareArticle deep link so app opens with share composer when possible
+        const deepLink = `linkedin://shareArticle?mini=true&url=${encodeURIComponent(
+          url
+        )}&title=${encodeURIComponent('My reflection')}&summary=${encodeURIComponent(t)}`;
+        await App.openUrl({ url: deepLink });
+      } catch (err) {
+        console.warn('LinkedIn deep link failed, falling back to web URL:', err);
+        window.open(
+          `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`,
+          '_blank',
+          'noopener,noreferrer'
+        );
+      }
+    } else {
+      // Web / PWA: use standard LinkedIn share URL
+      window.open(
+        `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`,
+        '_blank',
+        'noopener,noreferrer'
+      );
+    }
+
     recordShare('linkedin', t);
     copyCaptionToClipboardForLinkedIn(t);
   };
@@ -546,6 +572,7 @@ export default function ShareSuggestionsPage() {
     // Special case: LinkedIn should go directly to LinkedIn (app or browser),
     // not through the generic native share sheet.
     if (selectedPlatform === 'linkedin') {
+      // Fire and forget; deep link will open LinkedIn app on native when possible
       shareToLinkedIn(t);
       triggerPostShareConfirmation();
       setSharePanelOpen(false);
