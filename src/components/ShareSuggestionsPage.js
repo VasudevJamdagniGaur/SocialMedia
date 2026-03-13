@@ -403,8 +403,9 @@ export default function ShareSuggestionsPage() {
       }
     );
 
-    // 0) Special case: X (Twitter) → generate tweet-style image card and share that
-    if (selectedPlatform === 'x') {
+    // 0) Special case: X (Twitter) → generate tweet-style image card and share that,
+    // but only if an AI image has been generated for the selected suggestion
+    if (selectedPlatform === 'x' && isDataUrl) {
       debugLog(
         'HX',
         'ShareSuggestionsPage.js:handleShareToSelectedPlatform:xCard:start',
@@ -646,8 +647,8 @@ export default function ShareSuggestionsPage() {
       style={{ background: isDarkMode ? HUB.bg : '#F5F5F5' }}
     >
       <div className="max-w-md w-full mx-auto flex flex-col flex-1">
-        {/* Off-screen tweet card for X sharing */}
-        {selectedPlatform === 'x' && (
+        {/* Off-screen tweet card for X sharing – only when image has been generated */}
+        {selectedPlatform === 'x' && suggestionImageUrls[selectedIndex] && (
           <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
             <TweetShareCard
               ref={tweetCardRef}
@@ -776,7 +777,7 @@ export default function ShareSuggestionsPage() {
                         transform: isSelected ? 'translateY(-2px)' : 'none',
                       }}
                     >
-                      {selectedPlatform === 'x' ? (
+                      {selectedPlatform === 'x' && imageUrl ? (
                         <div className="p-3">
                           {eventLabel ? (
                             <p
@@ -786,22 +787,13 @@ export default function ShareSuggestionsPage() {
                               {eventLabel}
                             </p>
                           ) : null}
-                          <div
-                            style={{
-                              transform: 'scale(0.32)',
-                              transformOrigin: 'top left',
-                              width: 1080,
-                              overflow: 'hidden',
-                            }}
-                          >
-                            <TweetShareCard
-                              displayName={tweetDisplayName}
-                              username={tweetUsername}
-                              text={postText}
-                              imageUrl={imageUrl}
-                              profileImageUrl={tweetProfileImage}
-                            />
-                          </div>
+                          <TweetShareCard
+                            displayName={tweetDisplayName}
+                            username={tweetUsername}
+                            text={postText}
+                            imageUrl={imageUrl}
+                            profileImageUrl={tweetProfileImage}
+                          />
                         </div>
                       ) : (
                         <>
