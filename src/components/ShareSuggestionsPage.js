@@ -286,10 +286,15 @@ export default function ShareSuggestionsPage() {
 
     // 2) Compress and upload only the stored version; keep sharing pipeline high-quality
     let imageUrl = null;
-    if (imageToStore && typeof imageToStore === 'string' && imageToStore.startsWith('data:image')) {
-      const compressedFile = await compressImageForStorage(imageToStore);
-      if (compressedFile) {
-        imageUrl = await firestoreService.uploadPostImageFromFile(user.uid, compressedFile);
+    if (imageToStore && typeof imageToStore === 'string') {
+      if (imageToStore.startsWith('data:image')) {
+        const compressedFile = await compressImageForStorage(imageToStore);
+        if (compressedFile) {
+          imageUrl = await firestoreService.uploadPostImageFromFile(user.uid, compressedFile);
+        }
+      } else if (imageToStore.startsWith('http://') || imageToStore.startsWith('https://')) {
+        // Image already stored in Firebase (e.g. from reflectionImageCache); use URL as-is so My Presence has the image
+        imageUrl = imageToStore;
       }
     }
 
