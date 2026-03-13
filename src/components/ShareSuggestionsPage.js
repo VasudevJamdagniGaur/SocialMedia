@@ -301,15 +301,61 @@ export default function ShareSuggestionsPage() {
     const text = (editableShareText || selectedText || '').trim();
     if (!text) return;
 
-    const shareData = { text };
-
     try {
-      if (navigator.share) {
-        await navigator.share(shareData);
-        recordShare('other', text);
+      const imageDataUrl = suggestionImageUrls[selectedIndex] || null;
+      const isDataUrl =
+        imageDataUrl && typeof imageDataUrl === 'string' && imageDataUrl.startsWith('data:image');
+
+      // 1) Prefer native share with IMAGE ONLY when running as Capacitor app
+      if (isNative() && isDataUrl) {
+        try {
+          let fileUri = await writeImageToCacheFile(imageDataUrl);
+          if (fileUri) {
+            await Share.share({
+              text: '',
+              files: [fileUri],
+              title: 'Share reflection',
+              dialogTitle: 'Share to…',
+            });
+          }
+        } catch (err) {
+          console.warn('Native share (other platforms) failed:', err);
+        }
+      }
+      // 2) Web Share API with image file (PWA / supported browsers)
+      else if (
+        isDataUrl &&
+        typeof navigator !== 'undefined' &&
+        navigator.share &&
+        navigator.canShare
+      ) {
+        const file = dataURLtoFile(imageDataUrl);
+        if (file && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({ files: [file] });
+          } catch (err) {
+            console.warn('Web Share (other platforms) with image failed:', err);
+          }
+        }
+      }
+      // 3) Fallback: share text only if no image is available
+      else if (typeof navigator !== 'undefined' && navigator.share) {
+        try {
+          await navigator.share({ text });
+        } catch (err) {
+          console.warn('Web Share (text only) failed:', err);
+        }
+      }
+
+      // Copy caption and inform user
+      if (selectedPlatform === 'linkedin') {
+        // For LinkedIn we centralize copy + toast here
+        shareToLinkedIn(text);
       } else if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(text);
         alert('Text copied to clipboard. You can paste it into any app to share.');
+        recordShare('other', text);
+      } else {
         recordShare('other', text);
       }
     } catch (error) {
@@ -1127,19 +1173,20 @@ export default function ShareSuggestionsPage() {
               <div className="flex gap-3 mt-4">
                 <button
                   type="button"
-                  onClick={handleShareToOtherPlatforms}
-                  className="flex-1 py-3 rounded-xl font-medium transition-opacity hover:opacity-90"
-                  style={{ background: isDarkMode ? HUB.divider : '#E5E5E5', color: isDarkMode ? HUB.text : '#333' }}
-                >
-                  Share to other platforms
-                </button>
-                <button
-                  type="button"
                   onClick={handleShareToSelectedPlatform}
                   disabled={!selectedPlatform || !editableShareText.trim()}
                   className="flex-1 py-3 rounded-xl font-medium transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{
-                    background: selectedPlatform === 'linkedin' ? '#0A66C2' : selectedPlatform === 'x' ? '#1D9BF0' : selectedPlatform === 'reddit' ? REDDIT_COLOR : (isDarkMode ? HUB.divider : '#CCC'),
+                    background:
+                      selectedPlatform === 'linkedin'
+                        ? '#0A66C2'
+                        : selectedPlatform === 'x'
+                        ? '#1D9BF0'
+                        : selectedPlatform === 'reddit'
+                        ? REDDIT_COLOR
+                        : isDarkMode
+                        ? HUB.divider
+                        : '#CCC',
                     color: '#FFFFFF',
                   }}
                 >
