@@ -18,22 +18,21 @@ const TweetShareCard = React.forwardRef(function TweetShareCard(props, ref) {
       ref={ref}
       style={{
         width: 1080,
-        backgroundColor: '#000000',
-        color: '#E7E9EA',
+        backgroundColor: '#E7ECF0',
         fontFamily:
           '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-        padding: 32,
+        padding: 48,
         boxSizing: 'border-box',
       }}
     >
       <div
         style={{
-          maxWidth: 900,
+          maxWidth: 960,
           margin: '0 auto',
-          borderRadius: 32,
-          border: '1px solid #2F3336',
-          backgroundColor: '#000000',
-          padding: 32,
+          borderRadius: 40,
+          border: '1px solid #D1D5DB',
+          backgroundColor: '#FFFFFF',
+          padding: 36,
           boxSizing: 'border-box',
         }}
       >
@@ -47,7 +46,7 @@ const TweetShareCard = React.forwardRef(function TweetShareCard(props, ref) {
               overflow: 'hidden',
               marginRight: 20,
               background:
-                'linear-gradient(135deg, rgba(168,85,247,0.4), rgba(56,189,248,0.4))',
+                'linear-gradient(135deg, rgba(37,99,235,0.4), rgba(79,70,229,0.5))',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -77,7 +76,7 @@ const TweetShareCard = React.forwardRef(function TweetShareCard(props, ref) {
               style={{
                 fontSize: 30,
                 fontWeight: 700,
-                color: '#E7E9EA',
+                color: '#0F1419',
                 lineHeight: 1.2,
               }}
             >
@@ -87,7 +86,7 @@ const TweetShareCard = React.forwardRef(function TweetShareCard(props, ref) {
               style={{
                 marginTop: 4,
                 fontSize: 24,
-                color: '#8B98A5',
+                color: '#536471',
               }}
             >
               @{username}
@@ -100,7 +99,7 @@ const TweetShareCard = React.forwardRef(function TweetShareCard(props, ref) {
           style={{
             fontSize: 28,
             lineHeight: 1.5,
-            color: '#E7E9EA',
+            color: '#0F1419',
             whiteSpace: 'pre-wrap',
           }}
         >
@@ -114,7 +113,7 @@ const TweetShareCard = React.forwardRef(function TweetShareCard(props, ref) {
               marginTop: 24,
               borderRadius: 24,
               overflow: 'hidden',
-              border: '1px solid #2F3336',
+              border: '1px solid #D1D5DB',
             }}
           >
             <img
@@ -131,12 +130,13 @@ const TweetShareCard = React.forwardRef(function TweetShareCard(props, ref) {
             marginTop: 28,
             display: 'flex',
             justifyContent: 'flex-end',
+            alignItems: 'center',
           }}
         >
           <span
             style={{
               fontSize: 20,
-              color: '#8B98A5',
+              color: '#6B7280',
             }}
           >
             Created with DeTea

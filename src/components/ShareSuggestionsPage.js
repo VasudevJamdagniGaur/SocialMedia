@@ -748,57 +748,131 @@ export default function ShareSuggestionsPage() {
             ) : platformSuggestions.length > 0 ? (
               <div className="space-y-3 mb-8">
                 {platformSuggestions.map((item, idx) => {
-                  const eventLabel = typeof item === 'object' && item?.eventLabel != null ? item.eventLabel : 'Moment';
-                  const postText = typeof item === 'object' && item?.post != null ? item.post : String(item);
+                  const eventLabel =
+                    typeof item === 'object' && item?.eventLabel != null ? item.eventLabel : 'Moment';
+                  const postText =
+                    typeof item === 'object' && item?.post != null ? item.post : String(item);
                   const imageUrl = suggestionImageUrls[idx] || null;
+                  const isSelected = idx === selectedIndex;
+
                   return (
                     <button
                       key={idx}
                       type="button"
                       onClick={() => {
                         setSelectedIndex(idx);
-                        const postText = typeof item === 'object' && item?.post != null ? item.post : String(item);
-                        openSharePanel(postText);
+                        const post = typeof item === 'object' && item?.post != null ? item.post : String(item);
+                        openSharePanel(post);
                       }}
                       className="w-full text-left rounded-xl overflow-hidden transition-all"
                       style={{
                         background: isDarkMode ? HUB.bgSecondary : '#FFFFFF',
-                        border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'}`,
+                        border: `1px solid ${
+                          isSelected ? (isDarkMode ? HUB.accentHighlight : '#7C3AED') : isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'
+                        }`,
+                        boxShadow: isSelected
+                          ? '0 0 0 1px rgba(168, 85, 247, 0.5), 0 12px 30px rgba(15, 23, 42, 0.6)'
+                          : 'none',
+                        transform: isSelected ? 'translateY(-2px)' : 'none',
                       }}
                     >
-                      {imageUrl && (
-                        <div className="w-full aspect-video bg-black/20 flex-shrink-0 flex items-center justify-center min-h-[140px]">
-                          <img
-                            src={imageUrl}
-                            alt=""
-                            className="w-full h-full object-contain"
-                            loading="lazy"
-                            referrerPolicy="no-referrer"
-                            onError={(e) => {
-                              console.warn('[Suggestions] Image failed to load:', imageUrl?.slice(0, 60));
-                              e.target.style.display = 'none';
+                      {selectedPlatform === 'x' ? (
+                        <div className="p-3">
+                          {eventLabel ? (
+                            <p
+                              className="text-xs font-semibold mb-2"
+                              style={{ color: isDarkMode ? HUB.accentHighlight : '#7C3AED' }}
+                            >
+                              {eventLabel}
+                            </p>
+                          ) : null}
+                          <div
+                            style={{
+                              transform: 'scale(0.32)',
+                              transformOrigin: 'top left',
+                              width: 1080,
+                              overflow: 'hidden',
                             }}
-                          />
-                        </div>
-                      )}
-                      {isLoadingImages && !imageUrl && (
-                        <div className="w-full aspect-video flex items-center justify-center flex-shrink-0" style={{ background: isDarkMode ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.06)' }}>
-                          <div className="flex space-x-1.5">
-                            <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: HUB.accent, animationDelay: '0ms' }} />
-                            <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: HUB.accent, animationDelay: '150ms' }} />
-                            <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: HUB.accent, animationDelay: '300ms' }} />
+                          >
+                            <TweetShareCard
+                              displayName={tweetDisplayName}
+                              username={tweetUsername}
+                              text={postText}
+                              imageUrl={imageUrl}
+                              profileImageUrl={tweetProfileImage}
+                            />
                           </div>
                         </div>
+                      ) : (
+                        <>
+                          {imageUrl && (
+                            <div className="w-full aspect-video bg-black/20 flex-shrink-0 flex items-center justify-center min-h-[140px]">
+                              <img
+                                src={imageUrl}
+                                alt=""
+                                className="w-full h-full object-contain"
+                                loading="lazy"
+                                referrerPolicy="no-referrer"
+                                onError={(e) => {
+                                  console.warn(
+                                    '[Suggestions] Image failed to load:',
+                                    imageUrl?.slice(0, 60)
+                                  );
+                                  e.target.style.display = 'none';
+                                }}
+                              />
+                            </div>
+                          )}
+                          {isLoadingImages && !imageUrl && (
+                            <div
+                              className="w-full aspect-video flex items-center justify-center flex-shrink-0"
+                              style={{
+                                background: isDarkMode
+                                  ? 'rgba(0,0,0,0.2)'
+                                  : 'rgba(0,0,0,0.06)',
+                              }}
+                            >
+                              <div className="flex space-x-1.5">
+                                <div
+                                  className="w-2 h-2 rounded-full animate-bounce"
+                                  style={{ backgroundColor: HUB.accent, animationDelay: '0ms' }}
+                                />
+                                <div
+                                  className="w-2 h-2 rounded-full animate-bounce"
+                                  style={{ backgroundColor: HUB.accent, animationDelay: '150ms' }}
+                                />
+                                <div
+                                  className="w-2 h-2 rounded-full animate-bounce"
+                                  style={{ backgroundColor: HUB.accent, animationDelay: '300ms' }}
+                                />
+                              </div>
+                            </div>
+                          )}
+                          <div className="p-4">
+                            {eventLabel ? (
+                              <p
+                                className="text-xs font-semibold mb-1"
+                                style={{ color: HUB.accent }}
+                              >
+                                {eventLabel}
+                              </p>
+                            ) : null}
+                            <p
+                              className="text-[14px] leading-relaxed"
+                              style={{ color: isDarkMode ? HUB.text : '#333' }}
+                            >
+                              {postText}
+                            </p>
+                          </div>
+                        </>
                       )}
-                      <div className="p-4">
-                        {eventLabel ? <p className="text-xs font-semibold mb-1" style={{ color: HUB.accent }}>{eventLabel}</p> : null}
-                        <p className="text-[14px] leading-relaxed" style={{ color: isDarkMode ? HUB.text : '#333' }}>{postText}</p>
-                      </div>
                     </button>
                   );
                 })}
                 {suggestionError && (
-                  <p className="text-xs" style={{ color: isDarkMode ? HUB.textSecondary : '#888' }}>Using reflection after: {suggestionError}</p>
+                  <p className="text-xs" style={{ color: isDarkMode ? HUB.textSecondary : '#888' }}>
+                    Using reflection after: {suggestionError}
+                  </p>
                 )}
               </div>
             ) : (
