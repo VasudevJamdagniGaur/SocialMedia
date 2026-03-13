@@ -1273,9 +1273,10 @@ export default function ChatPage() {
             }}
           >
             <img
-              src="/Gemini_Generated_Image_ib3dfuib3dfuib3d.png"
+              src="/DEITECIrc.png"
               alt="DeTea"
-              className="w-full h-full object-cover"
+              className="w-full h-full object-contain"
+              style={{ padding: 2 }}
             />
           </div>
           <div>
