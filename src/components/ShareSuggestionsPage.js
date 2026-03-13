@@ -420,6 +420,8 @@ export default function ShareSuggestionsPage() {
         const node = tweetCardRef.current;
         if (node) {
           const cardDataUrl = await toPng(node, {
+            width: 1080,
+            height: 1350,
             pixelRatio: 2,
           });
 
@@ -652,6 +654,8 @@ export default function ShareSuggestionsPage() {
           <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
             <TweetShareCard
               ref={tweetCardRef}
+              width={1080}
+              height={1350}
               displayName={tweetDisplayName}
               username={tweetUsername}
               text={selectedText || reflectionFromState}

@@ -12,6 +12,7 @@ const TweetShareCard = React.forwardRef(function TweetShareCard(props, ref) {
     imageUrl,
     profileImageUrl,
     width = 1080,
+    height, // optional; when provided we force this height
   } = props;
 
   return (
@@ -19,6 +20,7 @@ const TweetShareCard = React.forwardRef(function TweetShareCard(props, ref) {
       ref={ref}
       style={{
         width,
+        height: typeof height === 'number' ? `${height}px` : height,
         borderRadius: 40,
         border: '1px solid #D1D5DB',
         backgroundColor: '#FFFFFF',
@@ -26,6 +28,9 @@ const TweetShareCard = React.forwardRef(function TweetShareCard(props, ref) {
         boxSizing: 'border-box',
         fontFamily:
           '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
       }}
     >
         {/* Header */}
