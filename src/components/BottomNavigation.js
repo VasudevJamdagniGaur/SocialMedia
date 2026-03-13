@@ -131,12 +131,12 @@ export default function BottomNavigation() {
               alt="DeTea community"
               className="w-12 h-12 object-contain"
               style={{
-                opacity: isCommunityActive ? 1 : 0.4,
+                opacity: isCommunityActive ? 0.95 : 0.4,
                 filter: isCommunityActive
-                  ? (isDarkMode ? 'brightness(0) invert(1)' : 'brightness(0)')
+                  ? (isDarkMode ? 'brightness(0.85) invert(0.9)' : 'brightness(0.15)')
                   : (isDarkMode ? 'none' : 'brightness(0) saturate(0)'),
                 WebkitFilter: isCommunityActive
-                  ? (isDarkMode ? 'brightness(0) invert(1)' : 'brightness(0)')
+                  ? (isDarkMode ? 'brightness(0.85) invert(0.9)' : 'brightness(0.15)')
                   : (isDarkMode ? 'none' : 'brightness(0) saturate(0)'),
                 imageRendering: 'crisp-edges',
                 WebkitImageRendering: 'crisp-edges',
