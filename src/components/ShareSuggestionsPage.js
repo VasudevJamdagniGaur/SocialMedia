@@ -4,11 +4,13 @@ import { ArrowLeft, Linkedin, Pencil } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { Share } from '@capacitor/share';
 import { Filesystem, Directory } from '@capacitor/filesystem';
+import { toPng } from 'html-to-image';
 import { useTheme } from '../contexts/ThemeContext';
 import { getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
 import chatService from '../services/chatService';
 import { getDateId } from '../utils/dateUtils';
+import TweetShareCard from './TweetShareCard';
 
 const HUB = {
   bg: '#0F0F0F',
@@ -125,6 +127,7 @@ export default function ShareSuggestionsPage() {
   const [editableShareText, setEditableShareText] = useState('');
   const [imageEditMenuOpen, setImageEditMenuOpen] = useState(false);
   const imageReplaceInputRef = useRef(null);
+  const tweetCardRef = useRef(null);
 
   const reflectionDate = state.selectedDate ? (state.selectedDate instanceof Date ? state.selectedDate : new Date(state.selectedDate)) : new Date();
   const dateStr = reflectionDate instanceof Date ? getDateId(reflectionDate) : getDateId(new Date(reflectionDate));
@@ -400,17 +403,106 @@ export default function ShareSuggestionsPage() {
       }
     );
 
-    // 0) Special case: X (Twitter) must always use intent URL, no Capacitor/Web Share
+    // 0) Special case: X (Twitter) → generate tweet-style image card and share that
     if (selectedPlatform === 'x') {
       debugLog(
         'HX',
-        'ShareSuggestionsPage.js:handleShareToSelectedPlatform:xIntent',
-        'Using Twitter intent URL instead of native/web share',
+        'ShareSuggestionsPage.js:handleShareToSelectedPlatform:xCard:start',
+        'Generating tweet-style image card for X share',
         {
           hasImage: !!imageDataUrl,
           textLength: t.length,
         }
       );
+
+      try {
+        const node = tweetCardRef.current;
+        if (node) {
+          const cardDataUrl = await toPng(node, {
+            pixelRatio: 2,
+          });
+
+          const isCardDataUrl =
+            cardDataUrl && typeof cardDataUrl === 'string' && cardDataUrl.startsWith('data:image');
+
+          if (isCardDataUrl) {
+            // Prefer native share with image card when running as Capacitor app
+            if (isNative()) {
+              try {
+                let fileUri = await writeImageToCacheFile(cardDataUrl);
+                if (fileUri) {
+                  await Share.share({
+                    text: '',
+                    files: [fileUri],
+                    title: 'Share reflection',
+                    dialogTitle: 'Share to…',
+                  });
+                  recordShare('x', t);
+                  debugLog(
+                    'HX',
+                    'ShareSuggestionsPage.js:handleShareToSelectedPlatform:xCard:nativeSuccess',
+                    'Shared tweet card via native Share'
+                  );
+                  setSharePanelOpen(false);
+                  return;
+                }
+              } catch (err) {
+                debugLog(
+                  'HX',
+                  'ShareSuggestionsPage.js:handleShareToSelectedPlatform:xCard:nativeError',
+                  'Native tweet card share failed',
+                  { name: err?.name || 'Error' }
+                );
+              }
+            }
+
+            // Web Share API with image file (PWA / mobile browser)
+            if (typeof navigator !== 'undefined' && navigator.share && navigator.canShare) {
+              const file = dataURLtoFile(cardDataUrl);
+              if (file && navigator.canShare({ files: [file] })) {
+                try {
+                  await navigator.share({ files: [file] });
+                  recordShare('x', t);
+                  debugLog(
+                    'HX',
+                    'ShareSuggestionsPage.js:handleShareToSelectedPlatform:xCard:webSuccess',
+                    'Shared tweet card via Web Share'
+                  );
+                  setSharePanelOpen(false);
+                  return;
+                } catch (err) {
+                  debugLog(
+                    'HX',
+                    'ShareSuggestionsPage.js:handleShareToSelectedPlatform:xCard:webError',
+                    'Web Share tweet card failed',
+                    { name: err?.name || 'Error' }
+                  );
+                }
+              }
+            }
+
+            // Fallback: download the card image so the user can attach manually
+            try {
+              const a = document.createElement('a');
+              a.href = cardDataUrl;
+              a.download = 'tweet-card.png';
+              a.click();
+            } catch (_) {}
+
+            setSharePanelOpen(false);
+            return;
+          }
+        }
+      } catch (err) {
+        debugLog(
+          'HX',
+          'ShareSuggestionsPage.js:handleShareToSelectedPlatform:xCard:renderError',
+          'Failed to generate tweet card',
+          { name: err?.name || 'Error' }
+        );
+      }
+
+      // Absolute fallback if card generation/sharing failed: fall back to existing X text-only share
       shareToTwitter(t);
       setSharePanelOpen(false);
       return;
@@ -538,12 +630,36 @@ export default function ShareSuggestionsPage() {
     border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'}`,
   };
 
+  const currentUser = getCurrentUser();
+  const tweetDisplayName =
+    (currentUser && (localStorage.getItem(`user_display_name_${currentUser.uid}`) || currentUser.displayName)) ||
+    'DeTea User';
+  const tweetUsername =
+    (currentUser && (currentUser.email || '').split('@')[0]) ||
+    'detea_user';
+  const tweetProfileImage =
+    (currentUser && localStorage.getItem(`user_profile_picture_${currentUser.uid}`)) || null;
+
   return (
     <div
       className="min-h-screen flex flex-col px-4 py-6 pb-10"
       style={{ background: isDarkMode ? HUB.bg : '#F5F5F5' }}
     >
       <div className="max-w-md w-full mx-auto flex flex-col flex-1">
+        {/* Off-screen tweet card for X sharing */}
+        {selectedPlatform === 'x' && (
+          <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
+            <TweetShareCard
+              ref={tweetCardRef}
+              displayName={tweetDisplayName}
+              username={tweetUsername}
+              text={selectedText || reflectionFromState}
+              imageUrl={suggestionImageUrls[selectedIndex] || null}
+              profileImageUrl={tweetProfileImage}
+            />
+          </div>
+        )}
+
         <div className="flex items-center gap-3 pt-2 pb-4">
           <button
             type="button"
