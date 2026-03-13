@@ -595,15 +595,16 @@ const MOOD_KEYWORDS = {
     setIsCropping(true);
     try {
       const croppedImage = await getCroppedImg(pendingPicture, croppedAreaPixels);
-      if (!croppedImage) {
+      const finalImage = croppedImage || pendingPicture;
+      if (!finalImage) {
         alert('Could not process the image. Please try again.');
         return;
       }
-      setProfilePicture(croppedImage);
+      setProfilePicture(finalImage);
       if (user) {
-        localStorage.setItem(`user_profile_picture_${user.uid}`, croppedImage);
+        localStorage.setItem(`user_profile_picture_${user.uid}`, finalImage);
         try {
-          const toStore = await compressDataUrlForStorage(croppedImage, 800);
+          const toStore = await compressDataUrlForStorage(finalImage, 800);
           await firestoreService.ensureUser(user.uid, { profilePicture: toStore });
         } catch (err) {
           console.error('Error saving profile picture to Firestore:', err);
@@ -618,7 +619,25 @@ const MOOD_KEYWORDS = {
       setCrop({ x: 0, y: 0 });
     } catch (err) {
       console.error('Crop failed:', err);
-      alert('Failed to crop image. Please try again or choose a different photo.');
+      alert('Failed to crop image. We used the original photo instead.');
+      // Fallback: still try to save the original pending picture so the user is not blocked
+      if (pendingPicture) {
+        try {
+          setProfilePicture(pendingPicture);
+          if (user) {
+            localStorage.setItem(`user_profile_picture_${user.uid}`, pendingPicture);
+            try {
+              const toStore = await compressDataUrlForStorage(pendingPicture, 800);
+              await firestoreService.ensureUser(user.uid, { profilePicture: toStore });
+            } catch (saveErr) {
+              console.error('Error saving fallback profile picture to Firestore:', saveErr);
+            }
+            window.dispatchEvent(new Event('profilePictureUpdated'));
+          }
+        } catch (fallbackErr) {
+          console.error('Fallback profile picture save failed:', fallbackErr);
+        }
+      }
     } finally {
       setIsCropping(false);
     }
@@ -925,7 +944,10 @@ const createImage = (url) =>
     const image = new Image();
     image.addEventListener('load', () => resolve(image));
     image.addEventListener('error', (error) => reject(error));
-    image.setAttribute('crossOrigin', 'anonymous');
+    // Only set crossOrigin for remote HTTP(S) URLs; data URLs and blobs don't need it
+    if (typeof url === 'string' && /^https?:/i.test(url)) {
+      image.setAttribute('crossOrigin', 'anonymous');
+    }
     image.src = url;
   });
 
