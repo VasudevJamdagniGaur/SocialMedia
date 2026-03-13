@@ -264,34 +264,16 @@ export default function ShareSuggestionsPage() {
     }
   };
 
-  const shareToLinkedIn = async (text) => {
+  const shareToLinkedIn = (text) => {
     const t = text ?? textToShare;
     if (!t) return;
     const url = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : 'https://detea.app';
-
-    // On native (APK), try to open the LinkedIn app directly via deep link.
-    if (isNative()) {
-      try {
-        const { App } = await import('@capacitor/app');
-        // Use LinkedIn's shareArticle deep link so app opens with share composer when possible
-        const deepLink = `linkedin://shareArticle?mini=true&url=${encodeURIComponent(
-          url
-        )}&title=${encodeURIComponent('My reflection')}&summary=${encodeURIComponent(t)}`;
-        await App.openUrl({ url: deepLink });
-      } catch (err) {
-        // On native we do NOT fall back to web; if the deep link fails
-        // we simply log and let the user try again or use another option.
-        console.warn('LinkedIn deep link failed (no web fallback on native):', err);
-      }
-    } else {
-      // Web / PWA: use standard LinkedIn share URL
-      window.open(
-        `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`,
-        '_blank',
-        'noopener,noreferrer'
-      );
-    }
-
+    // Web / PWA fallback: open standard LinkedIn share URL in browser.
+    window.open(
+      `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`,
+      '_blank',
+      'noopener,noreferrer'
+    );
     recordShare('linkedin', t);
     copyCaptionToClipboardForLinkedIn(t);
   };
@@ -561,16 +543,6 @@ export default function ShareSuggestionsPage() {
 
       // Absolute fallback if card generation/sharing failed: fall back to existing X text-only share
       shareToTwitter(t);
-      triggerPostShareConfirmation();
-      setSharePanelOpen(false);
-      return;
-    }
-
-    // Special case: LinkedIn should go directly to LinkedIn (app or browser),
-    // not through the generic native share sheet.
-    if (selectedPlatform === 'linkedin') {
-      // Fire and forget; deep link will open LinkedIn app on native when possible
-      shareToLinkedIn(t);
       triggerPostShareConfirmation();
       setSharePanelOpen(false);
       return;
