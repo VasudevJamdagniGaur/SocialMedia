@@ -384,11 +384,18 @@ export default function ShareSuggestionsPage() {
     }
   };
 
-  /** Only copies caption and shows toast. Persistence is done by caller via recordShare. */
+  /** Copies caption to clipboard, opens LinkedIn share dialog, and shows toast (user can paste caption there). */
   const shareToLinkedIn = (text) => {
-    const t = text ?? textToShare;
+    const t = ((text ?? textToShare) || '').trim();
     if (!t) return;
     copyCaptionToClipboardForLinkedIn(t);
+    const appUrl = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : 'https://deitedatabase.firebaseapp.com';
+    const shareUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(appUrl)}`;
+    if (isNative()) {
+      App.openUrl({ url: shareUrl }).catch(() => window.open(shareUrl, '_blank', 'noopener,noreferrer'));
+    } else {
+      window.open(shareUrl, '_blank', 'noopener,noreferrer');
+    }
   };
 
   const shareToTwitter = (text) => {
@@ -411,19 +418,25 @@ export default function ShareSuggestionsPage() {
    * Share to LinkedIn via backend API (POST /api/linkedin/share), then open LinkedIn app.
    * Requires user to have connected LinkedIn (OAuth) first. On 401, opens OAuth URL.
    * @param {string} caption - Post text
-   * @param {string|null} imageDataUrlOrUrl - Data URL or public HTTPS image URL
+   * @param {string|null} imageDataUrlOrUrl - Data URL, blob URL, or public HTTPS image URL
    * @returns {Promise<boolean>} - true if API share was attempted and we're done (success or 401); false to fall back to share sheet
    */
   const shareToLinkedInViaApi = async (caption, imageDataUrlOrUrl) => {
     const user = getCurrentUser();
     if (!user?.uid || !caption?.trim()) return false;
 
+    // Resolve blob URLs to data URL so we can upload (backend needs a fetchable URL or we upload first)
+    let resolvedImage = imageDataUrlOrUrl;
+    if (resolvedImage && typeof resolvedImage === 'string' && resolvedImage.startsWith('blob:')) {
+      resolvedImage = await blobUrlToDataUrl(resolvedImage) || null;
+    }
+
     let imageUrl = null;
-    if (imageDataUrlOrUrl && typeof imageDataUrlOrUrl === 'string') {
-      if (imageDataUrlOrUrl.startsWith('data:image')) {
-        imageUrl = await firestoreService.uploadPostImage(user.uid, imageDataUrlOrUrl);
-      } else if (imageDataUrlOrUrl.startsWith('https://') || imageDataUrlOrUrl.startsWith('http://')) {
-        imageUrl = imageDataUrlOrUrl;
+    if (resolvedImage && typeof resolvedImage === 'string') {
+      if (resolvedImage.startsWith('data:image')) {
+        imageUrl = await firestoreService.uploadPostImage(user.uid, resolvedImage);
+      } else if (resolvedImage.startsWith('https://') || resolvedImage.startsWith('http://')) {
+        imageUrl = resolvedImage;
       }
     }
     if (!imageUrl) return false;
@@ -640,6 +653,22 @@ export default function ShareSuggestionsPage() {
     } catch {
       return null;
     }
+  };
+
+  /** Convert blob URL to data URL so we can upload and use in LinkedIn API. */
+  const blobUrlToDataUrl = (blobUrl) => {
+    if (!blobUrl || typeof blobUrl !== 'string' || !blobUrl.startsWith('blob:')) return null;
+    return new Promise((resolve) => {
+      fetch(blobUrl)
+        .then((r) => r.blob())
+        .then((blob) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(typeof reader.result === 'string' ? reader.result : null);
+          reader.onerror = () => resolve(null);
+          reader.readAsDataURL(blob);
+        })
+        .catch(() => resolve(null));
+    });
   };
 
   /** Convert data URL to Blob (for shareImageToX). */
