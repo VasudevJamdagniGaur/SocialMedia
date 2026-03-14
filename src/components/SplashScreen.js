@@ -219,9 +219,9 @@ export default function SplashScreen() {
           }}
         >
           <img
-            src="/Gemini_Generated_Image_ib3dfuib3dfuib3d.png"
-            alt="DeTea"
-            className="w-full h-full relative z-10 object-cover"
+            src="/DEITECIrc.png"
+            alt="DEITEC"
+            className="w-full h-full relative z-10 object-contain"
           />
         </div>
         
