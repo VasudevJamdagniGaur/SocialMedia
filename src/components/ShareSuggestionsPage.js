@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Linkedin, Pencil } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
+import { App } from '@capacitor/app';
 import { Share } from '@capacitor/share';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { toPng } from 'html-to-image';
@@ -33,6 +34,11 @@ const PLATFORM_LABELS = {
   x: 'X',
   reddit: 'Reddit',
 };
+
+const LINKEDIN_OAUTH_BASE = 'https://www.linkedin.com/oauth/v2/authorization';
+const LINKEDIN_CLIENT_ID = '86ek56lm1yueyc';
+const LINKEDIN_REDIRECT_URI = 'https://deitedatabase.firebaseapp.com/auth/linkedin/callback';
+const LINKEDIN_SCOPE = 'openid profile email w_member_social';
 
 // Local image cache key builder (must stay in sync with chatService)
 const buildImageCacheKey = (text) => {
@@ -105,6 +111,7 @@ export default function ShareSuggestionsPage() {
   const [editableShareText, setEditableShareText] = useState('');
   const [imageEditMenuOpen, setImageEditMenuOpen] = useState(false);
   const [linkedInCaptionToastVisible, setLinkedInCaptionToastVisible] = useState(false);
+  const [linkedInToastMessage, setLinkedInToastMessage] = useState('caption'); // 'caption' | 'connect'
   const [shareConfirmation, setShareConfirmation] = useState({ open: false, index: null, platform: null });
   const imageReplaceInputRef = useRef(null);
   const tweetCardRef = useRef(null);
@@ -365,6 +372,7 @@ export default function ShareSuggestionsPage() {
     if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) return;
     try {
       await navigator.clipboard.writeText(text);
+      setLinkedInToastMessage('caption');
       setLinkedInCaptionToastVisible(true);
       setTimeout(() => {
         setLinkedInCaptionToastVisible(false);
@@ -395,6 +403,120 @@ export default function ShareSuggestionsPage() {
       '_blank',
       'noopener,noreferrer'
     );
+  };
+
+  /**
+   * Share to LinkedIn via backend API (POST /api/linkedin/share), then open LinkedIn app.
+   * Requires user to have connected LinkedIn (OAuth) first. On 401, opens OAuth URL.
+   * @param {string} caption - Post text
+   * @param {string|null} imageDataUrlOrUrl - Data URL or public HTTPS image URL
+   * @returns {Promise<boolean>} - true if API share was attempted and we're done (success or 401); false to fall back to share sheet
+   */
+  const shareToLinkedInViaApi = async (caption, imageDataUrlOrUrl) => {
+    const user = getCurrentUser();
+    if (!user?.uid || !caption?.trim()) return false;
+
+    let imageUrl = null;
+    if (imageDataUrlOrUrl && typeof imageDataUrlOrUrl === 'string') {
+      if (imageDataUrlOrUrl.startsWith('data:image')) {
+        imageUrl = await firestoreService.uploadPostImage(user.uid, imageDataUrlOrUrl);
+      } else if (imageDataUrlOrUrl.startsWith('https://') || imageDataUrlOrUrl.startsWith('http://')) {
+        imageUrl = imageDataUrlOrUrl;
+      }
+    }
+    if (!imageUrl) return false;
+
+    const result = await firestoreService.createPostForShare({
+      uid: user.uid,
+      caption: caption.trim(),
+      imageUrl,
+      platform: 'linkedin',
+    });
+    if (!result?.success || !result.postId || !result.imageUrl) return false;
+
+    const apiBase = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : 'https://deitedatabase.firebaseapp.com';
+    let res;
+    try {
+      res = await fetch(`${apiBase}/api/linkedin/share`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.uid,
+          caption: caption.trim(),
+          imageUrl: result.imageUrl,
+          postId: result.postId,
+        }),
+      });
+    } catch (err) {
+      console.warn('LinkedIn API share request failed:', err);
+      return false;
+    }
+
+    if (res.status === 401) {
+      const oauthUrl = `${LINKEDIN_OAUTH_BASE}?response_type=code&client_id=${encodeURIComponent(LINKEDIN_CLIENT_ID)}&redirect_uri=${encodeURIComponent(LINKEDIN_REDIRECT_URI)}&state=${encodeURIComponent(user.uid)}&scope=${encodeURIComponent(LINKEDIN_SCOPE)}`;
+      if (isNative()) {
+        try {
+          await App.openUrl({ url: oauthUrl });
+        } catch {
+          window.open(oauthUrl, '_blank', 'noopener,noreferrer');
+        }
+      } else {
+        window.open(oauthUrl, '_blank', 'noopener,noreferrer');
+      }
+      setLinkedInToastMessage('connect');
+      setLinkedInCaptionToastVisible(true);
+      setTimeout(() => setLinkedInCaptionToastVisible(false), 4000);
+      return true;
+    }
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      console.warn('LinkedIn share failed', res.status, data);
+      return false;
+    }
+
+    await firestoreService.saveSocialShare(user.uid, {
+      platform: 'linkedin',
+      reflectionDate: dateStr,
+      reflectionSnippet: caption.trim().slice(0, 200) || undefined,
+    });
+    const profileImage = (typeof localStorage !== 'undefined' && localStorage.getItem(`user_profile_picture_${user.uid}`)) || null;
+    const postData = {
+      author: user.displayName || 'Anonymous',
+      authorId: user.uid,
+      content: caption.trim(),
+      createdAt: serverTimestamp(),
+      likes: 0,
+      comments: [],
+      profilePicture: profileImage,
+      image: result.imageUrl,
+      source: 'social_share',
+      sharedPlatform: 'linkedin',
+      reflectionDate: (() => {
+        try {
+          const d = typeof dateStr === 'string' ? new Date(dateStr) : reflectionDate instanceof Date ? reflectionDate : new Date();
+          return d.toISOString();
+        } catch {
+          return new Date().toISOString();
+        }
+      })(),
+    };
+    await addDoc(collection(db, 'communityPosts'), postData);
+
+    if (isNative()) {
+      try {
+        await App.openUrl({ url: 'linkedin://feed' });
+      } catch {
+        try {
+          await App.openUrl({ url: 'https://www.linkedin.com/feed/' });
+        } catch {
+          window.open('https://www.linkedin.com/feed/', '_blank', 'noopener,noreferrer');
+        }
+      }
+    } else {
+      window.open('https://www.linkedin.com/feed/', '_blank', 'noopener,noreferrer');
+    }
+    return true;
   };
 
   const openSharePanel = (text) => {
@@ -587,7 +709,17 @@ export default function ShareSuggestionsPage() {
     const imageDataUrl = suggestionImageUrls[selectedIndex] || null;
     const isDataUrl = imageDataUrl && typeof imageDataUrl === 'string' && imageDataUrl.startsWith('data:image');
 
-    // 0) Special case: X (Twitter) → generate tweet-style image card and share that,
+    // 0) LinkedIn: use backend API to post, then open LinkedIn app (or OAuth if not connected)
+    if (selectedPlatform === 'linkedin' && (imageDataUrl || (suggestionImageUrls[selectedIndex] && typeof suggestionImageUrls[selectedIndex] === 'string'))) {
+      const done = await shareToLinkedInViaApi(t, imageDataUrl || suggestionImageUrls[selectedIndex] || null);
+      if (done) {
+        triggerPostShareConfirmation();
+        setSharePanelOpen(false);
+        return;
+      }
+    }
+
+    // 1) Special case: X (Twitter) → generate tweet-style image card and share that,
     // but only if an AI image has been generated for the selected suggestion
     if (selectedPlatform === 'x' && isDataUrl) {
       try {
@@ -792,7 +924,9 @@ export default function ShareSuggestionsPage() {
               color: '#FFFFFF',
             }}
           >
-            📋 Caption copied! Paste it in LinkedIn
+            {linkedInToastMessage === 'connect'
+              ? '🔗 Connect LinkedIn first — opening sign-in…'
+              : '📋 Caption copied! Paste it in LinkedIn'}
           </div>
         </div>
       )}
