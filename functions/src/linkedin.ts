@@ -1,0 +1,250 @@
+/**
+ * LinkedIn OAuth and Share API helpers.
+ * All LinkedIn API calls run on the backend; client secret never exposed.
+ */
+
+import * as admin from 'firebase-admin';
+import { logger } from 'firebase-functions';
+
+const REDIRECT_URI = 'https://deitedatabase.firebaseapp.com/auth/linkedin/callback';
+const LINKEDIN_TOKEN_URL = 'https://www.linkedin.com/oauth/v2/accessToken';
+const LINKEDIN_ME_URL = 'https://api.linkedin.com/v2/me';
+const LINKEDIN_REGISTER_UPLOAD = 'https://api.linkedin.com/rest/assets?action=registerUpload';
+const LINKEDIN_UGC_POSTS = 'https://api.linkedin.com/v2/ugcPosts';
+
+const RESTLI_HEADER = { 'X-Restli-Protocol-Version': '2.0.0' };
+
+export function getLinkedInConfig() {
+  const clientId = (process.env.LINKEDIN_CLIENT_ID || '').trim();
+  const clientSecret = (process.env.LINKEDIN_CLIENT_SECRET || '').trim();
+  return { clientId, clientSecret, redirectUri: REDIRECT_URI };
+}
+
+export interface TokenExchangeResult {
+  access_token: string;
+  expires_in: number;
+  scope?: string;
+}
+
+/**
+ * Exchange authorization code for access token.
+ */
+export async function exchangeCodeForToken(code: string): Promise<TokenExchangeResult> {
+  const { clientId, clientSecret, redirectUri } = getLinkedInConfig();
+  if (!clientId || !clientSecret) {
+    throw new Error('LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET must be set');
+  }
+
+  const body = new URLSearchParams({
+    grant_type: 'authorization_code',
+    code,
+    redirect_uri: redirectUri,
+    client_id: clientId,
+    client_secret: clientSecret,
+  }).toString();
+
+  const res = await fetch(LINKEDIN_TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    logger.warn('[linkedin] token exchange failed', { status: res.status, body: text?.slice(0, 200) });
+    throw new Error(`LinkedIn token exchange failed: ${res.status}`);
+  }
+
+  return (await res.json()) as TokenExchangeResult;
+}
+
+/**
+ * Get current member's person URN (e.g. urn:li:person:abc123).
+ */
+export async function getLinkedInPersonUrn(accessToken: string): Promise<string> {
+  const res = await fetch(LINKEDIN_ME_URL, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      ...RESTLI_HEADER,
+    },
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    logger.warn('[linkedin] /me failed', { status: res.status, body: text?.slice(0, 200) });
+    throw new Error('Failed to get LinkedIn profile');
+  }
+
+  const data = (await res.json()) as { id?: string };
+  const id = data?.id;
+  if (!id) throw new Error('LinkedIn /me did not return id');
+  return `urn:li:person:${id}`;
+}
+
+/**
+ * Store LinkedIn token in Firestore: users/{uid}.linkedin (accessToken, expiresAt).
+ * Caller may also set linkedinPersonUrn after getLinkedInPersonUrn().
+ */
+export async function storeLinkedInToken(
+  uid: string,
+  accessToken: string,
+  expiresIn: number
+): Promise<void> {
+  const expiresAt = Date.now() + expiresIn * 1000;
+  const db = admin.firestore();
+  await db.collection('users').doc(uid).set(
+    {
+      linkedin: {
+        accessToken,
+        expiresAt,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+    },
+    { merge: true }
+  );
+}
+
+/**
+ * Get valid LinkedIn access token for user from Firestore.
+ * Returns null if missing or expired (within 5 min buffer).
+ */
+export async function getLinkedInAccessToken(uid: string): Promise<string | null> {
+  const db = admin.firestore();
+  const doc = await db.collection('users').doc(uid).get();
+  const linkedin = doc.data()?.linkedin as { accessToken?: string; expiresAt?: number } | undefined;
+  if (!linkedin?.accessToken) return null;
+  const buffer = 5 * 60 * 1000; // 5 min
+  if (linkedin.expiresAt && Date.now() + buffer >= linkedin.expiresAt) return null;
+  return linkedin.accessToken;
+}
+
+export interface RegisterUploadResponse {
+  value?: {
+    uploadMechanism?: {
+      'com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest'?: {
+        uploadUrl: string;
+      };
+    };
+    asset?: string;
+  };
+}
+
+/**
+ * Step 1: Register image upload with LinkedIn.
+ */
+export async function registerImageUpload(
+  accessToken: string,
+  personUrn: string,
+  fileSizeBytes: number
+): Promise<{ uploadUrl: string; asset: string }> {
+  const body = {
+    registerUploadRequest: {
+      owner: personUrn,
+      recipes: ['urn:li:digitalmediaRecipe:feedshare-image'],
+      serviceRelationships: [
+        { identifier: 'urn:li:userGeneratedContent', relationshipType: 'OWNER' as const },
+      ],
+      supportedUploadMechanism: ['SYNCHRONOUS_UPLOAD' as const],
+      fileSize: fileSizeBytes,
+    },
+  };
+
+  const res = await fetch(LINKEDIN_REGISTER_UPLOAD, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      ...RESTLI_HEADER,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    logger.warn('[linkedin] registerUpload failed', { status: res.status, body: text?.slice(0, 300) });
+    throw new Error(`LinkedIn registerUpload failed: ${res.status}`);
+  }
+
+  const data = (await res.json()) as RegisterUploadResponse;
+  const uploadUrl =
+    data.value?.uploadMechanism?.['com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest']?.uploadUrl;
+  const asset = data.value?.asset;
+  if (!uploadUrl || !asset) throw new Error('LinkedIn registerUpload response missing uploadUrl or asset');
+  return { uploadUrl, asset };
+}
+
+/**
+ * Step 2: Upload image binary to LinkedIn uploadUrl.
+ */
+export async function uploadImageToLinkedIn(
+  accessToken: string,
+  uploadUrl: string,
+  imageBuffer: Buffer,
+  contentType: string
+): Promise<void> {
+  const res = await fetch(uploadUrl, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': contentType || 'image/jpeg',
+    },
+    body: imageBuffer,
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    logger.warn('[linkedin] image upload failed', { status: res.status, body: text?.slice(0, 200) });
+    throw new Error(`LinkedIn image upload failed: ${res.status}`);
+  }
+}
+
+/**
+ * Step 3: Create UGC post with caption and image asset.
+ */
+export async function createLinkedInUgcPost(
+  accessToken: string,
+  personUrn: string,
+  caption: string,
+  assetUrn: string
+): Promise<string> {
+  const body = {
+    author: personUrn,
+    lifecycleState: 'PUBLISHED',
+    specificContent: {
+      'com.linkedin.ugc.ShareContent': {
+        shareCommentary: { text: caption },
+        shareMediaCategory: 'IMAGE',
+        media: [
+          {
+            status: 'READY',
+            media: assetUrn,
+          },
+        ],
+      },
+    },
+    visibility: {
+      'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC',
+    },
+  };
+
+  const res = await fetch(LINKEDIN_UGC_POSTS, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      ...RESTLI_HEADER,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    logger.warn('[linkedin] ugcPosts failed', { status: res.status, body: text?.slice(0, 300) });
+    throw new Error(`LinkedIn create post failed: ${res.status}`);
+  }
+
+  const data = (await res.json()) as { id?: string };
+  const id = data?.id;
+  if (!id) throw new Error('LinkedIn ugcPosts did not return post id');
+  return id;
+}
