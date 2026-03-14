@@ -671,6 +671,29 @@ export default function ShareSuggestionsPage() {
     });
   };
 
+  /** Get image as data URL from data URL, blob URL, or https URL (for share sheet fallback). */
+  const getImageAsDataUrl = async (urlOrDataUrl) => {
+    if (!urlOrDataUrl || typeof urlOrDataUrl !== 'string') return null;
+    if (urlOrDataUrl.startsWith('data:image')) return urlOrDataUrl;
+    if (urlOrDataUrl.startsWith('blob:')) return blobUrlToDataUrl(urlOrDataUrl);
+    if (urlOrDataUrl.startsWith('https://') || urlOrDataUrl.startsWith('http://')) {
+      try {
+        const res = await fetch(urlOrDataUrl);
+        if (!res.ok) return null;
+        const blob = await res.blob();
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(typeof reader.result === 'string' ? reader.result : null);
+          reader.onerror = () => resolve(null);
+          reader.readAsDataURL(blob);
+        });
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  };
+
   /** Convert data URL to Blob (for shareImageToX). */
   const dataURLtoBlob = (dataUrl) => {
     if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image')) return null;
@@ -836,6 +859,55 @@ export default function ShareSuggestionsPage() {
         setSharePanelOpen(false);
         return;
       }
+      // API failed or not connected: fallback to share sheet with image + text so user can pick LinkedIn
+      const linkedInImageSource = imageDataUrl || suggestionImageUrls[selectedIndex] || null;
+      const linkedInDataUrl = linkedInImageSource && typeof linkedInImageSource === 'string'
+        ? await getImageAsDataUrl(linkedInImageSource)
+        : null;
+      if (linkedInDataUrl) {
+        setLinkedInToastMessage('caption');
+        setLinkedInCaptionToastVisible(true);
+        setTimeout(() => setLinkedInCaptionToastVisible(false), 3500);
+        try {
+          if (isNative()) {
+            const fileUri = await writeImageToCacheFile(linkedInDataUrl);
+            if (fileUri) {
+              await Share.share({
+                text: t,
+                files: [fileUri],
+                title: 'Share to LinkedIn',
+                dialogTitle: 'Share to LinkedIn',
+              });
+              await recordShare('linkedin', t, { imageDataUrlForStorage: linkedInDataUrl });
+              copyCaptionToClipboardForLinkedIn(t);
+              triggerPostShareConfirmation();
+              setSharePanelOpen(false);
+              return;
+            }
+          }
+          if (typeof navigator !== 'undefined' && navigator.share && navigator.canShare) {
+            const file = dataURLtoFile(linkedInDataUrl);
+            if (file && navigator.canShare({ text: t, files: [file] })) {
+              await navigator.share({ text: t, files: [file] });
+              await recordShare('linkedin', t, { imageDataUrlForStorage: linkedInDataUrl });
+              copyCaptionToClipboardForLinkedIn(t);
+              triggerPostShareConfirmation();
+              setSharePanelOpen(false);
+              return;
+            }
+          }
+        } catch (err) {
+          if (err?.name !== 'AbortError') console.warn('LinkedIn share sheet fallback failed', err);
+        }
+      }
+      // No image or share sheet failed: copy text and open LinkedIn share URL
+      shareToLinkedIn(t);
+      try {
+        await recordShare('linkedin', t, { imageDataUrlForStorage: linkedInDataUrl || null });
+      } catch (_) {}
+      triggerPostShareConfirmation();
+      setSharePanelOpen(false);
+      return;
     }
 
     // 1) Special case: X (Twitter) → generate tweet-style image card and share that,

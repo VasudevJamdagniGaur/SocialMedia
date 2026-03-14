@@ -24,6 +24,11 @@ var __importStar = (this && this.__importStar) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.linkedInApi = exports.generatePostEmbedding = void 0;
+const path = __importStar(require("path"));
+const dotenv_1 = require("dotenv");
+// Load functions/.env so LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET are available (local emulator).
+// In production, set these in Firebase Console → Project → Functions → Environment variables.
+(0, dotenv_1.config)({ path: path.resolve(__dirname, '..', '.env') });
 const admin = __importStar(require("firebase-admin"));
 const firestore_1 = require("firebase-functions/v2/firestore");
 const https_1 = require("firebase-functions/v2/https");

@@ -9,14 +9,25 @@
 
 ## 2. Firebase Functions – environment variables
 
-Set these for the Cloud Functions that run the LinkedIn API:
+The **root `.env`** is used by the React app only. The LinkedIn API runs in **Firebase Functions**, which do not read the root `.env`. You must set the same variables for the backend:
 
-1. Firebase Console → Project → **Functions** → **Environment variables** (or use Google Cloud Console for the project).
+**Option A – Local emulator**
+
+1. In the **`functions/`** folder, copy the example and add your values:
+   ```bash
+   cd functions
+   cp .env.example .env
+   ```
+2. Edit `functions/.env` and set `LINKEDIN_CLIENT_ID` and `LINKEDIN_CLIENT_SECRET`.
+
+**Option B – Production (deployed functions)**
+
+1. Firebase Console → your project → **Functions** → **Environment variables** (or Google Cloud Console → Cloud Functions → your function → Edit → Environment variables).
 2. Add:
    - `LINKEDIN_CLIENT_ID` = `86ek56lm1yueyc`
-   - `LINKEDIN_CLIENT_SECRET` = your app’s client secret
+   - `LINKEDIN_CLIENT_SECRET` = your app’s client secret from the LinkedIn Developer Portal.
 
-Redeploy functions after changing env vars:
+Redeploy after changing env vars:
 
 ```bash
 firebase deploy --only functions

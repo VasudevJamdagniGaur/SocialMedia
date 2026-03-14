@@ -1,3 +1,10 @@
+import * as path from 'path';
+import { config as loadEnv } from 'dotenv';
+
+// Load functions/.env so LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET are available (local emulator).
+// In production, set these in Firebase Console → Project → Functions → Environment variables.
+loadEnv({ path: path.resolve(__dirname, '..', '.env') });
+
 import * as admin from 'firebase-admin';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { onRequest } from 'firebase-functions/v2/https';
