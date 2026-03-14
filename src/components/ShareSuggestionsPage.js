@@ -112,6 +112,8 @@ export default function ShareSuggestionsPage() {
   const [imageEditMenuOpen, setImageEditMenuOpen] = useState(false);
   const [linkedInCaptionToastVisible, setLinkedInCaptionToastVisible] = useState(false);
   const [linkedInToastMessage, setLinkedInToastMessage] = useState('caption'); // 'caption' | 'connect'
+  const [xShareToastVisible, setXShareToastVisible] = useState(false);
+  const [xShareToastMessage, setXShareToastMessage] = useState(''); // 'opening' | 'choose_x' | 'downloaded' | 'error'
   const [shareConfirmation, setShareConfirmation] = useState({ open: false, index: null, platform: null });
   const imageReplaceInputRef = useRef(null);
   const tweetCardRef = useRef(null);
@@ -640,6 +642,94 @@ export default function ShareSuggestionsPage() {
     }
   };
 
+  /** Convert data URL to Blob (for shareImageToX). */
+  const dataURLtoBlob = (dataUrl) => {
+    if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image')) return null;
+    try {
+      const arr = dataUrl.split(',');
+      const mime = (arr[0].match(/:(.*?);/) || [])[1] || 'image/png';
+      const bstr = atob(arr[1]);
+      const u8arr = new Uint8Array(bstr.length);
+      for (let i = 0; i < bstr.length; i++) u8arr[i] = bstr.charCodeAt(i);
+      return new Blob([u8arr], { type: mime });
+    } catch {
+      return null;
+    }
+  };
+
+  /**
+   * Reusable: share an image via native device share sheet (no X API, no OAuth).
+   * Opens share menu so user can select X (or LinkedIn, etc.). Fallback: download image + message.
+   * @param {Blob} imageBlob - PNG or JPEG blob
+   */
+  const shareImageToX = async (imageBlob) => {
+    if (!imageBlob || !(imageBlob instanceof Blob)) return;
+    const file = new File([imageBlob], 'deite-post.png', { type: imageBlob.type || 'image/png' });
+
+    const showToast = (message) => {
+      setXShareToastMessage(message);
+      setXShareToastVisible(true);
+      setTimeout(() => setXShareToastVisible(false), 3500);
+    };
+
+    try {
+      showToast('opening');
+      if (typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          title: 'Shared from Deite',
+          text: 'Posted using Deite',
+          files: [file],
+        });
+        showToast('choose_x');
+      } else {
+        const url = URL.createObjectURL(imageBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'deite-post.png';
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('downloaded');
+      }
+    } catch (err) {
+      if (err?.name === 'AbortError') return;
+      showToast('error');
+    }
+  };
+
+  /** Get tweet card as image blob and share via native share sheet (Share to X button). */
+  const handleShareImageToX = async () => {
+    try {
+      const node = tweetCardRef.current;
+      if (!node) {
+        setXShareToastMessage('error');
+        setXShareToastVisible(true);
+        setTimeout(() => setXShareToastVisible(false), 3500);
+        return;
+      }
+      const exportWidth = 1080;
+      const exportHeight = Math.round((exportWidth * 10) / 7);
+      const cardDataUrl = await toPng(node, {
+        width: exportWidth,
+        height: exportHeight,
+        pixelRatio: 2,
+        skipFonts: true,
+        cacheBust: false,
+      });
+      const blob = dataURLtoBlob(cardDataUrl);
+      if (!blob) {
+        setXShareToastMessage('error');
+        setXShareToastVisible(true);
+        setTimeout(() => setXShareToastVisible(false), 3500);
+        return;
+      }
+      await shareImageToX(blob);
+    } catch (err) {
+      setXShareToastMessage('error');
+      setXShareToastVisible(true);
+      setTimeout(() => setXShareToastVisible(false), 3500);
+    }
+  };
+
   /** Compress image for Storage (dual-image pipeline: share high-quality, store compressed). */
   const compressImageForStorage = async (dataUrl) => {
     if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image')) return null;
@@ -927,6 +1017,26 @@ export default function ShareSuggestionsPage() {
             {linkedInToastMessage === 'connect'
               ? '🔗 Connect LinkedIn first — opening sign-in…'
               : '📋 Caption copied! Paste it in LinkedIn'}
+          </div>
+        </div>
+      )}
+      {/* X share sheet toast */}
+      {xShareToastVisible && (
+        <div className="fixed inset-x-0 bottom-6 flex justify-center pointer-events-none z-50">
+          <div
+            className="px-4 py-2 rounded-full shadow-md text-sm pointer-events-auto max-w-[90vw] text-center"
+            style={{
+              background: isDarkMode ? 'rgba(15,23,42,0.95)' : 'rgba(17,24,39,0.95)',
+              color: '#FFFFFF',
+            }}
+          >
+            {xShareToastMessage === 'opening'
+              ? 'Opening share menu...'
+              : xShareToastMessage === 'choose_x'
+              ? 'Choose X to post your image.'
+              : xShareToastMessage === 'downloaded'
+              ? 'Image downloaded. Upload it on X to share.'
+              : 'Unable to open share menu.'}
           </div>
         </div>
       )}
@@ -1268,6 +1378,7 @@ export default function ShareSuggestionsPage() {
                 <div className="w-full flex justify-center mb-4 flex-1 min-h-0">
                   <div className="w-full max-w-[360px] mx-auto">
                     <TweetShareCard
+                      ref={tweetCardRef}
                       width={360}
                       displayName={tweetDisplayName}
                       username={tweetUsername}
@@ -1354,7 +1465,11 @@ export default function ShareSuggestionsPage() {
               <div className="flex gap-3 mt-4">
                 <button
                   type="button"
-                  onClick={handleShareToSelectedPlatform}
+                  onClick={
+                    selectedPlatform === 'x' && suggestionImageUrls[selectedIndex]
+                      ? handleShareImageToX
+                      : handleShareToSelectedPlatform
+                  }
                   disabled={!selectedPlatform || !editableShareText.trim()}
                   className="flex-1 py-3 rounded-xl font-medium transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{
@@ -1372,7 +1487,9 @@ export default function ShareSuggestionsPage() {
                   }}
                 >
                   {selectedPlatform
-                    ? `Share to ${PLATFORM_LABELS[selectedPlatform]}`
+                    ? selectedPlatform === 'x' && suggestionImageUrls[selectedIndex]
+                      ? 'Share to X'
+                      : `Share to ${PLATFORM_LABELS[selectedPlatform]}`
                     : 'Select a platform above'}
                 </button>
               </div>
