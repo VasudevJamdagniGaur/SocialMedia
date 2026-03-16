@@ -851,7 +851,7 @@ export default function ShareSuggestionsPage() {
     const imageDataUrl = suggestionImageUrls[selectedIndex] || null;
     const isDataUrl = imageDataUrl && typeof imageDataUrl === 'string' && imageDataUrl.startsWith('data:image');
 
-    // 0) LinkedIn: use backend API to post, then open LinkedIn app (or OAuth if not connected)
+    // 0) LinkedIn: API flow — OAuth → backend posts image + text via LinkedIn API → post appears on feed → open feed
     if (selectedPlatform === 'linkedin' && (imageDataUrl || (suggestionImageUrls[selectedIndex] && typeof suggestionImageUrls[selectedIndex] === 'string'))) {
       const done = await shareToLinkedInViaApi(t, imageDataUrl || suggestionImageUrls[selectedIndex] || null);
       if (done) {
@@ -859,7 +859,7 @@ export default function ShareSuggestionsPage() {
         setSharePanelOpen(false);
         return;
       }
-      // API failed or not connected: fallback to share sheet with image + text so user can pick LinkedIn
+      // API failed (e.g. not connected, backend error): fallback to share sheet with image + text
       const linkedInImageSource = imageDataUrl || suggestionImageUrls[selectedIndex] || null;
       const linkedInDataUrl = linkedInImageSource && typeof linkedInImageSource === 'string'
         ? await getImageAsDataUrl(linkedInImageSource)
@@ -868,6 +868,7 @@ export default function ShareSuggestionsPage() {
         setLinkedInToastMessage('caption');
         setLinkedInCaptionToastVisible(true);
         setTimeout(() => setLinkedInCaptionToastVisible(false), 3500);
+        copyCaptionToClipboardForLinkedIn(t);
         try {
           if (isNative()) {
             const fileUri = await writeImageToCacheFile(linkedInDataUrl);
@@ -879,7 +880,6 @@ export default function ShareSuggestionsPage() {
                 dialogTitle: 'Share to LinkedIn',
               });
               await recordShare('linkedin', t, { imageDataUrlForStorage: linkedInDataUrl });
-              copyCaptionToClipboardForLinkedIn(t);
               triggerPostShareConfirmation();
               setSharePanelOpen(false);
               return;
@@ -890,20 +890,28 @@ export default function ShareSuggestionsPage() {
             if (file && navigator.canShare({ text: t, files: [file] })) {
               await navigator.share({ text: t, files: [file] });
               await recordShare('linkedin', t, { imageDataUrlForStorage: linkedInDataUrl });
-              copyCaptionToClipboardForLinkedIn(t);
               triggerPostShareConfirmation();
               setSharePanelOpen(false);
               return;
             }
           }
         } catch (err) {
-          if (err?.name !== 'AbortError') console.warn('LinkedIn share sheet fallback failed', err);
+          if (err?.name !== 'AbortError') console.warn('LinkedIn share fallback failed', err);
         }
       }
-      // No image or share sheet failed: copy text and open LinkedIn share URL
       shareToLinkedIn(t);
       try {
         await recordShare('linkedin', t, { imageDataUrlForStorage: linkedInDataUrl || null });
+      } catch (_) {}
+      triggerPostShareConfirmation();
+      setSharePanelOpen(false);
+      return;
+    }
+    if (selectedPlatform === 'linkedin') {
+      // No image: copy text and open LinkedIn share URL
+      shareToLinkedIn(t);
+      try {
+        await recordShare('linkedin', t, {});
       } catch (_) {}
       triggerPostShareConfirmation();
       setSharePanelOpen(false);
