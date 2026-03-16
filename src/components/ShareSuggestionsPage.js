@@ -1632,11 +1632,7 @@ export default function ShareSuggestionsPage() {
                     color: '#FFFFFF',
                   }}
                 >
-                  {selectedPlatform
-                    ? selectedPlatform === 'x' && suggestionImageUrls[selectedIndex]
-                      ? 'Share to X'
-                      : `Share to ${PLATFORM_LABELS[selectedPlatform]}`
-                    : 'Select a platform above'}
+                  {selectedPlatform ? 'Share' : 'Select a platform above'}
                 </button>
               </div>
             </div>
