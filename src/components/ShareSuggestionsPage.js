@@ -882,165 +882,9 @@ export default function ShareSuggestionsPage() {
     const isDataUrl =
       imageDataUrl && typeof imageDataUrl === 'string' && imageDataUrl.startsWith('data:image');
 
-    // 0) LinkedIn: API flow — OAuth → backend posts image + text via LinkedIn API → post appears on feed
-    if (
-      selectedPlatform === 'linkedin' &&
-      (imageDataUrl || (rawImage && typeof rawImage === 'string'))
-    ) {
-      const done = await shareToLinkedInViaApi(t, imageDataUrl || rawImage || null);
-      if (done) {
-        triggerPostShareConfirmation();
-        setSharePanelOpen(false);
-        return;
-      }
-      // API failed (e.g. not connected, backend error): fallback to share sheet with image + text
-      const linkedInImageSource = imageDataUrl || rawImage || null;
-      const linkedInDataUrl =
-        linkedInImageSource && typeof linkedInImageSource === 'string'
-          ? await getImageAsDataUrl(linkedInImageSource)
-          : null;
-      if (linkedInDataUrl) {
-        setLinkedInToastMessage('caption');
-        setLinkedInCaptionToastVisible(true);
-        setTimeout(() => setLinkedInCaptionToastVisible(false), 3500);
-        copyCaptionToClipboardForLinkedIn(t);
-        try {
-          if (isNative()) {
-            const fileUri = await writeImageToCacheFile(linkedInDataUrl);
-            if (fileUri) {
-              await Share.share({
-                text: t,
-                files: [fileUri],
-                title: 'Share to LinkedIn',
-                dialogTitle: 'Share to LinkedIn',
-              });
-              await recordShare('linkedin', t, { imageDataUrlForStorage: linkedInDataUrl });
-              triggerPostShareConfirmation();
-              setSharePanelOpen(false);
-              return;
-            }
-          }
-          if (typeof navigator !== 'undefined' && navigator.share && navigator.canShare) {
-            const file = dataURLtoFile(linkedInDataUrl);
-            if (file && navigator.canShare({ text: t, files: [file] })) {
-              await navigator.share({ text: t, files: [file] });
-              await recordShare('linkedin', t, { imageDataUrlForStorage: linkedInDataUrl });
-              triggerPostShareConfirmation();
-              setSharePanelOpen(false);
-              return;
-            }
-          }
-        } catch (err) {
-          if (err?.name !== 'AbortError') console.warn('LinkedIn share fallback failed', err);
-        }
-      }
-      shareToLinkedIn(t);
-      try {
-        await recordShare('linkedin', t, { imageDataUrlForStorage: linkedInDataUrl || null });
-      } catch (_) {}
-      triggerPostShareConfirmation();
-      setSharePanelOpen(false);
-      return;
-    }
-    if (selectedPlatform === 'linkedin') {
-      // No image: copy text and open LinkedIn share URL
-      shareToLinkedIn(t);
-      try {
-        await recordShare('linkedin', t, {});
-      } catch (_) {}
-      triggerPostShareConfirmation();
-      setSharePanelOpen(false);
-      return;
-    }
-
-    // 1) Special case: X (Twitter) → generate tweet-style image card and share that,
-    // but only if an AI image has been generated for the selected suggestion
-    if (selectedPlatform === 'x' && isDataUrl) {
-      try {
-        const node = tweetCardRef.current;
-        if (node) {
-          // Match TweetShareCard's 7:10 aspect ratio: height = width * 10 / 7
-          const exportWidth = 1080;
-          const exportHeight = Math.round((exportWidth * 10) / 7);
-
-          const cardDataUrl = await toPng(node, {
-            width: exportWidth,
-            height: exportHeight,
-            pixelRatio: 2,
-            skipFonts: true,
-            cacheBust: false,
-          });
-
-          const isCardDataUrl =
-            cardDataUrl && typeof cardDataUrl === 'string' && cardDataUrl.startsWith('data:image');
-
-          if (isCardDataUrl) {
-            // Prefer native share with image card when running as Capacitor app
-            if (isNative()) {
-              try {
-                let fileUri = await writeImageToCacheFile(cardDataUrl);
-                if (fileUri) {
-                  await Share.share({
-                    text: '',
-                    files: [fileUri],
-                    title: 'Share reflection',
-                    dialogTitle: 'Share to…',
-                  });
-                  await recordShare('x', t, { imageDataUrlForStorage: cardDataUrl });
-                  triggerPostShareConfirmation();
-                  setSharePanelOpen(false);
-                  return;
-                }
-              } catch (err) {
-                // Native share failed, fall through
-              }
-            }
-
-            // Web Share API with image file (PWA / mobile browser)
-            if (typeof navigator !== 'undefined' && navigator.share && navigator.canShare) {
-              const file = dataURLtoFile(cardDataUrl);
-              if (file && navigator.canShare({ files: [file] })) {
-                try {
-                  await navigator.share({ files: [file] });
-                  await recordShare('x', t, { imageDataUrlForStorage: cardDataUrl });
-                  triggerPostShareConfirmation();
-                  setSharePanelOpen(false);
-                  return;
-                } catch (err) {
-                  // Web Share failed, fall through to download fallback
-                }
-              }
-            }
-
-            // Fallback: download the card image so the user can attach manually
-            try {
-              const a = document.createElement('a');
-              a.href = cardDataUrl;
-              a.download = 'tweet-card.png';
-              a.click();
-            } catch (_) {}
-            await recordShare('x', t, { imageDataUrlForStorage: cardDataUrl });
-            triggerPostShareConfirmation();
-            setSharePanelOpen(false);
-            return;
-          }
-        }
-      } catch (err) {
-        if (err?.name === 'SecurityError' || (err?.message && err.message.includes('cssRules'))) {
-          await recordShare('x', t, { imageDataUrlForStorage: imageDataUrl || null });
-        }
-      }
-
-      // Absolute fallback if card generation/sharing failed: fall back to existing X text-only share
-      shareToTwitter(t);
-      triggerPostShareConfirmation();
-      setSharePanelOpen(false);
-      return;
-    }
-
-    // 1) Native share via Capacitor (Android/iOS app) – text + image
-    if (isNative() && isDataUrl) {
-      try {
+    try {
+      // 1) Native share via Capacitor – open phone share menu with image + text
+      if (isNative() && isDataUrl) {
         let fileUri = null;
         try {
           fileUri = await writeImageToCacheFile(imageDataUrl);
@@ -1053,73 +897,75 @@ export default function ShareSuggestionsPage() {
             text: t,
             files: [fileUri],
             title: 'Share reflection',
-            dialogTitle: 'Share to…',
+            dialogTitle: 'Share',
           });
         } else {
-          // Fallback: share data URL directly if file could not be created
           await Share.share({
             text: t,
             url: imageDataUrl,
             title: 'Share reflection',
-            dialogTitle: 'Share to…',
+            dialogTitle: 'Share',
           });
         }
-        await recordShare(selectedPlatform, t, { imageDataUrlForStorage: imageDataUrl || null });
-        if (selectedPlatform === 'linkedin') {
-          copyCaptionToClipboardForLinkedIn(t);
-        }
+        await recordShare(selectedPlatform || 'other', t, {
+          imageDataUrlForStorage: imageDataUrl || null,
+        });
         triggerPostShareConfirmation();
         setSharePanelOpen(false);
         return;
-      } catch (err) {
-        if (err?.name !== 'AbortError') {
-          console.warn('Native share failed, falling back to web share:', err);
-        }
       }
-    }
 
-    // 2) Web Share API with files (PWA / supported mobile browsers)
-    if (isDataUrl && typeof navigator !== 'undefined' && navigator.share && navigator.canShare) {
-      const file = dataURLtoFile(imageDataUrl);
-      if (file && navigator.canShare({ text: t, files: [file] })) {
-        try {
+      // 2) Web Share API with image file (PWA / mobile browser)
+      if (isDataUrl && typeof navigator !== 'undefined' && navigator.share && navigator.canShare) {
+        const file = dataURLtoFile(imageDataUrl);
+        if (file && navigator.canShare({ text: t, files: [file] })) {
           await navigator.share({ text: t, files: [file] });
-          await recordShare(selectedPlatform, t, { imageDataUrlForStorage: imageDataUrl || null });
-          if (selectedPlatform === 'linkedin') {
-            copyCaptionToClipboardForLinkedIn(t);
-          }
+          await recordShare(selectedPlatform || 'other', t, {
+            imageDataUrlForStorage: imageDataUrl || null,
+          });
           triggerPostShareConfirmation();
           setSharePanelOpen(false);
           return;
-        } catch (err) {
-          if (err.name !== 'AbortError') console.warn('Share with image failed:', err);
         }
       }
-    }
 
-    // 3) Fallback: platform-specific share URLs (text only) + optional download
-    const fallbackImage = isDataUrl ? imageDataUrl : rawImage;
-    try {
-      await recordShare(selectedPlatform, t, { imageDataUrlForStorage: fallbackImage });
-    } catch (err) {
-      console.error('Failed to save post to My Presence:', err);
-    }
-    if (selectedPlatform === 'linkedin') shareToLinkedIn(t);
-    else if (selectedPlatform === 'x') shareToTwitter(t);
-    else if (selectedPlatform === 'reddit') shareToReddit(t);
-
-    if (isDataUrl) {
-      try {
-        const a = document.createElement('a');
-        a.href = imageDataUrl;
-        a.download = 'post-image.png';
-        a.click();
-      } catch (_) {
-        // ignore download errors
+      // 3) Web Share API text-only
+      if (typeof navigator !== 'undefined' && navigator.share) {
+        await navigator.share({ text: t });
+        await recordShare(selectedPlatform || 'other', t, {
+          imageDataUrlForStorage: imageDataUrl || rawImage || null,
+        });
+        triggerPostShareConfirmation();
+        setSharePanelOpen(false);
+        return;
       }
+
+      // 4) Fallback: download image (if present) and copy text to clipboard
+      if (isDataUrl) {
+        try {
+          const a = document.createElement('a');
+          a.href = imageDataUrl;
+          a.download = 'post-image.png';
+          a.click();
+        } catch {
+          // ignore download errors
+        }
+      }
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(t);
+        } catch {
+          // ignore clipboard failures
+        }
+      }
+      await recordShare(selectedPlatform || 'other', t, {
+        imageDataUrlForStorage: imageDataUrl || rawImage || null,
+      });
+      triggerPostShareConfirmation();
+      setSharePanelOpen(false);
+    } catch (err) {
+      console.error('Share failed:', err);
     }
-    triggerPostShareConfirmation();
-    setSharePanelOpen(false);
   };
 
   if (!reflectionFromState) {
