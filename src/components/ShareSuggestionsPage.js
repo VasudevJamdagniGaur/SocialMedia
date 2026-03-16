@@ -883,55 +883,30 @@ export default function ShareSuggestionsPage() {
       imageDataUrl && typeof imageDataUrl === 'string' && imageDataUrl.startsWith('data:image');
 
     try {
-      // 1) Native share via Capacitor – open phone share menu with image + text
-      if (isNative() && isDataUrl) {
-        let fileUri = null;
-        try {
-          fileUri = await writeImageToCacheFile(imageDataUrl);
-        } catch {
-          fileUri = null;
+      // 1) Native share via Capacitor – always open phone share menu (text only or text + image)
+      if (isNative()) {
+        const options = {
+          text: t,
+          title: 'Share reflection',
+          dialogTitle: 'Share',
+        };
+
+        if (isDataUrl) {
+          let fileUri = null;
+          try {
+            fileUri = await writeImageToCacheFile(imageDataUrl);
+          } catch {
+            fileUri = null;
+          }
+
+          if (fileUri) {
+            options.files = [fileUri];
+          } else {
+            options.url = imageDataUrl;
+          }
         }
 
-        if (fileUri) {
-          await Share.share({
-            text: t,
-            files: [fileUri],
-            title: 'Share reflection',
-            dialogTitle: 'Share',
-          });
-        } else {
-          await Share.share({
-            text: t,
-            url: imageDataUrl,
-            title: 'Share reflection',
-            dialogTitle: 'Share',
-          });
-        }
-        await recordShare(selectedPlatform || 'other', t, {
-          imageDataUrlForStorage: imageDataUrl || null,
-        });
-        triggerPostShareConfirmation();
-        setSharePanelOpen(false);
-        return;
-      }
-
-      // 2) Web Share API with image file (PWA / mobile browser)
-      if (isDataUrl && typeof navigator !== 'undefined' && navigator.share && navigator.canShare) {
-        const file = dataURLtoFile(imageDataUrl);
-        if (file && navigator.canShare({ text: t, files: [file] })) {
-          await navigator.share({ text: t, files: [file] });
-          await recordShare(selectedPlatform || 'other', t, {
-            imageDataUrlForStorage: imageDataUrl || null,
-          });
-          triggerPostShareConfirmation();
-          setSharePanelOpen(false);
-          return;
-        }
-      }
-
-      // 3) Web Share API text-only
-      if (typeof navigator !== 'undefined' && navigator.share) {
-        await navigator.share({ text: t });
+        await Share.share(options);
         await recordShare(selectedPlatform || 'other', t, {
           imageDataUrlForStorage: imageDataUrl || rawImage || null,
         });
@@ -940,7 +915,26 @@ export default function ShareSuggestionsPage() {
         return;
       }
 
-      // 4) Fallback: download image (if present) and copy text to clipboard
+      // 2) Web Share API (PWA / mobile browser) – share text, and image when supported
+      if (typeof navigator !== 'undefined' && navigator.share) {
+        const shareOptions = { text: t };
+        if (isDataUrl && navigator.canShare) {
+          const file = dataURLtoFile(imageDataUrl);
+          if (file && navigator.canShare({ text: t, files: [file] })) {
+            shareOptions.files = [file];
+          }
+        }
+
+        await navigator.share(shareOptions);
+        await recordShare(selectedPlatform || 'other', t, {
+          imageDataUrlForStorage: imageDataUrl || rawImage || null,
+        });
+        triggerPostShareConfirmation();
+        setSharePanelOpen(false);
+        return;
+      }
+
+      // 3) Fallback: download image (if present) and copy text to clipboard
       if (isDataUrl) {
         try {
           const a = document.createElement('a');
