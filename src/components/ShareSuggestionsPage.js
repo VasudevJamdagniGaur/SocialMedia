@@ -1052,7 +1052,17 @@ export default function ShareSuggestionsPage() {
                   : 'Reddit'
               }?`}
             </span>
-            <div className="flex gap-2 justify-end">
+            <div className="flex gap-2 justify-end flex-wrap">
+              <button
+                type="button"
+                className="text-xs sm:text-sm px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/15 transition-colors"
+                onClick={() => {
+                  // User has not posted yet – just close the confirmation and keep everything as-is
+                  setShareConfirmation({ open: false, index: null, platform: null });
+                }}
+              >
+                No, I have not posted
+              </button>
               <button
                 type="button"
                 className="text-xs sm:text-sm px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/15 transition-colors"
