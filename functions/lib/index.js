@@ -168,6 +168,11 @@ async function handleLinkedInExchange(req, res) {
 /**
  * POST /api/linkedin/share — create LinkedIn UGC post with image; optionally update Firestore post doc.
  * Body: { userId: string, caption: string, imageUrl: string, postId?: string }.
+ *
+ * Implements LinkedIn's 3‑step image upload flow:
+ * 1) registerUpload → get upload URL + asset URN
+ * 2) PUT image bytes to upload URL
+ * 3) POST ugcPosts with the asset URN attached
  */
 async function handleLinkedInShare(req, res) {
     res.set('Access-Control-Allow-Origin', '*');
@@ -181,46 +186,117 @@ async function handleLinkedInShare(req, res) {
         res.status(405).json({ error: 'Method not allowed' });
         return;
     }
+    const db = admin.firestore();
     try {
         const { userId, caption, imageUrl, postId } = (req.body || {});
+        // Step 0: validate payload
         if (!userId || !caption || !imageUrl) {
             res.status(400).json({ error: 'Missing userId, caption, or imageUrl' });
             return;
         }
-        const accessToken = await (0, linkedin_1.getLinkedInAccessToken)(userId);
+        // Step 1: get LinkedIn accessToken + person URN from Firestore
+        let accessToken = null;
+        let personUrn;
+        try {
+            accessToken = await (0, linkedin_1.getLinkedInAccessToken)(userId);
+            const userDoc = await db.collection('users').doc(userId).get();
+            const linkedin = userDoc.data()?.linkedin;
+            personUrn = linkedin?.linkedinPersonUrn;
+            if (!personUrn && linkedin?.personId) {
+                personUrn = `urn:li:person:${linkedin.personId}`;
+            }
+        }
+        catch (e) {
+            firebase_functions_1.logger.warn('[linkedin] share step 1 (load credentials) failed', { message: e?.message, userId });
+            res.status(500).json({ error: 'Failed to load LinkedIn credentials for user' });
+            return;
+        }
         if (!accessToken) {
             res.status(401).json({ error: 'LinkedIn not connected or token expired' });
             return;
         }
-        const db = admin.firestore();
-        const userDoc = await db.collection('users').doc(userId).get();
-        const personUrn = userDoc.data()?.linkedin?.linkedinPersonUrn;
         if (!personUrn) {
             res.status(400).json({ error: 'LinkedIn person URN not found; reconnect LinkedIn' });
             return;
         }
-        // Fetch image from URL
-        const imageRes = await fetch(imageUrl, { method: 'GET' });
-        if (!imageRes.ok)
-            throw new Error('Failed to fetch image from URL');
-        const imageBuffer = Buffer.from(await imageRes.arrayBuffer());
-        const contentType = imageRes.headers.get('content-type') || 'image/jpeg';
-        const { uploadUrl, asset } = await (0, linkedin_1.registerImageUpload)(accessToken, personUrn, imageBuffer.length);
-        await (0, linkedin_1.uploadImageToLinkedIn)(accessToken, uploadUrl, imageBuffer, contentType);
-        const linkedinPostId = await (0, linkedin_1.createLinkedInUgcPost)(accessToken, personUrn, caption, asset);
-        if (postId) {
-            await db.collection('posts').doc(postId).set({
-                platform: 'linkedin',
-                linkedinPostId,
-                caption,
-                imageUrl,
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            }, { merge: true });
+        // Step 2: fetch image bytes from imageUrl
+        let imageBuffer;
+        let contentType;
+        try {
+            const imageRes = await fetch(imageUrl, { method: 'GET' });
+            if (!imageRes.ok) {
+                const text = await imageRes.text().catch(() => '');
+                firebase_functions_1.logger.warn('[linkedin] share step 2 (fetch image) failed', {
+                    status: imageRes.status,
+                    body: text.slice(0, 200),
+                });
+                res.status(500).json({ error: 'Failed to fetch image from URL' });
+                return;
+            }
+            const arr = await imageRes.arrayBuffer();
+            imageBuffer = Buffer.from(arr);
+            contentType = imageRes.headers.get('content-type') || 'image/jpeg';
         }
-        res.status(200).json({ linkedinPostId });
+        catch (e) {
+            firebase_functions_1.logger.warn('[linkedin] share step 2 (download image) error', { message: e?.message });
+            res.status(500).json({ error: 'Error downloading image' });
+            return;
+        }
+        // Step 3.1: registerUpload with LinkedIn
+        let uploadUrl;
+        let assetUrn;
+        try {
+            const { uploadUrl: u, asset } = await (0, linkedin_1.registerImageUpload)(accessToken, personUrn, imageBuffer.length);
+            uploadUrl = u;
+            assetUrn = asset;
+        }
+        catch (e) {
+            firebase_functions_1.logger.warn('[linkedin] share step 3.1 (registerUpload) failed', { message: e?.message });
+            res.status(500).json({ error: 'LinkedIn registerUpload failed' });
+            return;
+        }
+        // Step 3.2: upload image bytes
+        try {
+            await (0, linkedin_1.uploadImageToLinkedIn)(accessToken, uploadUrl, imageBuffer, contentType);
+        }
+        catch (e) {
+            firebase_functions_1.logger.warn('[linkedin] share step 3.2 (image upload) failed', { message: e?.message });
+            res.status(500).json({ error: 'LinkedIn image upload failed' });
+            return;
+        }
+        // Step 3.3: create UGC post
+        let linkedinPostId;
+        try {
+            linkedinPostId = await (0, linkedin_1.createLinkedInUgcPost)(accessToken, personUrn, caption, assetUrn);
+        }
+        catch (e) {
+            firebase_functions_1.logger.warn('[linkedin] share step 3.3 (ugcPosts) failed', { message: e?.message });
+            res.status(500).json({ error: 'LinkedIn post creation failed' });
+            return;
+        }
+        // Optional: update your posts collection
+        if (postId) {
+            try {
+                await db.collection('posts').doc(postId).set({
+                    platform: 'linkedin',
+                    linkedinPostId,
+                    caption,
+                    imageUrl,
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                }, { merge: true });
+            }
+            catch (e) {
+                firebase_functions_1.logger.warn('[linkedin] share Firestore post update failed', {
+                    message: e?.message,
+                    postId,
+                });
+                // Don't fail the whole request because of this
+            }
+        }
+        res.status(200).json({ success: true, linkedinPostId, asset: assetUrn });
     }
     catch (e) {
-        firebase_functions_1.logger.warn('[linkedin] share error', { message: e?.message });
+        firebase_functions_1.logger.warn('[linkedin] share unexpected error', { message: e?.message });
         res.status(500).json({ error: e?.message || 'Share failed' });
     }
 }
