@@ -62,6 +62,9 @@ export default function CommunityPage() {
   const [followLoadingUid, setFollowLoadingUid] = useState(null);
   const [socialShares, setSocialShares] = useState([]);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [linkedInPosts, setLinkedInPosts] = useState([]);
+  const [linkedInPostsLoading, setLinkedInPostsLoading] = useState(false);
+  const [analyticsRefreshing, setAnalyticsRefreshing] = useState({});
 
   // Load profile picture
   useEffect(() => {
@@ -481,6 +484,21 @@ export default function CommunityPage() {
         setSocialShares(result.shares);
       }
     });
+  }, []);
+
+  // Load LinkedIn posts (for post performance / analytics) when user is set
+  useEffect(() => {
+    const u = getCurrentUser();
+    if (!u?.uid) return;
+    setLinkedInPostsLoading(true);
+    const apiBase = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : 'https://deitedatabase.firebaseapp.com';
+    fetch(`${apiBase}/api/linkedin/posts?userId=${encodeURIComponent(u.uid)}`)
+      .then((res) => (res.ok ? res.json() : { posts: [] }))
+      .then((data) => {
+        setLinkedInPosts(Array.isArray(data.posts) ? data.posts : []);
+      })
+      .catch(() => setLinkedInPosts([]))
+      .finally(() => setLinkedInPostsLoading(false));
   }, []);
 
   const user = getCurrentUser();
@@ -1034,6 +1052,66 @@ export default function CommunityPage() {
             transition: 'opacity 0.2s ease, transform 0.2s ease',
           }}
         >
+          {activeTab === 'mySpace' && linkedInPosts.length > 0 && (
+            <div
+              className="mx-4 mb-4 rounded-2xl p-4"
+              style={{
+                background: isDarkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+                border: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'}`,
+              }}
+            >
+              <h3 className="text-sm font-semibold mb-3" style={{ color: THREADS.text }}>
+                Your LinkedIn post performance
+              </h3>
+              {linkedInPostsLoading ? (
+                <p className="text-xs" style={{ color: THREADS.textSecondary }}>Loading…</p>
+              ) : (
+                <ul className="space-y-3">
+                  {linkedInPosts.map((p, idx) => (
+                    <li
+                      key={p.id}
+                      className="flex flex-col gap-2"
+                      style={{ borderBottom: idx < linkedInPosts.length - 1 ? `1px solid ${THREADS.divider}` : 'none', paddingBottom: idx < linkedInPosts.length - 1 ? 12 : 0, marginBottom: idx < linkedInPosts.length - 1 ? 12 : 0 }}
+                    >
+                      <p className="text-xs line-clamp-2" style={{ color: THREADS.textSecondary }}>
+                        {p.caption || 'Post'}
+                      </p>
+                      <div className="flex items-center gap-4 text-xs" style={{ color: THREADS.text }}>
+                        <span>👍 {p.analytics?.likes ?? 0} likes</span>
+                        <span>💬 {p.analytics?.comments ?? 0} comments</span>
+                        <button
+                          type="button"
+                          disabled={analyticsRefreshing[p.id]}
+                          onClick={() => {
+                            const u = getCurrentUser();
+                            if (!u?.uid) return;
+                            setAnalyticsRefreshing((prev) => ({ ...prev, [p.id]: true }));
+                            const apiBase = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : 'https://deitedatabase.firebaseapp.com';
+                            fetch(`${apiBase}/api/linkedin/analytics?userId=${encodeURIComponent(u.uid)}&postId=${encodeURIComponent(p.id)}`)
+                              .then((res) => (res.ok ? res.json() : {}))
+                              .then((data) => {
+                                setLinkedInPosts((prev) =>
+                                  prev.map((post) =>
+                                    post.id === p.id
+                                      ? { ...post, analytics: { likes: data.likes ?? post.analytics?.likes ?? 0, comments: data.comments ?? post.analytics?.comments ?? 0, lastFetchedAt: data.lastFetchedAt ?? null } }
+                                      : post
+                                  )
+                                );
+                              })
+                              .finally(() => setAnalyticsRefreshing((prev) => ({ ...prev, [p.id]: false })));
+                          }}
+                          className="text-xs underline cursor-pointer disabled:opacity-50"
+                          style={{ color: THREADS.accent }}
+                        >
+                          {analyticsRefreshing[p.id] ? 'Refreshing…' : 'Refresh'}
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
           {activeTab === 'mySpace' && filteredPosts.length === 0 && socialOnlyDates.length === 0 && (
             <div className="py-16 px-6 text-center">
               <p className="text-base leading-relaxed" style={{ color: THREADS.textSecondary }}>

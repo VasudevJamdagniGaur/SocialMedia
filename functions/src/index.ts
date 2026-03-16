@@ -18,6 +18,7 @@ import {
   registerImageUpload,
   uploadImageToLinkedIn,
   createLinkedInUgcPost,
+  getLinkedInPostAnalytics,
 } from './linkedin';
 
 admin.initializeApp();
@@ -317,6 +318,11 @@ async function handleLinkedInShare(
             caption,
             imageUrl,
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            analytics: {
+              likes: 0,
+              comments: 0,
+              lastFetchedAt: null as number | null,
+            },
           },
           { merge: true }
         );
@@ -336,6 +342,130 @@ async function handleLinkedInShare(
   }
 }
 
+/**
+ * GET /api/linkedin/analytics?userId=xxx&postId=xxx
+ * Fetches LinkedIn social metadata for the post and updates Firestore. Returns { likes, comments, lastFetchedAt }.
+ */
+async function handleLinkedInAnalytics(
+  req: import('firebase-functions/v2/https').Request,
+  res: { set: (k: string, v: string) => void; status: (n: number) => { json: (o: object) => void }; json: (o: object) => void }
+): Promise<void> {
+  res.set('Access-Control-Allow-Origin', '*');
+  if (req.method === 'OPTIONS') {
+    res.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type');
+    res.status(204).end();
+    return;
+  }
+  if (req.method !== 'GET') {
+    res.status(405).json({ error: 'Method not allowed' });
+    return;
+  }
+
+  const userId = (req.query?.userId as string)?.trim();
+  const postId = (req.query?.postId as string)?.trim();
+  if (!userId || !postId) {
+    res.status(400).json({ error: 'Missing userId or postId' });
+    return;
+  }
+
+  const db = admin.firestore();
+  try {
+    const postDoc = await db.collection('posts').doc(postId).get();
+    const data = postDoc.data();
+    const linkedinPostId = data?.linkedinPostId as string | undefined;
+    if (!linkedinPostId || (data?.userId as string) !== userId) {
+      res.status(404).json({ error: 'Post not found or not a LinkedIn post' });
+      return;
+    }
+
+    const accessToken = await getLinkedInAccessToken(userId);
+    if (!accessToken) {
+      res.status(401).json({ error: 'LinkedIn not connected or token expired' });
+      return;
+    }
+
+    const analytics = await getLinkedInPostAnalytics(accessToken, linkedinPostId);
+    await db.collection('posts').doc(postId).set(
+      {
+        analytics: {
+          likes: analytics.likes,
+          comments: analytics.comments,
+          lastFetchedAt: analytics.lastFetchedAt,
+        },
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    res.status(200).json({
+      likes: analytics.likes,
+      comments: analytics.comments,
+      lastFetchedAt: analytics.lastFetchedAt,
+    });
+  } catch (e: any) {
+    logger.warn('[linkedin] analytics error', { message: e?.message });
+    res.status(500).json({ error: e?.message || 'Failed to fetch analytics' });
+  }
+}
+
+/**
+ * GET /api/linkedin/posts?userId=xxx
+ * Returns list of user's LinkedIn posts (postId, caption, linkedinPostId, analytics) for the dashboard.
+ */
+async function handleLinkedInPosts(
+  req: import('firebase-functions/v2/https').Request,
+  res: { set: (k: string, v: string) => void; status: (n: number) => { json: (o: object) => void }; json: (o: object) => void }
+): Promise<void> {
+  res.set('Access-Control-Allow-Origin', '*');
+  if (req.method === 'OPTIONS') {
+    res.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type');
+    res.status(204).end();
+    return;
+  }
+  if (req.method !== 'GET') {
+    res.status(405).json({ error: 'Method not allowed' });
+    return;
+  }
+
+  const userId = (req.query?.userId as string)?.trim();
+  if (!userId) {
+    res.status(400).json({ error: 'Missing userId' });
+    return;
+  }
+
+  const db = admin.firestore();
+  try {
+    const snapshot = await db
+      .collection('posts')
+      .where('userId', '==', userId)
+      .where('platform', '==', 'linkedin')
+      .limit(100)
+      .get();
+
+    const posts = snapshot.docs
+      .map((doc) => {
+        const d = doc.data();
+        return {
+          id: doc.id,
+          caption: d.caption ?? '',
+          imageUrl: d.imageUrl ?? null,
+          linkedinPostId: d.linkedinPostId ?? null,
+          analytics: d.analytics ?? { likes: 0, comments: 0, lastFetchedAt: null },
+          createdAt: d.createdAt?.toMillis?.() ?? null,
+        };
+      })
+      .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
+      .slice(0, 50);
+
+    res.status(200).json({ posts });
+  } catch (e: any) {
+    logger.warn('[linkedin] posts list error', { message: e?.message });
+    res.status(500).json({ error: e?.message || 'Failed to list posts' });
+  }
+}
+
 export const linkedInApi = onRequest(
   { cors: true },
   async (req, res) => {
@@ -345,6 +475,12 @@ export const linkedInApi = onRequest(
     }
     if (path.endsWith('/share')) {
       return handleLinkedInShare(req, res);
+    }
+    if (path.endsWith('/analytics')) {
+      return handleLinkedInAnalytics(req, res);
+    }
+    if (path.endsWith('/posts')) {
+      return handleLinkedInPosts(req, res);
     }
     res.status(404).json({ error: 'Not found' });
   }

@@ -883,7 +883,21 @@ export default function ShareSuggestionsPage() {
       imageDataUrl && typeof imageDataUrl === 'string' && imageDataUrl.startsWith('data:image');
 
     try {
-      // 1) Native share via Capacitor – always open phone share menu (text only or text + image)
+      // 0) LinkedIn: if connected, post via API so we get post ID and can show analytics
+      if (
+        selectedPlatform === 'linkedin' &&
+        (imageDataUrl || (rawImage && typeof rawImage === 'string'))
+      ) {
+        const done = await shareToLinkedInViaApi(t, imageDataUrl || rawImage || null);
+        if (done) {
+          triggerPostShareConfirmation();
+          setSharePanelOpen(false);
+          return;
+        }
+        // API failed or not connected – fall through to share sheet
+      }
+
+      // 1) Native share via Capacitor – open phone share menu (text only or text + image)
       if (isNative()) {
         const options = {
           text: t,
