@@ -518,19 +518,13 @@ export default function ShareSuggestionsPage() {
     };
     await addDoc(collection(db, 'communityPosts'), postData);
 
-    if (isNative()) {
-      try {
-        await App.openUrl({ url: 'linkedin://feed' });
-      } catch {
-        try {
-          await App.openUrl({ url: 'https://www.linkedin.com/feed/' });
-        } catch {
-          window.open('https://www.linkedin.com/feed/', '_blank', 'noopener,noreferrer');
-        }
-      }
-    } else {
-      window.open('https://www.linkedin.com/feed/', '_blank', 'noopener,noreferrer');
-    }
+    // Indicate success inside the app instead of forcing a redirect to LinkedIn.
+    setLinkedInToastMessage('success');
+    setLinkedInCaptionToastVisible(true);
+    setTimeout(() => {
+      setLinkedInCaptionToastVisible(false);
+    }, 3500);
+
     return true;
   };
 
@@ -1113,7 +1107,7 @@ export default function ShareSuggestionsPage() {
       className="min-h-screen flex flex-col px-4 py-6 pb-10"
       style={{ background: isDarkMode ? HUB.bg : '#F5F5F5', position: 'relative' }}
     >
-      {/* LinkedIn caption copied toast */}
+      {/* LinkedIn toast */}
       {linkedInCaptionToastVisible && (
         <div className="fixed inset-x-0 bottom-6 flex justify-center pointer-events-none z-50">
           <div
@@ -1125,6 +1119,8 @@ export default function ShareSuggestionsPage() {
           >
             {linkedInToastMessage === 'connect'
               ? '🔗 Connect LinkedIn first — opening sign-in…'
+              : linkedInToastMessage === 'success'
+              ? '✅ Successfully posted to LinkedIn!'
               : '📋 Caption copied! Paste it in LinkedIn'}
           </div>
         </div>
