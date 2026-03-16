@@ -746,6 +746,9 @@ export default function ShareSuggestionsPage() {
   const handleShareImageToX = async () => {
     try {
       const node = tweetCardRef.current;
+      // #region agent log
+      fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6e32d1' }, body: JSON.stringify({ sessionId: '6e32d1', location: 'ShareSuggestionsPage.js:handleShareImageToX:entry', message: 'Share to X clicked', data: { hasRef: !!node }, timestamp: Date.now(), hypothesisId: 'H5' }) }).catch(() => {});
+      // #endregion
       if (!node) {
         setXShareToastMessage('error');
         setXShareToastVisible(true);
@@ -766,6 +769,9 @@ export default function ShareSuggestionsPage() {
       if (isNative()) {
         try {
           const fileUri = await writeImageToCacheFile(cardDataUrl);
+          // #region agent log
+          fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6e32d1' }, body: JSON.stringify({ sessionId: '6e32d1', location: 'ShareSuggestionsPage.js:handleShareImageToX:native', message: 'X native fileUri', data: { hasFileUri: !!fileUri }, timestamp: Date.now(), hypothesisId: 'H5' }) }).catch(() => {});
+          // #endregion
           if (fileUri) {
             setXShareToastMessage('opening');
             setXShareToastVisible(true);
@@ -866,6 +872,9 @@ export default function ShareSuggestionsPage() {
 
   const handleShareToSelectedPlatform = async () => {
     const t = (sharePanelOpen ? editableShareText : selectedText) || '';
+    // #region agent log
+    fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6e32d1' }, body: JSON.stringify({ sessionId: '6e32d1', location: 'ShareSuggestionsPage.js:handleShareToSelectedPlatform:entry', message: 'Share button clicked', data: { platform: selectedPlatform, tLen: (t || '').length, sharePanelOpen, rawImageType: typeof (suggestionImageUrls[selectedIndex] || null), hasRawImage: !!(suggestionImageUrls[selectedIndex]) }, timestamp: Date.now(), hypothesisId: 'H1' }) }).catch(() => {});
+    // #endregion
     if (!t) return;
 
     // Resolve the current suggestion image (if any) to a data URL so we can share it
@@ -881,6 +890,9 @@ export default function ShareSuggestionsPage() {
     }
     const isDataUrl =
       imageDataUrl && typeof imageDataUrl === 'string' && imageDataUrl.startsWith('data:image');
+    // #region agent log
+    fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6e32d1' }, body: JSON.stringify({ sessionId: '6e32d1', location: 'ShareSuggestionsPage.js:afterGetImage', message: 'Image resolution', data: { isDataUrl, dataUrlLen: (imageDataUrl && typeof imageDataUrl === 'string') ? imageDataUrl.length : 0 }, timestamp: Date.now(), hypothesisId: 'H4' }) }).catch(() => {});
+    // #endregion
 
     try {
       // 0) LinkedIn: if connected, post via API so we get post ID and can show analytics
@@ -912,6 +924,9 @@ export default function ShareSuggestionsPage() {
           } catch {
             fileUri = null;
           }
+          // #region agent log
+          fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6e32d1' }, body: JSON.stringify({ sessionId: '6e32d1', location: 'ShareSuggestionsPage.js:nativeFileUri', message: 'Native writeImageToCacheFile result', data: { hasFileUri: !!fileUri, fileUriType: typeof fileUri }, timestamp: Date.now(), hypothesisId: 'H3' }) }).catch(() => {});
+          // #endregion
 
           if (fileUri) {
             options.files = [fileUri];
@@ -920,6 +935,9 @@ export default function ShareSuggestionsPage() {
           }
         }
 
+        // #region agent log
+        fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6e32d1' }, body: JSON.stringify({ sessionId: '6e32d1', location: 'ShareSuggestionsPage.js:beforeShareShare', message: 'About to call Share.share', data: { path: 'native', filesCount: (options.files && options.files.length) || 0, hasText: !!options.text }, timestamp: Date.now(), hypothesisId: 'H2' }) }).catch(() => {});
+        // #endregion
         await Share.share(options);
         await recordShare(selectedPlatform || 'other', t, {
           imageDataUrlForStorage: imageDataUrl || rawImage || null,
@@ -938,7 +956,9 @@ export default function ShareSuggestionsPage() {
             shareOptions.files = [file];
           }
         }
-
+        // #region agent log
+        fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6e32d1' }, body: JSON.stringify({ sessionId: '6e32d1', location: 'ShareSuggestionsPage.js:beforeNavigatorShare', message: 'About to call navigator.share', data: { path: 'web', filesCount: (shareOptions.files && shareOptions.files.length) || 0, hasText: !!shareOptions.text }, timestamp: Date.now(), hypothesisId: 'H2' }) }).catch(() => {});
+        // #endregion
         await navigator.share(shareOptions);
         await recordShare(selectedPlatform || 'other', t, {
           imageDataUrlForStorage: imageDataUrl || rawImage || null,
@@ -949,6 +969,9 @@ export default function ShareSuggestionsPage() {
       }
 
       // 3) Fallback: download image (if present) and copy text to clipboard
+      // #region agent log
+      fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6e32d1' }, body: JSON.stringify({ sessionId: '6e32d1', location: 'ShareSuggestionsPage.js:fallbackPath', message: 'Using fallback (no native share, no navigator.share)', data: { isNative: isNative(), hasNavigatorShare: !!(typeof navigator !== 'undefined' && navigator.share) }, timestamp: Date.now(), hypothesisId: 'H2' }) }).catch(() => {});
+      // #endregion
       if (isDataUrl) {
         try {
           const a = document.createElement('a');
@@ -972,6 +995,9 @@ export default function ShareSuggestionsPage() {
       triggerPostShareConfirmation();
       setSharePanelOpen(false);
     } catch (err) {
+      // #region agent log
+      fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6e32d1' }, body: JSON.stringify({ sessionId: '6e32d1', location: 'ShareSuggestionsPage.js:shareCatch', message: 'Share failed', data: { errName: err?.name, errMessage: (err && (err.message || String(err))) || '' }, timestamp: Date.now(), hypothesisId: 'H2' }) }).catch(() => {});
+      // #endregion
       console.error('Share failed:', err);
     }
   };
