@@ -115,6 +115,8 @@ export default function ShareSuggestionsPage() {
   const [xShareToastVisible, setXShareToastVisible] = useState(false);
   const [xShareToastMessage, setXShareToastMessage] = useState(''); // 'opening' | 'choose_x' | 'downloaded' | 'error'
   const [shareConfirmation, setShareConfirmation] = useState({ open: false, index: null, platform: null });
+  const [shareErrorToast, setShareErrorToast] = useState(false);
+  const [shareErrorToastMessage, setShareErrorToastMessage] = useState('');
   const imageReplaceInputRef = useRef(null);
   const tweetCardRef = useRef(null);
 
@@ -871,11 +873,12 @@ export default function ShareSuggestionsPage() {
   };
 
   const handleShareToSelectedPlatform = async () => {
-    const t = (sharePanelOpen ? editableShareText : selectedText) || '';
+    // Use edited text when in panel; fall back to selected suggestion text when edited is empty
+    const t = (sharePanelOpen ? ((editableShareText || '').trim() || selectedText) : selectedText) || '';
     // #region agent log
     fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6e32d1' }, body: JSON.stringify({ sessionId: '6e32d1', location: 'ShareSuggestionsPage.js:handleShareToSelectedPlatform:entry', message: 'Share button clicked', data: { platform: selectedPlatform, tLen: (t || '').length, sharePanelOpen, rawImageType: typeof (suggestionImageUrls[selectedIndex] || null), hasRawImage: !!(suggestionImageUrls[selectedIndex]) }, timestamp: Date.now(), hypothesisId: 'H1' }) }).catch(() => {});
     // #endregion
-    if (!t) return;
+    if (!t.trim()) return;
 
     // Resolve the current suggestion image (if any) to a data URL so we can share it
     const rawImage = suggestionImageUrls[selectedIndex] || null;
@@ -994,11 +997,17 @@ export default function ShareSuggestionsPage() {
       });
       triggerPostShareConfirmation();
       setSharePanelOpen(false);
+      setShareErrorToastMessage(isDataUrl ? 'Text copied. Image downloaded.' : 'Text copied to clipboard.');
+      setShareErrorToast(true);
+      setTimeout(() => setShareErrorToast(false), 3000);
     } catch (err) {
       // #region agent log
       fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6e32d1' }, body: JSON.stringify({ sessionId: '6e32d1', location: 'ShareSuggestionsPage.js:shareCatch', message: 'Share failed', data: { errName: err?.name, errMessage: (err && (err.message || String(err))) || '' }, timestamp: Date.now(), hypothesisId: 'H2' }) }).catch(() => {});
       // #endregion
       console.error('Share failed:', err);
+      setShareErrorToastMessage('Share cancelled or unavailable. Try again or use copy/download.');
+      setShareErrorToast(true);
+      setTimeout(() => setShareErrorToast(false), 4000);
     }
   };
 
@@ -1043,6 +1052,20 @@ export default function ShareSuggestionsPage() {
               : linkedInToastMessage === 'success'
               ? '✅ Successfully posted to LinkedIn!'
               : '📋 Caption copied! Paste it in LinkedIn'}
+          </div>
+        </div>
+      )}
+      {/* Share failed toast */}
+      {shareErrorToast && (
+        <div className="fixed inset-x-0 bottom-6 flex justify-center pointer-events-none z-50">
+          <div
+            className="px-4 py-2 rounded-full shadow-md text-sm pointer-events-auto"
+            style={{
+              background: isDarkMode ? 'rgba(15,23,42,0.95)' : 'rgba(17,24,39,0.95)',
+              color: '#FFFFFF',
+            }}
+          >
+            {shareErrorToastMessage || 'Share cancelled or unavailable.'}
           </div>
         </div>
       )}
@@ -1506,7 +1529,7 @@ export default function ShareSuggestionsPage() {
                       ? handleShareImageToX
                       : handleShareToSelectedPlatform
                   }
-                  disabled={!selectedPlatform || !editableShareText.trim()}
+                  disabled={!selectedPlatform || (!(editableShareText || '').trim() && !(selectedText || '').trim())}
                   className="flex-1 py-3 rounded-xl font-medium transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{
                     background:
