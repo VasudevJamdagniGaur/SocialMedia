@@ -761,6 +761,31 @@ export default function ShareSuggestionsPage() {
         skipFonts: true,
         cacheBust: false,
       });
+
+      // Prefer true native share sheet when running as Capacitor app so X appears as a target.
+      if (isNative()) {
+        try {
+          const fileUri = await writeImageToCacheFile(cardDataUrl);
+          if (fileUri) {
+            setXShareToastMessage('opening');
+            setXShareToastVisible(true);
+            setTimeout(() => setXShareToastVisible(false), 3500);
+            await Share.share({
+              text: '',
+              files: [fileUri],
+              title: 'Share reflection',
+              dialogTitle: 'Share to X',
+            });
+            setXShareToastMessage('choose_x');
+            setXShareToastVisible(true);
+            setTimeout(() => setXShareToastVisible(false), 3500);
+            return;
+          }
+        } catch (err) {
+          // If native share fails, fall back to web share/download below.
+        }
+      }
+
       const blob = dataURLtoBlob(cardDataUrl);
       if (!blob) {
         setXShareToastMessage('error');
