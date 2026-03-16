@@ -867,22 +867,38 @@ export default function ShareSuggestionsPage() {
   const handleShareToSelectedPlatform = async () => {
     const t = (sharePanelOpen ? editableShareText : selectedText) || '';
     if (!t) return;
-    const imageDataUrl = suggestionImageUrls[selectedIndex] || null;
-    const isDataUrl = imageDataUrl && typeof imageDataUrl === 'string' && imageDataUrl.startsWith('data:image');
 
-    // 0) LinkedIn: API flow — OAuth → backend posts image + text via LinkedIn API → post appears on feed → open feed
-    if (selectedPlatform === 'linkedin' && (imageDataUrl || (suggestionImageUrls[selectedIndex] && typeof suggestionImageUrls[selectedIndex] === 'string'))) {
-      const done = await shareToLinkedInViaApi(t, imageDataUrl || suggestionImageUrls[selectedIndex] || null);
+    // Resolve the current suggestion image (if any) to a data URL so we can share it
+    const rawImage = suggestionImageUrls[selectedIndex] || null;
+    let imageDataUrl = null;
+    if (rawImage && typeof rawImage === 'string') {
+      if (rawImage.startsWith('data:image')) {
+        imageDataUrl = rawImage;
+      } else {
+        // Convert blob/https URL → data URL for native / Web Share API
+        imageDataUrl = await getImageAsDataUrl(rawImage);
+      }
+    }
+    const isDataUrl =
+      imageDataUrl && typeof imageDataUrl === 'string' && imageDataUrl.startsWith('data:image');
+
+    // 0) LinkedIn: API flow — OAuth → backend posts image + text via LinkedIn API → post appears on feed
+    if (
+      selectedPlatform === 'linkedin' &&
+      (imageDataUrl || (rawImage && typeof rawImage === 'string'))
+    ) {
+      const done = await shareToLinkedInViaApi(t, imageDataUrl || rawImage || null);
       if (done) {
         triggerPostShareConfirmation();
         setSharePanelOpen(false);
         return;
       }
       // API failed (e.g. not connected, backend error): fallback to share sheet with image + text
-      const linkedInImageSource = imageDataUrl || suggestionImageUrls[selectedIndex] || null;
-      const linkedInDataUrl = linkedInImageSource && typeof linkedInImageSource === 'string'
-        ? await getImageAsDataUrl(linkedInImageSource)
-        : null;
+      const linkedInImageSource = imageDataUrl || rawImage || null;
+      const linkedInDataUrl =
+        linkedInImageSource && typeof linkedInImageSource === 'string'
+          ? await getImageAsDataUrl(linkedInImageSource)
+          : null;
       if (linkedInDataUrl) {
         setLinkedInToastMessage('caption');
         setLinkedInCaptionToastVisible(true);
@@ -1082,7 +1098,7 @@ export default function ShareSuggestionsPage() {
     }
 
     // 3) Fallback: platform-specific share URLs (text only) + optional download
-    const fallbackImage = isDataUrl ? imageDataUrl : (suggestionImageUrls[selectedIndex] || null);
+    const fallbackImage = isDataUrl ? imageDataUrl : rawImage;
     try {
       await recordShare(selectedPlatform, t, { imageDataUrlForStorage: fallbackImage });
     } catch (err) {
