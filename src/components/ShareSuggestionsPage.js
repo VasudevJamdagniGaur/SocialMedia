@@ -491,14 +491,41 @@ export default function ShareSuggestionsPage() {
       return true;
     }
 
+    // Try to capture a useful error for the user (this is our runtime evidence when logs aren't accessible)
+    let responseText = '';
+    let responseJson = null;
+    try {
+      responseText = await res.clone().text();
+    } catch {
+      responseText = '';
+    }
+    try {
+      responseJson = await res.clone().json();
+    } catch {
+      responseJson = null;
+    }
+
     if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      const errorMessage = (data && (data.error || data.message)) || `Server error (${res.status})`;
-      console.warn('LinkedIn share failed', res.status, data);
-      setLinkedInErrorText(errorMessage);
+      const errorMessage =
+        (responseJson && (responseJson.error || responseJson.message)) ||
+        (responseText ? responseText.slice(0, 140) : '') ||
+        `Server error (${res.status})`;
+      console.warn('LinkedIn share failed', res.status, responseJson || responseText);
+      setLinkedInErrorText(`API ${res.status} via ${apiBase}: ${errorMessage}`);
       setLinkedInToastMessage('error');
       setLinkedInCaptionToastVisible(true);
-      setTimeout(() => setLinkedInCaptionToastVisible(false), 6000);
+      setTimeout(() => setLinkedInCaptionToastVisible(false), 8000);
+      return true;
+    }
+
+    // If backend claims success but does not return a post id, treat as failure (prevents false success toasts)
+    const linkedinPostId = responseJson?.linkedinPostId;
+    if (!linkedinPostId) {
+      const snippet = responseText ? responseText.slice(0, 140) : '';
+      setLinkedInErrorText(`Backend returned 200 but no linkedinPostId. ${snippet ? `Body: ${snippet}` : ''}`);
+      setLinkedInToastMessage('error');
+      setLinkedInCaptionToastVisible(true);
+      setTimeout(() => setLinkedInCaptionToastVisible(false), 8000);
       return true;
     }
 
