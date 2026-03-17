@@ -452,9 +452,8 @@ export default function ShareSuggestionsPage() {
     });
     if (!result?.success || !result.postId || !result.imageUrl) return false;
 
-    // IMPORTANT: In the native app, window.location.origin is usually a local/capacitor origin
-    // (e.g. http://localhost or capacitor://localhost) which will NOT route /api/* to Firebase Functions.
-    // Force the API base to Firebase Hosting in native builds (and when origin looks local).
+    // IMPORTANT: In the native app, window.location.origin is usually local/capacitor, which will NOT
+    // route /api/* to Firebase Hosting rewrites. Use the Firebase project's Hosting domain instead.
     const origin = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '';
     const originLooksLocal =
       !origin ||
@@ -462,7 +461,11 @@ export default function ShareSuggestionsPage() {
       origin.startsWith('capacitor://') ||
       origin.startsWith('ionic://') ||
       origin.startsWith('file://');
-    const apiBase = (isNative() || originLooksLocal) ? 'https://deitedatabase.firebaseapp.com' : origin;
+
+    // Default to this project's Hosting domain based on Firebase config.
+    // (Both deitedatabase.web.app and deitedatabase.firebaseapp.com should work when Hosting is deployed.)
+    const hostingBase = 'https://deitedatabase.web.app';
+    const apiBase = (isNative() || originLooksLocal) ? hostingBase : origin;
     let res;
     try {
       res = await fetch(`${apiBase}/api/linkedin/share`, {
@@ -477,7 +480,8 @@ export default function ShareSuggestionsPage() {
       });
     } catch (err) {
       console.warn('LinkedIn API share request failed:', err);
-      setLinkedInErrorText('Could not reach server. Deploy the backend (see FIREBASE_FUNCTIONS_AND_LOGS.md in project).');
+      const msg = (err && (err.message || String(err))) ? (err.message || String(err)) : 'unknown';
+      setLinkedInErrorText(`Could not reach ${apiBase}/api/linkedin/share. Network error: ${msg}`);
       setLinkedInToastMessage('error');
       setLinkedInCaptionToastVisible(true);
       setTimeout(() => setLinkedInCaptionToastVisible(false), 6000);
