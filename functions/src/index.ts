@@ -299,19 +299,24 @@ async function handleLinkedInShare(
       return;
     }
 
-    // Step 3.2b: wait for asset to be AVAILABLE so the post actually appears on LinkedIn
+    // Step 3.2b: wait for asset to be AVAILABLE so the post actually appears on LinkedIn.
+    // If the status check fails (e.g. 403 on GET asset), wait 5s and proceed anyway.
     try {
       await waitForLinkedInAssetAvailable(accessToken, assetUrn, { maxWaitMs: 30_000, pollIntervalMs: 2_000 });
+      logger.info('[linkedin] share step 3.2b: asset AVAILABLE');
     } catch (e) {
-      logger.warn('[linkedin] share step 3.2b (wait for asset) failed', { message: (e as any)?.message });
-      res.status(500).json({ error: 'LinkedIn image is still processing; try again in a moment' });
-      return;
+      const msg = (e as any)?.message ?? '';
+      logger.warn('[linkedin] share step 3.2b (wait for asset) failed', { message: msg });
+      // Fallback: wait 5s then create post anyway (GET asset may return 403 for some tokens)
+      logger.info('[linkedin] share step 3.2b: fallback 5s delay before create');
+      await new Promise((r) => setTimeout(r, 5_000));
     }
 
     // Step 3.3: create UGC post
     let linkedinPostId: string;
     try {
       linkedinPostId = await createLinkedInUgcPost(accessToken, personUrn, caption, assetUrn);
+      logger.info('[linkedin] share step 3.3: post created', { linkedinPostId });
     } catch (e) {
       logger.warn('[linkedin] share step 3.3 (ugcPosts) failed', { message: (e as any)?.message });
       res.status(500).json({ error: 'LinkedIn post creation failed' });

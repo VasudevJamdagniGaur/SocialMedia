@@ -14,6 +14,8 @@ const LINKEDIN_UGC_POSTS = 'https://api.linkedin.com/v2/ugcPosts';
 const LINKEDIN_SOCIAL_METADATA_BASE = 'https://api.linkedin.com/rest/socialMetadata';
 
 const RESTLI_HEADER = { 'X-Restli-Protocol-Version': '2.0.0' };
+/** Required for LinkedIn REST APIs (e.g. rest/assets). */
+const LINKEDIN_VERSION_HEADER = { 'LinkedIn-Version': '202410' };
 
 export function getLinkedInConfig() {
   const clientId = (process.env.LINKEDIN_CLIENT_ID || '').trim();
@@ -156,6 +158,7 @@ export async function registerImageUpload(
       Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
       ...RESTLI_HEADER,
+      ...LINKEDIN_VERSION_HEADER,
     },
     body: JSON.stringify(body),
   });
@@ -224,6 +227,7 @@ export async function getLinkedInAssetStatus(
     headers: {
       Authorization: `Bearer ${accessToken}`,
       ...RESTLI_HEADER,
+      ...LINKEDIN_VERSION_HEADER,
     },
   });
 
