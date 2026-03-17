@@ -1,0 +1,4 @@
+{"sessionId":"6e32d1","location":"ShareSuggestionsPage.js:handleShareToSelectedPlatform:entry","message":"Share button clicked","data":{"platform":"linkedin","tLen":500,"sharePanelOpen":true,"rawImageType":"string","hasRawImage":true},"timestamp":1773712616034,"hypothesisId":"H1"}
+{"sessionId":"6e32d1","location":"ShareSuggestionsPage.js:afterGetImage","message":"Image resolution","data":{"isDataUrl":null,"dataUrlLen":0},"timestamp":1773712618252,"hypothesisId":"H4"}
+{"sessionId":"6e32d1","location":"ShareSuggestionsPage.js:handleShareToSelectedPlatform:entry","message":"Share button clicked","data":{"platform":"linkedin","tLen":500,"sharePanelOpen":true,"rawImageType":"string","hasRawImage":true},"timestamp":1773712620622,"hypothesisId":"H1"}
+{"sessionId":"6e32d1","location":"ShareSuggestionsPage.js:afterGetImage","message":"Image resolution","data":{"isDataUrl":null,"dataUrlLen":0},"timestamp":1773712621392,"hypothesisId":"H4"}
