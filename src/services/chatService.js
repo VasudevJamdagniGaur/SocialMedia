@@ -1583,17 +1583,25 @@ ${(reflection || '').trim()}`;
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 45000);
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(requestBody),
-      signal: controller.signal
-    });
+    let response;
+    try {
+      response = await fetch(apiUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(requestBody),
+        signal: controller.signal
+      });
+    } catch (e) {
+      clearTimeout(timeoutId);
+      const name = e && e.name ? e.name : 'Error';
+      const msg = e && (e.message || String(e)) ? (e.message || String(e)) : 'unknown';
+      throw new Error(`Suggestions request failed (${name}): ${msg}. URL=${apiUrl}`);
+    }
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`Suggestions failed: ${response.status} ${errText.substring(0, 150)}`);
+      const errText = await response.text().catch(() => '');
+      throw new Error(`Suggestions failed: ${response.status} ${errText.substring(0, 200)}. URL=${apiUrl}`);
     }
 
     const data = await response.json();
