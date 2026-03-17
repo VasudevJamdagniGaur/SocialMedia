@@ -1549,10 +1549,13 @@ ${text}`;
         }
       }
 
-      // In native/local contexts, do not silently fall back to direct OpenAI (it fails on device).
-      if (originLooksLocal && lastErr) throw lastErr;
+      // In native/local: backend unreachable — return reflection as single post so user can still choose & share.
+      if (originLooksLocal && lastErr) {
+        const trimmed = (reflection || '').trim();
+        if (trimmed) return [{ eventLabel: 'Reflection', post: trimmed }];
+        throw lastErr;
+      }
     } catch (e) {
-      // If backend is unreachable in native, surface that clearly (don't silently fall back to OpenAI).
       const origin = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '';
       const originLooksLocal =
         !origin ||
@@ -1560,10 +1563,13 @@ ${text}`;
         origin.startsWith('capacitor://') ||
         origin.startsWith('ionic://') ||
         origin.startsWith('file://');
+      // Graceful fallback: so "Choose a post" still works when backend is down.
       if (originLooksLocal) {
-        const msg = e && (e.message || String(e)) ? (e.message || String(e)) : 'unknown';
-        throw new Error(`Suggestions backend unreachable: ${msg}. Deploy hosting+functions. Try: firebase deploy --only hosting,functions`);
+        const trimmed = (reflection || '').trim();
+        if (trimmed) return [{ eventLabel: 'Reflection', post: trimmed }];
       }
+      const msg = e && (e.message || String(e)) ? (e.message || String(e)) : 'unknown';
+      throw new Error(`Suggestions failed: ${msg}`);
     }
 
     // Web fallback: Share suggestion text is generated with OpenAI directly
