@@ -1519,23 +1519,38 @@ ${text}`;
         origin.startsWith('capacitor://') ||
         origin.startsWith('ionic://') ||
         origin.startsWith('file://');
-      const hostingBase = 'https://deitedatabase.web.app';
-      const apiBase = originLooksLocal ? hostingBase : origin;
-      const res = await fetch(`${apiBase}/api/linkedin/suggestions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reflection: (reflection || '').trim(), platform })
-      });
-      if (res.ok) {
-        const data = await res.json().catch(() => null);
-        if (data && Array.isArray(data.posts) && data.posts.length) return data.posts;
-      } else {
-        const t = await res.text().catch(() => '');
-        // Fall through to direct OpenAI only for web/dev if needed
-        if (originLooksLocal) {
-          throw new Error(`Suggestions backend failed: ${res.status} ${t.slice(0, 150)}. URL=${apiBase}/api/linkedin/suggestions`);
+      const candidates = originLooksLocal
+        ? ['https://deitedatabase.web.app', 'https://deitedatabase.firebaseapp.com']
+        : [origin, 'https://deitedatabase.web.app', 'https://deitedatabase.firebaseapp.com'];
+
+      let lastErr = null;
+      for (const apiBase of candidates) {
+        if (!apiBase) continue;
+        try {
+          const res = await fetch(`${apiBase}/api/linkedin/suggestions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reflection: (reflection || '').trim(), platform })
+          });
+          if (res.ok) {
+            const data = await res.json().catch(() => null);
+            if (data && Array.isArray(data.posts) && data.posts.length) return data.posts;
+            // If ok but malformed, treat as failure and try next
+            const txt = await res.text().catch(() => '');
+            lastErr = new Error(`Suggestions backend returned OK but no posts. URL=${apiBase}/api/linkedin/suggestions Body=${txt.slice(0, 120)}`);
+            continue;
+          }
+          const t = await res.text().catch(() => '');
+          lastErr = new Error(`Suggestions backend failed: ${res.status} ${t.slice(0, 150)}. URL=${apiBase}/api/linkedin/suggestions`);
+        } catch (e) {
+          const msg = e && (e.message || String(e)) ? (e.message || String(e)) : 'unknown';
+          lastErr = new Error(`Suggestions backend unreachable: ${msg}. URL=${apiBase}/api/linkedin/suggestions`);
+          continue;
         }
       }
+
+      // In native/local contexts, do not silently fall back to direct OpenAI (it fails on device).
+      if (originLooksLocal && lastErr) throw lastErr;
     } catch (e) {
       // If backend is unreachable in native, surface that clearly (don't silently fall back to OpenAI).
       const origin = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '';
@@ -1547,7 +1562,7 @@ ${text}`;
         origin.startsWith('file://');
       if (originLooksLocal) {
         const msg = e && (e.message || String(e)) ? (e.message || String(e)) : 'unknown';
-        throw new Error(`Suggestions backend unreachable: ${msg}. Deploy functions and hosting rewrites. URL=https://deitedatabase.web.app/api/linkedin/suggestions`);
+        throw new Error(`Suggestions backend unreachable: ${msg}. Deploy hosting+functions. Try: firebase deploy --only hosting,functions`);
       }
     }
 

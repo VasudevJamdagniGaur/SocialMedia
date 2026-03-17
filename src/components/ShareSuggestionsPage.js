@@ -462,10 +462,10 @@ export default function ShareSuggestionsPage() {
       origin.startsWith('ionic://') ||
       origin.startsWith('file://');
 
-    // Default to this project's Hosting domain based on Firebase config.
-    // (Both deitedatabase.web.app and deitedatabase.firebaseapp.com should work when Hosting is deployed.)
-    const hostingBase = 'https://deitedatabase.web.app';
-    const apiBase = (isNative() || originLooksLocal) ? hostingBase : origin;
+    // Default to this project's Hosting domains based on Firebase config.
+    // Some networks/devices may block one of them, so we try both.
+    const hostingBases = ['https://deitedatabase.web.app', 'https://deitedatabase.firebaseapp.com'];
+    const apiBase = (isNative() || originLooksLocal) ? hostingBases[0] : origin;
     let res;
     try {
       res = await fetch(`${apiBase}/api/linkedin/share`, {
