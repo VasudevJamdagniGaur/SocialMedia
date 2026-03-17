@@ -452,7 +452,17 @@ export default function ShareSuggestionsPage() {
     });
     if (!result?.success || !result.postId || !result.imageUrl) return false;
 
-    const apiBase = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : 'https://deitedatabase.firebaseapp.com';
+    // IMPORTANT: In the native app, window.location.origin is usually a local/capacitor origin
+    // (e.g. http://localhost or capacitor://localhost) which will NOT route /api/* to Firebase Functions.
+    // Force the API base to Firebase Hosting in native builds (and when origin looks local).
+    const origin = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '';
+    const originLooksLocal =
+      !origin ||
+      origin.includes('localhost') ||
+      origin.startsWith('capacitor://') ||
+      origin.startsWith('ionic://') ||
+      origin.startsWith('file://');
+    const apiBase = (isNative() || originLooksLocal) ? 'https://deitedatabase.firebaseapp.com' : origin;
     let res;
     try {
       res = await fetch(`${apiBase}/api/linkedin/share`, {
