@@ -111,7 +111,8 @@ export default function ShareSuggestionsPage() {
   const [editableShareText, setEditableShareText] = useState('');
   const [imageEditMenuOpen, setImageEditMenuOpen] = useState(false);
   const [linkedInCaptionToastVisible, setLinkedInCaptionToastVisible] = useState(false);
-  const [linkedInToastMessage, setLinkedInToastMessage] = useState('caption'); // 'caption' | 'connect'
+  const [linkedInToastMessage, setLinkedInToastMessage] = useState('caption'); // 'caption' | 'connect' | 'success' | 'error'
+  const [linkedInErrorText, setLinkedInErrorText] = useState('');
   const [xShareToastVisible, setXShareToastVisible] = useState(false);
   const [xShareToastMessage, setXShareToastMessage] = useState(''); // 'opening' | 'choose_x' | 'downloaded' | 'error'
   const [shareConfirmation, setShareConfirmation] = useState({ open: false, index: null, platform: null });
@@ -466,7 +467,11 @@ export default function ShareSuggestionsPage() {
       });
     } catch (err) {
       console.warn('LinkedIn API share request failed:', err);
-      return false;
+      setLinkedInErrorText('Could not reach server. Deploy the backend (see FIREBASE_FUNCTIONS_AND_LOGS.md in project).');
+      setLinkedInToastMessage('error');
+      setLinkedInCaptionToastVisible(true);
+      setTimeout(() => setLinkedInCaptionToastVisible(false), 6000);
+      return true;
     }
 
     if (res.status === 401) {
@@ -488,8 +493,13 @@ export default function ShareSuggestionsPage() {
 
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
+      const errorMessage = (data && (data.error || data.message)) || `Server error (${res.status})`;
       console.warn('LinkedIn share failed', res.status, data);
-      return false;
+      setLinkedInErrorText(errorMessage);
+      setLinkedInToastMessage('error');
+      setLinkedInCaptionToastVisible(true);
+      setTimeout(() => setLinkedInCaptionToastVisible(false), 6000);
+      return true;
     }
 
     await firestoreService.saveSocialShare(user.uid, {
@@ -1041,7 +1051,7 @@ export default function ShareSuggestionsPage() {
       {linkedInCaptionToastVisible && (
         <div className="fixed inset-x-0 bottom-6 flex justify-center pointer-events-none z-50">
           <div
-            className="px-4 py-2 rounded-full shadow-md text-sm pointer-events-auto"
+            className="px-4 py-2 rounded-full shadow-md text-sm pointer-events-auto max-w-[90vw] text-center"
             style={{
               background: isDarkMode ? 'rgba(15,23,42,0.95)' : 'rgba(17,24,39,0.95)',
               color: '#FFFFFF',
@@ -1051,6 +1061,8 @@ export default function ShareSuggestionsPage() {
               ? '🔗 Connect LinkedIn first — opening sign-in…'
               : linkedInToastMessage === 'success'
               ? '✅ Successfully posted to LinkedIn!'
+              : linkedInToastMessage === 'error'
+              ? (linkedInErrorText || 'LinkedIn share failed.')
               : '📋 Caption copied! Paste it in LinkedIn'}
           </div>
         </div>
