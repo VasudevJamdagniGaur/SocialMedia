@@ -199,6 +199,70 @@ export async function uploadImageToLinkedIn(
   }
 }
 
+const LINKEDIN_REST_ASSETS = 'https://api.linkedin.com/rest/assets';
+
+/**
+ * Extract asset id from URN (urn:li:digitalmediaAsset:XXXX -> XXXX).
+ */
+function assetUrnToId(assetUrn: string): string {
+  const prefix = 'urn:li:digitalmediaAsset:';
+  if (assetUrn.startsWith(prefix)) return assetUrn.slice(prefix.length);
+  return assetUrn;
+}
+
+/**
+ * Get asset status from LinkedIn REST API. Returns the recipe status (e.g. PROCESSING, AVAILABLE).
+ */
+export async function getLinkedInAssetStatus(
+  accessToken: string,
+  assetUrn: string
+): Promise<string> {
+  const assetId = assetUrnToId(assetUrn);
+  const url = `${LINKEDIN_REST_ASSETS}/${encodeURIComponent(assetId)}`;
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      ...RESTLI_HEADER,
+    },
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    logger.warn('[linkedin] getAsset failed', { status: res.status, body: text?.slice(0, 200) });
+    throw new Error(`LinkedIn get asset failed: ${res.status}`);
+  }
+
+  const data = (await res.json()) as { recipes?: Array<{ recipe?: string; status?: string }> };
+  const status = data.recipes?.[0]?.status ?? 'UNKNOWN';
+  return status;
+}
+
+/**
+ * Poll asset status until AVAILABLE or timeout. Required so the post is actually visible;
+ * creating ugcPost before the asset is AVAILABLE can return 201 but the post won't appear.
+ */
+export async function waitForLinkedInAssetAvailable(
+  accessToken: string,
+  assetUrn: string,
+  options: { maxWaitMs?: number; pollIntervalMs?: number } = {}
+): Promise<void> {
+  const maxWaitMs = options.maxWaitMs ?? 30_000;
+  const pollIntervalMs = options.pollIntervalMs ?? 2_000;
+  const deadline = Date.now() + maxWaitMs;
+
+  while (Date.now() < deadline) {
+    const status = await getLinkedInAssetStatus(accessToken, assetUrn);
+    if (status === 'AVAILABLE') return;
+    if (status === 'CLIENT_ERROR' || status === 'SERVER_ERROR' || status === 'ABANDONED') {
+      throw new Error(`LinkedIn asset failed with status: ${status}`);
+    }
+    await new Promise((r) => setTimeout(r, pollIntervalMs));
+  }
+
+  throw new Error('LinkedIn asset did not become AVAILABLE in time');
+}
+
 /**
  * Step 3: Create UGC post with caption and image asset.
  */
@@ -244,9 +308,17 @@ export async function createLinkedInUgcPost(
     throw new Error(`LinkedIn create post failed: ${res.status}`);
   }
 
-  const data = (await res.json()) as { id?: string };
-  const id = data?.id;
-  if (!id) throw new Error('LinkedIn ugcPosts did not return post id');
+  // Post ID can be in header (x-restli-id) or in response body (id)
+  const xRestliId = res.headers.get('x-restli-id')?.trim();
+  let data: { id?: string };
+  try {
+    data = (await res.json()) as { id?: string };
+  } catch {
+    data = {};
+  }
+  const bodyId = data?.id;
+  const id = bodyId || xRestliId;
+  if (!id) throw new Error('LinkedIn ugcPosts did not return post id (body or x-restli-id)');
   return id;
 }
 

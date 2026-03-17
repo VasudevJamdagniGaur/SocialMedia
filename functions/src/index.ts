@@ -17,6 +17,7 @@ import {
   getLinkedInAccessToken,
   registerImageUpload,
   uploadImageToLinkedIn,
+  waitForLinkedInAssetAvailable,
   createLinkedInUgcPost,
   getLinkedInPostAnalytics,
 } from './linkedin';
@@ -295,6 +296,15 @@ async function handleLinkedInShare(
     } catch (e) {
       logger.warn('[linkedin] share step 3.2 (image upload) failed', { message: (e as any)?.message });
       res.status(500).json({ error: 'LinkedIn image upload failed' });
+      return;
+    }
+
+    // Step 3.2b: wait for asset to be AVAILABLE so the post actually appears on LinkedIn
+    try {
+      await waitForLinkedInAssetAvailable(accessToken, assetUrn, { maxWaitMs: 30_000, pollIntervalMs: 2_000 });
+    } catch (e) {
+      logger.warn('[linkedin] share step 3.2b (wait for asset) failed', { message: (e as any)?.message });
+      res.status(500).json({ error: 'LinkedIn image is still processing; try again in a moment' });
       return;
     }
 
