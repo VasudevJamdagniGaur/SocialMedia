@@ -1509,7 +1509,49 @@ ${text}`;
    * @returns {Promise<{ eventLabel: string, post: string }[]>} - Array of { eventLabel, post } per event
    */
   async generateSocialPostSuggestions(reflection, platform) {
-    // Share suggestion text is always generated with OpenAI; rest of app can use other providers
+    // On mobile/native builds, calling OpenAI directly can fail (network/CORS). Prefer backend endpoint.
+    // Backend uses OPENAI_API_KEY and returns parsed posts.
+    try {
+      const origin = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '';
+      const originLooksLocal =
+        !origin ||
+        origin.includes('localhost') ||
+        origin.startsWith('capacitor://') ||
+        origin.startsWith('ionic://') ||
+        origin.startsWith('file://');
+      const hostingBase = 'https://deitedatabase.web.app';
+      const apiBase = originLooksLocal ? hostingBase : origin;
+      const res = await fetch(`${apiBase}/api/linkedin/suggestions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reflection: (reflection || '').trim(), platform })
+      });
+      if (res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data && Array.isArray(data.posts) && data.posts.length) return data.posts;
+      } else {
+        const t = await res.text().catch(() => '');
+        // Fall through to direct OpenAI only for web/dev if needed
+        if (originLooksLocal) {
+          throw new Error(`Suggestions backend failed: ${res.status} ${t.slice(0, 150)}. URL=${apiBase}/api/linkedin/suggestions`);
+        }
+      }
+    } catch (e) {
+      // If backend is unreachable in native, surface that clearly (don't silently fall back to OpenAI).
+      const origin = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '';
+      const originLooksLocal =
+        !origin ||
+        origin.includes('localhost') ||
+        origin.startsWith('capacitor://') ||
+        origin.startsWith('ionic://') ||
+        origin.startsWith('file://');
+      if (originLooksLocal) {
+        const msg = e && (e.message || String(e)) ? (e.message || String(e)) : 'unknown';
+        throw new Error(`Suggestions backend unreachable: ${msg}. Deploy functions and hosting rewrites. URL=https://deitedatabase.web.app/api/linkedin/suggestions`);
+      }
+    }
+
+    // Web fallback: Share suggestion text is generated with OpenAI directly
     this.openaiApiKey = (process.env.REACT_APP_OPENAI_API_KEY || process.env.OPENAI_API_KEY || this.openaiApiKey || '').trim();
     const apiKey = this.openaiApiKey;
     if (!apiKey || apiKey.trim() === '') {

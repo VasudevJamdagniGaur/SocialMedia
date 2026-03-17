@@ -481,6 +481,132 @@ async function handleLinkedInPosts(
   }
 }
 
+/**
+ * POST /api/linkedin/suggestions — generate platform share suggestions on the backend.
+ * Body: { reflection: string, platform: 'linkedin' | 'x' | 'reddit' }.
+ *
+ * This avoids calling OpenAI directly from the mobile app (which can fail with TypeError: Failed to fetch).
+ */
+async function handleLinkedInSuggestions(
+  req: import('firebase-functions/v2/https').Request,
+  res: {
+    set: (k: string, v: string) => void;
+    status: (n: number) => { json: (o: object) => void; end: () => void };
+    json: (o: object) => void;
+  }
+): Promise<void> {
+  res.set('Access-Control-Allow-Origin', '*');
+  if (req.method === 'OPTIONS') {
+    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type');
+    res.status(204).end();
+    return;
+  }
+  if (req.method !== 'POST') {
+    res.status(405).json({ error: 'Method not allowed' });
+    return;
+  }
+
+  try {
+    const { reflection, platform } = (req.body || {}) as { reflection?: string; platform?: string };
+    const t = (reflection || '').trim();
+    const p = (platform || 'linkedin').toLowerCase();
+    if (!t) {
+      res.status(400).json({ error: 'Missing reflection' });
+      return;
+    }
+    if (!['linkedin', 'x', 'reddit'].includes(p)) {
+      res.status(400).json({ error: 'Invalid platform' });
+      return;
+    }
+
+    const apiKey = (process.env.OPENAI_API_KEY || process.env.REACT_APP_OPENAI_API_KEY || '').trim();
+    if (!apiKey) {
+      res.status(500).json({ error: 'OPENAI_API_KEY is not set on backend' });
+      return;
+    }
+
+    const platformLabel = p === 'x' ? 'X (Twitter)' : p.charAt(0).toUpperCase() + p.slice(1);
+    const platformStyleGuide: Record<string, string> = {
+      linkedin: `LINKEDIN STYLE (strict):
+- Professional, polished tone. Thought-leadership or reflective professional narrative.
+- Strong opening hook (question, observation, or bold line). Short paragraphs (1–3 lines).
+- First person, authentic but career-friendly. Optional light insight or takeaway.
+- End with 0–3 relevant hashtags. No emoji overload.`,
+      x: `X (TWITTER) STYLE (strict):
+- Very concise. Each post MUST be under 280 characters.
+- Punchy, direct. Line breaks for emphasis. One clear idea per post.
+- 1–2 hashtags max. Emoji sparingly if at all.`,
+      reddit: `REDDIT STYLE (strict):
+- Casual, conversational, like a personal story sub.
+- First-person, relatable, authentic.
+- Natural paragraph flow. No corporate speak.`
+    };
+
+    const styleGuide = platformStyleGuide[p] || platformStyleGuide.linkedin;
+    const prompt = `You are turning a day's reflection into separate social posts. You MUST create one standalone post for EACH distinct event or moment mentioned in the reflection.
+
+PLATFORM: ${platformLabel}. Write EVERY post in that platform's native style so it reads like a real ${platformLabel} post.
+
+${styleGuide}
+
+Output format (strict):
+- For each post, first write exactly: EVENT: <short event label>
+- Then on the next lines write the full post text.
+- Separate each post with a line that contains only: ---
+
+Reflection:
+${t}`;
+
+    const apiUrl = 'https://api.openai.com/v1/chat/completions';
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.5,
+        max_tokens: 2400
+      })
+    });
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      logger.warn('[suggestions] openai not ok', { status: response.status, body: errText.slice(0, 200) });
+      res.status(500).json({ error: `OpenAI error ${response.status}: ${errText.slice(0, 150)}` });
+      return;
+    }
+
+    const data = (await response.json()) as any;
+    const raw = (data?.choices?.[0]?.message?.content || '').trim();
+    if (!raw) {
+      res.status(200).json({ posts: [{ eventLabel: 'Reflection', post: t }] });
+      return;
+    }
+
+    // Parse EVENT blocks (same parsing rules as frontend)
+    let blocks = raw.split(/\n *--- *\n/).map((s: string) => s.trim()).filter(Boolean);
+    if (blocks.length <= 1 && (raw.match(/EVENT:\s*/gi) || []).length >= 2) {
+      const eventParts = raw.split(/\s*EVENT:\s*/i);
+      blocks = eventParts
+        .map((p2: string) => p2.trim())
+        .filter(Boolean)
+        .map((p2: string) => (p2.match(/^EVENT:/i) ? p2 : 'EVENT: ' + p2));
+    }
+    const result: Array<{ eventLabel: string; post: string }> = [];
+    for (const block of blocks) {
+      const eventMatch = block.match(/^EVENT:\s*(.+?)(?:\n|$)/i);
+      const eventLabel = eventMatch ? eventMatch[1].trim() : '';
+      const post = eventMatch ? block.slice(block.indexOf('\n') + 1).trim() : block.trim();
+      if (post) result.push({ eventLabel: eventLabel || 'Moment', post });
+    }
+    res.status(200).json({ posts: result.length ? result : [{ eventLabel: 'Reflection', post: t }] });
+  } catch (e: any) {
+    logger.warn('[suggestions] unexpected error', { message: e?.message });
+    res.status(500).json({ error: e?.message || 'Suggestions failed' });
+  }
+}
+
 export const linkedInApi = onRequest(
   { cors: true },
   async (req, res) => {
@@ -490,6 +616,9 @@ export const linkedInApi = onRequest(
     }
     if (path.endsWith('/share')) {
       return handleLinkedInShare(req, res);
+    }
+    if (path.endsWith('/suggestions')) {
+      return handleLinkedInSuggestions(req, res);
     }
     if (path.endsWith('/analytics')) {
       return handleLinkedInAnalytics(req, res);
