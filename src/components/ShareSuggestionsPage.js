@@ -197,7 +197,6 @@ export default function ShareSuggestionsPage() {
   const [shareConfirmation, setShareConfirmation] = useState({ open: false, index: null, platform: null });
   const [shareErrorToast, setShareErrorToast] = useState(false);
   const [shareErrorToastMessage, setShareErrorToastMessage] = useState('');
-  const [shareStatusLine, setShareStatusLine] = useState('');
   const imageReplaceInputRef = useRef(null);
   const tweetCardRef = useRef(null);
 
@@ -1007,7 +1006,6 @@ export default function ShareSuggestionsPage() {
   const handleShareToSelectedPlatform = async () => {
     // Use edited text when in panel; fall back to selected suggestion text when edited is empty
     const t = (sharePanelOpen ? ((editableShareText || '').trim() || selectedText) : selectedText) || '';
-    setShareStatusLine(`Share tapped (${selectedPlatform || 'none'})…`);
     if (!t.trim()) return;
 
     // Resolve the current suggestion image (if any) to a data URL so we can share it
@@ -1030,7 +1028,6 @@ export default function ShareSuggestionsPage() {
         selectedPlatform === 'linkedin' &&
         (imageDataUrl || (rawImage && typeof rawImage === 'string'))
       ) {
-        setShareStatusLine('Trying LinkedIn API post…');
         const done = await shareToLinkedInViaApi(t, imageDataUrl || rawImage || null);
         if (done) {
           triggerPostShareConfirmation();
@@ -1046,7 +1043,6 @@ export default function ShareSuggestionsPage() {
         // If we have an HTTPS image but couldn't convert to data URL (CORS), download natively and share the file.
         if (!isDataUrl && rawImage && typeof rawImage === 'string' && (rawImage.startsWith('https://') || rawImage.startsWith('http://'))) {
           try {
-            setShareStatusLine('Native share: downloading image…');
             const safeText = (t || '').trim();
             if (safeText) {
               await Clipboard.write({ string: safeText });
@@ -1078,7 +1074,6 @@ export default function ShareSuggestionsPage() {
             // (debug toast removed)
 
             if (fileUri) {
-              setShareStatusLine('Native share: opening share sheet (image)…');
               await Share.share({
                 url: fileUri,
                 title: 'Share image',
@@ -1092,13 +1087,11 @@ export default function ShareSuggestionsPage() {
               return;
             }
             // We had an image but couldn't obtain a shareable URI — do NOT fall back to text-only share.
-            setShareStatusLine('Native share: could not attach image.');
             setShareErrorToastMessage('Could not attach image to share. Please try again.');
             setShareErrorToast(true);
             setTimeout(() => setShareErrorToast(false), 4000);
             return;
           } catch (e) {
-            setShareStatusLine(`Native share(download) failed: ${String(e?.message || e).slice(0, 60)}`);
             // (debug toast removed)
             if (hasAnyImage) {
               setShareErrorToastMessage('Could not attach image to share. Please try again.');
@@ -1111,16 +1104,13 @@ export default function ShareSuggestionsPage() {
 
         // Requirement: share ONLY the image; copy text to clipboard (do not include in share payload)
         if (isDataUrl) {
-          setShareStatusLine('Native share: preparing image file…');
           const { shared, copied, fileUri, error } = await shareImageOnlyAndCopyText(imageDataUrl, t);
-          if (error) setShareStatusLine(`Native share(image) failed: ${String(error).slice(0, 60)}`);
           if (copied) {
             setShareErrorToastMessage('Caption copied. Paste it after sharing.');
             setShareErrorToast(true);
             setTimeout(() => setShareErrorToast(false), 2500);
           }
           if (shared) {
-            setShareStatusLine('Native share: share sheet opened (image).');
             await recordShare(selectedPlatform || 'other', t, {
               imageDataUrlForStorage: imageDataUrl || rawImage || null,
             });
@@ -1129,7 +1119,6 @@ export default function ShareSuggestionsPage() {
             return;
           }
           // Image share failed — do NOT fall back to text-only if we have an image.
-          setShareStatusLine('Native share: could not attach image.');
           setShareErrorToastMessage('Could not attach image to share. Please try again.');
           setShareErrorToast(true);
           setTimeout(() => setShareErrorToast(false), 4000);
@@ -1138,7 +1127,6 @@ export default function ShareSuggestionsPage() {
 
         // If we have an image but couldn't prepare it, stop here instead of sharing text-only.
         if (hasAnyImage) {
-          setShareStatusLine('Native share: image not ready.');
           setShareErrorToastMessage('Image is not ready to share yet. Please wait a moment and try again.');
           setShareErrorToast(true);
           setTimeout(() => setShareErrorToast(false), 4000);
@@ -1151,7 +1139,6 @@ export default function ShareSuggestionsPage() {
           dialogTitle: 'Share',
         };
 
-        setShareStatusLine('Native share: opening share sheet (text)…');
         try {
           await Share.share(options);
         } catch (e) {
@@ -1171,7 +1158,6 @@ export default function ShareSuggestionsPage() {
 
       // 2) Web Share API (PWA / mobile browser) – share text, and image when supported
       if (typeof navigator !== 'undefined' && navigator.share) {
-        setShareStatusLine('Web share: opening share sheet…');
         const shareOptions = { text: t };
         if (isDataUrl && navigator.canShare) {
           const file = dataURLtoFile(imageDataUrl);
@@ -1189,7 +1175,6 @@ export default function ShareSuggestionsPage() {
       }
 
       // 3) Fallback: download image (if present) and copy text to clipboard
-      setShareStatusLine('Fallback: download/copy…');
       if (isDataUrl) {
         try {
           const a = document.createElement('a');
@@ -1218,7 +1203,6 @@ export default function ShareSuggestionsPage() {
     } catch (err) {
       console.error('Share failed:', err);
       const msg = (err && (err.message || String(err))) ? (err.message || String(err)) : 'unknown';
-      setShareStatusLine(`Share failed: ${msg}`);
       setShareErrorToastMessage(`Share failed: ${msg}`);
       setShareErrorToast(true);
       setTimeout(() => setShareErrorToast(false), 4000);
@@ -1764,11 +1748,6 @@ export default function ShareSuggestionsPage() {
                   {selectedPlatform ? 'Share' : 'Select a platform above'}
                 </button>
               </div>
-              {shareStatusLine ? (
-                <p className="text-[11px] mt-2" style={{ color: isDarkMode ? HUB.textSecondary : '#666' }}>
-                  {shareStatusLine}
-                </p>
-              ) : null}
             </div>
           </div>
         )}
