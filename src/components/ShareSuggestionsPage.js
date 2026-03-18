@@ -90,6 +90,7 @@ async function shareImageOnlyAndCopyText(base64Image, text) {
   const safeText = (text || '').trim();
   let copied = false;
   let fileUri = null;
+  let error = null;
 
   // Copy text first so user can paste immediately in the destination app
   try {
@@ -104,14 +105,22 @@ async function shareImageOnlyAndCopyText(base64Image, text) {
   // Write image file to cache and share only the image
   try {
     if (!base64Image || typeof base64Image !== 'string') {
-      return { shared: false, copied, fileUri: null };
+      return { shared: false, copied, fileUri: null, error: 'Missing base64 image' };
     }
 
     // Remove the "data:image/...;base64," prefix if present
-    const base64Data = base64Image.includes(',') ? base64Image.split(',').slice(1).join(',') : base64Image;
-    if (!base64Data) return { shared: false, copied, fileUri: null };
+    const header = base64Image.startsWith('data:') ? base64Image.split(',')[0] : '';
+    const mimeMatch = header.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64$/);
+    const mime = (mimeMatch && mimeMatch[1]) ? mimeMatch[1] : 'image/png';
+    const ext =
+      mime.includes('png') ? 'png' :
+      (mime.includes('jpeg') || mime.includes('jpg')) ? 'jpg' :
+      mime.includes('webp') ? 'webp' : 'png';
 
-    const path = `share-only-${Date.now()}.png`;
+    const base64Data = base64Image.includes(',') ? base64Image.split(',').slice(1).join(',') : base64Image;
+    if (!base64Data) return { shared: false, copied, fileUri: null, error: 'Invalid base64 data' };
+
+    const path = `share-only-${Date.now()}.${ext}`;
     await Filesystem.writeFile({
       path,
       data: base64Data,
@@ -120,18 +129,20 @@ async function shareImageOnlyAndCopyText(base64Image, text) {
     });
     const uriResult = await Filesystem.getUri({ directory: Directory.Cache, path });
     fileUri = uriResult?.uri || null;
-    if (!fileUri) return { shared: false, copied, fileUri: null };
+    if (!fileUri) return { shared: false, copied, fileUri: null, error: 'Could not get file URI' };
 
     // Share ONLY the image. Do not include text in payload.
     await Share.share({
-      files: [fileUri],
+      // Use url for widest Android compatibility; do not include text
+      url: fileUri,
       title: 'Share image',
       dialogTitle: 'Share',
     });
 
-    return { shared: true, copied, fileUri };
+    return { shared: true, copied, fileUri, error: null };
   } catch {
-    return { shared: false, copied, fileUri };
+    error = 'Share image failed';
+    return { shared: false, copied, fileUri, error };
   }
 }
 
@@ -174,6 +185,8 @@ export default function ShareSuggestionsPage() {
   const [shareConfirmation, setShareConfirmation] = useState({ open: false, index: null, platform: null });
   const [shareErrorToast, setShareErrorToast] = useState(false);
   const [shareErrorToastMessage, setShareErrorToastMessage] = useState('');
+  const [shareDebugToastVisible, setShareDebugToastVisible] = useState(false);
+  const [shareDebugToastMessage, setShareDebugToastMessage] = useState('');
   const imageReplaceInputRef = useRef(null);
   const tweetCardRef = useRef(null);
 
@@ -1030,7 +1043,12 @@ export default function ShareSuggestionsPage() {
       if (isNative()) {
         // Requirement: share ONLY the image; copy text to clipboard (do not include in share payload)
         if (isDataUrl) {
-          const { shared, copied } = await shareImageOnlyAndCopyText(imageDataUrl, t);
+          const { shared, copied, fileUri, error } = await shareImageOnlyAndCopyText(imageDataUrl, t);
+          setShareDebugToastMessage(
+            `img=${isDataUrl ? 'yes' : 'no'} uri=${fileUri ? 'yes' : 'no'} shared=${shared ? 'yes' : 'no'} copied=${copied ? 'yes' : 'no'}${error ? ` err=${String(error).slice(0, 40)}` : ''}`
+          );
+          setShareDebugToastVisible(true);
+          setTimeout(() => setShareDebugToastVisible(false), 4500);
           if (copied) {
             setShareErrorToastMessage('Caption copied. Paste it after sharing.');
             setShareErrorToast(true);
@@ -1183,6 +1201,20 @@ export default function ShareSuggestionsPage() {
             }}
           >
             {shareErrorToastMessage || 'Share cancelled or unavailable.'}
+          </div>
+        </div>
+      )}
+      {/* Share debug toast (temporary for debugging image share) */}
+      {shareDebugToastVisible && (
+        <div className="fixed inset-x-0 bottom-16 flex justify-center pointer-events-none z-50">
+          <div
+            className="px-4 py-2 rounded-full shadow-md text-xs pointer-events-auto max-w-[90vw] text-center"
+            style={{
+              background: isDarkMode ? 'rgba(15,23,42,0.95)' : 'rgba(17,24,39,0.95)',
+              color: '#FFFFFF',
+            }}
+          >
+            {shareDebugToastMessage}
           </div>
         </div>
       )}
