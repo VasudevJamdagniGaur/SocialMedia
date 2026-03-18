@@ -383,7 +383,7 @@ export default function ShareSuggestionsPage() {
               toPngOptions: {
                 exportWidth,
                 exportHeight,
-                pixelRatio: 1,
+                pixelRatio: 2,
                 skipFonts: false,
               },
             },
@@ -396,7 +396,7 @@ export default function ShareSuggestionsPage() {
           imageDataUrl = await toPng(exportNode, {
             width: exportWidth,
             height: exportHeight,
-            pixelRatio: 1,
+            pixelRatio: 2,
             skipFonts: false,
             cacheBust: true,
           });
