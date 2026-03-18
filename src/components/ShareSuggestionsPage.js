@@ -339,7 +339,6 @@ export default function ShareSuggestionsPage() {
         // When user is editing, export from the visible card so typography/wrapping
         // matches the UI preview exactly.
         const exportNode =
-          (sharePanelOpen && tweetCardRef.current ? tweetCardRef.current : null) ||
           tweetCardExportRef.current ||
           tweetCardRef.current;
         if (!exportNode) {
@@ -1745,7 +1744,7 @@ export default function ShareSuggestionsPage() {
           <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
             <TweetShareCard
               ref={tweetCardExportRef}
-              width={1080} // height will be derived to keep 7:10 aspect ratio
+              width={360} // match "edit before sharing" preview card width
               displayName={tweetDisplayName}
               username={tweetUsername}
               text={sharePanelOpen ? ((editableShareText || '').trim() || selectedText || reflectionFromState) : (selectedText || reflectionFromState)}
