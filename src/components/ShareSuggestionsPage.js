@@ -1060,9 +1060,7 @@ export default function ShareSuggestionsPage() {
               }
             }
 
-            setShareDebugToastMessage(`img=https uri=${fileUri ? 'yes' : 'no'} shared=${fileUri ? 'try' : 'no'}`);
-            setShareDebugToastVisible(true);
-            setTimeout(() => setShareDebugToastVisible(false), 4500);
+            // (debug toast removed)
 
             if (fileUri) {
               setShareStatusLine('Native share: opening share sheet (image)…');
@@ -1080,9 +1078,7 @@ export default function ShareSuggestionsPage() {
             }
           } catch (e) {
             setShareStatusLine(`Native share(download) failed: ${String(e?.message || e).slice(0, 60)}`);
-            setShareDebugToastMessage(`img=https uri=no err=${String(e?.message || e).slice(0, 40)}`);
-            setShareDebugToastVisible(true);
-            setTimeout(() => setShareDebugToastVisible(false), 4500);
+            // (debug toast removed)
             // fall through to other paths
           }
         }
@@ -1091,11 +1087,7 @@ export default function ShareSuggestionsPage() {
         if (isDataUrl) {
           setShareStatusLine('Native share: preparing image file…');
           const { shared, copied, fileUri, error } = await shareImageOnlyAndCopyText(imageDataUrl, t);
-          setShareDebugToastMessage(
-            `img=${isDataUrl ? 'yes' : 'no'} uri=${fileUri ? 'yes' : 'no'} shared=${shared ? 'yes' : 'no'} copied=${copied ? 'yes' : 'no'}${error ? ` err=${String(error).slice(0, 40)}` : ''}`
-          );
-          setShareDebugToastVisible(true);
-          setTimeout(() => setShareDebugToastVisible(false), 4500);
+          if (error) setShareStatusLine(`Native share(image) failed: ${String(error).slice(0, 60)}`);
           if (copied) {
             setShareErrorToastMessage('Caption copied. Paste it after sharing.');
             setShareErrorToast(true);
