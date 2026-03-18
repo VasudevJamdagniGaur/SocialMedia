@@ -1041,6 +1041,60 @@ export default function ShareSuggestionsPage() {
 
       // 1) Native share via Capacitor – open phone share menu (text only or text + image)
       if (isNative()) {
+        // If we have an HTTPS image but couldn't convert to data URL (CORS), download natively and share the file.
+        if (!isDataUrl && rawImage && typeof rawImage === 'string' && (rawImage.startsWith('https://') || rawImage.startsWith('http://'))) {
+          try {
+            const safeText = (t || '').trim();
+            if (safeText) {
+              await Clipboard.write({ string: safeText });
+              setShareErrorToastMessage('Caption copied. Paste it after sharing.');
+              setShareErrorToast(true);
+              setTimeout(() => setShareErrorToast(false), 2500);
+            }
+
+            const filename = `share-only-${Date.now()}.png`;
+            let fileUri = null;
+            if (typeof Filesystem.downloadFile === 'function') {
+              const dl = await Filesystem.downloadFile({
+                url: rawImage,
+                directory: Directory.Cache,
+                path: filename,
+              });
+              fileUri = dl?.path || dl?.uri || null;
+            }
+            if (!fileUri) {
+              // Fallback: try to fetch as blob (may still fail on CORS) then write as base64
+              const maybeDataUrl = await getImageAsDataUrl(rawImage);
+              if (maybeDataUrl && typeof maybeDataUrl === 'string' && maybeDataUrl.startsWith('data:image')) {
+                fileUri = await writeImageToCacheFile(maybeDataUrl);
+              }
+            }
+
+            setShareDebugToastMessage(`img=https uri=${fileUri ? 'yes' : 'no'} shared=${fileUri ? 'try' : 'no'}`);
+            setShareDebugToastVisible(true);
+            setTimeout(() => setShareDebugToastVisible(false), 4500);
+
+            if (fileUri) {
+              await Share.share({
+                url: fileUri,
+                title: 'Share image',
+                dialogTitle: 'Share',
+              });
+              await recordShare(selectedPlatform || 'other', t, {
+                imageDataUrlForStorage: imageDataUrl || rawImage || null,
+              });
+              triggerPostShareConfirmation();
+              setSharePanelOpen(false);
+              return;
+            }
+          } catch (e) {
+            setShareDebugToastMessage(`img=https uri=no err=${String(e?.message || e).slice(0, 40)}`);
+            setShareDebugToastVisible(true);
+            setTimeout(() => setShareDebugToastVisible(false), 4500);
+            // fall through to other paths
+          }
+        }
+
         // Requirement: share ONLY the image; copy text to clipboard (do not include in share payload)
         if (isDataUrl) {
           const { shared, copied, fileUri, error } = await shareImageOnlyAndCopyText(imageDataUrl, t);
