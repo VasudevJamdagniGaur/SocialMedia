@@ -1030,6 +1030,7 @@ export default function ShareSuggestionsPage() {
 
       // 1) Native share via Capacitor – open phone share menu (text only or text + image)
       if (isNative()) {
+        const hasAnyImage = !!(rawImage && typeof rawImage === 'string');
         // If we have an HTTPS image but couldn't convert to data URL (CORS), download natively and share the file.
         if (!isDataUrl && rawImage && typeof rawImage === 'string' && (rawImage.startsWith('https://') || rawImage.startsWith('http://'))) {
           try {
@@ -1076,10 +1077,21 @@ export default function ShareSuggestionsPage() {
               setSharePanelOpen(false);
               return;
             }
+            // We had an image but couldn't obtain a shareable URI — do NOT fall back to text-only share.
+            setShareStatusLine('Native share: could not attach image.');
+            setShareErrorToastMessage('Could not attach image to share. Please try again.');
+            setShareErrorToast(true);
+            setTimeout(() => setShareErrorToast(false), 4000);
+            return;
           } catch (e) {
             setShareStatusLine(`Native share(download) failed: ${String(e?.message || e).slice(0, 60)}`);
             // (debug toast removed)
-            // fall through to other paths
+            if (hasAnyImage) {
+              setShareErrorToastMessage('Could not attach image to share. Please try again.');
+              setShareErrorToast(true);
+              setTimeout(() => setShareErrorToast(false), 4000);
+              return;
+            }
           }
         }
 
@@ -1102,7 +1114,21 @@ export default function ShareSuggestionsPage() {
             setSharePanelOpen(false);
             return;
           }
-          // If image share failed, fall back to text-only share sheet below.
+          // Image share failed — do NOT fall back to text-only if we have an image.
+          setShareStatusLine('Native share: could not attach image.');
+          setShareErrorToastMessage('Could not attach image to share. Please try again.');
+          setShareErrorToast(true);
+          setTimeout(() => setShareErrorToast(false), 4000);
+          return;
+        }
+
+        // If we have an image but couldn't prepare it, stop here instead of sharing text-only.
+        if (hasAnyImage) {
+          setShareStatusLine('Native share: image not ready.');
+          setShareErrorToastMessage('Image is not ready to share yet. Please wait a moment and try again.');
+          setShareErrorToast(true);
+          setTimeout(() => setShareErrorToast(false), 4000);
+          return;
         }
 
         const options = {
