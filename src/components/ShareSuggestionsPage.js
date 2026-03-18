@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Linkedin, Pencil } from 'lucide-react';
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, CapacitorHttp } from '@capacitor/core';
 import { App } from '@capacitor/app';
 import { Share } from '@capacitor/share';
 import { Filesystem, Directory } from '@capacitor/filesystem';
@@ -143,6 +143,18 @@ async function shareImageOnlyAndCopyText(base64Image, text) {
   } catch {
     error = 'Share image failed';
     return { shared: false, copied, fileUri, error };
+  }
+}
+
+function guessMimeFromHeaders(headers) {
+  if (!headers) return null;
+  try {
+    const keys = Object.keys(headers);
+    const ctKey = keys.find((k) => k.toLowerCase() === 'content-type');
+    const v = ctKey ? headers[ctKey] : null;
+    return typeof v === 'string' ? v.split(';')[0].trim() : null;
+  } catch {
+    return null;
   }
 }
 
@@ -1066,18 +1078,23 @@ export default function ShareSuggestionsPage() {
               setTimeout(() => setShareErrorToast(false), 2500);
             }
 
-            const filename = `share-only-${Date.now()}.png`;
+            // Use CapacitorHttp to fetch bytes natively (bypasses CORS), then write to cache and share.
             let fileUri = null;
-            if (typeof Filesystem.downloadFile === 'function') {
-              const dl = await Filesystem.downloadFile({
+            if (CapacitorHttp && typeof CapacitorHttp.get === 'function') {
+              const resp = await CapacitorHttp.get({
                 url: rawImage,
-                directory: Directory.Cache,
-                path: filename,
+                responseType: 'arraybuffer',
               });
-              fileUri = dl?.path || dl?.uri || null;
+              const mime = guessMimeFromHeaders(resp?.headers) || 'image/png';
+              const base64Bytes = typeof resp?.data === 'string' ? resp.data : null;
+              if (base64Bytes) {
+                const dataUrl = `data:${mime};base64,${base64Bytes}`;
+                fileUri = await writeImageToCacheFile(dataUrl);
+              }
             }
+
             if (!fileUri) {
-              // Fallback: try to fetch as blob (may still fail on CORS) then write as base64
+              // Last resort: try normal fetch (may fail on CORS)
               const maybeDataUrl = await getImageAsDataUrl(rawImage);
               if (maybeDataUrl && typeof maybeDataUrl === 'string' && maybeDataUrl.startsWith('data:image')) {
                 fileUri = await writeImageToCacheFile(maybeDataUrl);
