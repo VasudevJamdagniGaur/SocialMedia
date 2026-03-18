@@ -309,6 +309,8 @@ export default function ShareSuggestionsPage() {
   const [shareErrorToastMessage, setShareErrorToastMessage] = useState('');
   const imageReplaceInputRef = useRef(null);
   const tweetCardRef = useRef(null);
+  const tweetCardExportRef = useRef(null);
+  const [xExportImageDataUrl, setXExportImageDataUrl] = useState(null);
 
   /**
    * X + Reddit: share image via native share sheet and copy caption.
@@ -326,16 +328,23 @@ export default function ShareSuggestionsPage() {
 
       let imageDataUrl = null;
 
-      if (selectedPlatform === 'x' && tweetCardRef.current) {
+      if (selectedPlatform === 'x') {
+        const exportNode = tweetCardExportRef.current || tweetCardRef.current;
+        if (!exportNode) {
+          setShareErrorToastMessage('X share is still preparing. Please try again.');
+          setShareErrorToast(true);
+          setTimeout(() => setShareErrorToast(false), 3000);
+          return;
+        }
         try {
           const exportWidth = 1080;
           const exportHeight = Math.round((exportWidth * 10) / 7);
-          imageDataUrl = await toPng(tweetCardRef.current, {
+          imageDataUrl = await toPng(exportNode, {
             width: exportWidth,
             height: exportHeight,
             pixelRatio: 2,
             skipFonts: true,
-            cacheBust: false,
+            cacheBust: true,
           });
         } catch (e) {
           setShareErrorToastMessage(`X image export failed: ${formatShareError(e)}`);
@@ -407,6 +416,42 @@ export default function ShareSuggestionsPage() {
 
   const reflectionDate = state.selectedDate ? (state.selectedDate instanceof Date ? state.selectedDate : new Date(state.selectedDate)) : new Date();
   const dateStr = reflectionDate instanceof Date ? getDateId(reflectionDate) : getDateId(new Date(reflectionDate));
+
+  // For X export: ensure the embedded photo is an inline data URL (avoid toPng CORS/canvas taint).
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      if (!sharePanelOpen || selectedPlatform !== 'x') return;
+      const raw = suggestionImageUrls[selectedIndex] || null;
+      if (!raw || typeof raw !== 'string') {
+        setXExportImageDataUrl(null);
+        return;
+      }
+      if (raw.startsWith('data:image')) {
+        setXExportImageDataUrl(raw);
+        return;
+      }
+      // Prefer native HTTP for https images to bypass CORS
+      if ((raw.startsWith('https://') || raw.startsWith('http://')) && isNative() && CapacitorHttp && typeof CapacitorHttp.get === 'function') {
+        try {
+          const resp = await CapacitorHttp.get({ url: raw, responseType: 'arraybuffer' });
+          const mime = guessMimeFromHeaders(resp?.headers) || 'image/png';
+          const base64Bytes = typeof resp?.data === 'string' ? resp.data : null;
+          if (!cancelled) setXExportImageDataUrl(base64Bytes ? `data:${mime};base64,${base64Bytes}` : null);
+          return;
+        } catch {
+          // fall through
+        }
+      }
+      // Web/last resort
+      const dataUrl = await getImageAsDataUrl(raw);
+      if (!cancelled) setXExportImageDataUrl(dataUrl);
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [sharePanelOpen, selectedPlatform, selectedIndex, suggestionImageUrls]);
 
   // When user selects a platform (from state or by tapping an icon), fetch that platform's suggestions only
   useEffect(() => {
@@ -1582,13 +1627,13 @@ export default function ShareSuggestionsPage() {
         {selectedPlatform === 'x' && suggestionImageUrls[selectedIndex] && (
           <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
             <TweetShareCard
-              ref={tweetCardRef}
+              ref={tweetCardExportRef}
               width={1080} // height will be derived to keep 7:10 aspect ratio
               displayName={tweetDisplayName}
               username={tweetUsername}
               text={selectedText || reflectionFromState}
-              imageUrl={suggestionImageUrls[selectedIndex] || null}
-              profileImageUrl={tweetProfileImage}
+              imageUrl={xExportImageDataUrl || null}
+              profileImageUrl={null}
             />
           </div>
         )}
