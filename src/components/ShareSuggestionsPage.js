@@ -1111,7 +1111,15 @@ export default function ShareSuggestionsPage() {
           dialogTitle: 'Share',
         };
 
-        await Share.share(options);
+        try {
+          await Share.share(options);
+        } catch (e) {
+          const msg = (e && (e.message || String(e))) ? (e.message || String(e)) : 'unknown';
+          setShareErrorToastMessage(`Native Share failed: ${msg}`);
+          setShareErrorToast(true);
+          setTimeout(() => setShareErrorToast(false), 6000);
+          throw e;
+        }
         await recordShare(selectedPlatform || 'other', t, {
           imageDataUrlForStorage: imageDataUrl || rawImage || null,
         });
@@ -1166,7 +1174,8 @@ export default function ShareSuggestionsPage() {
       setTimeout(() => setShareErrorToast(false), 3000);
     } catch (err) {
       console.error('Share failed:', err);
-      setShareErrorToastMessage('Share cancelled or unavailable. Try again or use copy/download.');
+      const msg = (err && (err.message || String(err))) ? (err.message || String(err)) : 'unknown';
+      setShareErrorToastMessage(`Share failed: ${msg}`);
       setShareErrorToast(true);
       setTimeout(() => setShareErrorToast(false), 4000);
     }
