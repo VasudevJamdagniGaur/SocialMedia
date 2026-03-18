@@ -184,6 +184,69 @@ async function shareImageOnlyAndCopyText(base64Image, text) {
   }
 }
 
+/**
+ * Share ONLY the image (native share sheet). No clipboard, no text.
+ * @param {string} base64Image - data URL or raw base64 (png/jpg) string
+ * @returns {Promise<{ shared: boolean; fileUri?: string | null; error?: string | null }>}
+ */
+async function shareImageOnly(base64Image) {
+  let fileUri = null;
+  try {
+    if (!base64Image || typeof base64Image !== 'string') {
+      return { shared: false, fileUri: null, error: 'Missing base64 image' };
+    }
+
+    const header = base64Image.startsWith('data:') ? base64Image.split(',')[0] : '';
+    const mimeMatch = header.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64$/);
+    const mime = (mimeMatch && mimeMatch[1]) ? mimeMatch[1] : 'image/png';
+    const ext =
+      mime.includes('png') ? 'png' :
+      (mime.includes('jpeg') || mime.includes('jpg')) ? 'jpg' :
+      mime.includes('webp') ? 'webp' : 'png';
+
+    const base64Data = base64Image.includes(',') ? base64Image.split(',').slice(1).join(',') : base64Image;
+    if (!base64Data) return { shared: false, fileUri: null, error: 'Invalid base64 data' };
+
+    const path = `share-only-${Date.now()}.${ext}`;
+    await Filesystem.writeFile({
+      path,
+      data: base64Data,
+      directory: Directory.Cache,
+      recursive: false,
+    });
+    const uriResult = await Filesystem.getUri({ directory: Directory.Cache, path });
+    fileUri = uriResult?.uri || null;
+    if (!fileUri) return { shared: false, fileUri: null, error: 'Could not get file URI' };
+
+    // Some Android targets accept `files`, others accept `url`. Try both.
+    try {
+      await Share.share({
+        text: '',
+        files: [fileUri],
+        title: 'Share image',
+        dialogTitle: 'Share',
+      });
+    } catch (e1) {
+      try {
+        await Share.share({
+          text: '',
+          url: fileUri,
+          title: 'Share image',
+          dialogTitle: 'Share',
+        });
+      } catch (e2) {
+        const msg2 = (e2 && (e2.message || String(e2))) ? (e2.message || String(e2)) : 'unknown';
+        return { shared: false, fileUri, error: `Share failed: ${msg2}` };
+      }
+    }
+
+    return { shared: true, fileUri, error: null };
+  } catch (e) {
+    const msg = (e && (e.message || String(e))) ? (e.message || String(e)) : 'unknown';
+    return { shared: false, fileUri, error: `Share image failed: ${msg}` };
+  }
+}
+
 function buildFallbackSuggestions(original) {
   const t = (original || '').trim();
   if (!t) return [];
@@ -280,7 +343,16 @@ export default function ShareSuggestionsPage() {
       setShareErrorToast(true);
       setTimeout(() => setShareErrorToast(false), 1800);
 
-      const { shared, copied, error } = await shareImageOnlyAndCopyText(imageDataUrl, t);
+      // X requirement: share ONLY the image (no clipboard, no text).
+      // Reddit: share image + copy caption for easy pasting.
+      const result = selectedPlatform === 'x'
+        ? await shareImageOnly(imageDataUrl)
+        : await shareImageOnlyAndCopyText(imageDataUrl, t);
+
+      const shared = !!result?.shared;
+      const copied = selectedPlatform === 'x' ? false : !!result?.copied;
+      const error = result?.error;
+
       if (copied) {
         setShareErrorToastMessage('Caption copied. Paste it after sharing.');
         setShareErrorToast(true);
@@ -1835,7 +1907,14 @@ export default function ShareSuggestionsPage() {
                       ? handleShareImageToXOrReddit
                       : handleShareToSelectedPlatform
                   }
-                  disabled={!selectedPlatform || (!(editableShareText || '').trim() && !(selectedText || '').trim())}
+                  disabled={
+                    !selectedPlatform ||
+                    (
+                      // X with image: allow image-only sharing even when text is empty
+                      !(selectedPlatform === 'x' && !!suggestionImageUrls[selectedIndex]) &&
+                      (!(editableShareText || '').trim() && !(selectedText || '').trim())
+                    )
+                  }
                   className="flex-1 py-3 rounded-xl font-medium transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{
                     background:
