@@ -5,6 +5,7 @@ import { Capacitor } from '@capacitor/core';
 import { App } from '@capacitor/app';
 import { Share } from '@capacitor/share';
 import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Clipboard } from '@capacitor/clipboard';
 import { toPng } from 'html-to-image';
 import imageCompression from 'browser-image-compression';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
@@ -78,6 +79,61 @@ const isNative = () =>
   typeof Capacitor !== 'undefined' &&
   typeof Capacitor.isNativePlatform === 'function' &&
   Capacitor.isNativePlatform();
+
+/**
+ * Share ONLY the image (native share sheet) and copy the text to clipboard.
+ * @param {string} base64Image - data URL or raw base64 (png/jpg) string
+ * @param {string} text - text to copy to clipboard (NOT included in share payload)
+ * @returns {Promise<{ shared: boolean; copied: boolean; fileUri?: string | null }>}
+ */
+async function shareImageOnlyAndCopyText(base64Image, text) {
+  const safeText = (text || '').trim();
+  let copied = false;
+  let fileUri = null;
+
+  // Copy text first so user can paste immediately in the destination app
+  try {
+    if (safeText) {
+      await Clipboard.write({ string: safeText });
+      copied = true;
+    }
+  } catch {
+    copied = false;
+  }
+
+  // Write image file to cache and share only the image
+  try {
+    if (!base64Image || typeof base64Image !== 'string') {
+      return { shared: false, copied, fileUri: null };
+    }
+
+    // Remove the "data:image/...;base64," prefix if present
+    const base64Data = base64Image.includes(',') ? base64Image.split(',').slice(1).join(',') : base64Image;
+    if (!base64Data) return { shared: false, copied, fileUri: null };
+
+    const path = `share-only-${Date.now()}.png`;
+    await Filesystem.writeFile({
+      path,
+      data: base64Data,
+      directory: Directory.Cache,
+      recursive: false,
+    });
+    const uriResult = await Filesystem.getUri({ directory: Directory.Cache, path });
+    fileUri = uriResult?.uri || null;
+    if (!fileUri) return { shared: false, copied, fileUri: null };
+
+    // Share ONLY the image. Do not include text in payload.
+    await Share.share({
+      files: [fileUri],
+      title: 'Share image',
+      dialogTitle: 'Share',
+    });
+
+    return { shared: true, copied, fileUri };
+  } catch {
+    return { shared: false, copied, fileUri };
+  }
+}
 
 function buildFallbackSuggestions(original) {
   const t = (original || '').trim();
@@ -972,41 +1028,33 @@ export default function ShareSuggestionsPage() {
 
       // 1) Native share via Capacitor – open phone share menu (text only or text + image)
       if (isNative()) {
+        // Requirement: share ONLY the image; copy text to clipboard (do not include in share payload)
+        if (isDataUrl) {
+          const { shared, copied } = await shareImageOnlyAndCopyText(imageDataUrl, t);
+          if (copied) {
+            setShareErrorToastMessage('Caption copied. Paste it after sharing.');
+            setShareErrorToast(true);
+            setTimeout(() => setShareErrorToast(false), 2500);
+          }
+          if (shared) {
+            await recordShare(selectedPlatform || 'other', t, {
+              imageDataUrlForStorage: imageDataUrl || rawImage || null,
+            });
+            triggerPostShareConfirmation();
+            setSharePanelOpen(false);
+            return;
+          }
+          // If image share failed, fall back to text-only share sheet below.
+        }
+
         const options = {
           text: t,
           title: 'Share reflection',
           dialogTitle: 'Share',
         };
 
-        if (isDataUrl) {
-          let fileUri = null;
-          try {
-            fileUri = await writeImageToCacheFile(imageDataUrl);
-          } catch {
-            fileUri = null;
-          }
-          // #region agent log
-          fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6e32d1' }, body: JSON.stringify({ sessionId: '6e32d1', location: 'ShareSuggestionsPage.js:nativeFileUri', message: 'Native writeImageToCacheFile result', data: { hasFileUri: !!fileUri, fileUriType: typeof fileUri }, timestamp: Date.now(), hypothesisId: 'H3' }) }).catch(() => {});
-          // #endregion
-
-          if (fileUri) {
-            options.files = [fileUri];
-          } else {
-            // If we couldn't write a file, we can't reliably attach the image; share text only.
-            setShareErrorToastMessage('Could not attach image file. Sharing text only.');
-            setShareErrorToast(true);
-            setTimeout(() => setShareErrorToast(false), 3000);
-          }
-        }
-
-        // LinkedIn app often ignores text when sharing an image via the system sheet.
-        // As a fallback, copy caption to clipboard so user can paste it in LinkedIn.
-        if (selectedPlatform === 'linkedin' && t) {
-          copyCaptionToClipboardForLinkedIn(t);
-        }
-
         // #region agent log
-        fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6e32d1' }, body: JSON.stringify({ sessionId: '6e32d1', location: 'ShareSuggestionsPage.js:beforeShareShare', message: 'About to call Share.share', data: { path: 'native', filesCount: (options.files && options.files.length) || 0, hasText: !!options.text }, timestamp: Date.now(), hypothesisId: 'H2' }) }).catch(() => {});
+        fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6e32d1' }, body: JSON.stringify({ sessionId: '6e32d1', location: 'ShareSuggestionsPage.js:beforeShareShare', message: 'About to call Share.share (text-only fallback)', data: { path: 'native', hasText: !!options.text }, timestamp: Date.now(), hypothesisId: 'H2' }) }).catch(() => {});
         // #endregion
         await Share.share(options);
         await recordShare(selectedPlatform || 'other', t, {
