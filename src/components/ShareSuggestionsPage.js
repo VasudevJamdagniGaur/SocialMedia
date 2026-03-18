@@ -200,6 +200,78 @@ export default function ShareSuggestionsPage() {
   const imageReplaceInputRef = useRef(null);
   const tweetCardRef = useRef(null);
 
+  /**
+   * X + Reddit: share image via native share sheet and copy caption.
+   * - X: uses the TweetShareCard render when available.
+   * - Reddit: shares the generated image directly.
+   */
+  const handleShareImageToXOrReddit = async () => {
+    try {
+      const t = ((sharePanelOpen ? editableShareText : selectedText) || '').trim();
+      const rawImage = suggestionImageUrls[selectedIndex] || null;
+
+      let imageDataUrl = null;
+
+      if (selectedPlatform === 'x' && tweetCardRef.current) {
+        const exportWidth = 1080;
+        const exportHeight = Math.round((exportWidth * 10) / 7);
+        imageDataUrl = await toPng(tweetCardRef.current, {
+          width: exportWidth,
+          height: exportHeight,
+          pixelRatio: 2,
+          skipFonts: true,
+          cacheBust: false,
+        });
+      } else if (rawImage && typeof rawImage === 'string') {
+        if (rawImage.startsWith('data:image')) {
+          imageDataUrl = rawImage;
+        } else if (rawImage.startsWith('blob:')) {
+          imageDataUrl = await blobUrlToDataUrl(rawImage);
+        } else if (rawImage.startsWith('https://') || rawImage.startsWith('http://')) {
+          if (isNative() && CapacitorHttp && typeof CapacitorHttp.get === 'function') {
+            const resp = await CapacitorHttp.get({ url: rawImage, responseType: 'arraybuffer' });
+            const mime = guessMimeFromHeaders(resp?.headers) || 'image/png';
+            const base64Bytes = typeof resp?.data === 'string' ? resp.data : null;
+            if (base64Bytes) imageDataUrl = `data:${mime};base64,${base64Bytes}`;
+          } else {
+            imageDataUrl = await getImageAsDataUrl(rawImage);
+          }
+        }
+      }
+
+      if (!imageDataUrl || typeof imageDataUrl !== 'string' || !imageDataUrl.startsWith('data:image')) {
+        setShareErrorToastMessage('Could not prepare image for sharing. Please try again.');
+        setShareErrorToast(true);
+        setTimeout(() => setShareErrorToast(false), 3500);
+        return;
+      }
+
+      const { shared, copied, error } = await shareImageOnlyAndCopyText(imageDataUrl, t);
+      if (copied) {
+        setShareErrorToastMessage('Caption copied. Paste it after sharing.');
+        setShareErrorToast(true);
+        setTimeout(() => setShareErrorToast(false), 2500);
+      }
+      if (!shared) {
+        setShareErrorToastMessage(`Image share failed${error ? `: ${String(error)}` : ''}`);
+        setShareErrorToast(true);
+        setTimeout(() => setShareErrorToast(false), 4000);
+        return;
+      }
+
+      await recordShare(selectedPlatform || 'other', t, {
+        imageDataUrlForStorage: imageDataUrl || rawImage || null,
+      });
+      triggerPostShareConfirmation();
+      setSharePanelOpen(false);
+    } catch (e) {
+      const msg = (e && (e.message || String(e))) ? (e.message || String(e)) : 'unknown';
+      setShareErrorToastMessage(`Share failed: ${msg}`);
+      setShareErrorToast(true);
+      setTimeout(() => setShareErrorToast(false), 4000);
+    }
+  };
+
   const reflectionDate = state.selectedDate ? (state.selectedDate instanceof Date ? state.selectedDate : new Date(state.selectedDate)) : new Date();
   const dateStr = reflectionDate instanceof Date ? getDateId(reflectionDate) : getDateId(new Date(reflectionDate));
 
@@ -1725,8 +1797,8 @@ export default function ShareSuggestionsPage() {
                 <button
                   type="button"
                   onClick={
-                    selectedPlatform === 'x' && suggestionImageUrls[selectedIndex]
-                      ? handleShareImageToX
+                    (selectedPlatform === 'x' || selectedPlatform === 'reddit') && suggestionImageUrls[selectedIndex]
+                      ? handleShareImageToXOrReddit
                       : handleShareToSelectedPlatform
                   }
                   disabled={!selectedPlatform || (!(editableShareText || '').trim() && !(selectedText || '').trim())}
