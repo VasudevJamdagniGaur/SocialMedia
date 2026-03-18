@@ -994,6 +994,12 @@ export default function ShareSuggestionsPage() {
           }
         }
 
+        // LinkedIn app often ignores text when sharing an image via the system sheet.
+        // As a fallback, copy caption to clipboard so user can paste it in LinkedIn.
+        if (selectedPlatform === 'linkedin' && t) {
+          copyCaptionToClipboardForLinkedIn(t);
+        }
+
         // #region agent log
         fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6e32d1' }, body: JSON.stringify({ sessionId: '6e32d1', location: 'ShareSuggestionsPage.js:beforeShareShare', message: 'About to call Share.share', data: { path: 'native', filesCount: (options.files && options.files.length) || 0, hasText: !!options.text }, timestamp: Date.now(), hypothesisId: 'H2' }) }).catch(() => {});
         // #endregion
