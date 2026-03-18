@@ -185,22 +185,8 @@ export default function ShareSuggestionsPage() {
   const [shareConfirmation, setShareConfirmation] = useState({ open: false, index: null, platform: null });
   const [shareErrorToast, setShareErrorToast] = useState(false);
   const [shareErrorToastMessage, setShareErrorToastMessage] = useState('');
-  const [shareDebugToastVisible, setShareDebugToastVisible] = useState(false);
-  const [shareDebugToastMessage, setShareDebugToastMessage] = useState('');
   const imageReplaceInputRef = useRef(null);
   const tweetCardRef = useRef(null);
-
-  const showShareDebug = (msg) => {
-    try {
-      const m = (msg || '').toString();
-      setShareDebugToastMessage(m);
-      setShareDebugToastVisible(true);
-      setTimeout(() => setShareDebugToastVisible(false), 7000);
-      console.warn('[share-debug]', m);
-    } catch {
-      // ignore
-    }
-  };
 
   const reflectionDate = state.selectedDate ? (state.selectedDate instanceof Date ? state.selectedDate : new Date(state.selectedDate)) : new Date();
   const dateStr = reflectionDate instanceof Date ? getDateId(reflectionDate) : getDateId(new Date(reflectionDate));
@@ -885,9 +871,6 @@ export default function ShareSuggestionsPage() {
   const handleShareImageToX = async () => {
     try {
       const node = tweetCardRef.current;
-      // #region agent log
-      fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6e32d1' }, body: JSON.stringify({ sessionId: '6e32d1', location: 'ShareSuggestionsPage.js:handleShareImageToX:entry', message: 'Share to X clicked', data: { hasRef: !!node }, timestamp: Date.now(), hypothesisId: 'H5' }) }).catch(() => {});
-      // #endregion
       if (!node) {
         setXShareToastMessage('error');
         setXShareToastVisible(true);
@@ -908,9 +891,6 @@ export default function ShareSuggestionsPage() {
       if (isNative()) {
         try {
           const fileUri = await writeImageToCacheFile(cardDataUrl);
-          // #region agent log
-          fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6e32d1' }, body: JSON.stringify({ sessionId: '6e32d1', location: 'ShareSuggestionsPage.js:handleShareImageToX:native', message: 'X native fileUri', data: { hasFileUri: !!fileUri }, timestamp: Date.now(), hypothesisId: 'H5' }) }).catch(() => {});
-          // #endregion
           if (fileUri) {
             setXShareToastMessage('opening');
             setXShareToastVisible(true);
@@ -1014,10 +994,6 @@ export default function ShareSuggestionsPage() {
   const handleShareToSelectedPlatform = async () => {
     // Use edited text when in panel; fall back to selected suggestion text when edited is empty
     const t = (sharePanelOpen ? ((editableShareText || '').trim() || selectedText) : selectedText) || '';
-    showShareDebug(`tap platform=${selectedPlatform || 'none'} tLen=${(t || '').length}`);
-    // #region agent log
-    fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6e32d1' }, body: JSON.stringify({ sessionId: '6e32d1', location: 'ShareSuggestionsPage.js:handleShareToSelectedPlatform:entry', message: 'Share button clicked', data: { platform: selectedPlatform, tLen: (t || '').length, sharePanelOpen, rawImageType: typeof (suggestionImageUrls[selectedIndex] || null), hasRawImage: !!(suggestionImageUrls[selectedIndex]) }, timestamp: Date.now(), hypothesisId: 'H1' }) }).catch(() => {});
-    // #endregion
     if (!t.trim()) return;
 
     // Resolve the current suggestion image (if any) to a data URL so we can share it
@@ -1033,10 +1009,6 @@ export default function ShareSuggestionsPage() {
     }
     const isDataUrl =
       imageDataUrl && typeof imageDataUrl === 'string' && imageDataUrl.startsWith('data:image');
-    showShareDebug(`img raw=${rawImage ? (typeof rawImage === 'string' ? (rawImage.startsWith('data:') ? 'data' : rawImage.startsWith('http') ? 'http' : 'other') : typeof rawImage) : 'none'} dataUrl=${isDataUrl ? 'yes' : 'no'}`);
-    // #region agent log
-    fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6e32d1' }, body: JSON.stringify({ sessionId: '6e32d1', location: 'ShareSuggestionsPage.js:afterGetImage', message: 'Image resolution', data: { isDataUrl, dataUrlLen: (imageDataUrl && typeof imageDataUrl === 'string') ? imageDataUrl.length : 0 }, timestamp: Date.now(), hypothesisId: 'H4' }) }).catch(() => {});
-    // #endregion
 
     try {
       // 0) LinkedIn: if connected, post via API so we get post ID and can show analytics
@@ -1139,9 +1111,6 @@ export default function ShareSuggestionsPage() {
           dialogTitle: 'Share',
         };
 
-        // #region agent log
-        fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6e32d1' }, body: JSON.stringify({ sessionId: '6e32d1', location: 'ShareSuggestionsPage.js:beforeShareShare', message: 'About to call Share.share (text-only fallback)', data: { path: 'native', hasText: !!options.text }, timestamp: Date.now(), hypothesisId: 'H2' }) }).catch(() => {});
-        // #endregion
         await Share.share(options);
         await recordShare(selectedPlatform || 'other', t, {
           imageDataUrlForStorage: imageDataUrl || rawImage || null,
@@ -1160,9 +1129,6 @@ export default function ShareSuggestionsPage() {
             shareOptions.files = [file];
           }
         }
-        // #region agent log
-        fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6e32d1' }, body: JSON.stringify({ sessionId: '6e32d1', location: 'ShareSuggestionsPage.js:beforeNavigatorShare', message: 'About to call navigator.share', data: { path: 'web', filesCount: (shareOptions.files && shareOptions.files.length) || 0, hasText: !!shareOptions.text }, timestamp: Date.now(), hypothesisId: 'H2' }) }).catch(() => {});
-        // #endregion
         await navigator.share(shareOptions);
         await recordShare(selectedPlatform || 'other', t, {
           imageDataUrlForStorage: imageDataUrl || rawImage || null,
@@ -1173,9 +1139,6 @@ export default function ShareSuggestionsPage() {
       }
 
       // 3) Fallback: download image (if present) and copy text to clipboard
-      // #region agent log
-      fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6e32d1' }, body: JSON.stringify({ sessionId: '6e32d1', location: 'ShareSuggestionsPage.js:fallbackPath', message: 'Using fallback (no native share, no navigator.share)', data: { isNative: isNative(), hasNavigatorShare: !!(typeof navigator !== 'undefined' && navigator.share) }, timestamp: Date.now(), hypothesisId: 'H2' }) }).catch(() => {});
-      // #endregion
       if (isDataUrl) {
         try {
           const a = document.createElement('a');
@@ -1202,9 +1165,6 @@ export default function ShareSuggestionsPage() {
       setShareErrorToast(true);
       setTimeout(() => setShareErrorToast(false), 3000);
     } catch (err) {
-      // #region agent log
-      fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6e32d1' }, body: JSON.stringify({ sessionId: '6e32d1', location: 'ShareSuggestionsPage.js:shareCatch', message: 'Share failed', data: { errName: err?.name, errMessage: (err && (err.message || String(err))) || '' }, timestamp: Date.now(), hypothesisId: 'H2' }) }).catch(() => {});
-      // #endregion
       console.error('Share failed:', err);
       setShareErrorToastMessage('Share cancelled or unavailable. Try again or use copy/download.');
       setShareErrorToast(true);
@@ -1269,20 +1229,6 @@ export default function ShareSuggestionsPage() {
             }}
           >
             {shareErrorToastMessage || 'Share cancelled or unavailable.'}
-          </div>
-        </div>
-      )}
-      {/* Share debug toast (temporary for debugging image share) */}
-      {shareDebugToastVisible && (
-        <div className="fixed inset-x-0 top-6 flex justify-center pointer-events-none z-[9999]">
-          <div
-            className="px-4 py-2 rounded-full shadow-md text-xs pointer-events-auto max-w-[90vw] text-center"
-            style={{
-              background: isDarkMode ? 'rgba(15,23,42,0.95)' : 'rgba(17,24,39,0.95)',
-              color: '#FFFFFF',
-            }}
-          >
-            {shareDebugToastMessage}
           </div>
         </div>
       )}
