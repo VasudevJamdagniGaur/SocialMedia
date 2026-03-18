@@ -336,13 +336,22 @@ export default function ShareSuggestionsPage() {
           setTimeout(() => setShareErrorToast(false), 3000);
           return;
         }
-        const exportNode = tweetCardExportRef.current || tweetCardRef.current;
+        // When user is editing, export from the visible card so typography/wrapping
+        // matches the UI preview exactly.
+        const exportNode =
+          (sharePanelOpen && tweetCardRef.current ? tweetCardRef.current : null) ||
+          tweetCardExportRef.current ||
+          tweetCardRef.current;
         if (!exportNode) {
           setShareErrorToastMessage('X share is still preparing. Please try again.');
           setShareErrorToast(true);
           setTimeout(() => setShareErrorToast(false), 3000);
           return;
         }
+
+        const exportRect = exportNode.getBoundingClientRect?.();
+        const exportWidth = exportRect?.width ? Math.round(exportRect.width) : 360;
+        const exportHeight = exportRect?.height ? Math.round(exportRect.height) : Math.round((exportWidth * 10) / 7);
 
         // #region agent log
         fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', {
@@ -373,10 +382,10 @@ export default function ShareSuggestionsPage() {
                 : null,
               fontsStatus: typeof document !== 'undefined' && document.fonts ? document.fonts.status : null,
               toPngOptions: {
-                exportWidth: 1080,
-                exportHeight: Math.round((1080 * 10) / 7),
-                pixelRatio: 2,
-                skipFonts: true,
+                exportWidth,
+                exportHeight,
+                pixelRatio: 1,
+                skipFonts: false,
               },
             },
             timestamp: Date.now(),
@@ -385,13 +394,11 @@ export default function ShareSuggestionsPage() {
         // #endregion
 
         try {
-          const exportWidth = 1080;
-          const exportHeight = Math.round((exportWidth * 10) / 7);
           imageDataUrl = await toPng(exportNode, {
             width: exportWidth,
             height: exportHeight,
-            pixelRatio: 2,
-            skipFonts: true,
+            pixelRatio: 1,
+            skipFonts: false,
             cacheBust: true,
           });
 
