@@ -152,8 +152,34 @@ async function shareImageOnlyAndCopyText(base64Image, text) {
     });
 
     return { shared: true, copied, fileUri, error: null };
-  } catch {
-    error = 'Share image failed';
+    // Share ONLY the image. Do not include text in payload.
+    // Some Android targets accept `files`, others accept `url`. Try both.
+    try {
+      await Share.share({
+        text: '',
+        files: [fileUri],
+        title: 'Share image',
+        dialogTitle: 'Share',
+      });
+    } catch (e1) {
+      const msg1 = (e1 && (e1.message || String(e1))) ? (e1.message || String(e1)) : 'unknown';
+      try {
+        await Share.share({
+          text: '',
+          url: fileUri,
+          title: 'Share image',
+          dialogTitle: 'Share',
+        });
+      } catch (e2) {
+        const msg2 = (e2 && (e2.message || String(e2))) ? (e2.message || String(e2)) : 'unknown';
+        return { shared: false, copied, fileUri, error: `Share failed (files: ${msg1}) (url: ${msg2})` };
+      }
+    }
+
+    return { shared: true, copied, fileUri, error: null };
+  } catch (e) {
+    const msg = (e && (e.message || String(e))) ? (e.message || String(e)) : 'unknown';
+    error = `Share image failed: ${msg}`;
     return { shared: false, copied, fileUri, error };
   }
 }
