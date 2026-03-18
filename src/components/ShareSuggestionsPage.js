@@ -352,46 +352,6 @@ export default function ShareSuggestionsPage() {
         const exportWidth = exportRect?.width ? Math.round(exportRect.width) : 360;
         const exportHeight = exportRect?.height ? Math.round(exportRect.height) : Math.round((exportWidth * 10) / 7);
 
-        // #region agent log
-        fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6e32d1' },
-          body: JSON.stringify({
-            sessionId: '6e32d1',
-            location: 'ShareSuggestionsPage.js:handleShareImageToXOrReddit:preToPng',
-            message: 'X export preconditions',
-            data: {
-              sharePanelOpen: !!sharePanelOpen,
-              selectedIndex,
-              hasXExportImageDataUrl: !!xExportImageDataUrl,
-              hasXExportProfileImageDataUrl: !!xExportProfileImageDataUrl,
-              tLen: t ? String(t).length : 0,
-              exportNodeIsExportRef: exportNode === tweetCardExportRef.current,
-              visibleTweetCardRect: tweetCardRef.current
-                ? (() => {
-                    const r = tweetCardRef.current.getBoundingClientRect?.();
-                    return r ? { width: r.width, height: r.height } : null;
-                  })()
-                : null,
-              exportTweetCardRect: exportNode
-                ? (() => {
-                    const r = exportNode.getBoundingClientRect?.();
-                    return r ? { width: r.width, height: r.height } : null;
-                  })()
-                : null,
-              fontsStatus: typeof document !== 'undefined' && document.fonts ? document.fonts.status : null,
-              toPngOptions: {
-                exportWidth,
-                exportHeight,
-                pixelRatio: 2,
-                skipFonts: false,
-              },
-            },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion
-
         try {
           imageDataUrl = await toPng(exportNode, {
             width: exportWidth,
@@ -401,38 +361,7 @@ export default function ShareSuggestionsPage() {
             cacheBust: true,
           });
 
-          // #region agent log
-          fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6e32d1' },
-            body: JSON.stringify({
-              sessionId: '6e32d1',
-              location: 'ShareSuggestionsPage.js:handleShareImageToXOrReddit:postToPng',
-              message: 'X export succeeded',
-              data: {
-                imageDataUrlIsDataUrl: !!imageDataUrl && String(imageDataUrl).startsWith('data:image'),
-                imageDataUrlLen: imageDataUrl ? String(imageDataUrl).length : 0,
-              },
-              timestamp: Date.now(),
-            }),
-          }).catch(() => {});
-          // #endregion
         } catch (e) {
-          // #region agent log
-          fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6e32d1' },
-            body: JSON.stringify({
-              sessionId: '6e32d1',
-              location: 'ShareSuggestionsPage.js:handleShareImageToXOrReddit:toPngError',
-              message: 'X export toPng failed',
-              data: {
-                error: formatShareError(e),
-              },
-              timestamp: Date.now(),
-            }),
-          }).catch(() => {});
-          // #endregion
           setShareErrorToastMessage(`X image export failed: ${formatShareError(e)}`);
           setShareErrorToast(true);
           setTimeout(() => setShareErrorToast(false), 6000);
@@ -540,27 +469,6 @@ export default function ShareSuggestionsPage() {
       if (!cancelled) {
         setXExportImageDataUrl(photoDataUrl);
         setXExportProfileImageDataUrl(profileDataUrl);
-
-        // #region agent log
-        fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6e32d1' },
-          body: JSON.stringify({
-            sessionId: '6e32d1',
-            location: 'ShareSuggestionsPage.js:xExportConversion:afterConvert',
-            message: 'X export conversion results',
-            data: {
-              selectedIndex,
-              sharePanelOpen: !!sharePanelOpen,
-              hasPhoto: !!photoDataUrl,
-              photoIsDataUrl: !!photoDataUrl && String(photoDataUrl).startsWith('data:image'),
-              hasProfile: !!profileDataUrl,
-              profileIsDataUrl: !!profileDataUrl && String(profileDataUrl).startsWith('data:image'),
-            },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion
       }
     };
     run();
