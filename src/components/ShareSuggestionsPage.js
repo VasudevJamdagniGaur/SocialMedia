@@ -207,6 +207,10 @@ export default function ShareSuggestionsPage() {
    */
   const handleShareImageToXOrReddit = async () => {
     try {
+      setShareErrorToastMessage(`Starting image share for ${selectedPlatform === 'x' ? 'X' : 'Reddit'}…`);
+      setShareErrorToast(true);
+      setTimeout(() => setShareErrorToast(false), 1800);
+
       const t = ((sharePanelOpen ? editableShareText : selectedText) || '').trim();
       const rawImage = suggestionImageUrls[selectedIndex] || null;
 
@@ -245,6 +249,10 @@ export default function ShareSuggestionsPage() {
         setTimeout(() => setShareErrorToast(false), 3500);
         return;
       }
+
+      setShareErrorToastMessage('Image ready. Opening share sheet…');
+      setShareErrorToast(true);
+      setTimeout(() => setShareErrorToast(false), 1800);
 
       const { shared, copied, error } = await shareImageOnlyAndCopyText(imageDataUrl, t);
       if (copied) {
