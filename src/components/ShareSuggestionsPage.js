@@ -298,7 +298,7 @@ export default function ShareSuggestionsPage() {
     try {
       setShareErrorToastMessage(`Starting image share for ${selectedPlatform === 'x' ? 'X' : 'Reddit'}…`);
       setShareErrorToast(true);
-      setTimeout(() => setShareErrorToast(false), 1800);
+      setTimeout(() => setShareErrorToast(false), 4000);
 
       const t = ((sharePanelOpen ? editableShareText : selectedText) || '').trim();
       const rawImage = suggestionImageUrls[selectedIndex] || null;
@@ -341,7 +341,7 @@ export default function ShareSuggestionsPage() {
 
       setShareErrorToastMessage('Image ready. Opening share sheet…');
       setShareErrorToast(true);
-      setTimeout(() => setShareErrorToast(false), 1800);
+      setTimeout(() => setShareErrorToast(false), 4000);
 
       // X requirement: share ONLY the image (no clipboard, no text).
       // Reddit: share image + copy caption for easy pasting.
@@ -1415,7 +1415,7 @@ export default function ShareSuggestionsPage() {
     >
       {/* LinkedIn toast */}
       {linkedInCaptionToastVisible && (
-        <div className="fixed inset-x-0 bottom-6 flex justify-center pointer-events-none z-50">
+        <div className="fixed inset-x-0 bottom-6 flex justify-center pointer-events-none z-[9999]">
           <div
             className="px-4 py-2 rounded-full shadow-md text-sm pointer-events-auto max-w-[90vw] text-center"
             style={{
@@ -1435,7 +1435,7 @@ export default function ShareSuggestionsPage() {
       )}
       {/* Share failed toast */}
       {shareErrorToast && (
-        <div className="fixed inset-x-0 bottom-6 flex justify-center pointer-events-none z-50">
+        <div className="fixed inset-x-0 bottom-6 flex justify-center pointer-events-none z-[9999]">
           <div
             className="px-4 py-2 rounded-full shadow-md text-sm pointer-events-auto"
             style={{
@@ -1449,7 +1449,7 @@ export default function ShareSuggestionsPage() {
       )}
       {/* X share sheet toast */}
       {xShareToastVisible && (
-        <div className="fixed inset-x-0 bottom-6 flex justify-center pointer-events-none z-50">
+        <div className="fixed inset-x-0 bottom-6 flex justify-center pointer-events-none z-[9999]">
           <div
             className="px-4 py-2 rounded-full shadow-md text-sm pointer-events-auto max-w-[90vw] text-center"
             style={{
@@ -1468,7 +1468,7 @@ export default function ShareSuggestionsPage() {
         </div>
       )}
       {shareConfirmation.open && (
-        <div className="fixed inset-x-0 bottom-20 flex justify-center pointer-events-none z-50">
+        <div className="fixed inset-x-0 bottom-20 flex justify-center pointer-events-none z-[9999]">
           <div
             className="rounded-2xl shadow-lg text-sm pointer-events-auto px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3"
             style={{
