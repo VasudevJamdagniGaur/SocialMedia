@@ -190,6 +190,18 @@ export default function ShareSuggestionsPage() {
   const imageReplaceInputRef = useRef(null);
   const tweetCardRef = useRef(null);
 
+  const showShareDebug = (msg) => {
+    try {
+      const m = (msg || '').toString();
+      setShareDebugToastMessage(m);
+      setShareDebugToastVisible(true);
+      setTimeout(() => setShareDebugToastVisible(false), 7000);
+      console.warn('[share-debug]', m);
+    } catch {
+      // ignore
+    }
+  };
+
   const reflectionDate = state.selectedDate ? (state.selectedDate instanceof Date ? state.selectedDate : new Date(state.selectedDate)) : new Date();
   const dateStr = reflectionDate instanceof Date ? getDateId(reflectionDate) : getDateId(new Date(reflectionDate));
 
@@ -1002,6 +1014,7 @@ export default function ShareSuggestionsPage() {
   const handleShareToSelectedPlatform = async () => {
     // Use edited text when in panel; fall back to selected suggestion text when edited is empty
     const t = (sharePanelOpen ? ((editableShareText || '').trim() || selectedText) : selectedText) || '';
+    showShareDebug(`tap platform=${selectedPlatform || 'none'} tLen=${(t || '').length}`);
     // #region agent log
     fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6e32d1' }, body: JSON.stringify({ sessionId: '6e32d1', location: 'ShareSuggestionsPage.js:handleShareToSelectedPlatform:entry', message: 'Share button clicked', data: { platform: selectedPlatform, tLen: (t || '').length, sharePanelOpen, rawImageType: typeof (suggestionImageUrls[selectedIndex] || null), hasRawImage: !!(suggestionImageUrls[selectedIndex]) }, timestamp: Date.now(), hypothesisId: 'H1' }) }).catch(() => {});
     // #endregion
@@ -1020,6 +1033,7 @@ export default function ShareSuggestionsPage() {
     }
     const isDataUrl =
       imageDataUrl && typeof imageDataUrl === 'string' && imageDataUrl.startsWith('data:image');
+    showShareDebug(`img raw=${rawImage ? (typeof rawImage === 'string' ? (rawImage.startsWith('data:') ? 'data' : rawImage.startsWith('http') ? 'http' : 'other') : typeof rawImage) : 'none'} dataUrl=${isDataUrl ? 'yes' : 'no'}`);
     // #region agent log
     fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6e32d1' }, body: JSON.stringify({ sessionId: '6e32d1', location: 'ShareSuggestionsPage.js:afterGetImage', message: 'Image resolution', data: { isDataUrl, dataUrlLen: (imageDataUrl && typeof imageDataUrl === 'string') ? imageDataUrl.length : 0 }, timestamp: Date.now(), hypothesisId: 'H4' }) }).catch(() => {});
     // #endregion
@@ -1260,7 +1274,7 @@ export default function ShareSuggestionsPage() {
       )}
       {/* Share debug toast (temporary for debugging image share) */}
       {shareDebugToastVisible && (
-        <div className="fixed inset-x-0 bottom-16 flex justify-center pointer-events-none z-50">
+        <div className="fixed inset-x-0 top-6 flex justify-center pointer-events-none z-[9999]">
           <div
             className="px-4 py-2 rounded-full shadow-md text-xs pointer-events-auto max-w-[90vw] text-center"
             style={{
