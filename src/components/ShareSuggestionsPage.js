@@ -914,14 +914,16 @@ export default function ShareSuggestionsPage() {
       const base64Data = parts[1];
       const path = `share-post-${Date.now()}.png`;
 
-      const result = await Filesystem.writeFile({
+      await Filesystem.writeFile({
         path,
         data: base64Data,
         directory: Directory.Cache,
         recursive: false,
       });
 
-      const uri = result.uri || result.path || null;
+      // Android Share expects a real URI (file:// or content://). getUri normalizes this.
+      const uriResult = await Filesystem.getUri({ directory: Directory.Cache, path });
+      const uri = uriResult?.uri || null;
       return uri;
     } catch (e) {
       return null;
@@ -990,7 +992,10 @@ export default function ShareSuggestionsPage() {
           if (fileUri) {
             options.files = [fileUri];
           } else {
-            options.url = imageDataUrl;
+            // If we couldn't write a file, we can't reliably attach the image; share text only.
+            setShareErrorToastMessage('Could not attach image file. Sharing text only.');
+            setShareErrorToast(true);
+            setTimeout(() => setShareErrorToast(false), 3000);
           }
         }
 
