@@ -462,31 +462,36 @@ export default function ShareSuggestionsPage() {
       origin.startsWith('ionic://') ||
       origin.startsWith('file://');
 
-    // Default to this project's Hosting domains based on Firebase config.
-    // Some networks/devices may block one of them, so we try both.
     const hostingBases = ['https://deitedatabase.web.app', 'https://deitedatabase.firebaseapp.com'];
-    const apiBase = (isNative() || originLooksLocal) ? hostingBases[0] : origin;
-    let res;
-    try {
-      res = await fetch(`${apiBase}/api/linkedin/share`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: user.uid,
-          caption: caption.trim(),
-          imageUrl: result.imageUrl,
-          postId: result.postId,
-        }),
-      });
-    } catch (err) {
-      console.warn('LinkedIn API share request failed:', err);
-      const msg = (err && (err.message || String(err))) ? (err.message || String(err)) : 'unknown';
-      setLinkedInErrorText(`Could not reach ${apiBase}/api/linkedin/share. Network error: ${msg}`);
-      setLinkedInToastMessage('error');
-      setLinkedInCaptionToastVisible(true);
-      setTimeout(() => setLinkedInCaptionToastVisible(false), 6000);
-      return true;
+    const basesToTry = (isNative() || originLooksLocal) ? hostingBases : [origin];
+    const body = {
+      userId: user.uid,
+      caption: caption.trim(),
+      imageUrl: result.imageUrl,
+      postId: result.postId,
+    };
+    let res = null;
+    let usedBase = basesToTry[0] || origin;
+    for (const apiBase of basesToTry) {
+      if (!apiBase) continue;
+      try {
+        res = await fetch(`${apiBase}/api/linkedin/share`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        usedBase = apiBase;
+        if (res && (res.status === 200 || res.status === 201 || res.status === 401)) break;
+      } catch {
+        res = null;
+        continue;
+      }
     }
+    if (!res) {
+      // API unreachable — fall back to share sheet so Share button still opens share dialog
+      return false;
+    }
+    const apiBase = usedBase;
 
     if (res.status === 401) {
       const oauthUrl = `${LINKEDIN_OAUTH_BASE}?response_type=code&client_id=${encodeURIComponent(LINKEDIN_CLIENT_ID)}&redirect_uri=${encodeURIComponent(LINKEDIN_REDIRECT_URI)}&state=${encodeURIComponent(user.uid)}&scope=${encodeURIComponent(LINKEDIN_SCOPE)}`;
