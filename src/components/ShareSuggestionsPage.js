@@ -311,6 +311,7 @@ export default function ShareSuggestionsPage() {
   const tweetCardRef = useRef(null);
   const tweetCardExportRef = useRef(null);
   const [xExportImageDataUrl, setXExportImageDataUrl] = useState(null);
+  const [xExportProfileImageDataUrl, setXExportProfileImageDataUrl] = useState(null);
 
   /**
    * X + Reddit: share image via native share sheet and copy caption.
@@ -329,6 +330,12 @@ export default function ShareSuggestionsPage() {
       let imageDataUrl = null;
 
       if (selectedPlatform === 'x') {
+        if (!xExportImageDataUrl) {
+          setShareErrorToastMessage('Preparing X image… Please try again in a moment.');
+          setShareErrorToast(true);
+          setTimeout(() => setShareErrorToast(false), 3000);
+          return;
+        }
         const exportNode = tweetCardExportRef.current || tweetCardRef.current;
         if (!exportNode) {
           setShareErrorToastMessage('X share is still preparing. Please try again.');
@@ -336,6 +343,28 @@ export default function ShareSuggestionsPage() {
           setTimeout(() => setShareErrorToast(false), 3000);
           return;
         }
+
+        // #region agent log
+        fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6e32d1' },
+          body: JSON.stringify({
+            sessionId: '6e32d1',
+            location: 'ShareSuggestionsPage.js:handleShareImageToXOrReddit:preToPng',
+            message: 'X export preconditions',
+            data: {
+              sharePanelOpen: !!sharePanelOpen,
+              selectedIndex,
+              hasXExportImageDataUrl: !!xExportImageDataUrl,
+              hasXExportProfileImageDataUrl: !!xExportProfileImageDataUrl,
+              tLen: t ? String(t).length : 0,
+              exportNodeIsExportRef: exportNode === tweetCardExportRef.current,
+            },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
+
         try {
           const exportWidth = 1080;
           const exportHeight = Math.round((exportWidth * 10) / 7);
@@ -346,7 +375,39 @@ export default function ShareSuggestionsPage() {
             skipFonts: true,
             cacheBust: true,
           });
+
+          // #region agent log
+          fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6e32d1' },
+            body: JSON.stringify({
+              sessionId: '6e32d1',
+              location: 'ShareSuggestionsPage.js:handleShareImageToXOrReddit:postToPng',
+              message: 'X export succeeded',
+              data: {
+                imageDataUrlIsDataUrl: !!imageDataUrl && String(imageDataUrl).startsWith('data:image'),
+                imageDataUrlLen: imageDataUrl ? String(imageDataUrl).length : 0,
+              },
+              timestamp: Date.now(),
+            }),
+          }).catch(() => {});
+          // #endregion
         } catch (e) {
+          // #region agent log
+          fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6e32d1' },
+            body: JSON.stringify({
+              sessionId: '6e32d1',
+              location: 'ShareSuggestionsPage.js:handleShareImageToXOrReddit:toPngError',
+              message: 'X export toPng failed',
+              data: {
+                error: formatShareError(e),
+              },
+              timestamp: Date.now(),
+            }),
+          }).catch(() => {});
+          // #endregion
           setShareErrorToastMessage(`X image export failed: ${formatShareError(e)}`);
           setShareErrorToast(true);
           setTimeout(() => setShareErrorToast(false), 6000);
@@ -422,30 +483,60 @@ export default function ShareSuggestionsPage() {
     let cancelled = false;
     const run = async () => {
       if (!sharePanelOpen || selectedPlatform !== 'x') return;
-      const raw = suggestionImageUrls[selectedIndex] || null;
-      if (!raw || typeof raw !== 'string') {
-        setXExportImageDataUrl(null);
-        return;
-      }
-      if (raw.startsWith('data:image')) {
-        setXExportImageDataUrl(raw);
-        return;
-      }
-      // Prefer native HTTP for https images to bypass CORS
-      if ((raw.startsWith('https://') || raw.startsWith('http://')) && isNative() && CapacitorHttp && typeof CapacitorHttp.get === 'function') {
-        try {
-          const resp = await CapacitorHttp.get({ url: raw, responseType: 'arraybuffer' });
-          const mime = guessMimeFromHeaders(resp?.headers) || 'image/png';
-          const base64Bytes = typeof resp?.data === 'string' ? resp.data : null;
-          if (!cancelled) setXExportImageDataUrl(base64Bytes ? `data:${mime};base64,${base64Bytes}` : null);
-          return;
-        } catch {
-          // fall through
+
+      const rawPhoto = suggestionImageUrls[selectedIndex] || null;
+      const rawProfile = tweetProfileImage || null;
+
+      const convertToDataUrl = async (value) => {
+        if (!value || typeof value !== 'string') return null;
+        if (value.startsWith('data:image')) return value;
+        if (value.startsWith('blob:')) return blobUrlToDataUrl(value);
+        if (value.startsWith('https://') || value.startsWith('http://')) {
+          if (isNative() && CapacitorHttp && typeof CapacitorHttp.get === 'function') {
+            try {
+              const resp = await CapacitorHttp.get({ url: value, responseType: 'arraybuffer' });
+              const mime = guessMimeFromHeaders(resp?.headers) || 'image/png';
+              const base64Bytes = typeof resp?.data === 'string' ? resp.data : null;
+              return base64Bytes ? `data:${mime};base64,${base64Bytes}` : null;
+            } catch {
+              return null;
+            }
+          }
+          return getImageAsDataUrl(value);
         }
+        return null;
+      };
+
+      const [photoDataUrl, profileDataUrl] = await Promise.all([
+        convertToDataUrl(rawPhoto),
+        convertToDataUrl(rawProfile),
+      ]);
+
+      if (!cancelled) {
+        setXExportImageDataUrl(photoDataUrl);
+        setXExportProfileImageDataUrl(profileDataUrl);
+
+        // #region agent log
+        fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6e32d1' },
+          body: JSON.stringify({
+            sessionId: '6e32d1',
+            location: 'ShareSuggestionsPage.js:xExportConversion:afterConvert',
+            message: 'X export conversion results',
+            data: {
+              selectedIndex,
+              sharePanelOpen: !!sharePanelOpen,
+              hasPhoto: !!photoDataUrl,
+              photoIsDataUrl: !!photoDataUrl && String(photoDataUrl).startsWith('data:image'),
+              hasProfile: !!profileDataUrl,
+              profileIsDataUrl: !!profileDataUrl && String(profileDataUrl).startsWith('data:image'),
+            },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
       }
-      // Web/last resort
-      const dataUrl = await getImageAsDataUrl(raw);
-      if (!cancelled) setXExportImageDataUrl(dataUrl);
     };
     run();
     return () => {
@@ -1631,9 +1722,12 @@ export default function ShareSuggestionsPage() {
               width={1080} // height will be derived to keep 7:10 aspect ratio
               displayName={tweetDisplayName}
               username={tweetUsername}
-              text={selectedText || reflectionFromState}
+              text={sharePanelOpen ? ((editableShareText || '').trim() || selectedText || reflectionFromState) : (selectedText || reflectionFromState)}
               imageUrl={xExportImageDataUrl || null}
-              profileImageUrl={null}
+              profileImageUrl={
+                xExportProfileImageDataUrl ||
+                (typeof tweetProfileImage === 'string' && tweetProfileImage.startsWith('data:image') ? tweetProfileImage : null)
+              }
             />
           </div>
         )}
