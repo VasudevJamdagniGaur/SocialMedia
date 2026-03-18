@@ -92,6 +92,29 @@ const guessMimeFromHeaders = (headers) => {
   }
 };
 
+const formatShareError = (e) => {
+  try {
+    if (!e) return 'unknown';
+    if (typeof e === 'string') return e;
+    if (e instanceof Error) return e.message || 'Error';
+    // Some plugins throw event-like objects
+    if (typeof e?.message === 'string' && e.message.trim()) return e.message.trim();
+    if (typeof e?.error === 'string' && e.error.trim()) return e.error.trim();
+    if (typeof e?.error?.message === 'string' && e.error.message.trim()) return e.error.message.trim();
+    if (typeof e?.type === 'string') return `Event(${e.type})`;
+    // Try JSON
+    try {
+      const s = JSON.stringify(e);
+      if (s && s !== '{}' && s !== 'null') return s.slice(0, 160);
+    } catch {
+      // ignore
+    }
+    return String(e);
+  } catch {
+    return 'unknown';
+  }
+};
+
 /**
  * Share ONLY the image (native share sheet) and copy the text to clipboard.
  * @param {string} base64Image - data URL or raw base64 (png/jpg) string
@@ -235,15 +258,13 @@ async function shareImageOnly(base64Image) {
           dialogTitle: 'Share',
         });
       } catch (e2) {
-        const msg2 = (e2 && (e2.message || String(e2))) ? (e2.message || String(e2)) : 'unknown';
-        return { shared: false, fileUri, error: `Share failed: ${msg2}` };
+        return { shared: false, fileUri, error: `Share failed: ${formatShareError(e2)}` };
       }
     }
 
     return { shared: true, fileUri, error: null };
   } catch (e) {
-    const msg = (e && (e.message || String(e))) ? (e.message || String(e)) : 'unknown';
-    return { shared: false, fileUri, error: `Share image failed: ${msg}` };
+    return { shared: false, fileUri, error: `Share image failed: ${formatShareError(e)}` };
   }
 }
 
@@ -306,15 +327,22 @@ export default function ShareSuggestionsPage() {
       let imageDataUrl = null;
 
       if (selectedPlatform === 'x' && tweetCardRef.current) {
-        const exportWidth = 1080;
-        const exportHeight = Math.round((exportWidth * 10) / 7);
-        imageDataUrl = await toPng(tweetCardRef.current, {
-          width: exportWidth,
-          height: exportHeight,
-          pixelRatio: 2,
-          skipFonts: true,
-          cacheBust: false,
-        });
+        try {
+          const exportWidth = 1080;
+          const exportHeight = Math.round((exportWidth * 10) / 7);
+          imageDataUrl = await toPng(tweetCardRef.current, {
+            width: exportWidth,
+            height: exportHeight,
+            pixelRatio: 2,
+            skipFonts: true,
+            cacheBust: false,
+          });
+        } catch (e) {
+          setShareErrorToastMessage(`X image export failed: ${formatShareError(e)}`);
+          setShareErrorToast(true);
+          setTimeout(() => setShareErrorToast(false), 6000);
+          return;
+        }
       } else if (rawImage && typeof rawImage === 'string') {
         if (rawImage.startsWith('data:image')) {
           imageDataUrl = rawImage;
@@ -371,8 +399,7 @@ export default function ShareSuggestionsPage() {
       triggerPostShareConfirmation();
       setSharePanelOpen(false);
     } catch (e) {
-      const msg = (e && (e.message || String(e))) ? (e.message || String(e)) : 'unknown';
-      setShareErrorToastMessage(`Share failed: ${msg}`);
+      setShareErrorToastMessage(`Share failed: ${formatShareError(e)}`);
       setShareErrorToast(true);
       setTimeout(() => setShareErrorToast(false), 4000);
     }
