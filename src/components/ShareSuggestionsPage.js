@@ -359,6 +359,25 @@ export default function ShareSuggestionsPage() {
               hasXExportProfileImageDataUrl: !!xExportProfileImageDataUrl,
               tLen: t ? String(t).length : 0,
               exportNodeIsExportRef: exportNode === tweetCardExportRef.current,
+              visibleTweetCardRect: tweetCardRef.current
+                ? (() => {
+                    const r = tweetCardRef.current.getBoundingClientRect?.();
+                    return r ? { width: r.width, height: r.height } : null;
+                  })()
+                : null,
+              exportTweetCardRect: exportNode
+                ? (() => {
+                    const r = exportNode.getBoundingClientRect?.();
+                    return r ? { width: r.width, height: r.height } : null;
+                  })()
+                : null,
+              fontsStatus: typeof document !== 'undefined' && document.fonts ? document.fonts.status : null,
+              toPngOptions: {
+                exportWidth: 1080,
+                exportHeight: Math.round((1080 * 10) / 7),
+                pixelRatio: 2,
+                skipFonts: true,
+              },
             },
             timestamp: Date.now(),
           }),
