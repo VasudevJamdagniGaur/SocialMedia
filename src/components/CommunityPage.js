@@ -1199,17 +1199,6 @@ export default function CommunityPage() {
                         {post.content}
                       </p>
                     ) : null}
-                    {activeTab === 'mySpace' && user && post.authorId === user.uid && (() => {
-                      const normDate = normalizeReflectionDate(post.reflectionDate);
-                      const platforms = normDate ? (socialSharesByDate[normDate] || []) : [];
-                      if (platforms.length === 0) return null;
-                      const text = platforms.map((p) => socialPlatformLabels[p] || p).join(', ');
-                      return (
-                        <p className="mt-1.5 text-xs" style={{ color: THREADS.textSecondary }}>
-                          Shared to social: {text}
-                        </p>
-                      );
-                    })()}
                     {post.image && (
                       <div className="mt-3 rounded-2xl overflow-hidden" style={{ borderRadius: '14px' }}>
                         <img
@@ -1221,6 +1210,17 @@ export default function CommunityPage() {
                         />
                       </div>
                     )}
+                    {activeTab === 'mySpace' && user && post.authorId === user.uid && (() => {
+                      const normDate = normalizeReflectionDate(post.reflectionDate);
+                      const platforms = normDate ? (socialSharesByDate[normDate] || []) : [];
+                      if (platforms.length === 0) return null;
+                      const text = platforms.map((p) => socialPlatformLabels[p] || p).join(', ');
+                      return (
+                        <p className="mt-2 text-xs" style={{ color: THREADS.textSecondary }}>
+                          Shared to: {text}
+                        </p>
+                      );
+                    })()}
                   </div>
                 </div>
                 <div className="flex items-center gap-6 mt-3 pt-3 px-1" style={{ borderTop: `1px solid ${THREADS.divider}` }}>
