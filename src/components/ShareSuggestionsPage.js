@@ -450,8 +450,9 @@ export default function ShareSuggestionsPage() {
         return;
       }
 
+      const imageForStorage = rawImage || imageDataUrl || null;
       await recordShare(selectedPlatform || 'other', t, {
-        imageDataUrlForStorage: imageDataUrl || rawImage || null,
+        imageDataUrlForStorage: imageForStorage,
       });
       triggerPostShareConfirmation();
       setSharePanelOpen(false);
@@ -1405,8 +1406,9 @@ export default function ShareSuggestionsPage() {
                 title: 'Share image',
                 dialogTitle: 'Share',
               });
+              const imageForStorage = rawImage || imageDataUrl || null;
               await recordShare(selectedPlatform || 'other', t, {
-                imageDataUrlForStorage: imageDataUrl || rawImage || null,
+                imageDataUrlForStorage: imageForStorage,
               });
               triggerPostShareConfirmation();
               setSharePanelOpen(false);
@@ -1437,8 +1439,9 @@ export default function ShareSuggestionsPage() {
             setTimeout(() => setShareErrorToast(false), 2500);
           }
           if (shared) {
+            const imageForStorage = rawImage || imageDataUrl || null;
             await recordShare(selectedPlatform || 'other', t, {
-              imageDataUrlForStorage: imageDataUrl || rawImage || null,
+              imageDataUrlForStorage: imageForStorage,
             });
             triggerPostShareConfirmation();
             setSharePanelOpen(false);
@@ -1474,8 +1477,9 @@ export default function ShareSuggestionsPage() {
           setTimeout(() => setShareErrorToast(false), 6000);
           throw e;
         }
+        const imageForStorage = rawImage || imageDataUrl || null;
         await recordShare(selectedPlatform || 'other', t, {
-          imageDataUrlForStorage: imageDataUrl || rawImage || null,
+          imageDataUrlForStorage: imageForStorage,
         });
         triggerPostShareConfirmation();
         setSharePanelOpen(false);
@@ -1492,8 +1496,9 @@ export default function ShareSuggestionsPage() {
           }
         }
         await navigator.share(shareOptions);
+        const imageForStorage = rawImage || imageDataUrl || null;
         await recordShare(selectedPlatform || 'other', t, {
-          imageDataUrlForStorage: imageDataUrl || rawImage || null,
+          imageDataUrlForStorage: imageForStorage,
         });
         triggerPostShareConfirmation();
         setSharePanelOpen(false);
@@ -1518,8 +1523,9 @@ export default function ShareSuggestionsPage() {
           // ignore clipboard failures
         }
       }
+      const imageForStorage = rawImage || imageDataUrl || null;
       await recordShare(selectedPlatform || 'other', t, {
-        imageDataUrlForStorage: imageDataUrl || rawImage || null,
+        imageDataUrlForStorage: imageForStorage,
       });
       triggerPostShareConfirmation();
       setSharePanelOpen(false);

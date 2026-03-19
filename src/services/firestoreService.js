@@ -476,15 +476,14 @@ class FirestoreService {
         updatedAt: serverTimestamp(),
       });
 
-      // Generate postId first so we can use it in Storage path: posts/{userId}/{postId}.jpg
+      // Posts collection reference
       const postsRef = collection(this.db, 'posts');
-      const postDocRef = doc(postsRef);
-      const postId = postDocRef.id;
-
       let imageUrl = imageUrlParam || null;
 
       // Upload image to Firebase Storage (never store image in Firestore)
       if (imageFile && (imageFile instanceof File || imageFile instanceof Blob)) {
+        const tempPostRef = doc(postsRef);
+        const tempPostId = tempPostRef.id;
         imageUrl = await this.uploadPostImageToPath(uid, postId, imageFile);
         if (!imageUrl) {
           imageUrl = await this.uploadPostImageFromFile(uid, imageFile);
@@ -493,10 +492,51 @@ class FirestoreService {
         imageUrl = await this.uploadPostImage(uid, imageDataUrl);
       }
 
+      // De-duplication: if a post with the same caption + image already exists for this user,
+      // reuse it instead of creating another post.
+      const normalizedCaption = caption.trim();
+      let existingPostId = null;
+      try {
+        let dedupeQuery;
+        if (imageUrl) {
+          dedupeQuery = query(
+            postsRef,
+            where('userId', '==', uid),
+            where('caption', '==', normalizedCaption),
+            where('imageUrl', '==', imageUrl)
+          );
+        } else {
+          dedupeQuery = query(
+            postsRef,
+            where('userId', '==', uid),
+            where('caption', '==', normalizedCaption),
+            where('imageUrl', '==', null)
+          );
+        }
+        const existingSnap = await getDocs(dedupeQuery);
+        if (!existingSnap.empty) {
+          existingPostId = existingSnap.docs[0].id;
+          const shareRef = collection(this.db, 'shareHistory');
+          await addDoc(shareRef, {
+            userId: uid,
+            postId: existingPostId,
+            platform,
+            createdAt: serverTimestamp(),
+          });
+          return { success: true, postId: existingPostId, imageUrl: imageUrl || null };
+        }
+      } catch (dedupeError) {
+        console.warn('createPostForShare dedupe check failed, proceeding to create new post:', dedupeError);
+      }
+
+      // Generate postId now that we know there is no duplicate.
+      const postDocRef = doc(postsRef);
+      const postId = postDocRef.id;
+
       // Create post document: metadata + imageUrl only (no base64)
       await setDoc(postDocRef, {
         userId: uid,
-        caption,
+        caption: normalizedCaption,
         imageUrl: imageUrl || null,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),

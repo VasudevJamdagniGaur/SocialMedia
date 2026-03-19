@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
-import { MessageCircle, Heart, User, Sun, Moon, Send, X, Plus, XCircle, Image, Link, Share2, Repeat, Bookmark } from 'lucide-react';
+import { MessageCircle, Heart, User, Sun, Moon, Send, X, Plus, XCircle, Image, Link, Share2, Repeat, Bookmark, MoreVertical, Trash2 } from 'lucide-react';
 import { getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
 import { collection, addDoc, query, orderBy, getDocs, serverTimestamp, doc, setDoc, updateDoc, increment, deleteDoc, onSnapshot } from 'firebase/firestore';
@@ -62,6 +62,8 @@ export default function CommunityPage() {
   const [followLoadingUid, setFollowLoadingUid] = useState(null);
   const [socialShares, setSocialShares] = useState([]);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [postMenuOpenId, setPostMenuOpenId] = useState(null); // three-dot menu for My Presence post
+  const [deletePostLoadingId, setDeletePostLoadingId] = useState(null);
   const [linkedInPosts, setLinkedInPosts] = useState([]);
   const [linkedInPostsLoading, setLinkedInPostsLoading] = useState(false);
   const [analyticsRefreshing, setAnalyticsRefreshing] = useState({});
@@ -527,14 +529,45 @@ export default function CommunityPage() {
 
   const filteredPosts = (() => {
     if (!communityPosts.length) return [];
+
+    // My Space: only current user's posts, with duplicates (same content+image) collapsed to newest one
     if (activeTab === 'mySpace') {
-      return user ? communityPosts.filter((p) => p.authorId === user.uid) : [];
+      if (!user) return [];
+      const mine = communityPosts.filter((p) => p.authorId === user.uid);
+      if (!mine.length) return [];
+
+      const byKey = new Map();
+      mine.forEach((p) => {
+        const content = (p?.content || '').trim();
+        const image = p?.image || '';
+        const key = `${content}::${image}`;
+        const existing = byKey.get(key);
+        if (!existing) {
+          byKey.set(key, p);
+        } else {
+          const existingTime = existing.createdAt?.getTime?.() ?? 0;
+          const currentTime = p.createdAt?.getTime?.() ?? 0;
+          if (currentTime > existingTime) {
+            byKey.set(key, p);
+          }
+        }
+      });
+
+      return Array.from(byKey.values()).sort((a, b) => {
+        const ta = a.createdAt?.getTime?.() ?? 0;
+        const tb = b.createdAt?.getTime?.() ?? 0;
+        return tb - ta;
+      });
     }
+
+    // Following tab: only posts from people you follow
     if (activeTab === 'following') {
       if (!user || !followingIds.length) return [];
       return communityPosts.filter((p) => p.authorId && followingIds.includes(p.authorId));
     }
-    return communityPosts; // explore: all posts
+
+    // Explore: all posts
+    return communityPosts;
   })();
 
   // Update position mapping for tracking
@@ -675,6 +708,36 @@ export default function CommunityPage() {
       return dateStr;
     }
   };
+
+  // Date label for My Presence separators (WhatsApp-style: "14 March 2026")
+  const formatDatePillLabel = (dateStr) => {
+    if (!dateStr) return '';
+    try {
+      const [y, m, d] = dateStr.split('-').map(Number);
+      const date = new Date(y, m - 1, d);
+      return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  // For My Presence: build feed items with date separators between different days
+  const feedItems = (() => {
+    if (activeTab !== 'mySpace' || !filteredPosts.length) {
+      return filteredPosts.map((post) => ({ type: 'post', post }));
+    }
+    const items = [];
+    let lastDateKey = null;
+    for (const post of filteredPosts) {
+      const dateKey = normalizeReflectionDate(post.reflectionDate) || normalizeReflectionDate(post.createdAt);
+      if (dateKey && dateKey !== lastDateKey) {
+        items.push({ type: 'date', dateKey, label: formatDatePillLabel(dateKey) });
+        lastDateKey = dateKey;
+      }
+      items.push({ type: 'post', post });
+    }
+    return items;
+  })();
 
   const socialPlatformLabels = { x: 'X', whatsapp: 'WhatsApp', native: 'More', image: 'Image' };
 
@@ -857,6 +920,22 @@ export default function CommunityPage() {
       console.error('❌ Error updating like:', error);
       console.error('Error details:', error.code, error.message);
       alert('Failed to update like: ' + error.message);
+    }
+  };
+
+  const handleDeletePost = async (postId) => {
+    if (!postId || !user) return;
+    setDeletePostLoadingId(postId);
+    setPostMenuOpenId(null);
+    try {
+      const postRef = doc(db, 'communityPosts', postId);
+      await deleteDoc(postRef);
+      setCommunityPosts((prev) => prev.filter((p) => p.id !== postId));
+    } catch (error) {
+      console.error('Error deleting post:', error);
+      alert('Failed to delete post: ' + (error?.message || 'Unknown error'));
+    } finally {
+      setDeletePostLoadingId(null);
     }
   };
 
@@ -1140,11 +1219,35 @@ export default function CommunityPage() {
           )}
 
           <div className="rounded-2xl overflow-hidden" style={{ background: THREADS.bg }}>
-          {filteredPosts.map((post, index) => {
+          {feedItems.map((item, index) => {
+            if (item.type === 'date') {
+              return (
+                <div
+                  key={`date-${item.dateKey}`}
+                  className="flex justify-center py-3"
+                  style={{ animation: 'fadeIn 0.25s ease forwards' }}
+                >
+                  <span
+                    className="px-4 py-1.5 rounded-full text-sm font-medium"
+                    style={{
+                      background: 'rgba(255,255,255,0.08)',
+                      color: THREADS.textSecondary,
+                    }}
+                  >
+                    {item.label}
+                  </span>
+                </div>
+              );
+            }
+            const post = item.post;
             const postCommentsData = postComments[post.id] || { comments: post.comments || [], showComments: false, newComment: '' };
             const postLikesCount = postLikes[post.id] || post.likes || 0;
             const likedUsers = postLikedBy[post.id] || [];
             const isPostLiked = user && likedUsers.includes(user.uid);
+            const isFirstPost = feedItems.findIndex((i) => i.type === 'post') === index;
+            const isMyPost = activeTab === 'mySpace' && user && post.authorId === user.uid;
+            const menuOpen = postMenuOpenId === post.id;
+            const deleting = deletePostLoadingId === post.id;
             
             return (
               <div
@@ -1152,11 +1255,58 @@ export default function CommunityPage() {
                 ref={(el) => registerPostElement(post.id, el)}
                 className="relative transition-[background,transform] duration-150 hover:bg-white/[0.03] active:scale-[0.99] fadeIn"
                 style={{
-                  borderTop: index === 0 ? 'none' : `1px solid ${THREADS.divider}`,
+                  borderTop: isFirstPost ? 'none' : `1px solid ${THREADS.divider}`,
                   padding: '16px 0',
                   animation: 'fadeIn 0.25s ease forwards',
                 }}
               >
+                {isMyPost && (
+                  <div className="absolute top-2 right-2 z-10">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPostMenuOpenId((id) => (id === post.id ? null : post.id));
+                      }}
+                      disabled={deleting}
+                      className="p-1.5 rounded-full hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-offset-0 transition-colors"
+                      style={{ color: THREADS.textSecondary }}
+                      aria-label="Post options"
+                    >
+                      <MoreVertical className="w-[18px] h-[18px]" strokeWidth={1.5} />
+                    </button>
+                    {menuOpen && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-0"
+                          aria-hidden
+                          onClick={() => setPostMenuOpenId(null)}
+                        />
+                        <div
+                          className="absolute right-0 top-full mt-1 py-1 min-w-[140px] rounded-xl shadow-lg z-20"
+                          style={{
+                            background: THREADS.bgSecondary,
+                            border: `1px solid ${THREADS.divider}`,
+                          }}
+                        >
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeletePost(post.id);
+                            }}
+                            disabled={deleting}
+                            className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm hover:bg-white/10 focus:outline-none transition-colors rounded-lg mx-1"
+                            style={{ color: THREADS.text }}
+                          >
+                            <Trash2 className="w-4 h-4 flex-shrink-0" style={{ color: THREADS.textSecondary }} />
+                            {deleting ? 'Deleting…' : 'Delete'}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
                 <div className="flex items-start gap-3 px-1">
                   <div className="flex-shrink-0 relative">
                     <button
@@ -1210,17 +1360,6 @@ export default function CommunityPage() {
                         />
                       </div>
                     )}
-                    {activeTab === 'mySpace' && user && post.authorId === user.uid && (() => {
-                      const normDate = normalizeReflectionDate(post.reflectionDate);
-                      const platforms = normDate ? (socialSharesByDate[normDate] || []) : [];
-                      if (platforms.length === 0) return null;
-                      const text = platforms.map((p) => socialPlatformLabels[p] || p).join(', ');
-                      return (
-                        <p className="mt-2 text-xs" style={{ color: THREADS.textSecondary }}>
-                          Shared to: {text}
-                        </p>
-                      );
-                    })()}
                   </div>
                 </div>
                 <div className="flex items-center gap-6 mt-3 pt-3 px-1" style={{ borderTop: `1px solid ${THREADS.divider}` }}>
@@ -1258,51 +1397,6 @@ export default function CommunityPage() {
                     <Send className="w-4 h-4" style={{ color: THREADS.textSecondary }} />
                     <span className="text-xs" style={{ color: THREADS.textSecondary }}>0</span>
                   </button>
-                  {activeTab === 'mySpace' && user && post.authorId === user.uid && (() => {
-                    const normDate = normalizeReflectionDate(post.reflectionDate);
-                    const platforms = normDate ? (socialSharesByDate[normDate] || []) : [];
-                    const sharedX = platforms.includes('x');
-                    const sharedIg = platforms.includes('instagram');
-                    const sharedReddit = platforms.includes('reddit');
-                    const sharedWa = platforms.includes('whatsapp');
-                    const sharedLinkedIn = platforms.includes('linkedin');
-                    const socialGreen = THREADS.accent;
-                    const socialGrey = THREADS.textSecondary;
-                    return (
-                      <div className="flex items-center gap-3 ml-auto" title="Shared to social">
-                        <span className="w-4 h-4 flex items-center justify-center" title={sharedX ? 'Shared to X' : 'Not shared to X'}>
-                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill={sharedX ? socialGreen : socialGrey} aria-hidden>
-                            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-                          </svg>
-                        </span>
-                        <span className="w-4 h-4 flex items-center justify-center" title={sharedIg ? 'Shared to Instagram' : 'Not shared to Instagram'}>
-                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke={sharedIg ? socialGreen : socialGrey} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                            <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
-                            <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
-                            <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
-                          </svg>
-                        </span>
-                        <span className="w-4 h-4 flex items-center justify-center" title={sharedLinkedIn ? 'Shared to LinkedIn' : 'Not shared to LinkedIn'}>
-                          <svg className="w-4 h-4" viewBox="0 0 24 24" aria-hidden>
-                            <path
-                              fill={sharedLinkedIn ? socialGreen : socialGrey}
-                              d="M4.98 3.5C4.98 4.88 3.88 6 2.5 6S0 4.88 0 3.5 1.12 1 2.5 1 4.98 2.12 4.98 3.5zM.25 8.25h4.5V24h-4.5V8.25zM8.75 8.25h4.31v2.14h.06c.6-1.14 2.06-2.34 4.24-2.34 4.54 0 5.38 2.99 5.38 6.88V24h-4.5v-7.16c0-1.71-.03-3.9-2.38-3.9-2.38 0-2.75 1.86-2.75 3.78V24h-4.5V8.25z"
-                            />
-                          </svg>
-                        </span>
-                        <span className="w-4 h-4 flex items-center justify-center" title={sharedReddit ? 'Shared to Reddit' : 'Not shared to Reddit'}>
-                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill={sharedReddit ? socialGreen : socialGrey} aria-hidden>
-                            <path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.701zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 0 0-.232-.095z" />
-                          </svg>
-                        </span>
-                        <span className="w-4 h-4 flex items-center justify-center" title={sharedWa ? 'Shared to WhatsApp' : 'Not shared to WhatsApp'}>
-                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill={sharedWa ? socialGreen : socialGrey} aria-hidden>
-                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.865 9.865 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.578 5.945L.057 24l6.305-1.654a9.863 9.863 0 004.688 1.177h.004c5.45 0 9.884-4.437 9.884-9.884 0-2.64-1.03-5.122-2.898-6.988a9.865 9.865 0 00-6.994-2.893z" />
-                          </svg>
-                        </span>
-                      </div>
-                    );
-                  })()}
                 </div>
 
                 {/* Comments Section - Threads style */}
