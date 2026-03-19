@@ -953,6 +953,39 @@ export default function CommunityPage() {
     return `${days} ${days === 1 ? 'day' : 'days'} ago`;
   };
 
+  // Three-dot timestamp label for My Presence (matches your example screenshots)
+  const formatThreeDotTimestamp = (dateVal) => {
+    if (!dateVal) return '';
+    const postDate = dateVal instanceof Date ? dateVal : new Date(dateVal);
+    if (Number.isNaN(postDate.getTime())) return '';
+
+    const now = new Date();
+    const diffMs = now - postDate;
+    if (diffMs < 0) return '';
+
+    // < 24 hours => show like "17h"
+    if (diffMs < 24 * 60 * 60 * 1000) {
+      const hours = Math.floor(diffMs / 3600000);
+      if (hours >= 1) return `${hours}h`;
+      const minutes = Math.max(1, Math.floor(diffMs / 60000));
+      return `${minutes}m`;
+    }
+
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const month = months[postDate.getMonth()];
+    const dayNum = postDate.getDate();
+    const year = postDate.getFullYear();
+    const currentYear = now.getFullYear();
+
+    // This year => show like "20 Feb"
+    if (year === currentYear) return `${dayNum} ${month}`;
+
+    // Past year => show like "08 Dec 25"
+    const dayPadded = String(dayNum).padStart(2, '0');
+    const year2 = String(year).slice(-2);
+    return `${dayPadded} ${month} ${year2}`;
+  };
+
 
   // Threads-style theme constants
   const THREADS = {
@@ -1214,7 +1247,13 @@ export default function CommunityPage() {
                 }}
               >
                 {isMyPost && (
-                  <div className="absolute top-2 right-2 z-10">
+                  <div className="absolute top-2 right-2 z-10 flex items-center gap-2">
+                    <span
+                      className="text-[12px] font-medium"
+                      style={{ color: THREADS.textSecondary, lineHeight: 1 }}
+                    >
+                      {formatThreeDotTimestamp(post.createdAt)}
+                    </span>
                     <button
                       type="button"
                       onClick={(e) => {
