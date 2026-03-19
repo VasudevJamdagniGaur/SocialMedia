@@ -501,11 +501,26 @@ export default function ShareSuggestionsPage() {
         const reflectionKey = firestoreService.hashForReflectionCache(reflectionFromState);
 
         // 1) Single round: Firebase by index only (fast), then localStorage – no second round of text-based reads
+        const preferredPlatforms = ['linkedin', 'x', 'reddit'];
+        const platformsToTry = [
+          selectedPlatform,
+          ...preferredPlatforms.filter((p) => p !== selectedPlatform),
+        ].filter(Boolean);
+
         const firebaseUrls = user
           ? await Promise.all(
-              postsWithText.map((_, idx) =>
-                firestoreService.getReflectionImageUrlByIndex(user.uid, selectedPlatform, reflectionKey, idx)
-              )
+              postsWithText.map(async (_, idx) => {
+                for (const p of platformsToTry) {
+                  const url = await firestoreService.getReflectionImageUrlByIndex(
+                    user.uid,
+                    p,
+                    reflectionKey,
+                    idx
+                  );
+                  if (url) return url;
+                }
+                return null;
+              })
             )
           : postsWithText.map(() => null);
 
