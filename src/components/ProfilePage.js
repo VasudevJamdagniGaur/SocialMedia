@@ -486,6 +486,43 @@ const MOOD_KEYWORDS = {
     let summarySentence = null;
     if (user) {
       const insights = await analyzeUserChatHistory(user.uid);
+      let socialHabitSentence = null;
+      try {
+        const sharesRes = await firestoreService.getSocialSharesByUser(user.uid);
+        const shares = sharesRes?.success && Array.isArray(sharesRes.shares) ? sharesRes.shares : [];
+        if (shares.length) {
+          const byPlatform = {};
+          const byDate = {};
+          for (const s of shares) {
+            const p = (s?.platform || 'other').toLowerCase();
+            byPlatform[p] = (byPlatform[p] || 0) + 1;
+            const d = (s?.reflectionDate || '').slice(0, 10);
+            if (d) byDate[d] = true;
+          }
+          const ranked = Object.entries(byPlatform).sort((a, b) => b[1] - a[1]);
+          const top = ranked.slice(0, 2).map(([p]) => p);
+          const totalDaysShared = Object.keys(byDate).length;
+
+          const label = (p) => (
+            p === 'x' ? 'X' :
+            p === 'linkedin' ? 'LinkedIn' :
+            p === 'reddit' ? 'Reddit' :
+            p === 'whatsapp' ? 'WhatsApp' :
+            p === 'native' ? 'share sheet' :
+            p
+          );
+          const topText = top.length === 2 ? `${label(top[0])} and ${label(top[1])}` : (top[0] ? label(top[0]) : null);
+          if (topText) {
+            socialHabitSentence =
+              totalDaysShared >= 6
+                ? `often shares reflections to ${topText} and likes to make your day visible.`
+                : `has started sharing reflections to ${topText}, especially on days that feel meaningful.`;
+          }
+        }
+      } catch {
+        socialHabitSentence = null;
+      }
+
       if (insights && insights.psychologicalInsights) {
         const psych = insights.psychologicalInsights;
         
@@ -496,12 +533,16 @@ const MOOD_KEYWORDS = {
           psych.thoughtPatterns ? `${firstName} ${psych.thoughtPatterns}.` : null,
           psych.copingStyle ? `${firstName} ${psych.copingStyle}.` : null,
           psych.coreMotivations ? `${firstName} ${psych.coreMotivations}.` : null,
-          psych.relationshipStyle ? `${firstName} ${psych.relationshipStyle}.` : null
+          psych.relationshipStyle ? `${firstName} ${psych.relationshipStyle}.` : null,
+          socialHabitSentence ? `${firstName} ${socialHabitSentence}` : null,
+          (Array.isArray(insights.topTopics) && insights.topTopics.length)
+            ? `${firstName} tends to reflect most on ${insights.topTopics.slice(0, 2).join(' and ')}.`
+            : null
         ].filter(Boolean);
 
         // Select top 2-3 most relevant insights
         if (orderedSentences.length > 0) {
-          const selectedSentences = orderedSentences.slice(0, Math.min(3, orderedSentences.length));
+          const selectedSentences = orderedSentences.slice(0, Math.min(5, orderedSentences.length));
           summarySentence = selectedSentences.join(' ');
         }
       }
