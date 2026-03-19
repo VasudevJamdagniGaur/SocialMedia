@@ -709,35 +709,7 @@ export default function CommunityPage() {
     }
   };
 
-  // Date label for My Presence separators (WhatsApp-style: "14 March 2026")
-  const formatDatePillLabel = (dateStr) => {
-    if (!dateStr) return '';
-    try {
-      const [y, m, d] = dateStr.split('-').map(Number);
-      const date = new Date(y, m - 1, d);
-      return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-    } catch {
-      return dateStr;
-    }
-  };
-
-  // For My Presence: build feed items with date separators between different days
-  const feedItems = (() => {
-    if (activeTab !== 'mySpace' || !filteredPosts.length) {
-      return filteredPosts.map((post) => ({ type: 'post', post }));
-    }
-    const items = [];
-    let lastDateKey = null;
-    for (const post of filteredPosts) {
-      const dateKey = normalizeReflectionDate(post.reflectionDate) || normalizeReflectionDate(post.createdAt);
-      if (dateKey && dateKey !== lastDateKey) {
-        items.push({ type: 'date', dateKey, label: formatDatePillLabel(dateKey) });
-        lastDateKey = dateKey;
-      }
-      items.push({ type: 'post', post });
-    }
-    return items;
-  })();
+  const feedItems = filteredPosts.map((post) => ({ type: 'post', post }));
 
   const socialPlatformLabels = { x: 'X', whatsapp: 'WhatsApp', native: 'More', image: 'Image' };
 
@@ -1220,31 +1192,12 @@ export default function CommunityPage() {
 
           <div className="rounded-2xl overflow-hidden" style={{ background: THREADS.bg }}>
           {feedItems.map((item, index) => {
-            if (item.type === 'date') {
-              return (
-                <div
-                  key={`date-${item.dateKey}`}
-                  className="flex justify-center py-3"
-                  style={{ animation: 'fadeIn 0.25s ease forwards' }}
-                >
-                  <span
-                    className="px-4 py-1.5 rounded-full text-sm font-medium"
-                    style={{
-                      background: 'rgba(255,255,255,0.08)',
-                      color: THREADS.textSecondary,
-                    }}
-                  >
-                    {item.label}
-                  </span>
-                </div>
-              );
-            }
             const post = item.post;
             const postCommentsData = postComments[post.id] || { comments: post.comments || [], showComments: false, newComment: '' };
             const postLikesCount = postLikes[post.id] || post.likes || 0;
             const likedUsers = postLikedBy[post.id] || [];
             const isPostLiked = user && likedUsers.includes(user.uid);
-            const isFirstPost = feedItems.findIndex((i) => i.type === 'post') === index;
+            const isFirstPost = index === 0;
             const isMyPost = activeTab === 'mySpace' && user && post.authorId === user.uid;
             const menuOpen = postMenuOpenId === post.id;
             const deleting = deletePostLoadingId === post.id;
