@@ -1194,9 +1194,11 @@ export default function CommunityPage() {
                       <span className="font-semibold" style={{ color: THREADS.text }}>{post.author}</span>
                       <span style={{ color: THREADS.textSecondary }}>{formatTimeAgo(post.createdAt)}</span>
                     </button>
-                    <p className="text-[15px] leading-snug mt-0.5" style={{ color: THREADS.text }}>
-                      {post.content}
-                    </p>
+                    {!(post?.sharedPlatform === 'x' && post?.image) ? (
+                      <p className="text-[15px] leading-snug mt-0.5" style={{ color: THREADS.text }}>
+                        {post.content}
+                      </p>
+                    ) : null}
                     {activeTab === 'mySpace' && user && post.authorId === user.uid && (() => {
                       const normDate = normalizeReflectionDate(post.reflectionDate);
                       const platforms = normDate ? (socialSharesByDate[normDate] || []) : [];
