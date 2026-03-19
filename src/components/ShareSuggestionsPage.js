@@ -74,6 +74,39 @@ const getCachedImageForPost = (text) => {
   }
 };
 
+const getLastChatImageForDate = async (dateId) => {
+  try {
+    if (!dateId) return null;
+
+    // 1) Prefer localStorage (works even when Firestore omits large images)
+    if (typeof localStorage !== 'undefined') {
+      const raw = localStorage.getItem(`chatMessages_${dateId}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          for (let i = parsed.length - 1; i >= 0; i--) {
+            const img = parsed[i]?.image;
+            if (typeof img === 'string' && img.startsWith('data:image')) return img;
+          }
+        }
+      }
+    }
+
+    // 2) Fallback: Firestore messages for the day (only if image was small enough to store)
+    const user = getCurrentUser();
+    if (!user?.uid) return null;
+    const res = await firestoreService.getChatMessagesNew(user.uid, dateId);
+    const msgs = Array.isArray(res?.messages) ? res.messages : [];
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const img = msgs[i]?.image;
+      if (typeof img === 'string' && img.startsWith('data:image')) return img;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
 const isNative = () =>
   typeof window !== 'undefined' &&
   typeof Capacitor !== 'undefined' &&
@@ -499,6 +532,8 @@ export default function ShareSuggestionsPage() {
 
         const user = getCurrentUser();
         const reflectionKey = firestoreService.hashForReflectionCache(reflectionFromState);
+        const dateIdForChat = getDateId(reflectionDate);
+        const chatImage = await getLastChatImageForDate(dateIdForChat);
 
         // 1) Single round: Firebase by index only (fast), then localStorage – no second round of text-based reads
         const preferredPlatforms = ['linkedin', 'x', 'reddit'];
@@ -524,8 +559,10 @@ export default function ShareSuggestionsPage() {
             )
           : postsWithText.map(() => null);
 
+        // If user shared a real photo while chatting about the day,
+        // use that same photo for all platforms instead of generating an AI image.
         const cachedImages = postsWithText.map((text, idx) =>
-          firebaseUrls[idx] || getCachedImageForPost(text)
+          chatImage || firebaseUrls[idx] || getCachedImageForPost(text)
         );
 
         setSuggestionImageUrls(cachedImages);
