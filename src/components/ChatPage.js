@@ -1565,38 +1565,7 @@ export default function ChatPage() {
               lineHeight: '1.4',
             }}
           />
-          
-          {/* API Provider Toggle Button */}
-          <button
-            type="button"
-            onClick={() => {
-              // Cycle through: openai -> gemini -> grok -> openai
-              const newProvider = apiProvider === 'openai' ? 'gemini' : apiProvider === 'gemini' ? 'grok' : 'openai';
-              setApiProvider(newProvider);
-              localStorage.setItem('chat_api_provider', newProvider);
-              chatService.setApiProvider(newProvider);
-            }}
-            className="shrink-0 px-2 py-1 rounded-lg text-xs font-medium transition-all duration-200 flex items-center justify-center"
-            style={{
-              backgroundColor: "rgba(255, 255, 255, 0.04)",
-              backdropFilter: "blur(12px)",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
-              boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-            }}
-            title={`Switch to ${
-              apiProvider === 'openai' ? 'Gemini' : 
-              apiProvider === 'gemini' ? 'Grok' : 
-              'OpenAI'
-            }`}
-          >
-            <img 
-              src={apiProvider === 'openai' ? openaiIcon : apiProvider === 'gemini' ? geminiIcon : grokIcon}
-              alt={apiProvider === 'openai' ? 'OpenAI' : apiProvider === 'gemini' ? 'Gemini' : 'Grok'}
-              className="w-11 h-11 min-w-[44px] min-h-[44px] object-contain"
-              style={(apiProvider === 'openai' || apiProvider === 'grok') ? { filter: 'brightness(0) invert(1)' } : {}}
-            />
-          </button>
-          
+
           <button
             type="submit"
             disabled={(!inputMessage.trim() && !selectedImage) || isLoading}
