@@ -23,12 +23,36 @@ const HUB = {
 export default function DashboardPage() {
   const navigate = useNavigate();
   const { isDarkMode, toggleTheme } = useTheme();
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(() => {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const saved = localStorage.getItem('dashboard_selected_date_iso');
+        if (saved) {
+          const d = new Date(saved);
+          if (!Number.isNaN(d.getTime())) return d;
+        }
+      }
+    } catch (_) {
+      // ignore
+    }
+    return new Date();
+  });
   const [reflection, setReflection] = useState('');
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isLoadingReflection, setIsLoadingReflection] = useState(false);
   const [chatDays, setChatDays] = useState([]);
   const [profilePicture, setProfilePicture] = useState(null);
+
+  // Persist selected date so it stays the same after navigation/back.
+  useEffect(() => {
+    try {
+      if (typeof localStorage !== 'undefined' && selectedDate) {
+        localStorage.setItem('dashboard_selected_date_iso', selectedDate.toISOString());
+      }
+    } catch (_) {
+      // ignore
+    }
+  }, [selectedDate]);
 
   // Ensure user document exists in Firestore (for counting authenticated users)
   useEffect(() => {
@@ -312,6 +336,13 @@ export default function DashboardPage() {
   const handleDateSelect = (date) => {
     setSelectedDate(date);
     setIsCalendarOpen(false);
+    try {
+      if (typeof localStorage !== 'undefined' && date) {
+        localStorage.setItem('dashboard_selected_date_iso', date.toISOString());
+      }
+    } catch (_) {
+      // ignore
+    }
   };
 
   const handleGenerateReflection = async () => {

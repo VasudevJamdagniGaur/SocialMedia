@@ -342,6 +342,15 @@ export default function AllDayReflectionsPage() {
   const handleDateSelect = async (date) => {
     setSelectedDate(date);
     setIsCalendarOpen(false);
+
+    // Persist so Dashboard keeps the same selected date after user navigates back.
+    try {
+      if (typeof localStorage !== 'undefined' && date) {
+        localStorage.setItem('dashboard_selected_date_iso', date.toISOString());
+      }
+    } catch (_) {
+      // ignore
+    }
     
     // Find reflection for this date and load mood data
     const dateId = getDateId(date);
