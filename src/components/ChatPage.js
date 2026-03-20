@@ -1537,7 +1537,7 @@ export default function ChatPage() {
           >
             <Plus
               className="w-6 h-6"
-              style={{ color: selectedImage ? "#81C995" : "#8AB4F8" }}
+              style={{ color: "#A855F7" }}
               strokeWidth={2}
             />
           </button>
@@ -1580,7 +1580,7 @@ export default function ChatPage() {
             >
               <Send
                 className="w-5 h-5"
-                style={{ color: !isLoading ? "#FFFFFF" : "#8AB4F8" }}
+                style={{ color: "#A855F7" }}
                 strokeWidth={1.5}
               />
             </button>
