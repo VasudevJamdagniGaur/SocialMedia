@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Send, ArrowLeft, User, AlertTriangle, Image as ImageIcon, X, Eye } from "lucide-react";
+import { Send, ArrowLeft, AlertTriangle, Image as ImageIcon, X, Eye } from "lucide-react";
 import { useTheme } from '../contexts/ThemeContext';
 import chatService from '../services/chatService';
 import reflectionService from '../services/reflectionService';
@@ -1287,27 +1287,35 @@ export default function ChatPage() {
 
         <div className="flex items-center space-x-3">
           <button
-            onClick={() => navigate('/profile')}
+            type="button"
+            onClick={() => {
+              // Cycle through: OpenAI -> Gemini -> Grok -> OpenAI
+              const newProvider =
+                apiProvider === 'openai' ? 'gemini' : apiProvider === 'gemini' ? 'grok' : 'openai';
+              setApiProvider(newProvider);
+              localStorage.setItem('chat_api_provider', newProvider);
+              chatService.setApiProvider(newProvider);
+            }}
             className={`w-10 h-10 rounded-full flex items-center justify-center hover:opacity-80 transition-opacity overflow-hidden ${
               isDarkMode ? 'backdrop-blur-md' : 'bg-white'
             }`}
             style={isDarkMode ? {
-              backgroundColor: profilePicture ? "transparent" : "#262626",
+              backgroundColor: "#262626",
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
               border: profilePicture ? "none" : "1px solid rgba(255, 255, 255, 0.08)",
             } : {
               boxShadow: "0 2px 8px rgba(177, 156, 217, 0.15)",
             }}
+            title={`Switch API: ${
+              apiProvider === 'openai' ? 'Gemini' : apiProvider === 'gemini' ? 'Grok' : 'OpenAI'
+            }`}
           >
-            {profilePicture ? (
-              <img 
-                src={profilePicture} 
-                alt="Profile" 
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <User className="w-5 h-5" style={{ color: isDarkMode ? "#81C995" : "#B19CD9" }} strokeWidth={1.5} />
-            )}
+            <img
+              src={apiProvider === 'openai' ? openaiIcon : apiProvider === 'gemini' ? geminiIcon : grokIcon}
+              alt={apiProvider === 'openai' ? 'OpenAI' : apiProvider === 'gemini' ? 'Gemini' : 'Grok'}
+              className="w-6 h-6 object-contain"
+              style={(apiProvider === 'openai' || apiProvider === 'grok') ? { filter: 'brightness(0) invert(1)' } : {}}
+            />
           </button>
         </div>
       </div>
