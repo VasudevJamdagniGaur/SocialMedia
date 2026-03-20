@@ -43,6 +43,7 @@ export default function ChatPage() {
     return saved || 'openai';
   });
   const messagesEndRef = useRef(null);
+  const hasComposerContent = !!(inputMessage.trim() || selectedImage);
   
   // Debug: Log when imagePreview changes
   useEffect(() => {
@@ -1566,24 +1567,24 @@ export default function ChatPage() {
             }}
           />
 
-          <button
-            type="submit"
-            disabled={(!inputMessage.trim() && !selectedImage) || isLoading}
-            className="shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center backdrop-blur-lg transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100"
-            style={{
-              background: (inputMessage.trim() || selectedImage) && !isLoading
-                ? "#262626"
-                : "#262626",
-              boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
-            }}
-          >
-            <Send 
-              className="w-5 h-5" 
-              style={{ color: (inputMessage.trim() || selectedImage) && !isLoading ? "#FFFFFF" : "#8AB4F8" }} 
-              strokeWidth={1.5} 
-            />
-          </button>
+          {hasComposerContent && (
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center backdrop-blur-lg transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100"
+              style={{
+                background: "#262626",
+                boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+              }}
+            >
+              <Send
+                className="w-5 h-5"
+                style={{ color: !isLoading ? "#FFFFFF" : "#8AB4F8" }}
+                strokeWidth={1.5}
+              />
+            </button>
+          )}
         </form>
       </div>
 
