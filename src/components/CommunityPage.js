@@ -1348,6 +1348,9 @@ export default function CommunityPage() {
                           alt=""
                           className="w-full max-h-80 object-cover"
                           referrerPolicy="no-referrer"
+                          style={{
+                            filter: post?.source === 'social_share' ? 'grayscale(100%)' : undefined,
+                          }}
                           onError={(e) => { e.target.style.display = 'none'; }}
                         />
                       </div>

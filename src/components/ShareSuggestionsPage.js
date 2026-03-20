@@ -340,6 +340,7 @@ export default function ShareSuggestionsPage() {
   const [shareConfirmation, setShareConfirmation] = useState({ open: false, index: null, platform: null });
   const [shareErrorToast, setShareErrorToast] = useState(false);
   const [shareErrorToastMessage, setShareErrorToastMessage] = useState('');
+  const [pendingMyPresenceShare, setPendingMyPresenceShare] = useState(null);
   const imageReplaceInputRef = useRef(null);
   const tweetCardRef = useRef(null);
   const tweetCardExportRef = useRef(null);
@@ -451,7 +452,10 @@ export default function ShareSuggestionsPage() {
       }
 
       const imageForStorage = rawImage || imageDataUrl || null;
-      await recordShare(selectedPlatform || 'other', t, {
+      // Defer "My Presence" persistence until user confirms.
+      setPendingMyPresenceShare({
+        plat: selectedPlatform || 'other',
+        caption: t,
         imageDataUrlForStorage: imageForStorage,
       });
       triggerPostShareConfirmation();
@@ -767,6 +771,47 @@ export default function ShareSuggestionsPage() {
     }
   };
 
+  // Used when a backend flow already created the post/image (e.g., LinkedIn API),
+  // but we still want to write the "My Presence" (communityPosts + badges) only
+  // after the user confirms "Yes, I posted!".
+  const persistMyPresenceOnly = async ({ plat, caption, imageUrl }) => {
+    const user = getCurrentUser();
+    const content = (caption || '').trim();
+    if (!user?.uid || !content) return;
+
+    await firestoreService.saveSocialShare(user.uid, {
+      platform: plat,
+      reflectionDate: dateStr,
+      reflectionSnippet: content.slice(0, 200) || undefined,
+    });
+
+    const profileImage =
+      (typeof localStorage !== 'undefined' && localStorage.getItem(`user_profile_picture_${user.uid}`)) || null;
+
+    const postData = {
+      author: user.displayName || 'Anonymous',
+      authorId: user.uid,
+      content,
+      createdAt: serverTimestamp(),
+      likes: 0,
+      comments: [],
+      profilePicture: profileImage,
+      image: imageUrl || null,
+      source: 'social_share',
+      sharedPlatform: plat,
+      reflectionDate: (() => {
+        try {
+          const d = typeof dateStr === 'string' ? new Date(dateStr) : reflectionDate;
+          return (d || new Date()).toISOString();
+        } catch {
+          return new Date().toISOString();
+        }
+      })(),
+    };
+
+    await addDoc(collection(db, 'communityPosts'), postData);
+  };
+
   const textToShare = (sharePanelOpen && editableShareText !== '') ? editableShareText : selectedText;
 
   const triggerPostShareConfirmation = () => {
@@ -830,7 +875,7 @@ export default function ShareSuggestionsPage() {
    * @param {string|null} imageDataUrlOrUrl - Data URL, blob URL, or public HTTPS image URL
    * @returns {Promise<boolean>} - true if API share was attempted and we're done (success or 401); false to fall back to share sheet
    */
-  const shareToLinkedInViaApi = async (caption, imageDataUrlOrUrl) => {
+  const shareToLinkedInViaApi = async (caption, imageDataUrlOrUrl, { deferMyPresenceWrites = false } = {}) => {
     const user = getCurrentUser();
     if (!user?.uid || !caption?.trim()) return false;
 
@@ -913,7 +958,7 @@ export default function ShareSuggestionsPage() {
       setLinkedInToastMessage('connect');
       setLinkedInCaptionToastVisible(true);
       setTimeout(() => setLinkedInCaptionToastVisible(false), 4000);
-      return true;
+      return { done: true, imageUrl: result.imageUrl };
     }
 
     // Try to capture a useful error for the user (this is our runtime evidence when logs aren't accessible)
@@ -940,7 +985,7 @@ export default function ShareSuggestionsPage() {
       setLinkedInToastMessage('error');
       setLinkedInCaptionToastVisible(true);
       setTimeout(() => setLinkedInCaptionToastVisible(false), 8000);
-      return true;
+      return { done: true, imageUrl: result.imageUrl };
     }
 
     // If backend claims success but does not return a post id, treat as failure (prevents false success toasts)
@@ -951,36 +996,44 @@ export default function ShareSuggestionsPage() {
       setLinkedInToastMessage('error');
       setLinkedInCaptionToastVisible(true);
       setTimeout(() => setLinkedInCaptionToastVisible(false), 8000);
-      return true;
+      return { done: true, imageUrl: result.imageUrl };
     }
 
-    await firestoreService.saveSocialShare(user.uid, {
-      platform: 'linkedin',
-      reflectionDate: dateStr,
-      reflectionSnippet: caption.trim().slice(0, 200) || undefined,
-    });
-    const profileImage = (typeof localStorage !== 'undefined' && localStorage.getItem(`user_profile_picture_${user.uid}`)) || null;
-    const postData = {
-      author: user.displayName || 'Anonymous',
-      authorId: user.uid,
-      content: caption.trim(),
-      createdAt: serverTimestamp(),
-      likes: 0,
-      comments: [],
-      profilePicture: profileImage,
-      image: result.imageUrl,
-      source: 'social_share',
-      sharedPlatform: 'linkedin',
-      reflectionDate: (() => {
-        try {
-          const d = typeof dateStr === 'string' ? new Date(dateStr) : reflectionDate instanceof Date ? reflectionDate : new Date();
-          return d.toISOString();
-        } catch {
-          return new Date().toISOString();
-        }
-      })(),
-    };
-    await addDoc(collection(db, 'communityPosts'), postData);
+    if (!deferMyPresenceWrites) {
+      await firestoreService.saveSocialShare(user.uid, {
+        platform: 'linkedin',
+        reflectionDate: dateStr,
+        reflectionSnippet: caption.trim().slice(0, 200) || undefined,
+      });
+      const profileImage =
+        (typeof localStorage !== 'undefined' && localStorage.getItem(`user_profile_picture_${user.uid}`)) || null;
+      const postData = {
+        author: user.displayName || 'Anonymous',
+        authorId: user.uid,
+        content: caption.trim(),
+        createdAt: serverTimestamp(),
+        likes: 0,
+        comments: [],
+        profilePicture: profileImage,
+        image: result.imageUrl,
+        source: 'social_share',
+        sharedPlatform: 'linkedin',
+        reflectionDate: (() => {
+          try {
+            const d =
+              typeof dateStr === 'string'
+                ? new Date(dateStr)
+                : reflectionDate instanceof Date
+                  ? reflectionDate
+                  : new Date();
+            return d.toISOString();
+          } catch {
+            return new Date().toISOString();
+          }
+        })(),
+      };
+      await addDoc(collection(db, 'communityPosts'), postData);
+    }
 
     // Indicate success inside the app instead of forcing a redirect to LinkedIn.
     setLinkedInToastMessage('success');
@@ -989,7 +1042,7 @@ export default function ShareSuggestionsPage() {
       setLinkedInCaptionToastVisible(false);
     }, 3500);
 
-    return true;
+    return { done: true, imageUrl: result.imageUrl };
   };
 
   const openSharePanel = (text) => {
@@ -1355,8 +1408,16 @@ export default function ShareSuggestionsPage() {
         selectedPlatform === 'linkedin' &&
         (imageDataUrl || (rawImage && typeof rawImage === 'string'))
       ) {
-        const done = await shareToLinkedInViaApi(t, imageDataUrl || rawImage || null);
-        if (done) {
+        const liResult = await shareToLinkedInViaApi(t, imageDataUrl || rawImage || null, {
+          deferMyPresenceWrites: true,
+        });
+        if (liResult?.done) {
+          setPendingMyPresenceShare({
+            mode: 'myPresenceOnly',
+            plat: 'linkedin',
+            caption: t,
+            imageUrl: liResult.imageUrl || null,
+          });
           triggerPostShareConfirmation();
           setSharePanelOpen(false);
           return;
@@ -1407,7 +1468,10 @@ export default function ShareSuggestionsPage() {
                 dialogTitle: 'Share',
               });
               const imageForStorage = rawImage || imageDataUrl || null;
-              await recordShare(selectedPlatform || 'other', t, {
+              // Defer "My Presence" persistence until user confirms.
+              setPendingMyPresenceShare({
+                plat: selectedPlatform || 'other',
+                caption: t,
                 imageDataUrlForStorage: imageForStorage,
               });
               triggerPostShareConfirmation();
@@ -1440,7 +1504,10 @@ export default function ShareSuggestionsPage() {
           }
           if (shared) {
             const imageForStorage = rawImage || imageDataUrl || null;
-            await recordShare(selectedPlatform || 'other', t, {
+            // Defer "My Presence" persistence until user confirms.
+            setPendingMyPresenceShare({
+              plat: selectedPlatform || 'other',
+              caption: t,
               imageDataUrlForStorage: imageForStorage,
             });
             triggerPostShareConfirmation();
@@ -1478,7 +1545,10 @@ export default function ShareSuggestionsPage() {
           throw e;
         }
         const imageForStorage = rawImage || imageDataUrl || null;
-        await recordShare(selectedPlatform || 'other', t, {
+        // Defer "My Presence" persistence until user confirms.
+        setPendingMyPresenceShare({
+          plat: selectedPlatform || 'other',
+          caption: t,
           imageDataUrlForStorage: imageForStorage,
         });
         triggerPostShareConfirmation();
@@ -1497,7 +1567,10 @@ export default function ShareSuggestionsPage() {
         }
         await navigator.share(shareOptions);
         const imageForStorage = rawImage || imageDataUrl || null;
-        await recordShare(selectedPlatform || 'other', t, {
+        // Defer "My Presence" persistence until user confirms.
+        setPendingMyPresenceShare({
+          plat: selectedPlatform || 'other',
+          caption: t,
           imageDataUrlForStorage: imageForStorage,
         });
         triggerPostShareConfirmation();
@@ -1524,7 +1597,10 @@ export default function ShareSuggestionsPage() {
         }
       }
       const imageForStorage = rawImage || imageDataUrl || null;
-      await recordShare(selectedPlatform || 'other', t, {
+      // Defer "My Presence" persistence until user confirms.
+      setPendingMyPresenceShare({
+        plat: selectedPlatform || 'other',
+        caption: t,
         imageDataUrlForStorage: imageForStorage,
       });
       triggerPostShareConfirmation();
@@ -1648,6 +1724,7 @@ export default function ShareSuggestionsPage() {
                 onClick={() => {
                   // User has not posted yet – just close the confirmation and keep everything as-is
                   setShareConfirmation({ open: false, index: null, platform: null });
+                  setPendingMyPresenceShare(null);
                 }}
               >
                 No, I have not posted
@@ -1664,6 +1741,7 @@ export default function ShareSuggestionsPage() {
                   setSelectedIndex(idx);
                   openSharePanel(post);
                   setShareConfirmation({ open: false, index: null, platform: null });
+                  setPendingMyPresenceShare(null);
                 }}
               >
                 Oops, try again
@@ -1671,8 +1749,33 @@ export default function ShareSuggestionsPage() {
               <button
                 type="button"
                 className="text-xs sm:text-sm px-3 py-1.5 rounded-full bg-white text-gray-900 font-medium hover:bg-gray-100 transition-colors"
-                onClick={() => {
+                onClick={async () => {
                   const idx = shareConfirmation.index ?? 0;
+                  try {
+                    if (pendingMyPresenceShare?.plat && pendingMyPresenceShare?.caption) {
+                      if (pendingMyPresenceShare.mode === 'myPresenceOnly') {
+                        await persistMyPresenceOnly({
+                          plat: pendingMyPresenceShare.plat,
+                          caption: pendingMyPresenceShare.caption,
+                          imageUrl: pendingMyPresenceShare.imageUrl || null,
+                        });
+                      } else {
+                        await recordShare(pendingMyPresenceShare.plat, pendingMyPresenceShare.caption, {
+                          imageDataUrlForStorage: pendingMyPresenceShare.imageDataUrlForStorage,
+                        });
+                      }
+                    }
+                    setPendingMyPresenceShare(null);
+                  } catch (e) {
+                    console.error('Failed to persist My Presence after confirmation:', e);
+                    setShareErrorToastMessage(
+                      `Could not post to My Presence: ${e?.message ? String(e.message) : 'Unknown error'}`
+                    );
+                    setShareErrorToast(true);
+                    setTimeout(() => setShareErrorToast(false), 4500);
+                    return;
+                  }
+
                   setPlatformSuggestions((prev) => {
                     if (!prev || idx < 0 || idx >= prev.length) return prev;
                     const next = [...prev];
@@ -1684,6 +1787,7 @@ export default function ShareSuggestionsPage() {
                     next.push(normalized);
                     return next;
                   });
+
                   setSuggestionImageUrls((prev) => {
                     if (!prev || idx < 0 || idx >= prev.length) return prev;
                     const next = [...prev];
@@ -1691,10 +1795,12 @@ export default function ShareSuggestionsPage() {
                     next.push(img || null);
                     return next;
                   });
+
                   setSelectedIndex((prevIdx) => {
                     const total = platformSuggestions.length;
                     return total > 0 ? total - 1 : prevIdx;
                   });
+
                   setShareConfirmation({ open: false, index: null, platform: null });
                 }}
               >
