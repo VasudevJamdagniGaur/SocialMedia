@@ -484,7 +484,9 @@ class FirestoreService {
       if (imageFile && (imageFile instanceof File || imageFile instanceof Blob)) {
         const tempPostRef = doc(postsRef);
         const tempPostId = tempPostRef.id;
-        imageUrl = await this.uploadPostImageToPath(uid, postId, imageFile);
+        // Use tempPostId for the storage path until we finalize the Firestore postId.
+        // (Avoid ReferenceError: postId is not defined at this point.)
+        imageUrl = await this.uploadPostImageToPath(uid, tempPostId, imageFile);
         if (!imageUrl) {
           imageUrl = await this.uploadPostImageFromFile(uid, imageFile);
         }

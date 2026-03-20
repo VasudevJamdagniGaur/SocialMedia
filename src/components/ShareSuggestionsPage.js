@@ -344,6 +344,9 @@ export default function ShareSuggestionsPage() {
   const [shareErrorToast, setShareErrorToast] = useState(false);
   const [shareErrorToastMessage, setShareErrorToastMessage] = useState('');
   const [pendingMyPresenceShare, setPendingMyPresenceShare] = useState(null);
+  // Tracks whether suggestionImageUrls[idx] comes from a real photo sent in chat.
+  // Used so we can persist the exact same image (no extra compression) into My Presence.
+  const [suggestionImagesFromChat, setSuggestionImagesFromChat] = useState([]);
   const imageReplaceInputRef = useRef(null);
   const tweetCardRef = useRef(null);
   const tweetCardExportRef = useRef(null);
@@ -458,8 +461,9 @@ export default function ShareSuggestionsPage() {
       // Defer "My Presence" persistence until user confirms.
       setPendingMyPresenceShare({
         plat: selectedPlatform || 'other',
-        caption: t,
-        imageDataUrlForStorage: imageForStorage,
+                    caption: t,
+                    imageDataUrlForStorage: imageForStorage,
+                    skipCompression: suggestionImagesFromChat[selectedIndex],
       });
       triggerPostShareConfirmation();
       setSharePanelOpen(false);
@@ -574,6 +578,7 @@ export default function ShareSuggestionsPage() {
         );
 
         setSuggestionImageUrls(cachedImages);
+        setSuggestionImagesFromChat(postsWithText.map(() => !!chatImage));
 
         const indicesNeedingFetch = postsWithText
           .map((text, idx) => (cachedImages[idx] ? null : idx))
@@ -679,6 +684,7 @@ export default function ShareSuggestionsPage() {
     const user = getCurrentUser();
     const content = (text || selectedText || '').trim();
     if (!user?.uid || !content) return;
+    const skipCompression = !!options.skipCompression;
 
     // 1) Save lightweight social share record (for platform badges in My Presence)
     await firestoreService.saveSocialShare(user.uid, {
@@ -702,11 +708,16 @@ export default function ShareSuggestionsPage() {
     let imageUrl = null;
     if (imageToStore && typeof imageToStore === 'string') {
       if (imageToStore.startsWith('data:image')) {
-        const compressed = await compressImageForStorage(imageToStore);
-        if (compressed) {
-          imageFile = compressed;
-        } else {
+        if (skipCompression) {
+          // Upload the original bytes so My Presence matches the exact shared image.
           imageUrl = await firestoreService.uploadPostImage(user.uid, imageToStore);
+        } else {
+          const compressed = await compressImageForStorage(imageToStore);
+          if (compressed) {
+            imageFile = compressed;
+          } else {
+            imageUrl = await firestoreService.uploadPostImage(user.uid, imageToStore);
+          }
         }
       } else if (imageToStore.startsWith('http://') || imageToStore.startsWith('https://')) {
         imageUrl = imageToStore;
@@ -1136,6 +1147,11 @@ export default function ShareSuggestionsPage() {
       next[selectedIndex] = null;
       return next;
     });
+    setSuggestionImagesFromChat((prev) => {
+      const next = [...(prev || [])];
+      next[selectedIndex] = false;
+      return next;
+    });
   };
 
   const handleReplaceImageFile = (e) => {
@@ -1148,6 +1164,12 @@ export default function ShareSuggestionsPage() {
         setSuggestionImageUrls((prev) => {
           const next = [...(prev || [])];
           next[selectedIndex] = dataUrl;
+          return next;
+        });
+        // Replaced image is no longer guaranteed to be the original chat image.
+        setSuggestionImagesFromChat((prev) => {
+          const next = [...(prev || [])];
+          next[selectedIndex] = false;
           return next;
         });
       }
@@ -1415,12 +1437,12 @@ export default function ShareSuggestionsPage() {
           deferMyPresenceWrites: true,
         });
         if (liResult?.done) {
-          setPendingMyPresenceShare({
-            mode: 'myPresenceOnly',
-            plat: 'linkedin',
-            caption: t,
-            imageUrl: liResult.imageUrl || null,
-          });
+              setPendingMyPresenceShare({
+                mode: 'myPresenceOnly',
+                plat: 'linkedin',
+                caption: t,
+                imageUrl: liResult.imageUrl || null,
+              });
           triggerPostShareConfirmation();
           setSharePanelOpen(false);
           return;
@@ -1474,8 +1496,9 @@ export default function ShareSuggestionsPage() {
               // Defer "My Presence" persistence until user confirms.
               setPendingMyPresenceShare({
                 plat: selectedPlatform || 'other',
-                caption: t,
-                imageDataUrlForStorage: imageForStorage,
+                  caption: t,
+                  imageDataUrlForStorage: imageForStorage,
+                  skipCompression: suggestionImagesFromChat[selectedIndex],
               });
               triggerPostShareConfirmation();
               setSharePanelOpen(false);
@@ -1510,8 +1533,9 @@ export default function ShareSuggestionsPage() {
             // Defer "My Presence" persistence until user confirms.
             setPendingMyPresenceShare({
               plat: selectedPlatform || 'other',
-              caption: t,
-              imageDataUrlForStorage: imageForStorage,
+                    caption: t,
+                    imageDataUrlForStorage: imageForStorage,
+                    skipCompression: suggestionImagesFromChat[selectedIndex],
             });
             triggerPostShareConfirmation();
             setSharePanelOpen(false);
@@ -1553,6 +1577,7 @@ export default function ShareSuggestionsPage() {
           plat: selectedPlatform || 'other',
           caption: t,
           imageDataUrlForStorage: imageForStorage,
+          skipCompression: suggestionImagesFromChat[selectedIndex],
         });
         triggerPostShareConfirmation();
         setSharePanelOpen(false);
@@ -1575,6 +1600,7 @@ export default function ShareSuggestionsPage() {
           plat: selectedPlatform || 'other',
           caption: t,
           imageDataUrlForStorage: imageForStorage,
+          skipCompression: suggestionImagesFromChat[selectedIndex],
         });
         triggerPostShareConfirmation();
         setSharePanelOpen(false);
@@ -1605,6 +1631,7 @@ export default function ShareSuggestionsPage() {
         plat: selectedPlatform || 'other',
         caption: t,
         imageDataUrlForStorage: imageForStorage,
+        skipCompression: suggestionImagesFromChat[selectedIndex],
       });
       triggerPostShareConfirmation();
       setSharePanelOpen(false);
@@ -1765,6 +1792,7 @@ export default function ShareSuggestionsPage() {
                       } else {
                         await recordShare(pendingMyPresenceShare.plat, pendingMyPresenceShare.caption, {
                           imageDataUrlForStorage: pendingMyPresenceShare.imageDataUrlForStorage,
+                          skipCompression: pendingMyPresenceShare.skipCompression,
                         });
                       }
                     }
@@ -1947,8 +1975,9 @@ export default function ShareSuggestionsPage() {
                           ? '0 0 0 1px rgba(168, 85, 247, 0.5), 0 12px 30px rgba(15, 23, 42, 0.6)'
                           : 'none',
                         transform: isSelected ? 'translateY(-2px)' : 'none',
-                        filter: isPosted ? 'grayscale(100%)' : 'none',
-                        opacity: isPosted && !isSelected ? 0.7 : 1,
+                        // Keep suggestions UI consistent; black/white styling belongs only in My Presence feed.
+                        filter: 'none',
+                        opacity: 1,
                       }}
                     >
                       {selectedPlatform === 'x' && imageUrl ? (
