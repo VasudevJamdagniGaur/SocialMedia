@@ -1591,7 +1591,7 @@ export default function EmotionalWellbeing() {
       return {
         peak: {
           title: "Best Mood Day",
-          description: "No emotional data available for the last 3 months. Start chatting with DeTea to track your emotional journey!",
+          description: "No emotional data available for the last 3 months. Start chatting with Detea to track your emotional journey!",
           date: "No data",
           score: 0
         },
@@ -1611,13 +1611,13 @@ export default function EmotionalWellbeing() {
       return {
         peak: {
           title: "Best Mood Day",
-          description: "This is your first day tracking emotions with DeTea. Keep chatting to see more insights!",
+          description: "This is your first day tracking emotions with Detea. Keep chatting to see more insights!",
           date: onlyDay.date ? new Date(onlyDay.date).toLocaleDateString() : 'Unknown Date',
           score: Math.round((onlyDay.happiness + onlyDay.energy) / 2)
         },
         toughestDay: {
           title: "Challenging Day", 
-          description: "Chat with DeTea for a few more days to identify patterns and challenging moments.",
+          description: "Chat with Detea for a few more days to identify patterns and challenging moments.",
           date: "Track more days",
           score: 0
         }
@@ -2170,7 +2170,7 @@ export default function EmotionalWellbeing() {
     setHighlights({
       peak: {
         title: "No Data Yet",
-        description: "Start chatting with DeTea to track your emotional journey",
+        description: "Start chatting with Detea to track your emotional journey",
         date: "N/A",
         score: 0
       },
@@ -2182,7 +2182,7 @@ export default function EmotionalWellbeing() {
       },
       shift: {
         title: "Start Your Journey",
-        description: "Chat with DeTea to begin emotional tracking",
+        description: "Chat with Detea to begin emotional tracking",
         change: "0 days tracked",
         trend: "neutral"
       }
@@ -2445,7 +2445,7 @@ export default function EmotionalWellbeing() {
       console.log(`📊 Found ${emotionalData.length} emotional records in localStorage`);
       
       if (emotionalData.length === 0) {
-        alert('No emotional data found in localStorage. Chat with DeTea first to generate some data!');
+        alert('No emotional data found in localStorage. Chat with Detea first to generate some data!');
         return;
       }
 
@@ -2603,7 +2603,7 @@ export default function EmotionalWellbeing() {
           alert(`Found ${messagesResult.messages.length} chat messages for October 8th, but no mood data.\n\nClick "Fix Oct 8th Data" to generate mood analysis from your chat!`);
         } else {
           console.log('❌ CHECKING: No chat messages found');
-          alert('No chat messages found for October 8th.\n\nDid you chat with DeTea on that day?');
+          alert('No chat messages found for October 8th.\n\nDid you chat with Detea on that day?');
         }
       }
     } catch (error) {
@@ -2744,7 +2744,7 @@ export default function EmotionalWellbeing() {
       console.log('🔬 OCT 8 ANALYSIS: Messages result:', messagesResult);
 
       if (!messagesResult.success || messagesResult.messages.length === 0) {
-        alert('No messages found for October 8th. Did you chat with DeTea on that day?');
+        alert('No messages found for October 8th. Did you chat with Detea on that day?');
         return;
       }
 
@@ -2799,7 +2799,7 @@ export default function EmotionalWellbeing() {
       console.log('🔬 FORCE ANALYSIS: Messages result:', messagesResult);
 
       if (!messagesResult.success || messagesResult.messages.length === 0) {
-      alert('No messages found for today. Chat with DeTea first!');
+      alert('No messages found for today. Chat with Detea first!');
         return;
       }
 
@@ -2940,7 +2940,7 @@ export default function EmotionalWellbeing() {
 
     // Create conversation transcript for that day
     const transcript = chatResult.messages.map(msg => 
-      `${msg.sender === 'user' ? 'User' : 'DeTea'}: ${msg.text}`
+      `${msg.sender === 'user' ? 'User' : 'Detea'}: ${msg.text}`
     ).join('\n\n');
 
     const explanationPrompt = `Based on this conversation, explain why the user felt each emotion at that specific level. Give one concise, contextual reason per emotion.
@@ -4099,7 +4099,7 @@ Return in this JSON format:
                       </h4>
                     </div>
                     <p className="text-sm text-gray-300 group-hover:text-gray-200 transition-colors duration-300 leading-relaxed">
-                      Keep engaging with DeTea to build more comprehensive emotional insights and patterns.
+                      Keep engaging with Detea to build more comprehensive emotional insights and patterns.
                     </p>
                   </div>
 
@@ -4154,7 +4154,7 @@ Return in this JSON format:
                       >
                         <img
                           src="/Gemini_Generated_Image_ib3dfuib3dfuib3d.png"
-                          alt="DeTea"
+                          alt="Detea"
                           className="w-full h-full object-cover"
                         />
                       </div>

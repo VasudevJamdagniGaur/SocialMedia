@@ -450,7 +450,7 @@ class FirestoreService {
   }
 
   /**
-   * Create a DeTea social post: image in Storage, only metadata + imageUrl in Firestore.
+   * Create a Detea social post: image in Storage, only metadata + imageUrl in Firestore.
    * Flow: generate postId → upload image to posts/{userId}/{postId}.jpg (if file) → create posts doc → userPosts ref → shareHistory.
    *
    * @param {object} params

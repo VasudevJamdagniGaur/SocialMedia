@@ -6,7 +6,7 @@ import React from 'react';
  */
 const TweetShareCard = React.forwardRef(function TweetShareCard(props, ref) {
   const {
-    displayName = 'DeTea User',
+    displayName = 'Detea User',
     username = 'detea_user',
     text,
     imageUrl,

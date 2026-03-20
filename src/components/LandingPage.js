@@ -152,14 +152,14 @@ export default function LandingPage() {
           >
             <img
               src="/DEITECIrc.png"
-              alt="DeTea"
+              alt="Detea"
               className="w-full h-full relative z-10 object-cover"
             />
           </div>
         </div>
 
         <div className="space-y-4">
-          <h1 className="text-4xl font-bold text-white">DeTea</h1>
+          <h1 className="text-4xl font-bold text-white">Detea</h1>
           <p className="text-lg text-gray-300 max-w-md">Your Social Tea</p>
         </div>
 

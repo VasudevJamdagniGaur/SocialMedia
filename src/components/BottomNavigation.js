@@ -128,7 +128,7 @@ export default function BottomNavigation() {
           <div className="w-14 h-14 rounded-full flex items-center justify-center overflow-hidden">
             <img
               src="/Gemini_Generated_Image_enm22aenm22aenm2.png"
-              alt="DeTea community"
+              alt="Detea community"
               className="w-12 h-12 object-contain transition-transform duration-200"
               style={{
                 opacity: isCommunityActive ? 1 : 0.4,

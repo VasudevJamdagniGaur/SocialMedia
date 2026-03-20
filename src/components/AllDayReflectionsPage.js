@@ -485,7 +485,7 @@ export default function AllDayReflectionsPage() {
             <Zap className="w-8 h-8" style={{ color: isDarkMode ? THREADS.accent : '#87A96B' }} />
           </div>
           <p className="text-sm text-center" style={{ color: isDarkMode ? THREADS.textSecondary : '#6b7280' }}>
-            {selectedDate ? 'No reflection found for the selected date.' : 'No reflections yet. Start chatting with DeTea to generate reflections!'}
+            {selectedDate ? 'No reflection found for the selected date.' : 'No reflections yet. Start chatting with Detea to generate reflections!'}
           </p>
         </div>
       ) : (

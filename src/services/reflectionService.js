@@ -25,7 +25,7 @@ class ReflectionService {
     // Safety check and fix for messages
     if (!messages || !Array.isArray(messages)) {
       console.error('❌ REFLECTION ERROR: Invalid messages array, using fallback');
-      return "Had a brief chat with DeTea today.";
+      return "Had a brief chat with Detea today.";
     }
     
     console.log('💬 Total messages for reflection:', messages.length);
@@ -44,7 +44,7 @@ class ReflectionService {
     console.log('🤖 AI messages:', aiMessages.length);
 
     if (userMessages.length === 0) {
-      return "Had a brief chat with DeTea today but didn't share much.";
+      return "Had a brief chat with Detea today but didn't share much.";
     }
 
     // Generate AI summary with safe fallback
@@ -107,21 +107,21 @@ CRITICAL REQUIREMENTS:
 5. BE SPECIFIC - Mention real events, people, or activities that were discussed
 6. NATURAL STORYTELLING - Write like someone naturally reflecting on their day, not like an analysis or summary
 7. USE AS LITTLE TIME/SPACE AS APPROPRIATE - Keep it concise, focus on what matters most
-8. NO REPEATED "DETEA SAID..." - Do NOT repeatedly say "DeTea said..." or "DeTea told me..." - just mention what was discussed naturally
-9. NO "DETEA ASKED ME..." - Do NOT say "DeTea asked me..." - just write about the topics naturally
-10. NO LONG DESCRIPTIONS OF DETEA'S ACTIONS - Do NOT write long descriptions of what DeTea did or how DeTea responded - focus on YOUR experience and reflections
+8. NO REPEATED "DETEA SAID..." - Do NOT repeatedly say "Detea said..." or "Detea told me..." - just mention what was discussed naturally
+9. NO "DETEA ASKED ME..." - Do NOT say "Detea asked me..." - just write about the topics naturally
+10. NO LONG DESCRIPTIONS OF DETEA'S ACTIONS - Do NOT write long descriptions of what Detea did or how Detea responded - focus on YOUR experience and reflections
 11. FEEL LIKE A PERSONAL REFLECTION - The diary should feel natural and personal, like you're reflecting on your own day, not describing an AI conversation
 12. AVOID DRAMATIC LINES - Do NOT use overly dramatic phrases like "It was crazy", "it gave me all the feels", "it was absolutely amazing", etc. UNLESS something truly extraordinary or life-changing happened. Keep the tone grounded and realistic - avoid too much dramatic storytelling for ordinary days.
 13. NO REFLECTIVE CLOSING SENTENCES - Do NOT include reflective or moral closing sentences such as "it lifted my mood", "it made me feel seen", "it reminded me of something", "it was a good day", "it helped me realize", etc. End the diary naturally after describing the events or thoughts of the day, without summarizing emotions or giving life lessons. Just describe what happened and stop - no need to wrap it up with emotional conclusions.
-14. NO POSITIVITY ABOUT TALKING TO DETEA - Do NOT add statements like "talking to DeTea made me feel better", "chatting with DeTea helped", "DeTea made me feel", or any positive statements about the conversation itself. ONLY summarize what the user expressed and how their day emotionally felt - do NOT comment on the conversation or its effects.
-15. ONLY SUMMARIZE USER'S EXPRESSION - Focus ONLY on summarizing what the user expressed in their messages and how their day emotionally felt. Do NOT add commentary about the conversation, DeTea's responses, or how talking to DeTea affected them.
+14. NO POSITIVITY ABOUT TALKING TO DETEA - Do NOT add statements like "talking to Detea made me feel better", "chatting with Detea helped", "Detea made me feel", or any positive statements about the conversation itself. ONLY summarize what the user expressed and how their day emotionally felt - do NOT comment on the conversation or its effects.
+15. ONLY SUMMARIZE USER'S EXPRESSION - Focus ONLY on summarizing what the user expressed in their messages and how their day emotionally felt. Do NOT add commentary about the conversation, Detea's responses, or how talking to Detea affected them.
 ${sizeInstructions}
 ${characterLimitInstruction}
 
-Conversation with DeTea:
+Conversation with Detea:
 ${conversationContext}
 
-Write a natural diary entry about this day in first person. Just tell the story of what happened and how it felt. Focus ONLY on summarizing what the user expressed and how their day emotionally felt. Do NOT add any statements about talking to DeTea, how DeTea helped, or how the conversation made you feel. Keep it grounded and realistic, avoiding dramatic language unless something truly extraordinary happened. End naturally after describing events - do NOT add reflective closing sentences about how things made you feel or what you learned.
+Write a natural diary entry about this day in first person. Just tell the story of what happened and how it felt. Focus ONLY on summarizing what the user expressed and how their day emotionally felt. Do NOT add any statements about talking to Detea, how Detea helped, or how the conversation made you feel. Keep it grounded and realistic, avoiding dramatic language unless something truly extraordinary happened. End naturally after describing events - do NOT add reflective closing sentences about how things made you feel or what you learned.
 
 CRITICAL: The reflection must NEVER exceed ${maxReflectionCharacters} characters (2x the ${userCharacterCount} characters the user wrote). Always stay within this strict character limit.`;
 
@@ -218,7 +218,7 @@ CRITICAL: The reflection must NEVER exceed ${maxReflectionCharacters} characters
     const firstUser = userMessages[0] || '';
     const base = (firstUser !== lastUser) ? `${firstUser} ... ${lastUser}` : lastUser;
     const trimmed = base.slice(0, 220);
-    return `Today I chatted with DeTea about: "${trimmed}${base.length > 220 ? '...' : ''}". It was nice to talk through my day and get some perspective.`;
+    return `Today I chatted with Detea about: "${trimmed}${base.length > 220 ? '...' : ''}". It was nice to talk through my day and get some perspective.`;
   }
 
   buildConversationContext(userMessages, aiMessages) {
@@ -232,7 +232,7 @@ CRITICAL: The reflection must NEVER exceed ${maxReflectionCharacters} characters
         // Include more of the AI response to capture the emotional journey and context
         // Increased from 200 to 300 characters to better capture full context
         const aiResponse = aiMessages[index].substring(0, 300);
-        context += `DeTea: "${aiResponse}${aiMessages[index].length > 300 ? '...' : ''}"\n\n`;
+        context += `Detea: "${aiResponse}${aiMessages[index].length > 300 ? '...' : ''}"\n\n`;
       }
     });
     
@@ -337,17 +337,17 @@ CRITICAL REQUIREMENTS:
 6. INCLUDE EMOTIONS - Naturally weave in how things felt (sad, happy, excited, etc.) without being explicit about it
 7. NATURAL STORYTELLING - Write like someone naturally reflecting on their day in a brief way
 8. BE SPECIFIC BUT CONCISE - Mention real events, people, or activities, but keep descriptions brief
-9. NO REPEATED "DETEA SAID..." - Do NOT repeatedly say "DeTea said..." or "DeTea told me..." - just mention what was discussed naturally
-10. NO "DETEA ASKED ME..." - Do NOT say "DeTea asked me..." - just write about the topics naturally
-11. NO LONG DESCRIPTIONS OF DETEA'S ACTIONS - Do NOT write long descriptions of what DeTea did or how DeTea responded - focus on YOUR experience and reflections
+9. NO REPEATED "DETEA SAID..." - Do NOT repeatedly say "Detea said..." or "Detea told me..." - just mention what was discussed naturally
+10. NO "DETEA ASKED ME..." - Do NOT say "Detea asked me..." - just write about the topics naturally
+11. NO LONG DESCRIPTIONS OF DETEA'S ACTIONS - Do NOT write long descriptions of what Detea did or how Detea responded - focus on YOUR experience and reflections
 12. FEEL LIKE A PERSONAL REFLECTION - The diary should feel natural and personal, like you're reflecting on your own day, not describing an AI conversation
 13. AVOID DRAMATIC LINES - Do NOT use overly dramatic phrases like "It was crazy", "it gave me all the feels", "it was absolutely amazing", etc. UNLESS something truly extraordinary or life-changing happened. Keep the tone grounded and realistic - avoid too much dramatic storytelling for ordinary days.
 14. NO REFLECTIVE CLOSING SENTENCES - Do NOT include reflective or moral closing sentences such as "it lifted my mood", "it made me feel seen", "it reminded me of something", "it was a good day", "it helped me realize", etc. End the diary naturally after describing the events or thoughts of the day, without summarizing emotions or giving life lessons. Just describe what happened and stop - no need to wrap it up with emotional conclusions.
 
-Conversation with DeTea:
+Conversation with Detea:
 ${conversationContext}
 
-Write a SHORT, natural diary entry about this day in first person. Write ${sentenceGuidance} maximum, briefly covering all key topics and emotions. Focus on YOUR experience and reflections, not on describing what DeTea said or did. Keep it grounded and realistic, avoiding dramatic language unless something truly extraordinary happened. End naturally after describing events - do NOT add reflective closing sentences about how things made you feel or what you learned:`;
+Write a SHORT, natural diary entry about this day in first person. Write ${sentenceGuidance} maximum, briefly covering all key topics and emotions. Focus on YOUR experience and reflections, not on describing what Detea said or did. Keep it grounded and realistic, avoiding dramatic language unless something truly extraordinary happened. End naturally after describing events - do NOT add reflective closing sentences about how things made you feel or what you learned:`;
 
     console.log('🧪 Narrative prompt length:', narrativePrompt.length);
     console.log('🧪 Narrative prompt preview:', narrativePrompt.slice(0, 200));

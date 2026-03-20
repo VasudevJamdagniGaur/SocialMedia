@@ -1,4 +1,4 @@
-# LinkedIn OAuth – DeTea
+# LinkedIn OAuth – Detea
 
 ## 1. LinkedIn Developer App
 

@@ -1009,7 +1009,7 @@ export default function CommunityPage() {
       }}
     >
       <div className="relative z-10 mx-auto w-full max-w-[600px] px-4 sm:px-5">
-        {/* Sticky header: Theme | DeTea logo | Profile */}
+        {/* Sticky header: Theme | Detea logo | Profile */}
         <header
           className="sticky top-0 z-20 flex items-center justify-between px-1 py-3 min-h-[52px]"
           style={{
@@ -1028,7 +1028,7 @@ export default function CommunityPage() {
           <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ background: THREADS.bgSecondary }}>
             <img
               src="/DEITECIrc.png"
-              alt="DeTea"
+              alt="Detea"
               className="w-8 h-8 object-contain"
             />
           </div>
@@ -1577,7 +1577,7 @@ export default function CommunityPage() {
         </div>
       </div>
 
-      {/* FAB - Threads style with DeTea accent */}
+      {/* FAB - Threads style with Detea accent */}
       <button
         onClick={() => setShowCreatePost(true)}
         className={`fixed bottom-20 right-4 z-40 w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-105 active:scale-95 ${

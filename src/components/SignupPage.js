@@ -87,7 +87,7 @@ const SignupPage = () => {
           >
             <img
               src="/DEITECIrc.png"
-              alt="DeTea"
+              alt="Detea"
               className="w-full h-full object-cover"
             />
           </div>

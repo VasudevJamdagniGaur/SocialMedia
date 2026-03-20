@@ -1631,7 +1631,7 @@ export default function ShareSuggestionsPage() {
   const currentUser = getCurrentUser();
   const tweetDisplayName =
     (currentUser && (localStorage.getItem(`user_display_name_${currentUser.uid}`) || currentUser.displayName)) ||
-    'DeTea User';
+    'Detea User';
   const tweetUsername =
     (currentUser && (currentUser.email || '').split('@')[0]) ||
     'detea_user';
