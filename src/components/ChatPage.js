@@ -1339,7 +1339,9 @@ export default function ChatPage() {
                 )}
                 <div className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'} items-end gap-2`}>
                   <div
-                    className={`max-w-[85%] sm:max-w-md px-4 py-2.5 rounded-2xl ${
+                    className={`max-w-[85%] sm:max-w-md ${
+                      message.sender === 'user' ? 'px-4 py-2.5' : 'px-3 py-2'
+                    } rounded-2xl ${
                       message.sender === 'user' ? 'rounded-br-md' : 'rounded-bl-md'
                     }`}
                     style={{
@@ -1358,12 +1360,17 @@ export default function ChatPage() {
                     {message.isProcessingReel ? (
                       <div className="flex items-center space-x-2">
                         <Eye className="w-5 h-5 text-amber-400 animate-pulse" />
-                        <p className="text-sm leading-relaxed" style={{ color: CHAT.text }}>
+                        <p className="text-[13px] leading-snug" style={{ color: CHAT.text }}>
                           {message.text}
                         </p>
                       </div>
                     ) : (
-                      <p className="text-sm leading-relaxed whitespace-pre-wrap break-words" style={{ color: CHAT.text }}>
+                      <p
+                        className={`whitespace-pre-wrap break-words ${
+                          message.sender === 'user' ? 'text-sm leading-relaxed' : 'text-[13px] leading-snug'
+                        }`}
+                        style={{ color: CHAT.text }}
+                      >
                         {message.text}
                         {message.isStreaming && (
                           <span className="inline-block ml-1 w-2 h-4 bg-gray-400 animate-pulse" style={{ animation: 'blink 1s infinite' }}>|</span>
