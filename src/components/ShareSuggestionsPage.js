@@ -86,7 +86,10 @@ const getLastChatImageForDate = async (dateId) => {
         if (Array.isArray(parsed)) {
           for (let i = parsed.length - 1; i >= 0; i--) {
             const img = parsed[i]?.image;
-            if (typeof img === 'string' && img.startsWith('data:image')) return img;
+            // Chat images can be stored as `data:image/...`, blob URLs, or HTTPS URLs.
+            // We accept any non-empty string so we can reuse the real photo and avoid
+            // unnecessary Gemini image generation.
+            if (typeof img === 'string' && img.trim()) return img;
           }
         }
       }
@@ -99,7 +102,7 @@ const getLastChatImageForDate = async (dateId) => {
     const msgs = Array.isArray(res?.messages) ? res.messages : [];
     for (let i = msgs.length - 1; i >= 0; i--) {
       const img = msgs[i]?.image;
-      if (typeof img === 'string' && img.startsWith('data:image')) return img;
+      if (typeof img === 'string' && img.trim()) return img;
     }
     return null;
   } catch {
@@ -451,7 +454,7 @@ export default function ShareSuggestionsPage() {
         return;
       }
 
-      const imageForStorage = rawImage || imageDataUrl || null;
+      const imageForStorage = imageDataUrl || rawImage || null;
       // Defer "My Presence" persistence until user confirms.
       setPendingMyPresenceShare({
         plat: selectedPlatform || 'other',
@@ -1467,7 +1470,7 @@ export default function ShareSuggestionsPage() {
                 title: 'Share image',
                 dialogTitle: 'Share',
               });
-              const imageForStorage = rawImage || imageDataUrl || null;
+              const imageForStorage = imageDataUrl || rawImage || null;
               // Defer "My Presence" persistence until user confirms.
               setPendingMyPresenceShare({
                 plat: selectedPlatform || 'other',
@@ -1503,7 +1506,7 @@ export default function ShareSuggestionsPage() {
             setTimeout(() => setShareErrorToast(false), 2500);
           }
           if (shared) {
-            const imageForStorage = rawImage || imageDataUrl || null;
+            const imageForStorage = imageDataUrl || rawImage || null;
             // Defer "My Presence" persistence until user confirms.
             setPendingMyPresenceShare({
               plat: selectedPlatform || 'other',
@@ -1544,7 +1547,7 @@ export default function ShareSuggestionsPage() {
           setTimeout(() => setShareErrorToast(false), 6000);
           throw e;
         }
-        const imageForStorage = rawImage || imageDataUrl || null;
+        const imageForStorage = imageDataUrl || rawImage || null;
         // Defer "My Presence" persistence until user confirms.
         setPendingMyPresenceShare({
           plat: selectedPlatform || 'other',
@@ -1566,7 +1569,7 @@ export default function ShareSuggestionsPage() {
           }
         }
         await navigator.share(shareOptions);
-        const imageForStorage = rawImage || imageDataUrl || null;
+        const imageForStorage = imageDataUrl || rawImage || null;
         // Defer "My Presence" persistence until user confirms.
         setPendingMyPresenceShare({
           plat: selectedPlatform || 'other',
@@ -1596,7 +1599,7 @@ export default function ShareSuggestionsPage() {
           // ignore clipboard failures
         }
       }
-      const imageForStorage = rawImage || imageDataUrl || null;
+      const imageForStorage = imageDataUrl || rawImage || null;
       // Defer "My Presence" persistence until user confirms.
       setPendingMyPresenceShare({
         plat: selectedPlatform || 'other',
