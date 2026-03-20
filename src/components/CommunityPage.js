@@ -1069,7 +1069,7 @@ export default function CommunityPage() {
             <img
               src="/DEITECIrc.webp"
               alt="Detea"
-              className="w-8 h-8 object-contain"
+              className="w-full h-full object-cover rounded-full"
             />
           </div>
           <button
