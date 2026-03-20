@@ -1098,7 +1098,7 @@ export default function CommunityPage() {
           {[
             { id: 'mySpace', label: 'My Presence' },
             { id: 'following', label: 'Following' },
-            { id: 'explore', label: 'Explore' },
+            { id: 'explore', label: 'HUB' },
           ].map((tab) => (
             <button
               key={tab.id}
