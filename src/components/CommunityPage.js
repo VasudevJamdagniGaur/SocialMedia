@@ -911,6 +911,46 @@ export default function CommunityPage() {
     }
   };
 
+  const handleCopyLink = async (postId) => {
+    try {
+      const origin = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '';
+      const path = typeof window !== 'undefined' ? window.location.pathname : '';
+      const url = `${origin}${path}?post=${encodeURIComponent(postId)}`;
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        // Fallback: best-effort selection copy
+        const ta = document.createElement('textarea');
+        ta.value = url;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      setPostMenuOpenId(null);
+    } catch (e) {
+      console.error('Copy link failed:', e);
+      alert('Failed to copy link.');
+    }
+  };
+
+  const handleSaveFromMenu = (postId) => {
+    try {
+      logEngagement('save', postId);
+      setPostMenuOpenId(null);
+    } catch (e) {
+      console.error('Save failed:', e);
+    }
+  };
+
+  const handleAboutFromMenu = (post) => {
+    setPostMenuOpenId(null);
+    if (post?.authorId) openUserProfile(post.authorId);
+  };
+
   const openUserProfile = (authorId) => {
     if (!authorId) return;
     if (user && authorId === user.uid) {
@@ -1281,6 +1321,45 @@ export default function CommunityPage() {
                             border: `1px solid ${THREADS.divider}`,
                           }}
                         >
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCopyLink(post.id);
+                            }}
+                            className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm hover:bg-white/10 focus:outline-none transition-colors rounded-lg mx-1"
+                            style={{ color: THREADS.text }}
+                          >
+                            <Link className="w-4 h-4 flex-shrink-0" style={{ color: THREADS.textSecondary }} strokeWidth={2} />
+                            Copy link
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSaveFromMenu(post.id);
+                            }}
+                            className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm hover:bg-white/10 focus:outline-none transition-colors rounded-lg mx-1"
+                            style={{ color: THREADS.text }}
+                          >
+                            <Bookmark className="w-4 h-4 flex-shrink-0" style={{ color: THREADS.textSecondary }} strokeWidth={2} />
+                            Save
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAboutFromMenu(post);
+                            }}
+                            className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm hover:bg-white/10 focus:outline-none transition-colors rounded-lg mx-1"
+                            style={{ color: THREADS.text }}
+                          >
+                            <User className="w-4 h-4 flex-shrink-0" style={{ color: THREADS.textSecondary }} strokeWidth={2} />
+                            About
+                          </button>
+
                           <button
                             type="button"
                             onClick={(e) => {
