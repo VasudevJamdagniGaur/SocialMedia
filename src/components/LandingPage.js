@@ -151,7 +151,7 @@ export default function LandingPage() {
             }}
           >
             <img
-              src="/DEITECIrc.png"
+              src="/DEITECIrc.webp"
               alt="Detea"
               className="w-full h-full relative z-10 object-cover"
             />

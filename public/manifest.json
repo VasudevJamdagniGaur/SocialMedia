@@ -8,15 +8,15 @@
   "orientation": "portrait",
   "icons": [
     {
-      "src": "DEITECIrc.png?v=2",
+      "src": "DEITECIrc-192.webp?v=2",
       "sizes": "192x192",
-      "type": "image/png",
+      "type": "image/webp",
       "purpose": "any maskable"
     },
     {
-      "src": "DEITECIrc.png?v=2",
+      "src": "DEITECIrc.webp?v=2",
       "sizes": "512x512",
-      "type": "image/png",
+      "type": "image/webp",
       "purpose": "any maskable"
     }
   ]

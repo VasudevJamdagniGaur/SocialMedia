@@ -612,7 +612,7 @@ export default function DashboardPage() {
             }}
         >
           <img
-            src="/DEITECIrc.png"
+            src="/DEITECIrc.webp"
             alt="Detea"
             className="w-full h-full object-cover"
           />

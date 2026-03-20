@@ -219,7 +219,7 @@ export default function SplashScreen() {
           }}
         >
           <img
-            src="/DEITECIrc.png"
+            src="/DEITECIrc.webp"
             alt="DEITEC"
             className="w-full h-full relative z-10 object-contain"
           />
