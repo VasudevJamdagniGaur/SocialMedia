@@ -1975,9 +1975,8 @@ export default function ShareSuggestionsPage() {
                           ? '0 0 0 1px rgba(168, 85, 247, 0.5), 0 12px 30px rgba(15, 23, 42, 0.6)'
                           : 'none',
                         transform: isSelected ? 'translateY(-2px)' : 'none',
-                        // Keep suggestions UI consistent; black/white styling belongs only in My Presence feed.
-                        filter: 'none',
-                        opacity: 1,
+                        filter: isPosted ? 'grayscale(100%)' : 'none',
+                        opacity: isPosted && !isSelected ? 0.7 : 1,
                       }}
                     >
                       {selectedPlatform === 'x' && imageUrl ? (
