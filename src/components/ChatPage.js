@@ -1257,7 +1257,7 @@ export default function ChatPage() {
             boxShadow: "0 2px 8px rgba(134, 169, 107, 0.15)",
           }}
         >
-          <ArrowLeft className="w-5 h-5" style={{ color: isDarkMode ? "#8AB4F8" : "#87A96B" }} strokeWidth={1.5} />
+          <ArrowLeft className="w-5 h-5" style={{ color: "#A855F7" }} strokeWidth={1.5} />
         </button>
 
         <div className="flex items-center space-x-3">
@@ -1556,7 +1556,7 @@ export default function ChatPage() {
             placeholder="Message..."
             disabled={isLoading}
             rows={1}
-            className="flex-1 min-w-0 px-4 py-3 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#A855F7] text-white placeholder-gray-400 resize-none overflow-y-auto"
+            className="flex-1 min-w-0 px-4 py-3 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#A855F7] focus:ring-opacity-50 text-white placeholder-gray-400 resize-none overflow-y-auto"
             style={{
               backgroundColor: isDarkMode ? "#3a3a3a" : "rgba(255,255,255,0.9)",
               border: isDarkMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.08)",
