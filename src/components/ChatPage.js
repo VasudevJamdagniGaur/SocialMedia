@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Send, ArrowLeft, AlertTriangle, Image as ImageIcon, X, Eye } from "lucide-react";
+import { Send, ArrowLeft, AlertTriangle, Plus, X, Eye } from "lucide-react";
 import { useTheme } from '../contexts/ThemeContext';
 import chatService from '../services/chatService';
 import reflectionService from '../services/reflectionService';
@@ -1535,10 +1535,10 @@ export default function ChatPage() {
             }}
             title={selectedImage ? `Image selected: ${selectedImage.name}` : "Select image"}
           >
-            <ImageIcon 
-              className="w-5 h-5" 
-              style={{ color: selectedImage ? "#81C995" : "#8AB4F8" }} 
-              strokeWidth={1.5} 
+            <Plus
+              className="w-6 h-6"
+              style={{ color: selectedImage ? "#81C995" : "#8AB4F8" }}
+              strokeWidth={2}
             />
           </button>
           
