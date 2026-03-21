@@ -16,6 +16,8 @@ import chatService from '../services/chatService';
 import { getDateId } from '../utils/dateUtils';
 import { db } from '../firebase/config';
 import TweetShareCard from './TweetShareCard';
+import xLogoImg from '../assets/images/x-logo.png';
+import redditLogoImg from '../assets/images/reddit-logo.png';
 
 const HUB = {
   bg: '#0F0F0F',
@@ -2038,7 +2040,7 @@ export default function ShareSuggestionsPage() {
             }}
             title="X (Twitter) – get X-style post suggestions"
           >
-            <img src="/x-logo.png" alt="X" className="object-contain" style={{ width: '45px', height: '45px' }} />
+            <img src={xLogoImg} alt="X" className="object-contain" style={{ width: '45px', height: '45px' }} />
           </button>
           <button
             type="button"
@@ -2051,7 +2053,7 @@ export default function ShareSuggestionsPage() {
             }}
             title="Reddit – get Reddit-style post suggestions"
           >
-            <img src="/reddit-logo.png" alt="Reddit" className="object-contain" style={{ width: '45px', height: '45px' }} />
+            <img src={redditLogoImg} alt="Reddit" className="object-contain" style={{ width: '45px', height: '45px' }} />
           </button>
         </div>
 
