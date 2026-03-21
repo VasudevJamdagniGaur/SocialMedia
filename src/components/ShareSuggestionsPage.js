@@ -86,25 +86,38 @@ const sharePostedLocalKey = (uid, dateStr, platform) => {
 
 const readSharePostedState = (key) => {
   try {
-    if (typeof localStorage === 'undefined') return { reflectionHash: null, postedTexts: [] };
+    if (typeof localStorage === 'undefined') {
+      return { reflectionHash: null, postedTexts: [], captionOverrides: {} };
+    }
     const raw = localStorage.getItem(key);
-    if (!raw) return { reflectionHash: null, postedTexts: [] };
+    if (!raw) return { reflectionHash: null, postedTexts: [], captionOverrides: {} };
     const o = JSON.parse(raw);
     const arr = Array.isArray(o.postedTexts) ? o.postedTexts.filter((x) => typeof x === 'string') : [];
+    const captionOverrides =
+      o.captionOverrides && typeof o.captionOverrides === 'object' && !Array.isArray(o.captionOverrides)
+        ? o.captionOverrides
+        : {};
     return {
       reflectionHash: o.reflectionHash || null,
       postedTexts: arr.map(normSuggestionPost).filter(Boolean),
+      captionOverrides,
     };
   } catch {
-    return { reflectionHash: null, postedTexts: [] };
+    return { reflectionHash: null, postedTexts: [], captionOverrides: {} };
   }
 };
 
-const writeSharePostedState = (key, reflectionHash, postedTexts) => {
+const writeSharePostedState = (key, reflectionHash, postedTexts, captionOverrides = {}) => {
   try {
     if (typeof localStorage === 'undefined') return;
     const unique = [...new Set(postedTexts.map(normSuggestionPost).filter(Boolean))];
-    localStorage.setItem(key, JSON.stringify({ reflectionHash, postedTexts: unique }));
+    const co = {};
+    Object.keys(captionOverrides || {}).forEach((k) => {
+      const nk = normSuggestionPost(k);
+      const v = captionOverrides[k];
+      if (nk && typeof v === 'string' && v.trim()) co[nk] = v.trim();
+    });
+    localStorage.setItem(key, JSON.stringify({ reflectionHash, postedTexts: unique, captionOverrides: co }));
   } catch {
     // ignore quota / private mode
   }
@@ -114,38 +127,54 @@ const writeSharePostedState = (key, reflectionHash, postedTexts) => {
  * If reflection text changed (e.g. user chatted more with Detea), clear posted markers so cards show in color again.
  * Otherwise return a Set of post texts that were already shared for this reflection + date + platform.
  */
-const getPostedSetForLoadedReflection = (reflectionText, storageKey) => {
+const getPostedStateForLoadedReflection = (reflectionText, storageKey) => {
   const currentHash = firestoreService.hashForReflectionCache(reflectionText);
   const stored = readSharePostedState(storageKey);
   if (!stored.reflectionHash || stored.reflectionHash !== currentHash) {
-    writeSharePostedState(storageKey, currentHash, []);
-    return new Set();
+    writeSharePostedState(storageKey, currentHash, [], {});
+    return { postedSet: new Set(), captionOverrides: {} };
   }
-  return new Set(stored.postedTexts);
+  return {
+    postedSet: new Set(stored.postedTexts),
+    captionOverrides: stored.captionOverrides || {},
+  };
 };
 
-const mergePostedIntoSuggestions = (posts, postedSet) => {
+const mergePostedIntoSuggestions = (posts, postedSet, captionOverrides = {}) => {
   if (!Array.isArray(posts) || !postedSet?.size) return posts;
   return posts.map((item) => {
     const post = typeof item === 'object' && item?.post != null ? item.post : String(item || '');
     const n = normSuggestionPost(post);
-    if (!n || !postedSet.has(n)) return item;
-    if (typeof item === 'object') return { ...item, posted: true };
-    return { eventLabel: 'Reflection', post, posted: true };
+    const displayCaption = (n && captionOverrides[n]) || post;
+    const nDisplay = normSuggestionPost(displayCaption);
+    const isPosted =
+      (n && postedSet.has(n)) ||
+      (nDisplay && postedSet.has(nDisplay)) ||
+      (n && captionOverrides[n] && postedSet.has(normSuggestionPost(captionOverrides[n])));
+    if (!isPosted) return item;
+    if (typeof item === 'object') return { ...item, post: displayCaption, posted: true };
+    return { eventLabel: 'Reflection', post: displayCaption, posted: true };
   });
 };
 
-const appendPostedTextsForShare = (storageKey, reflectionText, textsToAdd) => {
+const appendPostedTextsForShare = (storageKey, reflectionText, textsToAdd, captionOverrideEntry = null) => {
   const currentHash = firestoreService.hashForReflectionCache(reflectionText);
   const stored = readSharePostedState(storageKey);
   let postedTexts =
     stored.reflectionHash === currentHash ? [...stored.postedTexts] : [];
+  let captionOverrides =
+    stored.reflectionHash === currentHash ? { ...(stored.captionOverrides || {}) } : {};
   textsToAdd.forEach((t) => {
     const n = normSuggestionPost(t);
     if (n) postedTexts.push(n);
   });
   postedTexts = [...new Set(postedTexts.map(normSuggestionPost).filter(Boolean))];
-  writeSharePostedState(storageKey, currentHash, postedTexts);
+  if (captionOverrideEntry?.original != null && captionOverrideEntry?.final != null) {
+    const no = normSuggestionPost(captionOverrideEntry.original);
+    const nf = String(captionOverrideEntry.final).trim();
+    if (no && nf && no !== normSuggestionPost(nf)) captionOverrides[no] = nf;
+  }
+  writeSharePostedState(storageKey, currentHash, postedTexts, captionOverrides);
 };
 
 const getLastChatImageForDate = async (dateId) => {
@@ -438,7 +467,8 @@ export default function ShareSuggestionsPage() {
       setShareErrorToast(true);
       setTimeout(() => setShareErrorToast(false), 4000);
 
-      const t = ((sharePanelOpen ? editableShareText : selectedText) || '').trim();
+      const t =
+        (sharePanelOpen ? ((editableShareText || '').trim() || selectedText) : selectedText) || '';
       const rawImage = suggestionImageUrls[selectedIndex] || null;
 
       let imageDataUrl = null;
@@ -610,8 +640,8 @@ export default function ShareSuggestionsPage() {
         const posts = Array.isArray(list) && list.length ? list : [{ eventLabel: 'Reflection', post: reflectionFromState }];
         const userForPosted = getCurrentUser();
         const postedKey = sharePostedLocalKey(userForPosted?.uid, dateStr, selectedPlatform);
-        const postedSet = getPostedSetForLoadedReflection(reflectionFromState, postedKey);
-        setPlatformSuggestions(mergePostedIntoSuggestions(posts, postedSet));
+        const { postedSet, captionOverrides } = getPostedStateForLoadedReflection(reflectionFromState, postedKey);
+        setPlatformSuggestions(mergePostedIntoSuggestions(posts, postedSet, captionOverrides));
         setSelectedIndex(0);
         setIsLoadingSuggestions(false);
         // For LinkedIn, X, and Reddit: Prefer Firebase cache (no API re-calls), then localStorage, then Gemini; save to Firebase after generation
@@ -737,9 +767,9 @@ export default function ShareSuggestionsPage() {
           setSuggestionError(err.message || 'Could not generate suggestions');
           const userForPosted = getCurrentUser();
           const postedKey = sharePostedLocalKey(userForPosted?.uid, dateStr, selectedPlatform);
-          const postedSet = getPostedSetForLoadedReflection(reflectionFromState, postedKey);
+          const { postedSet, captionOverrides } = getPostedStateForLoadedReflection(reflectionFromState, postedKey);
           const fallbackPosts = [{ eventLabel: 'Reflection', post: reflectionFromState }];
-          setPlatformSuggestions(mergePostedIntoSuggestions(fallbackPosts, postedSet));
+          setPlatformSuggestions(mergePostedIntoSuggestions(fallbackPosts, postedSet, captionOverrides));
           setSelectedIndex(0);
           setSuggestionImageUrls([]);
           setIsLoadingSuggestions(false);
@@ -1868,6 +1898,8 @@ export default function ShareSuggestionsPage() {
                       ? itemAtIdx.post
                       : String(itemAtIdx || '');
                   const confirmedCaption = (pendingMyPresenceShare?.caption || '').trim();
+                  const finalCaption =
+                    confirmedCaption || normSuggestionPost(suggestionPostText);
 
                   try {
                     if (pendingMyPresenceShare?.plat && pendingMyPresenceShare?.caption) {
@@ -1899,10 +1931,12 @@ export default function ShareSuggestionsPage() {
                   const userPosted = getCurrentUser();
                   const platKey = shareConfirmation.platform || selectedPlatform;
                   const postedKey = sharePostedLocalKey(userPosted?.uid, dateStr, platKey);
-                  appendPostedTextsForShare(postedKey, reflectionFromState, [
-                    suggestionPostText,
-                    confirmedCaption,
-                  ]);
+                  appendPostedTextsForShare(
+                    postedKey,
+                    reflectionFromState,
+                    [suggestionPostText, confirmedCaption, finalCaption].filter(Boolean),
+                    { original: suggestionPostText, final: finalCaption }
+                  );
 
                   setPlatformSuggestions((prev) => {
                     if (!prev || idx < 0 || idx >= prev.length) return prev;
@@ -1910,8 +1944,8 @@ export default function ShareSuggestionsPage() {
                     const [item] = next.splice(idx, 1);
                     const normalized =
                       typeof item === 'object'
-                        ? { ...item, posted: true }
-                        : { eventLabel: 'Reflection', post: String(item || ''), posted: true };
+                        ? { ...item, post: finalCaption, posted: true }
+                        : { eventLabel: 'Reflection', post: finalCaption, posted: true };
                     next.push(normalized);
                     return next;
                   });
