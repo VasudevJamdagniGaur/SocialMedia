@@ -38,11 +38,6 @@ const PLATFORM_LABELS = {
   reddit: 'Reddit',
 };
 
-const LINKEDIN_OAUTH_BASE = 'https://www.linkedin.com/oauth/v2/authorization';
-const LINKEDIN_CLIENT_ID = '86ek56lm1yueyc';
-const LINKEDIN_REDIRECT_URI = 'https://deitedatabase.firebaseapp.com/auth/linkedin/callback';
-const LINKEDIN_SCOPE = 'openid profile email w_member_social';
-
 // Local image cache key builder (must stay in sync with chatService)
 const buildImageCacheKey = (text) => {
   try {
@@ -1034,9 +1029,7 @@ export default function ShareSuggestionsPage() {
     }
   };
 
-  // Used when a backend flow already created the post/image (e.g., LinkedIn API),
-  // but we still want to write the "My Presence" (communityPosts + badges) only
-  // after the user confirms "Yes, I posted!".
+  // Reserved for flows that defer My Presence until after "Yes, I posted!" (e.g. if a backend pre-created the asset).
   const persistMyPresenceOnly = async ({ plat, caption, imageUrl }) => {
     const user = getCurrentUser();
     const content = (caption || '').trim();
@@ -1129,183 +1122,6 @@ export default function ShareSuggestionsPage() {
       '_blank',
       'noopener,noreferrer'
     );
-  };
-
-  /**
-   * Share to LinkedIn via backend API (POST /api/linkedin/share), then open LinkedIn app.
-   * Requires user to have connected LinkedIn (OAuth) first. On 401, opens OAuth URL.
-   * @param {string} caption - Post text
-   * @param {string|null} imageDataUrlOrUrl - Data URL, blob URL, or public HTTPS image URL
-   * @returns {Promise<boolean>} - true if API share was attempted and we're done (success or 401); false to fall back to share sheet
-   */
-  const shareToLinkedInViaApi = async (caption, imageDataUrlOrUrl, { deferMyPresenceWrites = false } = {}) => {
-    const user = getCurrentUser();
-    if (!user?.uid || !caption?.trim()) return false;
-
-    // Resolve blob URLs to data URL so we can upload (backend needs a fetchable URL or we upload first)
-    let resolvedImage = imageDataUrlOrUrl;
-    if (resolvedImage && typeof resolvedImage === 'string' && resolvedImage.startsWith('blob:')) {
-      resolvedImage = await blobUrlToDataUrl(resolvedImage) || null;
-    }
-
-    let imageUrl = null;
-    if (resolvedImage && typeof resolvedImage === 'string') {
-      if (resolvedImage.startsWith('data:image')) {
-        imageUrl = await firestoreService.uploadPostImage(user.uid, resolvedImage);
-      } else if (resolvedImage.startsWith('https://') || resolvedImage.startsWith('http://')) {
-        imageUrl = resolvedImage;
-      }
-    }
-    if (!imageUrl) return false;
-
-    const result = await firestoreService.createPostForShare({
-      uid: user.uid,
-      caption: caption.trim(),
-      imageUrl,
-      platform: 'linkedin',
-    });
-    if (!result?.success || !result.postId || !result.imageUrl) return false;
-
-    // IMPORTANT: In the native app, window.location.origin is usually local/capacitor, which will NOT
-    // route /api/* to Firebase Hosting rewrites. Use the Firebase project's Hosting domain instead.
-    const origin = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '';
-    const originLooksLocal =
-      !origin ||
-      origin.includes('localhost') ||
-      origin.startsWith('capacitor://') ||
-      origin.startsWith('ionic://') ||
-      origin.startsWith('file://');
-
-    const hostingBases = ['https://deitedatabase.web.app', 'https://deitedatabase.firebaseapp.com'];
-    const basesToTry = (isNative() || originLooksLocal) ? hostingBases : [origin];
-    const body = {
-      userId: user.uid,
-      caption: caption.trim(),
-      imageUrl: result.imageUrl,
-      postId: result.postId,
-    };
-    let res = null;
-    let usedBase = basesToTry[0] || origin;
-    for (const apiBase of basesToTry) {
-      if (!apiBase) continue;
-      try {
-        res = await fetch(`${apiBase}/api/linkedin/share`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
-        usedBase = apiBase;
-        if (res && (res.status === 200 || res.status === 201 || res.status === 401)) break;
-      } catch {
-        res = null;
-        continue;
-      }
-    }
-    if (!res) {
-      // API unreachable — fall back to share sheet so Share button still opens share dialog
-      return false;
-    }
-    const apiBase = usedBase;
-
-    if (res.status === 401) {
-      const oauthUrl = `${LINKEDIN_OAUTH_BASE}?response_type=code&client_id=${encodeURIComponent(LINKEDIN_CLIENT_ID)}&redirect_uri=${encodeURIComponent(LINKEDIN_REDIRECT_URI)}&state=${encodeURIComponent(user.uid)}&scope=${encodeURIComponent(LINKEDIN_SCOPE)}`;
-      if (isNative()) {
-        try {
-          await App.openUrl({ url: oauthUrl });
-        } catch {
-          window.open(oauthUrl, '_blank', 'noopener,noreferrer');
-        }
-      } else {
-        window.open(oauthUrl, '_blank', 'noopener,noreferrer');
-      }
-      setLinkedInToastMessage('connect');
-      setLinkedInCaptionToastVisible(true);
-      setTimeout(() => setLinkedInCaptionToastVisible(false), 4000);
-      return { done: true, imageUrl: result.imageUrl };
-    }
-
-    // Try to capture a useful error for the user (this is our runtime evidence when logs aren't accessible)
-    let responseText = '';
-    let responseJson = null;
-    try {
-      responseText = await res.clone().text();
-    } catch {
-      responseText = '';
-    }
-    try {
-      responseJson = await res.clone().json();
-    } catch {
-      responseJson = null;
-    }
-
-    if (!res.ok) {
-      const errorMessage =
-        (responseJson && (responseJson.error || responseJson.message)) ||
-        (responseText ? responseText.slice(0, 140) : '') ||
-        `Server error (${res.status})`;
-      console.warn('LinkedIn share failed', res.status, responseJson || responseText);
-      setLinkedInErrorText(`API ${res.status} via ${apiBase}: ${errorMessage}`);
-      setLinkedInToastMessage('error');
-      setLinkedInCaptionToastVisible(true);
-      setTimeout(() => setLinkedInCaptionToastVisible(false), 8000);
-      return { done: true, imageUrl: result.imageUrl };
-    }
-
-    // If backend claims success but does not return a post id, treat as failure (prevents false success toasts)
-    const linkedinPostId = responseJson?.linkedinPostId;
-    if (!linkedinPostId) {
-      const snippet = responseText ? responseText.slice(0, 140) : '';
-      setLinkedInErrorText(`Backend returned 200 but no linkedinPostId. ${snippet ? `Body: ${snippet}` : ''}`);
-      setLinkedInToastMessage('error');
-      setLinkedInCaptionToastVisible(true);
-      setTimeout(() => setLinkedInCaptionToastVisible(false), 8000);
-      return { done: true, imageUrl: result.imageUrl };
-    }
-
-    if (!deferMyPresenceWrites) {
-      await firestoreService.saveSocialShare(user.uid, {
-        platform: 'linkedin',
-        reflectionDate: dateStr,
-        reflectionSnippet: caption.trim().slice(0, 200) || undefined,
-      });
-      const profileImage =
-        (typeof localStorage !== 'undefined' && localStorage.getItem(`user_profile_picture_${user.uid}`)) || null;
-      const postData = {
-        author: user.displayName || 'Anonymous',
-        authorId: user.uid,
-        content: caption.trim(),
-        createdAt: serverTimestamp(),
-        likes: 0,
-        comments: [],
-        profilePicture: profileImage,
-        image: result.imageUrl,
-        source: 'social_share',
-        sharedPlatform: 'linkedin',
-        reflectionDate: (() => {
-          try {
-            const d =
-              typeof dateStr === 'string'
-                ? new Date(dateStr)
-                : reflectionDate instanceof Date
-                  ? reflectionDate
-                  : new Date();
-            return d.toISOString();
-          } catch {
-            return new Date().toISOString();
-          }
-        })(),
-      };
-      await addDoc(collection(db, 'communityPosts'), postData);
-    }
-
-    // Indicate success inside the app instead of forcing a redirect to LinkedIn.
-    setLinkedInToastMessage('success');
-    setLinkedInCaptionToastVisible(true);
-    setTimeout(() => {
-      setLinkedInCaptionToastVisible(false);
-    }, 3500);
-
-    return { done: true, imageUrl: result.imageUrl };
   };
 
   const openSharePanel = (text) => {
@@ -1831,7 +1647,7 @@ export default function ShareSuggestionsPage() {
     const prepKey = getSharePrepKey();
     const prep = preparedShareRef.current;
 
-    // Prefer session-cached compressed image so LinkedIn API / fallbacks skip network re-fetch when possible
+    // Prefer session-cached compressed image so share sheet skips network re-fetch when possible
     let imageDataUrl = null;
     if (rawImage && typeof rawImage === 'string') {
       if (prep.key === prepKey && prep.preparedImageDataUrl) {
@@ -1846,27 +1662,7 @@ export default function ShareSuggestionsPage() {
       imageDataUrl && typeof imageDataUrl === 'string' && imageDataUrl.startsWith('data:image');
 
     try {
-      // 0) LinkedIn: if connected, post via API so we get post ID and can show analytics
-      if (
-        selectedPlatform === 'linkedin' &&
-        (imageDataUrl || (rawImage && typeof rawImage === 'string'))
-      ) {
-        const liResult = await shareToLinkedInViaApi(t, imageDataUrl || rawImage || null, {
-          deferMyPresenceWrites: true,
-        });
-        if (liResult?.done) {
-              setPendingMyPresenceShare({
-                mode: 'myPresenceOnly',
-                plat: 'linkedin',
-                caption: t,
-                imageUrl: liResult.imageUrl || null,
-              });
-          triggerPostShareConfirmation();
-          setSharePanelOpen(false);
-          return;
-        }
-        // API failed or not connected – fall through to share sheet
-      }
+      // LinkedIn: use the same native / web share sheet as other platforms (no backend API — faster UX).
 
       // 1) Native share via Capacitor – open phone share menu (text only or text + image)
       if (isNative()) {
