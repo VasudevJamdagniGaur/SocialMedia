@@ -907,7 +907,12 @@ export default function ShareSuggestionsPage() {
    * Dual-image pipeline: high-quality image is used for sharing; compressed copy is uploaded and only the URL is stored.
    * @param {string} plat - Platform: 'linkedin' | 'x' | 'reddit' | 'other'
    * @param {string} text - Caption text
-   * @param {{ imageDataUrlForStorage?: string | null }} [options] - High-quality image (card or suggestion) to compress, upload, and store as URL only
+   * @param {{
+   *   imageDataUrlForStorage?: string | null;
+   *   skipCompression?: boolean;
+   *   suggestionImageUrlSnapshot?: string | null;
+   *   reflectionImageLookupTexts?: string[];
+   * }} [options] - Image + cache hints; use snapshot fields when firing recordShare after optimistic UI updates
    */
   const recordShare = async (plat, text, options = {}) => {
     const user = getCurrentUser();
@@ -927,9 +932,11 @@ export default function ShareSuggestionsPage() {
         localStorage.getItem(`user_profile_picture_${user.uid}`)) ||
       null;
     const imageForPost =
-      Array.isArray(suggestionImageUrls) && suggestionImageUrls[selectedIndex]
-        ? suggestionImageUrls[selectedIndex]
-        : null;
+      'suggestionImageUrlSnapshot' in options
+        ? options.suggestionImageUrlSnapshot
+        : Array.isArray(suggestionImageUrls) && suggestionImageUrls[selectedIndex]
+          ? suggestionImageUrls[selectedIndex]
+          : null;
     const imageToStore = options.imageDataUrlForStorage ?? imageForPost;
 
     // 2) Prepare image: File for upload to Storage at posts/{uid}/{postId}.jpg, or existing URL
@@ -953,19 +960,32 @@ export default function ShareSuggestionsPage() {
       }
     }
     if (!imageUrl && content) {
-      const suggestionPostText = platformSuggestions[selectedIndex]?.post;
-      if (suggestionPostText) {
-        const cached = await firestoreService.getReflectionImageUrl(user.uid, suggestionPostText);
-        if (cached) imageUrl = cached;
-      }
-      if (!imageUrl) {
-        const suggestionText = selectedText || content;
-        const cached = await firestoreService.getReflectionImageUrl(user.uid, suggestionText);
-        if (cached) imageUrl = cached;
-      }
-      if (!imageUrl && content !== (selectedText || '')) {
-        const cachedByContent = await firestoreService.getReflectionImageUrl(user.uid, content);
-        if (cachedByContent) imageUrl = cachedByContent;
+      const lookupList = Array.isArray(options.reflectionImageLookupTexts)
+        ? [...new Set(options.reflectionImageLookupTexts.filter(Boolean))]
+        : null;
+      if (lookupList?.length) {
+        for (const key of lookupList) {
+          const cached = await firestoreService.getReflectionImageUrl(user.uid, key);
+          if (cached) {
+            imageUrl = cached;
+            break;
+          }
+        }
+      } else {
+        const suggestionPostText = platformSuggestions[selectedIndex]?.post;
+        if (suggestionPostText) {
+          const cached = await firestoreService.getReflectionImageUrl(user.uid, suggestionPostText);
+          if (cached) imageUrl = cached;
+        }
+        if (!imageUrl) {
+          const suggestionText = selectedText || content;
+          const cached = await firestoreService.getReflectionImageUrl(user.uid, suggestionText);
+          if (cached) imageUrl = cached;
+        }
+        if (!imageUrl && content !== (selectedText || '')) {
+          const cachedByContent = await firestoreService.getReflectionImageUrl(user.uid, content);
+          if (cachedByContent) imageUrl = cachedByContent;
+        }
       }
     }
 
@@ -2254,7 +2274,7 @@ export default function ShareSuggestionsPage() {
               <button
                 type="button"
                 className="text-xs sm:text-sm px-3 py-1.5 rounded-full bg-white text-gray-900 font-medium hover:bg-gray-100 transition-colors"
-                onClick={async () => {
+                onClick={() => {
                   const idx = shareConfirmation.index ?? 0;
                   const itemAtIdx = platformSuggestions[idx];
                   const suggestionPostText =
@@ -2265,35 +2285,47 @@ export default function ShareSuggestionsPage() {
                   const finalCaption =
                     confirmedCaption || normSuggestionPost(suggestionPostText);
 
-                  try {
-                    if (pendingMyPresenceShare?.plat && pendingMyPresenceShare?.caption) {
-                      if (pendingMyPresenceShare.mode === 'myPresenceOnly') {
-                        await persistMyPresenceOnly({
-                          plat: pendingMyPresenceShare.plat,
-                          caption: pendingMyPresenceShare.caption,
-                          imageUrl: pendingMyPresenceShare.imageUrl || null,
-                        });
-                      } else {
-                        await recordShare(pendingMyPresenceShare.plat, pendingMyPresenceShare.caption, {
-                          imageDataUrlForStorage: pendingMyPresenceShare.imageDataUrlForStorage,
-                          skipCompression: pendingMyPresenceShare.skipCompression,
-                        });
-                      }
-                    }
-                    setPendingMyPresenceShare(null);
-                  } catch (e) {
-                    console.error('Failed to persist My Presence after confirmation:', e);
-                    setShareErrorToastMessage(
-                      `Could not post to My Presence: ${e?.message ? String(e.message) : 'Unknown error'}`
-                    );
-                    setShareErrorToast(true);
-                    setTimeout(() => setShareErrorToast(false), 4500);
-                    return;
+                  const pending = pendingMyPresenceShare;
+                  const platFromConfirm = shareConfirmation.platform || selectedPlatform;
+                  const suggestionImageSnapshot = suggestionImageUrls[idx] ?? null;
+                  const reflectionImageLookupTexts = [
+                    normSuggestionPost(suggestionPostText),
+                    normSuggestionPost(finalCaption),
+                    normSuggestionPost(confirmedCaption),
+                  ].filter(Boolean);
+
+                  // Close UI and update lists immediately; persistence runs in background (no await on click).
+                  setShareConfirmation({ open: false, index: null, platform: null });
+                  setPendingMyPresenceShare(null);
+
+                  if (pending?.plat && pending?.caption) {
+                    const persistPromise =
+                      pending.mode === 'myPresenceOnly'
+                        ? persistMyPresenceOnly({
+                            plat: pending.plat,
+                            caption: pending.caption,
+                            imageUrl: pending.imageUrl || null,
+                          })
+                        : recordShare(pending.plat, pending.caption, {
+                            imageDataUrlForStorage: pending.imageDataUrlForStorage,
+                            skipCompression: pending.skipCompression,
+                            suggestionImageUrlSnapshot: suggestionImageSnapshot,
+                            reflectionImageLookupTexts,
+                          });
+
+                    void persistPromise.catch((e) => {
+                      console.error('Failed to persist My Presence after confirmation:', e);
+                      setShareErrorToastMessage(
+                        `Could not post to My Presence: ${e?.message ? String(e.message) : 'Unknown error'}`
+                      );
+                      setShareErrorToast(true);
+                      setTimeout(() => setShareErrorToast(false), 4500);
+                    });
                   }
 
                   // Remember shared posts across refresh; cleared when reflection text changes (new Detea chat).
                   const userPosted = getCurrentUser();
-                  const platKey = shareConfirmation.platform || selectedPlatform;
+                  const platKey = platFromConfirm;
                   const postedKey = sharePostedLocalKey(userPosted?.uid, dateStr, platKey);
                   appendPostedTextsForShare(
                     postedKey,
@@ -2326,8 +2358,6 @@ export default function ShareSuggestionsPage() {
                     const total = platformSuggestions.length;
                     return total > 0 ? total - 1 : prevIdx;
                   });
-
-                  setShareConfirmation({ open: false, index: null, platform: null });
                 }}
               >
                 Yes, I posted!
