@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Linkedin, Pencil } from 'lucide-react';
 import { Capacitor, CapacitorHttp } from '@capacitor/core';
@@ -457,6 +457,19 @@ export default function ShareSuggestionsPage() {
   const tweetCardExportRef = useRef(null);
   const [xExportImageDataUrl, setXExportImageDataUrl] = useState(null);
   const [xExportProfileImageDataUrl, setXExportProfileImageDataUrl] = useState(null);
+  /** Bumps when opening the share panel so prep cache never matches a previous session. */
+  const sharePanelSessionRef = useRef(0);
+  /**
+   * Pre-built share payload (Capacitor: cache file URI + data URL for My Presence; web: File for navigator.share).
+   * Populated while "Edit before sharing" is open so Share tap does not await heavy work.
+   */
+  const preparedShareRef = useRef({
+    key: '',
+    nativeImageUri: null,
+    preparedImageDataUrl: null,
+    webShareFile: null,
+  });
+  const [sharePanelPrepStatus, setSharePanelPrepStatus] = useState({ status: 'idle', error: null });
 
   /**
    * X + Reddit: share image via native share sheet and copy caption.
@@ -465,13 +478,89 @@ export default function ShareSuggestionsPage() {
    */
   const handleShareImageToXOrReddit = async () => {
     try {
-      setShareErrorToastMessage(`Starting image share for ${selectedPlatform === 'x' ? 'X' : 'Reddit'}…`);
-      setShareErrorToast(true);
-      setTimeout(() => setShareErrorToast(false), 4000);
-
       const t =
         (sharePanelOpen ? ((editableShareText || '').trim() || selectedText) : selectedText) || '';
       const rawImage = suggestionImageUrls[selectedIndex] || null;
+      const prepKey = getSharePrepKey();
+      const prep = preparedShareRef.current;
+
+      // Pre-built file from background prep — open share sheet immediately (no toPng / write on tap).
+      if (prep.key === prepKey && prep.nativeImageUri && isNative()) {
+        try {
+          if (selectedPlatform === 'reddit') {
+            const safeText = (t || '').trim();
+            if (safeText) {
+              try {
+                await Clipboard.write({ string: safeText });
+              } catch {
+                // ignore
+              }
+              setShareErrorToastMessage('Caption copied. Paste it after sharing.');
+              setShareErrorToast(true);
+              setTimeout(() => setShareErrorToast(false), 2500);
+            }
+          }
+          await Share.share({
+            url: prep.nativeImageUri,
+            title: 'Share image',
+            dialogTitle: 'Share',
+          });
+          const imageForStorage = prep.preparedImageDataUrl || rawImage || null;
+          setPendingMyPresenceShare({
+            plat: selectedPlatform || 'other',
+            caption: t,
+            imageDataUrlForStorage: imageForStorage,
+            skipCompression: suggestionImagesFromChat[selectedIndex],
+          });
+          triggerPostShareConfirmation();
+          setSharePanelOpen(false);
+          return;
+        } catch (e) {
+          // fall through to slow path
+        }
+      }
+
+      if (
+        prep.key === prepKey &&
+        prep.webShareFile &&
+        !isNative() &&
+        typeof navigator !== 'undefined' &&
+        navigator.share
+      ) {
+        try {
+          const file = prep.webShareFile;
+          if (selectedPlatform === 'x') {
+            if (navigator.canShare && !navigator.canShare({ files: [file] })) {
+              throw new Error('Web Share cannot attach this file');
+            }
+            await navigator.share({ files: [file] });
+          } else {
+            const payload = { text: (t || '').trim(), files: [file] };
+            if (navigator.canShare && !navigator.canShare(payload)) {
+              await navigator.share({ files: [file] });
+            } else {
+              await navigator.share(payload);
+            }
+          }
+          const imageForStorage = prep.preparedImageDataUrl || rawImage || null;
+          setPendingMyPresenceShare({
+            plat: selectedPlatform || 'other',
+            caption: t,
+            imageDataUrlForStorage: imageForStorage,
+            skipCompression: suggestionImagesFromChat[selectedIndex],
+          });
+          triggerPostShareConfirmation();
+          setSharePanelOpen(false);
+          return;
+        } catch (e) {
+          if (e?.name === 'AbortError') return;
+          // fall through to slow path
+        }
+      }
+
+      setShareErrorToastMessage(`Starting image share for ${selectedPlatform === 'x' ? 'X' : 'Reddit'}…`);
+      setShareErrorToast(true);
+      setTimeout(() => setShareErrorToast(false), 4000);
 
       let imageDataUrl = null;
 
@@ -785,6 +874,33 @@ export default function ShareSuggestionsPage() {
   const selectedText = selectedPlatform
     ? (platformSuggestions[selectedIndex]?.post ?? platformSuggestions[0]?.post ?? reflectionFromState)
     : (fallbackSuggestions[selectedIndex]?.text ?? reflectionFromState);
+
+  /** Stable key so pre-built share files match the current panel state (session, caption, image, X card readiness). */
+  const getSharePrepKey = useCallback(() => {
+    const caption = normSuggestionPost(
+      ((editableShareText || '').trim() || (selectedText || '')).trim()
+    );
+    const raw = suggestionImageUrls[selectedIndex] || null;
+    const rawSig =
+      !raw ? 'n' :
+      typeof raw !== 'string' ? 'x' :
+      raw.startsWith('http://') || raw.startsWith('https://') ? raw :
+      raw.startsWith('data:image') ? `d:${raw.length}` :
+      raw.startsWith('blob:') ? `b:${raw.slice(0, 96)}` :
+      `o:${String(raw).slice(0, 48)}`;
+    const xCardReady =
+      selectedPlatform === 'x' && raw
+        ? (xExportImageDataUrl ? '1' : '0')
+        : 'na';
+    return `${sharePanelSessionRef.current}|${selectedPlatform}|${selectedIndex}|${caption}|${rawSig}|${xCardReady}`;
+  }, [
+    editableShareText,
+    selectedText,
+    selectedPlatform,
+    selectedIndex,
+    suggestionImageUrls,
+    xExportImageDataUrl,
+  ]);
 
   /**
    * Persist share to Firestore so the post stays in My Presence after app reopen.
@@ -1173,6 +1289,14 @@ export default function ShareSuggestionsPage() {
   };
 
   const openSharePanel = (text) => {
+    sharePanelSessionRef.current += 1;
+    preparedShareRef.current = {
+      key: '',
+      nativeImageUri: null,
+      preparedImageDataUrl: null,
+      webShareFile: null,
+    };
+    setSharePanelPrepStatus({ status: 'idle', error: null });
     setEditableShareText(text ?? selectedText ?? '');
     setImageEditMenuOpen(false);
     setSharePanelOpen(true);
@@ -1521,19 +1645,180 @@ export default function ShareSuggestionsPage() {
     }
   };
 
+  // While "Edit before sharing" is open, build compressed image + native cache URI / web File so Share opens instantly.
+  useEffect(() => {
+    if (!sharePanelOpen) return;
+
+    const sessionAtStart = sharePanelSessionRef.current;
+    let cancelled = false;
+
+    const run = async () => {
+      const raw = suggestionImageUrls[selectedIndex];
+      if (!raw || typeof raw !== 'string') {
+        if (!cancelled && sharePanelSessionRef.current === sessionAtStart) {
+          preparedShareRef.current = {
+            key: getSharePrepKey(),
+            nativeImageUri: null,
+            preparedImageDataUrl: null,
+            webShareFile: null,
+          };
+          setSharePanelPrepStatus({ status: 'ready', error: null });
+        }
+        return;
+      }
+
+      setSharePanelPrepStatus({ status: 'preparing', error: null });
+
+      await new Promise((r) => setTimeout(r, 400));
+      if (cancelled || sharePanelSessionRef.current !== sessionAtStart) return;
+
+      const targetKey = getSharePrepKey();
+
+      try {
+        let imageDataUrl = null;
+
+        if (selectedPlatform === 'x') {
+          if (!xExportImageDataUrl) {
+            if (!cancelled && sharePanelSessionRef.current === sessionAtStart) {
+              setSharePanelPrepStatus({ status: 'preparing', error: null });
+            }
+            return;
+          }
+          let exportNode = tweetCardExportRef.current || tweetCardRef.current;
+          let attempts = 0;
+          while (!exportNode && attempts < 35 && !cancelled && sharePanelSessionRef.current === sessionAtStart) {
+            await new Promise((r) => setTimeout(r, 100));
+            exportNode = tweetCardExportRef.current || tweetCardRef.current;
+            attempts += 1;
+          }
+          if (!exportNode) {
+            if (!cancelled && sharePanelSessionRef.current === sessionAtStart) {
+              setSharePanelPrepStatus({
+                status: 'error',
+                error: 'Share preview not ready. You can still share — it may take a moment.',
+              });
+            }
+            return;
+          }
+          const exportRect = exportNode.getBoundingClientRect?.();
+          const exportWidth = exportRect?.width ? Math.round(exportRect.width) : 360;
+          const exportHeight = exportRect?.height
+            ? Math.round(exportRect.height)
+            : Math.round((exportWidth * 10) / 7);
+          imageDataUrl = await toPng(exportNode, {
+            width: exportWidth,
+            height: exportHeight,
+            pixelRatio: 2,
+            skipFonts: false,
+            cacheBust: true,
+          });
+        } else {
+          if (raw.startsWith('data:image')) {
+            imageDataUrl = raw;
+          } else if (raw.startsWith('blob:')) {
+            imageDataUrl = await blobUrlToDataUrl(raw);
+          } else if (raw.startsWith('https://') || raw.startsWith('http://')) {
+            if (isNative() && CapacitorHttp && typeof CapacitorHttp.get === 'function') {
+              try {
+                const resp = await CapacitorHttp.get({ url: raw, responseType: 'arraybuffer' });
+                const mime = guessMimeFromHeaders(resp?.headers) || 'image/png';
+                const base64Bytes = typeof resp?.data === 'string' ? resp.data : null;
+                if (base64Bytes) imageDataUrl = `data:${mime};base64,${base64Bytes}`;
+              } catch {
+                imageDataUrl = null;
+              }
+            }
+            if (!imageDataUrl) {
+              imageDataUrl = await getImageAsDataUrl(raw);
+            }
+          }
+        }
+
+        if (cancelled || sharePanelSessionRef.current !== sessionAtStart) return;
+        if (getSharePrepKey() !== targetKey) return;
+
+        if (!imageDataUrl || typeof imageDataUrl !== 'string' || !imageDataUrl.startsWith('data:image')) {
+          throw new Error('Could not prepare image');
+        }
+
+        const compressedFile = await compressReflectionImage(imageDataUrl);
+        let preparedDataUrl = imageDataUrl;
+        if (compressedFile) {
+          preparedDataUrl = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () =>
+              resolve(typeof reader.result === 'string' ? reader.result : imageDataUrl);
+            reader.onerror = () => resolve(imageDataUrl);
+            reader.readAsDataURL(compressedFile);
+          });
+        }
+
+        if (cancelled || sharePanelSessionRef.current !== sessionAtStart) return;
+        if (getSharePrepKey() !== targetKey) return;
+
+        let nativeImageUri = null;
+        let webShareFile = null;
+        if (isNative()) {
+          nativeImageUri = await writeImageToCacheFile(preparedDataUrl);
+        } else {
+          webShareFile = dataURLtoFile(preparedDataUrl, 'share-post.png');
+        }
+
+        if (cancelled || sharePanelSessionRef.current !== sessionAtStart) return;
+        if (getSharePrepKey() !== targetKey) return;
+
+        preparedShareRef.current = {
+          key: targetKey,
+          nativeImageUri,
+          preparedImageDataUrl: preparedDataUrl,
+          webShareFile,
+        };
+        setSharePanelPrepStatus({ status: 'ready', error: null });
+      } catch (e) {
+        if (!cancelled && sharePanelSessionRef.current === sessionAtStart) {
+          preparedShareRef.current = {
+            key: '',
+            nativeImageUri: null,
+            preparedImageDataUrl: null,
+            webShareFile: null,
+          };
+          setSharePanelPrepStatus({ status: 'error', error: formatShareError(e) });
+        }
+      }
+    };
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    sharePanelOpen,
+    getSharePrepKey,
+    selectedPlatform,
+    selectedIndex,
+    editableShareText,
+    selectedText,
+    suggestionImageUrls,
+    xExportImageDataUrl,
+  ]);
+
   const handleShareToSelectedPlatform = async () => {
     // Use edited text when in panel; fall back to selected suggestion text when edited is empty
     const t = (sharePanelOpen ? ((editableShareText || '').trim() || selectedText) : selectedText) || '';
     if (!t.trim()) return;
 
-    // Resolve the current suggestion image (if any) to a data URL so we can share it
     const rawImage = suggestionImageUrls[selectedIndex] || null;
+    const prepKey = getSharePrepKey();
+    const prep = preparedShareRef.current;
+
+    // Prefer session-cached compressed image so LinkedIn API / fallbacks skip network re-fetch when possible
     let imageDataUrl = null;
     if (rawImage && typeof rawImage === 'string') {
-      if (rawImage.startsWith('data:image')) {
+      if (prep.key === prepKey && prep.preparedImageDataUrl) {
+        imageDataUrl = prep.preparedImageDataUrl;
+      } else if (rawImage.startsWith('data:image')) {
         imageDataUrl = rawImage;
       } else {
-        // Convert blob/https URL → data URL for native / Web Share API
         imageDataUrl = await getImageAsDataUrl(rawImage);
       }
     }
@@ -1566,6 +1851,45 @@ export default function ShareSuggestionsPage() {
       // 1) Native share via Capacitor – open phone share menu (text only or text + image)
       if (isNative()) {
         const hasAnyImage = !!(rawImage && typeof rawImage === 'string');
+
+        // Pre-built file from background prep (instant share sheet)
+        if (hasAnyImage && prep.key === prepKey && prep.nativeImageUri && isDataUrl) {
+          try {
+            let copied = false;
+            const safeText = (t || '').trim();
+            if (safeText) {
+              try {
+                await Clipboard.write({ string: safeText });
+                copied = true;
+              } catch {
+                copied = false;
+              }
+            }
+            if (copied) {
+              setShareErrorToastMessage('Caption copied. Paste it after sharing.');
+              setShareErrorToast(true);
+              setTimeout(() => setShareErrorToast(false), 2500);
+            }
+            await Share.share({
+              url: prep.nativeImageUri,
+              title: 'Share image',
+              dialogTitle: 'Share',
+            });
+            const imageForStorage = prep.preparedImageDataUrl || imageDataUrl || rawImage || null;
+            setPendingMyPresenceShare({
+              plat: selectedPlatform || 'other',
+              caption: t,
+              imageDataUrlForStorage: imageForStorage,
+              skipCompression: suggestionImagesFromChat[selectedIndex],
+            });
+            triggerPostShareConfirmation();
+            setSharePanelOpen(false);
+            return;
+          } catch (e) {
+            // fall through to legacy path
+          }
+        }
+
         // If we have an HTTPS image but couldn't convert to data URL (CORS), download natively and share the file.
         if (!isDataUrl && rawImage && typeof rawImage === 'string' && (rawImage.startsWith('https://') || rawImage.startsWith('http://'))) {
           try {
@@ -1575,6 +1899,24 @@ export default function ShareSuggestionsPage() {
               setShareErrorToastMessage('Caption copied. Paste it after sharing.');
               setShareErrorToast(true);
               setTimeout(() => setShareErrorToast(false), 2500);
+            }
+
+            if (prep.key === prepKey && prep.nativeImageUri) {
+              await Share.share({
+                url: prep.nativeImageUri,
+                title: 'Share image',
+                dialogTitle: 'Share',
+              });
+              const imageForStorage = prep.preparedImageDataUrl || rawImage || null;
+              setPendingMyPresenceShare({
+                plat: selectedPlatform || 'other',
+                caption: t,
+                imageDataUrlForStorage: imageForStorage,
+                skipCompression: suggestionImagesFromChat[selectedIndex],
+              });
+              triggerPostShareConfirmation();
+              setSharePanelOpen(false);
+              return;
             }
 
             let fileUri = null;
@@ -1699,6 +2041,26 @@ export default function ShareSuggestionsPage() {
 
       // 2) Web Share API (PWA / mobile browser) – share text, and image when supported
       if (typeof navigator !== 'undefined' && navigator.share) {
+        if (
+          rawImage &&
+          prep.key === prepKey &&
+          prep.webShareFile &&
+          navigator.canShare &&
+          navigator.canShare({ text: t, files: [prep.webShareFile] })
+        ) {
+          await navigator.share({ text: t, files: [prep.webShareFile] });
+          const imageForStorage = prep.preparedImageDataUrl || imageDataUrl || rawImage || null;
+          setPendingMyPresenceShare({
+            plat: selectedPlatform || 'other',
+            caption: t,
+            imageDataUrlForStorage: imageForStorage,
+            skipCompression: suggestionImagesFromChat[selectedIndex],
+          });
+          triggerPostShareConfirmation();
+          setSharePanelOpen(false);
+          return;
+        }
+
         const shareOptions = { text: t };
         if (isDataUrl && navigator.canShare) {
           const file = dataURLtoFile(imageDataUrl);
@@ -2340,6 +2702,12 @@ export default function ShareSuggestionsPage() {
                       // X with image: allow image-only sharing even when text is empty
                       !(selectedPlatform === 'x' && !!suggestionImageUrls[selectedIndex]) &&
                       (!(editableShareText || '').trim() && !(selectedText || '').trim())
+                    ) ||
+                    (
+                      sharePanelOpen &&
+                      !!suggestionImageUrls[selectedIndex] &&
+                      (selectedPlatform === 'x' || selectedPlatform === 'reddit') &&
+                      sharePanelPrepStatus.status === 'preparing'
                     )
                   }
                   className="flex-1 py-3 rounded-xl font-medium transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
@@ -2357,7 +2725,14 @@ export default function ShareSuggestionsPage() {
                     color: '#FFFFFF',
                   }}
                 >
-                  {selectedPlatform ? 'Share' : 'Select a platform above'}
+                  {selectedPlatform
+                    ? sharePanelOpen &&
+                      !!suggestionImageUrls[selectedIndex] &&
+                      (selectedPlatform === 'x' || selectedPlatform === 'reddit') &&
+                      sharePanelPrepStatus.status === 'preparing'
+                      ? 'Preparing…'
+                      : 'Share'
+                    : 'Select a platform above'}
                 </button>
               </div>
             </div>
