@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
-import { Users, User, Sun, Moon, ChevronRight, Sparkles, ChevronDown, ChevronUp, Activity } from 'lucide-react';
+import { User, Sun, Moon, ChevronRight, Sparkles } from 'lucide-react';
 import { getCurrentUser } from '../services/authService';
 import reflectionService from '../services/reflectionService';
 import firestoreService from '../services/firestoreService';
@@ -521,217 +521,38 @@ export default function PodPage() {
 
           return (
         <>
-        {/* Crew Content - consistent padding and spacing */}
-        <div className="space-y-5 px-1">
-          {/* Crew's Sphere - same UI as Crew's Activity */}
-          <div
-            onClick={() => navigate('/pod/chat')}
-            className={`${cardClass} cursor-pointer transition-opacity hover:opacity-90`}
-            style={cardStyle}
-          >
-            <div className={headerClass} style={headerBorder}>
-              <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: HUB.accent + '30' }}>
-                  <Users className="w-4 h-4" style={{ color: HUB.accent }} strokeWidth={2} />
-                </div>
-                <h2 className="text-lg font-semibold" style={{ color: HUB.text }}>Crew's Sphere</h2>
-              </div>
-              <ChevronRight className="w-5 h-5 flex-shrink-0" style={{ color: HUB.textSecondary }} />
-            </div>
-            <div className="px-4 py-4 flex items-center justify-center space-x-2 flex-wrap gap-y-3">
-              {(() => {
-                const user = getCurrentUser();
-                const userName = user?.displayName || 'You';
-                return (
-                  <div className="flex flex-col items-center" title={userName}>
-                    <div
-                      className="w-8 h-8 rounded-full flex items-center justify-center text-xs overflow-hidden"
-                      style={{ backgroundColor: profilePicture ? 'transparent' : HUB.accent + '30', border: profilePicture ? 'none' : `2px solid ${HUB.accent}40` }}
-                    >
-                      {profilePicture ? <img src={profilePicture} alt="You" className="w-full h-full object-cover" /> : <User className="w-4 h-4" style={{ color: HUB.accent }} />}
-                    </div>
-                    <span className="text-[10px] mt-1" style={{ color: HUB.textSecondary }}>{userName}</span>
-                  </div>
-                );
-              })()}
-              {!isLoadingCrewMembers && [
-                ...crewMembers.map((member, index) => ({
-                  name: member.displayName || member.name || 'User',
-                  emoji: '👤',
-                  color: ['#7DD3C0', '#FDD663', HUB.accent, '#E6B3BA', '#81C995'][index % 5],
-                  profilePicture: member.profilePicture || null,
-                  uid: member.uid
-                })),
-                { name: 'AI', emoji: '🤖', color: '#B19CD9', avatar: '/ai-avatar.png' },
-              ].map((member, index) => (
-                <div key={index} className="flex flex-col items-center" title={member.name}>
-                  <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-xs overflow-hidden"
-                    style={{ backgroundColor: member.avatar ? 'transparent' : member.color + '30', border: member.avatar ? 'none' : `2px solid ${member.color}40` }}
-                  >
-                    {member.avatar ? <img src={member.avatar} alt={member.name} className="w-full h-full object-cover" /> : member.profilePicture ? <img src={member.profilePicture} alt={member.name} className="w-full h-full object-cover" /> : <span>{member.emoji}</span>}
-                  </div>
-                  <span className="text-[10px] mt-1" style={{ color: HUB.textSecondary }}>{member.name}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Crew's Reflection - same UI as Crew's Activity */}
-          <div
-            onClick={(e) => { if (e.target === e.currentTarget || e.target.closest('.reflection-content')) navigate('/pod/reflections'); }}
-            className={`${cardClass} transition-all ${!podReflection ? '' : 'cursor-pointer hover:opacity-90'}`}
-            style={cardStyle}
-          >
+        {/* Categories */}
+        <div className="space-y-4 px-1">
+          <div className={cardClass} style={cardStyle}>
             <div className={headerClass} style={headerBorder}>
               <div className="flex items-center space-x-3">
                 <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: HUB.accent + '30' }}>
                   <Sparkles className="w-4 h-4" style={{ color: HUB.accent }} strokeWidth={2} />
                 </div>
-                <h2 className="text-lg font-semibold" style={{ color: HUB.text }}>Crew's Reflection</h2>
+                <h2 className="text-lg font-semibold" style={{ color: HUB.text }}>Categories</h2>
               </div>
-              <button onClick={(e) => { e.stopPropagation(); navigate('/pod/reflections'); }} className="p-1 rounded-full hover:opacity-80 transition-opacity">
-                <ChevronRight className="w-5 h-5" style={{ color: HUB.textSecondary }} />
-              </button>
             </div>
-            <div className="px-4 py-4">
-            {isLoadingPodReflection ? (
-              <div className="flex flex-col items-center justify-center py-6">
-                <div className="flex space-x-1 mb-3">
-                  <div className="w-2 h-2 rounded-full animate-bounce bg-[#A855F7]" style={{ animationDelay: '0ms' }} />
-                  <div className="w-2 h-2 rounded-full animate-bounce bg-[#A855F7]" style={{ animationDelay: '150ms' }} />
-                  <div className="w-2 h-2 rounded-full animate-bounce bg-[#A855F7]" style={{ animationDelay: '300ms' }} />
-                </div>
-                <p className="text-sm italic" style={{ color: HUB.textSecondary }}>Generating crew reflection...</p>
-              </div>
-            ) : podReflection ? (
-              <div className="reflection-content">
-                <p className="text-[15px] leading-relaxed whitespace-pre-wrap break-words" style={{ color: HUB.text }}>
-                  {podReflection}
-                </p>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-4">
-                <div className="w-12 h-12 rounded-lg flex items-center justify-center mb-3" style={{ backgroundColor: HUB.accent + '20', border: `1px solid ${HUB.accent}30` }}>
-                  <span className="text-2xl">🌿</span>
-                </div>
-                <p className="text-sm text-center mb-4" style={{ color: HUB.text }}>No reflection yet.</p>
-                <button
-                  onClick={(e) => { e.stopPropagation(); handleGeneratePodReflection(); }}
-                  disabled={isLoadingPodReflection}
-                  className="px-4 py-2 rounded-lg font-medium transition-all duration-200 hover:opacity-90 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-white"
-                  style={{ backgroundColor: HUB.accent, boxShadow: `0 4px 12px ${HUB.accentShadow}60` }}
+            <div className="px-4 py-3">
+              {['Sports', 'AI & Tech', 'Entrapenaurship', 'Current Affairs'].map((category, index) => (
+                <div
+                  key={category}
+                  onClick={() => {
+                    if (category === 'Sports') {
+                      navigate('/pod/sports');
+                    }
+                  }}
+                  className="flex items-center justify-between py-3 cursor-pointer transition-opacity hover:opacity-90"
+                  style={{
+                    borderTop: index === 0 ? 'none' : `1px solid ${HUB.divider}`,
+                    color: HUB.text,
+                  }}
                 >
-                  {isLoadingPodReflection ? 'Generating...' : 'Create Reflection'}
-                </button>
-                <button onClick={(e) => { e.stopPropagation(); navigate('/pod/reflections'); }} className="mt-2 text-xs transition-colors hover:opacity-80" style={{ color: HUB.textSecondary }}>
-                  View all reflections →
-                </button>
-              </div>
-            )}
+                  <span className="text-[15px] font-medium">{category}</span>
+                  <ChevronRight className="w-5 h-5" style={{ color: HUB.textSecondary }} />
+                </div>
+              ))}
             </div>
           </div>
-
-          {/* Crew's Activity - same theme, gap and post layout as Community page feed */}
-          <div className={cardClass} style={cardStyle}>
-                <div className={headerClass} style={headerBorder}>
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: HUB.accent + '30' }}>
-                      <Activity className="w-4 h-4" style={{ color: HUB.accent }} strokeWidth={2} />
-                    </div>
-                    <h2 className="text-lg font-semibold" style={{ color: HUB.text }}>Crew's Activity</h2>
-                  </div>
-                  <button onClick={() => navigate('/community')} className="p-1 rounded-full hover:opacity-80 transition-opacity">
-                    <ChevronRight className="w-5 h-5" style={{ color: HUB.textSecondary }} />
-                  </button>
-                </div>
-                {isLoadingCrewActivity ? (
-                  <div className="flex flex-col items-center justify-center py-8">
-                    <div className="flex space-x-1 mb-2">
-                      <div className="w-2 h-2 rounded-full animate-bounce bg-[#A855F7]" style={{ animationDelay: '0ms' }} />
-                      <div className="w-2 h-2 rounded-full animate-bounce bg-[#A855F7]" style={{ animationDelay: '150ms' }} />
-                      <div className="w-2 h-2 rounded-full animate-bounce bg-[#A855F7]" style={{ animationDelay: '300ms' }} />
-                    </div>
-                    <p className="text-sm" style={{ color: HUB.textSecondary }}>Loading activity...</p>
-                  </div>
-                ) : crewActivityPosts.length === 0 ? (
-                  <div className="py-8 px-4 text-center">
-                    <p className="text-sm" style={{ color: HUB.textSecondary }}>
-                      No recent posts from your crew yet. Share something in the Hub!
-                    </p>
-                    <button onClick={() => navigate('/community')} className="mt-3 text-sm font-medium hover:underline" style={{ color: HUB.accent }}>
-                      Go to Hub →
-                    </button>
-                  </div>
-                ) : (
-                  <div>
-                    {crewActivityPosts.slice(0, 5).map((post, index) => {
-                      const currentUser = getCurrentUser();
-                      const showFollow = post.authorId && currentUser && post.authorId !== currentUser.uid;
-                      return (
-                        <div
-                          key={post.id}
-                          onClick={() => navigate('/community')}
-                          className="transition-[background] duration-150 hover:bg-white/[0.03] active:scale-[0.99] cursor-pointer"
-                          style={{
-                            borderTop: index === 0 ? 'none' : `1px solid ${HUB.divider}`,
-                            padding: '16px 16px',
-                          }}
-                        >
-                          <div className="flex items-start gap-3">
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); openUserProfile(post.authorId); }}
-                              className="flex-shrink-0 rounded-full focus:outline-none cursor-pointer"
-                            >
-                              {post.profilePicture ? (
-                                <img src={post.profilePicture} alt="" className="w-10 h-10 rounded-full object-cover" />
-                              ) : (
-                                <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: HUB.divider }}>
-                                  <User className="w-5 h-5" style={{ color: HUB.textSecondary }} strokeWidth={1.5} />
-                                </div>
-                              )}
-                            </button>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <button
-                                  type="button"
-                                  onClick={(e) => { e.stopPropagation(); openUserProfile(post.authorId); }}
-                                  className="flex items-center gap-2 text-left cursor-pointer hover:opacity-90"
-                                  style={{ fontSize: '13px' }}
-                                >
-                                  <span className="font-semibold" style={{ color: HUB.text }}>{post.author || 'Someone'}</span>
-                                  <span style={{ color: HUB.textSecondary }}>{formatTimeAgo(post.createdAt)}</span>
-                                </button>
-                                {showFollow && (
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); handleFollowClick(e, post.authorId); }}
-                                    disabled={followLoadingUid === post.authorId}
-                                    className={`flex-shrink-0 text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
-                                      followLoadingUid === post.authorId ? 'opacity-60 cursor-not-allowed' : 'hover:opacity-90'
-                                    } ${followingIds.includes(post.authorId) ? 'bg-white/10 text-white' : 'text-white'}`}
-                                    style={!followingIds.includes(post.authorId) ? { background: HUB.accent } : {}}
-                                  >
-                                    {followLoadingUid === post.authorId ? '…' : followingIds.includes(post.authorId) ? 'Following' : 'Follow'}
-                                  </button>
-                                )}
-                              </div>
-                              <p className="text-[15px] leading-snug mt-0.5 line-clamp-2" style={{ color: HUB.text }}>
-                                {post.content || ''}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                    <div style={{ borderTop: `1px solid ${HUB.divider}`, padding: '12px 16px' }}>
-                      <button onClick={() => navigate('/community')} className="w-full text-left text-xs transition-colors hover:opacity-80" style={{ color: HUB.textSecondary }}>
-                        View all in Hub →
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
         </div>
         </>
           );
