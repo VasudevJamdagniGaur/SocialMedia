@@ -541,6 +541,8 @@ export default function PodPage() {
                       navigate('/pod/sports');
                     } else if (category === 'AI & Tech') {
                       navigate('/pod/ai-tech');
+                    } else if (category === 'Entrepreneurship') {
+                      navigate('/pod/entrepreneurship');
                     }
                   }}
                   className="flex items-center justify-between py-3 cursor-pointer transition-opacity hover:opacity-90"
