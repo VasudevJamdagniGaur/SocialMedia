@@ -18,6 +18,7 @@ import PodPage from './components/PodPage';
 import PodSportsPage from './components/PodSportsPage';
 import PodAiTechPage from './components/PodAiTechPage';
 import PodEntrepreneurshipPage from './components/PodEntrepreneurshipPage';
+import PodCurrentAffairsPage from './components/PodCurrentAffairsPage';
 import PodGroupChatPage from './components/PodGroupChatPage';
 import AllReflectionsPage from './components/AllReflectionsPage';
 import AllDayReflectionsPage from './components/AllDayReflectionsPage';
@@ -101,6 +102,9 @@ function AppContent() {
             } else if (location.pathname === '/pod/entrepreneurship') {
               console.log('📍 Navigating to pod from Entrepreneurship');
               navigate('/pod', { replace: true });
+            } else if (location.pathname === '/pod/current-affairs') {
+              console.log('📍 Navigating to pod from Current Affairs');
+              navigate('/pod', { replace: true });
             } else if (location.pathname === '/pod') {
               // Navigate to dashboard from Pod
               console.log('📍 Navigating to dashboard from Pod');
@@ -170,6 +174,7 @@ function AppContent() {
         <Route path="/pod/sports" element={<PodSportsPage />} />
         <Route path="/pod/ai-tech" element={<PodAiTechPage />} />
         <Route path="/pod/entrepreneurship" element={<PodEntrepreneurshipPage />} />
+        <Route path="/pod/current-affairs" element={<PodCurrentAffairsPage />} />
         <Route path="/pod/chat" element={<PodGroupChatPage />} />
         <Route path="/pod/reflections" element={<AllReflectionsPage />} />
         <Route path="/reflections" element={<AllDayReflectionsPage />} />

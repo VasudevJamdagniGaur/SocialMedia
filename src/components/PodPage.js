@@ -543,6 +543,8 @@ export default function PodPage() {
                       navigate('/pod/ai-tech');
                     } else if (category === 'Entrepreneurship') {
                       navigate('/pod/entrepreneurship');
+                    } else if (category === 'Current Affairs') {
+                      navigate('/pod/current-affairs');
                     }
                   }}
                   className="flex items-center justify-between py-3 cursor-pointer transition-opacity hover:opacity-90"
