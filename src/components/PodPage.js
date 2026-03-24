@@ -533,7 +533,7 @@ export default function PodPage() {
               </div>
             </div>
             <div className="px-4 py-3">
-              {['Sports', 'AI & Tech', 'Entrapenaurship', 'Current Affairs'].map((category, index) => (
+              {['Sports', 'AI & Tech', 'Entrepreneurship', 'Current Affairs'].map((category, index) => (
                 <div
                   key={category}
                   onClick={() => {
