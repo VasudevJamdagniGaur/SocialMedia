@@ -539,6 +539,8 @@ export default function PodPage() {
                   onClick={() => {
                     if (category === 'Sports') {
                       navigate('/pod/sports');
+                    } else if (category === 'AI & Tech') {
+                      navigate('/pod/ai-tech');
                     }
                   }}
                   className="flex items-center justify-between py-3 cursor-pointer transition-opacity hover:opacity-90"
