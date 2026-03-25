@@ -83,6 +83,15 @@ function AppContent() {
               // Navigate to dashboard from Profile
               console.log('📍 Navigating to dashboard from Profile');
               navigate('/dashboard', { replace: true });
+            } else if (location.pathname === '/share-suggestions') {
+              const ret =
+                location.state &&
+                typeof location.state.returnTo === 'string' &&
+                location.state.returnTo.startsWith('/')
+                  ? location.state.returnTo
+                  : '/dashboard';
+              console.log('📍 Navigating back from share suggestions');
+              navigate(ret, { replace: true });
             } else if (location.pathname.startsWith('/user/')) {
               console.log('📍 Navigating back from User Profile');
               navigate(-1);

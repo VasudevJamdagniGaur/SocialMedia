@@ -226,18 +226,12 @@ export function normalizeArticles(list) {
     });
 }
 
-export function NewsFeedRow({ item, hub, isLast }) {
+export function NewsFeedRow({ item, hub, isLast, onOpenShare }) {
   const icon = faviconUrl(item);
   const rel = formatRelativeTime(item.publishedAt);
 
-  return (
-    <a
-      href={item.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="flex gap-3 py-4 px-4 text-left transition-opacity hover:opacity-90 active:opacity-80"
-      style={{ borderBottom: isLast ? 'none' : `1px solid ${hub.divider}` }}
-    >
+  const inner = (
+    <>
       <div className="flex-1 min-w-0 flex flex-col gap-1.5">
         <div className="flex items-center gap-2 min-w-0">
           {icon ? (
@@ -276,6 +270,33 @@ export function NewsFeedRow({ item, hub, isLast }) {
           <img src={item.image} alt="" className="w-full h-full object-cover" loading="lazy" />
         ) : null}
       </div>
+    </>
+  );
+
+  const rowStyle = { borderBottom: isLast ? 'none' : `1px solid ${hub.divider}` };
+
+  if (typeof onOpenShare === 'function') {
+    return (
+      <button
+        type="button"
+        onClick={() => onOpenShare(item)}
+        className="flex gap-3 py-4 px-4 w-full text-left transition-opacity hover:opacity-90 active:opacity-80"
+        style={rowStyle}
+      >
+        {inner}
+      </button>
+    );
+  }
+
+  return (
+    <a
+      href={item.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex gap-3 py-4 px-4 text-left transition-opacity hover:opacity-90 active:opacity-80"
+      style={rowStyle}
+    >
+      {inner}
     </a>
   );
 }

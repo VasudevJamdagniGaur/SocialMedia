@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import {
@@ -69,6 +69,7 @@ function browseTopicOnGoogleNews(topicId) {
 export default function PodSportsTopicPage() {
   const { topicId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { isDarkMode } = useTheme();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -231,6 +232,20 @@ export default function PodSportsTopicPage() {
                     item={item}
                     hub={HUB}
                     isLast={idx === arr.length - 1}
+                    onOpenShare={(row) =>
+                      navigate('/share-suggestions', {
+                        state: {
+                          newsArticle: {
+                            title: row.title,
+                            url: row.url,
+                            description: row.description || '',
+                            image: row.image || null,
+                            source: row.source || '',
+                          },
+                          returnTo: `${location.pathname}${location.search || ''}`,
+                        },
+                      })
+                    }
                   />
                 ))}
                 {!!error && (

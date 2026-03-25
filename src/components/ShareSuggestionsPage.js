@@ -416,12 +416,52 @@ function buildFallbackSuggestions(original) {
   ];
 }
 
+function normalizeNewsArticle(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const title = String(raw.title || '').trim();
+  const url = String(raw.url || '').trim();
+  if (!title || !url) return null;
+  return {
+    title,
+    url,
+    description: String(raw.description || '').trim(),
+    image: typeof raw.image === 'string' && raw.image.trim() ? raw.image.trim() : null,
+    source: String(raw.source || '').trim(),
+  };
+}
+
+function buildNewsSharePromptContext(n) {
+  return [
+    'The user wants social posts based on this NEWS ARTICLE (not a personal diary).',
+    `Headline: ${n.title}`,
+    n.source ? `Source: ${n.source}` : '',
+    n.description ? `Summary: ${n.description}` : '',
+    `Article URL: ${n.url}`,
+    '',
+    'Write posts that react to, summarize, or add concise professional commentary on this story. Ground posts only in the headline and summary; do not invent specific facts not implied there.',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
 export default function ShareSuggestionsPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { isDarkMode } = useTheme();
   const state = location.state || {};
   const reflectionFromState = (state.reflection ?? '').trim();
+  const newsArticleFromState = normalizeNewsArticle(state.newsArticle);
+  const isNewsShareMode = !!newsArticleFromState;
+  const suggestionPromptText = isNewsShareMode
+    ? buildNewsSharePromptContext(newsArticleFromState)
+    : reflectionFromState;
+  const baselineShareText = isNewsShareMode
+    ? [newsArticleFromState.title, newsArticleFromState.description].filter(Boolean).join('\n\n') ||
+      newsArticleFromState.title
+    : reflectionFromState;
+  const eventLabelDefault = isNewsShareMode ? 'News' : 'Reflection';
+  const shareReturnTo =
+    typeof state.returnTo === 'string' && state.returnTo.startsWith('/') ? state.returnTo : '/dashboard';
   const platformFromState = state.platform; // 'linkedin' | 'x' | 'reddit' when from Dashboard icons
 
   // Selected platform: from navigation state or from tapping an icon (LinkedIn / X / Reddit)
@@ -714,19 +754,32 @@ export default function ShareSuggestionsPage() {
 
   // When user selects a platform (from state or by tapping an icon), fetch that platform's suggestions only
   useEffect(() => {
-    if (!selectedPlatform || !reflectionFromState) return;
+    if (!selectedPlatform || !suggestionPromptText) return;
     let cancelled = false;
     setIsLoadingSuggestions(true);
     setSuggestionError(null);
     setSuggestionImageUrls([]);
     chatService
-      .generateSocialPostSuggestions(reflectionFromState, selectedPlatform)
+      .generateSocialPostSuggestions(suggestionPromptText, selectedPlatform)
       .then(async (list) => {
         if (cancelled) return;
-        const posts = Array.isArray(list) && list.length ? list : [{ eventLabel: 'Reflection', post: reflectionFromState }];
+        const postsRaw =
+          Array.isArray(list) && list.length
+            ? list
+            : [{ eventLabel: eventLabelDefault, post: baselineShareText }];
+        const posts = isNewsShareMode
+          ? postsRaw.map((item) =>
+              typeof item === 'object' && item?.post != null
+                ? { ...item, eventLabel: 'News' }
+                : { eventLabel: 'News', post: String(item || baselineShareText) }
+            )
+          : postsRaw;
         const userForPosted = getCurrentUser();
         const postedKey = sharePostedLocalKey(userForPosted?.uid, dateStr, selectedPlatform);
-        const { postedSet, captionOverrides } = getPostedStateForLoadedReflection(reflectionFromState, postedKey);
+        const { postedSet, captionOverrides } = getPostedStateForLoadedReflection(
+          suggestionPromptText,
+          postedKey
+        );
         setPlatformSuggestions(mergePostedIntoSuggestions(posts, postedSet, captionOverrides));
         setSelectedIndex(0);
         setIsLoadingSuggestions(false);
@@ -735,8 +788,16 @@ export default function ShareSuggestionsPage() {
           (typeof item === 'object' && item?.post != null ? item.post : String(item || '')).trim()
         );
 
+        if (isNewsShareMode) {
+          const img = newsArticleFromState.image || null;
+          setSuggestionImageUrls(postsWithText.map(() => img));
+          setSuggestionImagesFromChat(postsWithText.map(() => false));
+          setIsLoadingImages(false);
+          return;
+        }
+
         const user = getCurrentUser();
-        const reflectionKey = firestoreService.hashForReflectionCache(reflectionFromState);
+        const reflectionKey = firestoreService.hashForReflectionCache(suggestionPromptText);
         const dateIdForChat = getDateId(reflectionDate);
         const chatImage = await getLastChatImageForDate(dateIdForChat);
 
@@ -853,22 +914,32 @@ export default function ShareSuggestionsPage() {
           setSuggestionError(err.message || 'Could not generate suggestions');
           const userForPosted = getCurrentUser();
           const postedKey = sharePostedLocalKey(userForPosted?.uid, dateStr, selectedPlatform);
-          const { postedSet, captionOverrides } = getPostedStateForLoadedReflection(reflectionFromState, postedKey);
-          const fallbackPosts = [{ eventLabel: 'Reflection', post: reflectionFromState }];
+          const { postedSet, captionOverrides } = getPostedStateForLoadedReflection(
+            suggestionPromptText,
+            postedKey
+          );
+          const fallbackPosts = [{ eventLabel: eventLabelDefault, post: baselineShareText }];
           setPlatformSuggestions(mergePostedIntoSuggestions(fallbackPosts, postedSet, captionOverrides));
           setSelectedIndex(0);
-          setSuggestionImageUrls([]);
+          if (isNewsShareMode) {
+            const img = newsArticleFromState.image || null;
+            setSuggestionImageUrls([img]);
+          } else {
+            setSuggestionImageUrls([]);
+          }
           setIsLoadingSuggestions(false);
         }
       });
     return () => { cancelled = true; };
-  }, [selectedPlatform, reflectionFromState, dateStr]);
+  }, [selectedPlatform, suggestionPromptText, dateStr]);
 
-  const fallbackSuggestions = buildFallbackSuggestions(reflectionFromState);
+  const fallbackSuggestions = buildFallbackSuggestions(
+    isNewsShareMode ? baselineShareText : reflectionFromState
+  );
   const selectedFallbackId = fallbackSuggestions[selectedIndex]?.id ?? 'original';
   const selectedText = selectedPlatform
-    ? (platformSuggestions[selectedIndex]?.post ?? platformSuggestions[0]?.post ?? reflectionFromState)
-    : (fallbackSuggestions[selectedIndex]?.text ?? reflectionFromState);
+    ? (platformSuggestions[selectedIndex]?.post ?? platformSuggestions[0]?.post ?? baselineShareText)
+    : (fallbackSuggestions[selectedIndex]?.text ?? baselineShareText);
 
   /** Stable key so pre-built share files match the current panel state (session, caption, image, X card readiness). */
   const getSharePrepKey = useCallback(() => {
@@ -1938,7 +2009,7 @@ export default function ShareSuggestionsPage() {
     }
   };
 
-  if (!reflectionFromState) {
+  if (!reflectionFromState && !isNewsShareMode) {
     navigate('/dashboard', { replace: true });
     return null;
   }
@@ -2125,7 +2196,7 @@ export default function ShareSuggestionsPage() {
                   const postedKey = sharePostedLocalKey(userPosted?.uid, dateStr, platKey);
                   appendPostedTextsForShare(
                     postedKey,
-                    reflectionFromState,
+                    suggestionPromptText,
                     [suggestionPostText, confirmedCaption, finalCaption].filter(Boolean),
                     { original: suggestionPostText, final: finalCaption }
                   );
@@ -2137,7 +2208,7 @@ export default function ShareSuggestionsPage() {
                     const normalized =
                       typeof item === 'object'
                         ? { ...item, post: finalCaption, posted: true }
-                        : { eventLabel: 'Reflection', post: finalCaption, posted: true };
+                        : { eventLabel: eventLabelDefault, post: finalCaption, posted: true };
                     next.push(normalized);
                     return next;
                   });
@@ -2171,7 +2242,7 @@ export default function ShareSuggestionsPage() {
               width={360} // match "edit before sharing" preview card width
               displayName={tweetDisplayName}
               username={tweetUsername}
-              text={sharePanelOpen ? ((editableShareText || '').trim() || selectedText || reflectionFromState) : (selectedText || reflectionFromState)}
+              text={sharePanelOpen ? ((editableShareText || '').trim() || selectedText || baselineShareText) : (selectedText || baselineShareText)}
               imageUrl={xExportImageDataUrl || null}
               profileImageUrl={
                 xExportProfileImageDataUrl ||
@@ -2184,7 +2255,7 @@ export default function ShareSuggestionsPage() {
         <div className="flex items-center gap-3 pt-2 pb-4">
           <button
             type="button"
-            onClick={() => navigate('/dashboard')}
+            onClick={() => navigate(shareReturnTo)}
             className="p-2 -ml-2 rounded-full transition-opacity hover:opacity-90"
             style={{ color: isDarkMode ? HUB.textSecondary : '#666' }}
             aria-label="Go back"
@@ -2197,10 +2268,42 @@ export default function ShareSuggestionsPage() {
         </div>
 
         <div className="rounded-xl p-4 mb-6" style={cardStyle}>
-          <p className="text-sm" style={{ color: isDarkMode ? HUB.textSecondary : '#666' }}>Your reflection</p>
-          <p className="text-[15px] leading-relaxed mt-1" style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}>
-            {reflectionFromState}
+          <p
+            className="text-sm font-medium"
+            style={{ color: isNewsShareMode ? (isDarkMode ? HUB.accentHighlight : '#7C3AED') : isDarkMode ? HUB.textSecondary : '#666' }}
+          >
+            {isNewsShareMode ? 'News' : 'Your reflection'}
           </p>
+          {isNewsShareMode ? (
+            <>
+              <a
+                href={newsArticleFromState.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[15px] font-semibold leading-snug mt-2 block hover:underline"
+                style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}
+              >
+                {newsArticleFromState.title}
+              </a>
+              {newsArticleFromState.source ? (
+                <p className="text-xs mt-1" style={{ color: isDarkMode ? HUB.textSecondary : '#666' }}>
+                  {newsArticleFromState.source}
+                </p>
+              ) : null}
+              {newsArticleFromState.description ? (
+                <p className="text-[15px] leading-relaxed mt-2" style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}>
+                  {newsArticleFromState.description}
+                </p>
+              ) : null}
+              <p className="text-xs mt-2" style={{ color: isDarkMode ? HUB.textSecondary : '#888' }}>
+                Tap the headline to open the full article.
+              </p>
+            </>
+          ) : (
+            <p className="text-[15px] leading-relaxed mt-1" style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}>
+              {reflectionFromState}
+            </p>
+          )}
         </div>
 
         <div className="flex items-center justify-center gap-6 mb-3">
@@ -2252,7 +2355,8 @@ export default function ShareSuggestionsPage() {
             </p>
             {platformSuggestions.length > 0 && !isLoadingSuggestions ? (
               <p className="text-xs mb-2" style={{ color: isDarkMode ? HUB.textSecondary : '#666' }}>
-                Showing all {platformSuggestions.length} post{platformSuggestions.length !== 1 ? 's' : ''} for events from your day
+                Showing all {platformSuggestions.length} post{platformSuggestions.length !== 1 ? 's' : ''}{' '}
+                {isNewsShareMode ? 'based on this story' : 'for events from your day'}
               </p>
             ) : null}
             {isLoadingSuggestions ? (
@@ -2388,13 +2492,15 @@ export default function ShareSuggestionsPage() {
                 })}
                 {suggestionError && (
                   <p className="text-xs" style={{ color: isDarkMode ? HUB.textSecondary : '#888' }}>
-                    Using reflection after: {suggestionError}
+                    {isNewsShareMode ? 'Using article text after' : 'Using reflection after'}: {suggestionError}
                   </p>
                 )}
               </div>
             ) : (
               suggestionError ? (
-                <p className="text-xs mb-8" style={{ color: isDarkMode ? HUB.textSecondary : '#888' }}>Using reflection after: {suggestionError}</p>
+                <p className="text-xs mb-8" style={{ color: isDarkMode ? HUB.textSecondary : '#888' }}>
+                  {isNewsShareMode ? 'Using article text after' : 'Using reflection after'}: {suggestionError}
+                </p>
               ) : null
             )}
           </>
