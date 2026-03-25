@@ -759,9 +759,11 @@ export default function ShareSuggestionsPage() {
     setIsLoadingSuggestions(true);
     setSuggestionError(null);
     setSuggestionImageUrls([]);
-    chatService
-      .generateSocialPostSuggestions(suggestionPromptText, selectedPlatform)
-      .then(async (list) => {
+    const suggestionsPromise = isNewsShareMode
+      ? chatService.generateNewsArticleShareSuggestions(newsArticleFromState, selectedPlatform)
+      : chatService.generateSocialPostSuggestions(suggestionPromptText, selectedPlatform);
+
+    suggestionsPromise.then(async (list) => {
         if (cancelled) return;
         const postsRaw =
           Array.isArray(list) && list.length

@@ -1692,6 +1692,117 @@ ${(reflection || '').trim()}`;
     return result;
   }
 
+  /**
+   * Social post suggestions for a news article — always uses OpenAI (skips /api/linkedin/suggestions)
+   * so we never surface the internal prompt text as the post body on native/local builds.
+   * @param {{ title: string, url: string, description?: string, source?: string }} article
+   * @param {'linkedin'|'x'|'reddit'} platform
+   * @returns {Promise<{ eventLabel: string, post: string }[]>}
+   */
+  async generateNewsArticleShareSuggestions(article, platform) {
+    const title = (article && article.title ? String(article.title) : '').trim();
+    const url = (article && article.url ? String(article.url) : '').trim();
+    const description = (article && article.description ? String(article.description) : '').trim();
+    const source = (article && article.source ? String(article.source) : '').trim();
+    const fallbackPost = [title, description].filter(Boolean).join('\n\n') || title;
+    const fallback = [{ eventLabel: 'News', post: `${fallbackPost}\n\nRead more: ${url}`.trim() }];
+
+    if (!title || !url) return fallback;
+
+    this.openaiApiKey = (process.env.REACT_APP_OPENAI_API_KEY || process.env.OPENAI_API_KEY || this.openaiApiKey || '').trim();
+    const apiKey = this.openaiApiKey;
+    if (!apiKey) {
+      return fallback;
+    }
+
+    const platformLabel = platform === 'x' ? 'X (Twitter)' : platform.charAt(0).toUpperCase() + platform.slice(1);
+    const platformStyleGuide = {
+      linkedin: `LINKEDIN: Professional, hook + short paragraphs, first person where natural. 0–3 hashtags. No meta text.`,
+      x: `X: Under 280 characters per post. Punchy. 1–2 hashtags max.`,
+      reddit: `REDDIT: Casual first-person, conversational, like r/worldnews discussion — not corporate.`,
+    };
+    const style = platformStyleGuide[platform] || platformStyleGuide.linkedin;
+
+    const userContent = `Write social posts about this news story for ${platformLabel}.
+
+${style}
+
+Article:
+Title: ${title}
+${source ? `Source: ${source}\n` : ''}${description ? `Summary: ${description}\n` : ''}URL: ${url}
+
+Rules:
+- Output 1 to 3 posts. Each "post" is ONLY the text someone would publish — no instructions, no labels like "Post 1:", no JSON explanation.
+- Base content only on title and summary; do not invent facts.
+- Do not repeat this prompt or system rules in the output.
+
+Return ONLY valid JSON with this exact shape (no markdown fences):
+{"posts":[{"eventLabel":"News","post":"..."}]}`;
+
+    const apiUrl = `${this.openaiBaseURL}/chat/completions`;
+    const requestBody = {
+      model: this.openaiModelName,
+      messages: [{ role: 'user', content: userContent }],
+      temperature: 0.55,
+      max_tokens: 2000,
+      response_format: { type: 'json_object' },
+    };
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000);
+    let response;
+    try {
+      response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
+      });
+    } catch {
+      clearTimeout(timeoutId);
+      return fallback;
+    }
+    clearTimeout(timeoutId);
+
+    if (!response.ok) return fallback;
+
+    let data;
+    try {
+      data = await response.json();
+    } catch {
+      return fallback;
+    }
+    const raw = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content)
+      ? data.choices[0].message.content
+      : '';
+    let parsed;
+    try {
+      parsed = JSON.parse((raw || '').trim());
+    } catch {
+      const m = (raw || '').match(/\{[\s\S]*"posts"[\s\S]*\}/);
+      if (!m) return fallback;
+      try {
+        parsed = JSON.parse(m[0]);
+      } catch {
+        return fallback;
+      }
+    }
+    const list = parsed && Array.isArray(parsed.posts) ? parsed.posts : [];
+    const looksLikeInternalPrompt = (text) =>
+      /The user wants social posts based on this NEWS ARTICLE/i.test(text || '') ||
+      /Ground posts only in the headline and summary/i.test(text || '');
+    const out = list
+      .map((row) => {
+        const post = typeof row?.post === 'string' ? row.post.trim() : '';
+        if (!post || post.length < 8 || looksLikeInternalPrompt(post)) return null;
+        const ev = typeof row?.eventLabel === 'string' && row.eventLabel.trim() ? row.eventLabel.trim() : 'News';
+        return { eventLabel: ev, post };
+      })
+      .filter(Boolean);
+    if (!out.length) return fallback;
+    return out;
+  }
+
   // ---------- Image: context + user profile → Gemini (same style for LinkedIn and X) ----------
 
   /**
