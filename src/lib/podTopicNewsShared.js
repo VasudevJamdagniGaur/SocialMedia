@@ -391,12 +391,15 @@ export function parseOgImageFromHtml(html) {
 
 async function fetchPageHtmlViaProxies(pageUrl) {
   const encoded = encodeURIComponent(pageUrl);
-  // Google News shells often load better via allorigins first (some proxies block Google).
+  // Important: some proxies (notably allorigins) do NOT send CORS headers,
+  // which causes the browser to block the response entirely.
+  // So for Google News, prefer proxies that work from the browser.
   const attempts = /news\.google\.com/i.test(pageUrl)
     ? [
-        `https://api.allorigins.win/get?url=${encoded}`,
         `https://api.codetabs.com/v1/proxy?quest=${encoded}`,
         `https://corsproxy.io/?${encoded}`,
+        // last resort: might still be blocked by CORS depending on browser/proxy config
+        `https://api.allorigins.win/get?url=${encoded}`,
       ]
     : [
         `https://api.codetabs.com/v1/proxy?quest=${encoded}`,
