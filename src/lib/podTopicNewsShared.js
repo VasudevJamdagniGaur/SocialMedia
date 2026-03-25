@@ -155,9 +155,34 @@ export function isBadHeroImageUrl(url) {
   if (s.includes('google.com/s2/favicons')) return true;
   if (s.includes('gstatic.com/images/branding')) return true;
   if (s.includes('gstatic.com/images/icons')) return true;
+  // Google News thumbnails are frequently delivered from `lh*.googleusercontent.com` using `s0-w###`.
+  // These are often branding / logo thumbs rather than the publisher's story image.
+  if (/lh[0-9]\.googleusercontent\.com/i.test(url) && (s.includes('s0-w') || s.includes('=s0-w'))) {
+    return true;
+  }
   if (/news\.google\.com\/.{0,120}(icon|logo|favicon)/i.test(url)) return true;
   if ((s.includes('logo') || s.includes('icon')) && (s.includes('google') || s.includes('gstatic'))) return true;
   if (/googleusercontent\.com\/.{0,100}(icon|logo|favicon|branding)/i.test(url)) return true;
+  return false;
+}
+
+function looksLikeGoogleNewsBrandingThumb(url) {
+  if (!url || typeof url !== 'string') return false;
+  const s = url.toLowerCase();
+  // Google News often uses `lh3.googleusercontent.com` for thumbnails; many of these are just
+  // Google branding (not the publisher's article photo).
+  if (!s.includes('googleusercontent.com')) return false;
+  let host = '';
+  try {
+    host = new URL(url).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+  if (!/^lh[0-9]\.googleusercontent\.com$/.test(host) && !host.includes('lh3.googleusercontent.com')) {
+    return false;
+  }
+  // Most branding thumbs use the `s0-w###` sizing convention.
+  if (s.includes('s0-w') || s.includes('=s0-w')) return true;
   return false;
 }
 
@@ -467,7 +492,9 @@ export async function enrichNewsItemsWithOgImages(items, options = {}) {
       if (!it || typeof it.url !== 'string' || !/^https?:\/\//i.test(it.url.trim())) return false;
       const missing = !it.image;
       const badGoogleThumb = it.image && isBadHeroImageUrl(it.image);
-      return missing || badGoogleThumb;
+      const fromGoogleNews = isGoogleNewsArticleUrl(it.url);
+      const googleNewsBrandingThumb = fromGoogleNews && it.image && looksLikeGoogleNewsBrandingThumb(it.image);
+      return missing || badGoogleThumb || googleNewsBrandingThumb;
     })
     .slice(0, maxResolve);
 
