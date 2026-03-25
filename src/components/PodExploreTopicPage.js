@@ -6,6 +6,7 @@ import {
   googleNewsSearchUrl,
   fetchLiveFromGoogleRssByQuery,
   normalizeArticles,
+  enrichNewsItemsWithOgImages,
   NewsFeedRow,
 } from '../lib/podTopicNewsShared';
 
@@ -166,6 +167,9 @@ export default function PodExploreTopicPage() {
           if (rows?.length) {
             setItems(rows);
             setError('');
+            enrichNewsItemsWithOgImages(rows).then((enriched) => {
+              if (!cancelled) setItems(enriched);
+            });
           } else {
             setItems([]);
             setError('Could not load stories. Check your connection or try opening Google News below.');

@@ -59,6 +59,108 @@ function firstImageUrlFromHtml(html) {
   return null;
 }
 
+function decodeGoogleWrappedUrl(href) {
+  if (!href || typeof href !== 'string') return null;
+  try {
+    const u = new URL(href, 'https://news.google.com');
+    const inner = u.searchParams.get('url') || u.searchParams.get('q');
+    if (inner && /^https?:\/\//i.test(inner) && !isBlockedOutboundHost(inner)) return inner;
+    const m = href.match(/[?&](?:url|q)=(https%3A%2F%2F[^&]+)/i);
+    if (m) {
+      const decoded = decodeURIComponent(m[1]);
+      if (decoded && /^https?:\/\//i.test(decoded) && !isBlockedOutboundHost(decoded)) return decoded;
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+/** Google News RSS often wraps the real story in <a href="..."> or google/url?q=... */
+function extractPublisherUrlFromRssItemHtml(html) {
+  if (!html || typeof html !== 'string') return null;
+  const re = /<a[^>]+href=["'](https?:\/\/[^"']+)["']/gi;
+  let m;
+  let best = null;
+  let bestLen = 0;
+  while ((m = re.exec(html)) !== null) {
+    let u = decodeMetaUrl(m[1]);
+    const unwrapped = decodeGoogleWrappedUrl(u);
+    if (unwrapped) u = unwrapped;
+    if (!u || isBlockedOutboundHost(u)) continue;
+    try {
+      const len = new URL(u).pathname.length;
+      if (len > bestLen) {
+        bestLen = len;
+        best = u;
+      }
+    } catch {
+      /* skip */
+    }
+  }
+  return best;
+}
+
+function isBlockedOutboundHost(url) {
+  try {
+    const h = new URL(url).hostname.toLowerCase();
+    if (h === 'news.google.com' || h.endsWith('.news.google.com')) return true;
+    if (h === 'play.google.com' || h.endsWith('.play.google.com')) return true;
+    if (h.endsWith('google.com') || h === 'gstatic.com' || h.endsWith('.gstatic.com')) return true;
+    if (h === 'youtube.com' || h.endsWith('.youtube.com')) return true;
+    if (h === 'googleusercontent.com' && /\/(icons?|branding|static\/images)/i.test(url)) return true;
+    return false;
+  } catch {
+    return true;
+  }
+}
+
+function isGoogleNewsArticleUrl(url) {
+  return typeof url === 'string' && /news\.google\.com\/(rss\/)?articles\//i.test(url);
+}
+
+/**
+ * Pull a likely publisher article URL from a proxied Google News article HTML shell.
+ */
+function extractLikelyPublisherUrlFromGoogleNewsPageHtml(html) {
+  if (!html || typeof html !== 'string' || html.length < 200) return null;
+  const re = /https?:\/\/[a-z0-9][-a-z0-9.]*[a-z0-9](?::\d+)?\/[^"'\\\s<>)]{12,900}/gi;
+  let m;
+  let best = null;
+  let bestScore = 0;
+  while ((m = re.exec(html)) !== null) {
+    let u = m[0].replace(/[),.;]+$/g, '');
+    u = decodeMetaUrl(u);
+    const unwrapped = decodeGoogleWrappedUrl(u);
+    if (unwrapped) u = unwrapped;
+    if (!u || isBlockedOutboundHost(u)) continue;
+    try {
+      const p = new URL(u);
+      const score = p.pathname.length + (p.search ? 8 : 0);
+      if (score > bestScore) {
+        bestScore = score;
+        best = u;
+      }
+    } catch {
+      /* skip */
+    }
+  }
+  return best;
+}
+
+/** Microlink / RSS sometimes return Google branding, not the story photo. */
+export function isBadHeroImageUrl(url) {
+  if (!url || typeof url !== 'string') return true;
+  const s = url.toLowerCase();
+  if (s.includes('google.com/s2/favicons')) return true;
+  if (s.includes('gstatic.com/images/branding')) return true;
+  if (s.includes('gstatic.com/images/icons')) return true;
+  if (/news\.google\.com\/.{0,120}(icon|logo|favicon)/i.test(url)) return true;
+  if ((s.includes('logo') || s.includes('icon')) && (s.includes('google') || s.includes('gstatic'))) return true;
+  if (/googleusercontent\.com\/.{0,100}(icon|logo|favicon|branding)/i.test(url)) return true;
+  return false;
+}
+
 function escapeRegExp(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -137,7 +239,9 @@ function parseGoogleNewsRssXml(xml) {
     const publishedAt = parseRssPubDate(pubDateRaw);
     const rawDesc = item.getElementsByTagName('description')[0]?.textContent || '';
     const description = rawDesc.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-    const image = firstImageUrlFromHtml(rawDesc);
+    let image = firstImageUrlFromHtml(rawDesc);
+    if (isBadHeroImageUrl(image)) image = null;
+    const publisherUrl = extractPublisherUrlFromRssItemHtml(rawDesc);
     const title = cleanPublisherSuffixFromTitle(rawTitle, source);
     out.push({
       title,
@@ -147,6 +251,7 @@ function parseGoogleNewsRssXml(xml) {
       description,
       publishedAt,
       sourceSiteUrl,
+      publisherUrl: publisherUrl || '',
     });
   }
   return out;
@@ -170,9 +275,11 @@ async function fetchItemsThroughRss2Json(rssUrl) {
           .replace(/<[^>]*>/g, ' ')
           .replace(/\s+/g, ' ')
           .trim();
-        const image =
+        let image =
           (it.enclosure?.link && /^https?:/i.test(it.enclosure.link) ? it.enclosure.link : null) ||
           firstImageUrlFromHtml(htmlBlob);
+        if (isBadHeroImageUrl(image)) image = null;
+        const publisherUrl = extractPublisherUrlFromRssItemHtml(htmlBlob) || '';
         const publishedAt = parseRssPubDate(it.pubDate);
         const title = cleanPublisherSuffixFromTitle(rawTitle, source);
         return {
@@ -183,6 +290,7 @@ async function fetchItemsThroughRss2Json(rssUrl) {
           description,
           publishedAt,
           sourceSiteUrl: '',
+          publisherUrl,
         };
       })
       .filter(Boolean);
@@ -214,16 +322,177 @@ export function normalizeArticles(list) {
       const publishedAt =
         typeof a.publishedAt === 'string' && a.publishedAt ? a.publishedAt : null;
       const rawTitle = a.title;
+      let img = a.urlToImage || firstImageUrlFromHtml(a.description || '') || null;
+      if (isBadHeroImageUrl(img)) img = null;
+      const pubFromDesc = extractPublisherUrlFromRssItemHtml(a.description || '');
       return {
         title: cleanPublisherSuffixFromTitle(rawTitle, source),
         source,
         url: direct || googleNewsSearchUrl(rawTitle),
-        image: a.urlToImage || firstImageUrlFromHtml(a.description || '') || null,
+        image: img,
         description: a.description || '',
         publishedAt,
         sourceSiteUrl: '',
+        publisherUrl: pubFromDesc || '',
       };
     });
+}
+
+function decodeMetaUrl(raw) {
+  if (!raw || typeof raw !== 'string') return null;
+  let u = raw.trim().replace(/&amp;/g, '&').replace(/&quot;/g, '"');
+  if (u.startsWith('//')) u = `https:${u}`;
+  return /^https?:\/\//i.test(u) ? u : null;
+}
+
+/** Extract Open Graph / Twitter image from raw HTML (best-effort). */
+export function parseOgImageFromHtml(html) {
+  if (!html || typeof html !== 'string') return null;
+  const res = [
+    /<meta\s+[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i,
+    /<meta\s+[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["']/i,
+    /<meta\s+[^>]*property=["']og:image:url["'][^>]*content=["']([^"']+)["']/i,
+    /<meta\s+[^>]*name=["']twitter:image["'][^>]*content=["']([^"']+)["']/i,
+    /<meta\s+[^>]*name=["']twitter:image:src["'][^>]*content=["']([^"']+)["']/i,
+    /<meta\s+[^>]*content=["']([^"']+)["'][^>]*name=["']twitter:image["']/i,
+  ];
+  for (const re of res) {
+    const m = html.match(re);
+    const d = decodeMetaUrl(m?.[1]);
+    if (d) return d;
+  }
+  return null;
+}
+
+async function fetchPageHtmlViaProxies(pageUrl) {
+  const encoded = encodeURIComponent(pageUrl);
+  // Google News shells often load better via allorigins first (some proxies block Google).
+  const attempts = /news\.google\.com/i.test(pageUrl)
+    ? [
+        `https://api.allorigins.win/get?url=${encoded}`,
+        `https://api.codetabs.com/v1/proxy?quest=${encoded}`,
+        `https://corsproxy.io/?${encoded}`,
+      ]
+    : [
+        `https://api.codetabs.com/v1/proxy?quest=${encoded}`,
+        `https://corsproxy.io/?${encoded}`,
+        `https://api.allorigins.win/get?url=${encoded}`,
+      ];
+  for (const apiUrl of attempts) {
+    try {
+      const res = await fetch(apiUrl);
+      if (!res.ok) continue;
+      if (apiUrl.includes('allorigins')) {
+        const j = await res.json();
+        const c = typeof j.contents === 'string' ? j.contents : '';
+        if (c && c.length > 400) return c;
+      } else {
+        const t = await res.text();
+        if (t && t.length > 400) return t;
+      }
+    } catch {
+      /* next proxy */
+    }
+  }
+  return '';
+}
+
+async function tryHeroImageFromPublisherPage(targetUrl) {
+  const u = typeof targetUrl === 'string' ? targetUrl.trim() : '';
+  if (!u || !/^https?:\/\//i.test(u) || isBlockedOutboundHost(u)) return null;
+
+  try {
+    const ml = await fetch(`https://api.microlink.io/?url=${encodeURIComponent(u)}`);
+    if (ml.ok) {
+      const j = await ml.json().catch(() => null);
+      const fixed = decodeMetaUrl(j?.data?.image?.url);
+      if (fixed && !isBadHeroImageUrl(fixed)) return fixed;
+    }
+  } catch {
+    /* og fallback */
+  }
+
+  const html = await fetchPageHtmlViaProxies(u);
+  const og = parseOgImageFromHtml(html);
+  if (og && !isBadHeroImageUrl(og)) return og;
+  return null;
+}
+
+/**
+ * Hero image for a story. Google News links need the publisher URL (from RSS &lt;a&gt; or unpacked HTML);
+ * Microlink on google.com alone often returns the Google News logo — those URLs are rejected.
+ */
+export async function resolveArticleHeroImage(pageUrl, options = {}) {
+  const u = typeof pageUrl === 'string' ? pageUrl.trim() : '';
+  if (!u || !/^https?:\/\//i.test(u)) return null;
+
+  const skipUnpack = options.skipGoogleUnpack === true;
+  const publisherHint =
+    typeof options.publisherUrl === 'string' ? options.publisherUrl.trim() : '';
+
+  if (publisherHint && !isBlockedOutboundHost(publisherHint)) {
+    const fromHint = await tryHeroImageFromPublisherPage(publisherHint);
+    if (fromHint) return fromHint;
+  }
+
+  if (!skipUnpack && isGoogleNewsArticleUrl(u)) {
+    const shellHtml = await fetchPageHtmlViaProxies(u);
+    const extracted = extractLikelyPublisherUrlFromGoogleNewsPageHtml(shellHtml);
+    if (extracted && extracted !== u && !isBlockedOutboundHost(extracted)) {
+      const fromPublisher = await resolveArticleHeroImage(extracted, {
+        skipGoogleUnpack: true,
+        publisherUrl: '',
+      });
+      if (fromPublisher) return fromPublisher;
+    }
+    const shellImg = await tryHeroImageFromPublisherPage(u);
+    if (shellImg && !isBadHeroImageUrl(shellImg)) return shellImg;
+    return null;
+  }
+
+  return tryHeroImageFromPublisherPage(u);
+}
+
+/**
+ * Fills missing `item.image` by resolving publisher og:image (concurrency-limited).
+ */
+export async function enrichNewsItemsWithOgImages(items, options = {}) {
+  const maxResolve = typeof options.maxResolve === 'number' ? options.maxResolve : 18;
+  const concurrency = typeof options.concurrency === 'number' ? options.concurrency : 4;
+  if (!Array.isArray(items) || !items.length) return items;
+
+  const slots = items
+    .map((it, i) => ({ i, it }))
+    .filter(({ it }) => {
+      if (!it || typeof it.url !== 'string' || !/^https?:\/\//i.test(it.url.trim())) return false;
+      const missing = !it.image;
+      const badGoogleThumb = it.image && isBadHeroImageUrl(it.image);
+      return missing || badGoogleThumb;
+    })
+    .slice(0, maxResolve);
+
+  if (!slots.length) return items;
+
+  const out = items.map((it) => ({ ...it }));
+  let job = 0;
+  const runWorker = async () => {
+    while (true) {
+      const k = job++;
+      if (k >= slots.length) return;
+      const { i } = slots[k];
+      try {
+        const img = await resolveArticleHeroImage(out[i].url, {
+          publisherUrl: out[i].publisherUrl || '',
+        });
+        if (img && !isBadHeroImageUrl(img)) out[i] = { ...out[i], image: img };
+      } catch {
+        /* ignore */
+      }
+    }
+  };
+  const workers = Math.min(concurrency, slots.length);
+  await Promise.all(Array.from({ length: workers }, () => runWorker()));
+  return out;
 }
 
 export function NewsFeedRow({ item, hub, isLast, onOpenShare }) {
@@ -267,7 +536,16 @@ export function NewsFeedRow({ item, hub, isLast, onOpenShare }) {
       </div>
       <div className="flex-shrink-0 w-[4.5rem] h-[4.5rem] rounded-lg overflow-hidden bg-black/25">
         {item.image ? (
-          <img src={item.image} alt="" className="w-full h-full object-cover" loading="lazy" />
+          <img
+            src={item.image}
+            alt=""
+            className="w-full h-full object-cover"
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            onError={(e) => {
+              e.target.style.display = 'none';
+            }}
+          />
         ) : null}
       </div>
     </>
