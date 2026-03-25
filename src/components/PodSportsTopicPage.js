@@ -3,6 +3,12 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 
+/** When there is no direct article URL, open a relevant Google News search (still a real navigation). */
+function googleNewsSearchUrl(query) {
+  const q = (query || 'sports').trim() || 'sports';
+  return `https://news.google.com/search?q=${encodeURIComponent(q)}&hl=en&gl=US&ceid=US:en`;
+}
+
 /** Match article text to one of the four main Explore topics (used to strip them from “Others”). */
 function matchesMainTopic(text) {
   const t = (text || '').toLowerCase();
@@ -24,45 +30,120 @@ const TOPIC_META = {
     /** NewsAPI everything `q` — scoped to the sport */
     q: '(cricket OR IPL OR "test cricket" OR T20 OR BBL OR PSL OR Ashes OR wicket)',
     fallbacks: [
-      { title: 'International cricket boards finalize next championship window', source: 'Cricket Desk', image: null },
-      { title: 'T20 leagues see record streaming numbers across regions', source: 'Sports Media', image: null },
-      { title: 'Injury updates shift line-ups ahead of key bilateral series', source: 'Team Reports', image: null },
+      {
+        title: 'International cricket boards finalize next championship window',
+        source: 'Cricket Desk',
+        image: null,
+        url: googleNewsSearchUrl('international cricket championship news'),
+      },
+      {
+        title: 'T20 leagues see record streaming numbers across regions',
+        source: 'Sports Media',
+        image: null,
+        url: googleNewsSearchUrl('T20 cricket leagues streaming'),
+      },
+      {
+        title: 'Injury updates shift line-ups ahead of key bilateral series',
+        source: 'Team Reports',
+        image: null,
+        url: googleNewsSearchUrl('cricket team injury news'),
+      },
     ],
   },
   football: {
     label: 'Football',
     q: '(soccer OR NFL OR FIFA OR UEFA OR "Premier League" OR "Champions League" OR "La Liga" OR Bundesliga OR MLS OR "World Cup")',
     fallbacks: [
-      { title: 'European leagues enter the decisive stretch of the season', source: 'Football Weekly', image: null },
-      { title: 'NFL playoff picture tightens after weekend results', source: 'Gridiron', image: null },
-      { title: 'Transfer talk intensifies as windows approach', source: 'Rumour Mill', image: null },
+      {
+        title: 'European leagues enter the decisive stretch of the season',
+        source: 'Football Weekly',
+        image: null,
+        url: googleNewsSearchUrl('European football league news'),
+      },
+      {
+        title: 'NFL playoff picture tightens after weekend results',
+        source: 'Gridiron',
+        image: null,
+        url: googleNewsSearchUrl('NFL playoff standings news'),
+      },
+      {
+        title: 'Transfer talk intensifies as windows approach',
+        source: 'Rumour Mill',
+        image: null,
+        url: googleNewsSearchUrl('football transfer window rumors'),
+      },
     ],
   },
   f1: {
     label: 'F1',
     q: '("Formula 1" OR "Formula One" OR F1 OR "Grand Prix" OR qualifying OR pitwall OR constructors)',
     fallbacks: [
-      { title: 'Teams bring aero updates ahead of the next race weekend', source: 'Motorsport', image: null },
-      { title: 'Championship battle narrows after latest circuit results', source: 'F1 Briefing', image: null },
-      { title: 'Sprint format and tyre strategy stay in focus for team principals', source: 'Paddock', image: null },
+      {
+        title: 'Teams bring aero updates ahead of the next race weekend',
+        source: 'Motorsport',
+        image: null,
+        url: googleNewsSearchUrl('Formula 1 aero updates race weekend'),
+      },
+      {
+        title: 'Championship battle narrows after latest circuit results',
+        source: 'F1 Briefing',
+        image: null,
+        url: googleNewsSearchUrl('F1 championship standings'),
+      },
+      {
+        title: 'Sprint format and tyre strategy stay in focus for team principals',
+        source: 'Paddock',
+        image: null,
+        url: googleNewsSearchUrl('F1 sprint format tyre strategy'),
+      },
     ],
   },
   chess: {
     label: 'Chess',
     q: '(chess OR FIDE OR grandmaster OR Carlsen OR Nakamura OR Candidates OR lichess OR Chess.com)',
     fallbacks: [
-      { title: 'Elite rapid events draw record online audiences', source: 'Chess Chronicle', image: null },
-      { title: 'FIDE calendar adds hybrid classical-rapid stops', source: 'Federation Wire', image: null },
-      { title: 'Young talents climb rankings after major open victories', source: 'Ratings Watch', image: null },
+      {
+        title: 'Elite rapid events draw record online audiences',
+        source: 'Chess Chronicle',
+        image: null,
+        url: googleNewsSearchUrl('chess rapid tournament streaming'),
+      },
+      {
+        title: 'FIDE calendar adds hybrid classical-rapid stops',
+        source: 'Federation Wire',
+        image: null,
+        url: googleNewsSearchUrl('FIDE chess calendar'),
+      },
+      {
+        title: 'Young talents climb rankings after major open victories',
+        source: 'Ratings Watch',
+        image: null,
+        url: googleNewsSearchUrl('chess rankings young grandmasters'),
+      },
     ],
   },
   others: {
     label: 'Other sports',
     q: null,
     fallbacks: [
-      { title: 'Olympic sports see renewed investment in grassroots programs', source: 'Olympic Desk', image: null },
-      { title: 'Tennis and basketball lead weekend arena attendance', source: 'Arena Digest', image: null },
-      { title: 'Combat sports cards announce cross-promotion showcases', source: 'Combat Wire', image: null },
+      {
+        title: 'Olympic sports see renewed investment in grassroots programs',
+        source: 'Olympic Desk',
+        image: null,
+        url: googleNewsSearchUrl('Olympic sports grassroots programs'),
+      },
+      {
+        title: 'Tennis and basketball lead weekend arena attendance',
+        source: 'Arena Digest',
+        image: null,
+        url: googleNewsSearchUrl('tennis basketball sports attendance'),
+      },
+      {
+        title: 'Combat sports cards announce cross-promotion showcases',
+        source: 'Combat Wire',
+        image: null,
+        url: googleNewsSearchUrl('combat sports boxing UFC news'),
+      },
     ],
   },
 };
@@ -71,13 +152,16 @@ function normalizeArticles(list) {
   if (!Array.isArray(list)) return [];
   return list
     .filter((a) => a?.title)
-    .map((a) => ({
-      title: a.title,
-      source: a?.source?.name || 'News',
-      url: a.url || null,
-      image: a.urlToImage || null,
-      description: a.description || '',
-    }));
+    .map((a) => {
+      const direct = typeof a.url === 'string' ? a.url.trim() : '';
+      return {
+        title: a.title,
+        source: a?.source?.name || 'News',
+        url: direct || googleNewsSearchUrl(a.title),
+        image: a.urlToImage || null,
+        description: a.description || '',
+      };
+    });
 }
 
 export default function PodSportsTopicPage() {
@@ -230,9 +314,9 @@ export default function PodSportsTopicPage() {
                     return (
                       <a
                         key={`${item.title}-${idx}`}
-                        href={item.url || undefined}
-                        target={item.url ? '_blank' : undefined}
-                        rel={item.url ? 'noopener noreferrer' : undefined}
+                        href={item.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         className="relative flex-shrink-0 w-[min(260px,78vw)] snap-start snap-always rounded-xl overflow-hidden border transition-transform active:scale-[0.98] hover:opacity-95"
                         style={{
                           borderColor: HUB.divider,
