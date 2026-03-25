@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
@@ -74,7 +74,14 @@ export default function PodSportsTopicPage() {
   const { isDarkMode } = useTheme();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const [pullProgress, setPullProgress] = useState(0);
+
+  const pullStartYRef = useRef(null);
+  const pullDistanceRef = useRef(0);
+  const loadTokenRef = useRef(0);
+  const isMountedRef = useRef(true);
 
   const configForTitle = TOPIC_META[topicId];
   const title = configForTitle?.label ?? 'Sports';
@@ -85,85 +92,102 @@ export default function PodSportsTopicPage() {
   );
 
   useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  const loadNews = async ({ initialLoad }) => {
     const config = TOPIC_META[topicId];
     if (!config) {
-      setItems([]);
+      if (initialLoad) setItems([]);
       return;
     }
 
-    let cancelled = false;
-
-    const load = async () => {
+    const token = ++loadTokenRef.current;
+    if (initialLoad) {
       setLoading(true);
       setError('');
-      try {
-        /** @type {Array<{title:string,source:string,url:string,image:null|string,description:string,publishedAt?:string|null,sourceSiteUrl?:string}>|null} */
-        let rows = null;
+    } else {
+      setRefreshing(true);
+      setError('');
+    }
 
-        if (apiKey) {
-          try {
-            if (topicId === 'others') {
-              const res = await fetch(
-                `https://newsapi.org/v2/top-headlines?category=sports&language=en&pageSize=100&apiKey=${encodeURIComponent(apiKey)}`
-              );
-              const data = await res.json();
-              if (data.status === 'ok' && Array.isArray(data.articles)) {
-                const normalized = normalizeArticles(data.articles);
-                const filtered = normalized.filter((a) => {
-                  const blob = `${a.title} ${a.description || ''}`;
-                  return !matchesMainTopic(blob);
-                });
-                if (filtered.length) rows = filtered.slice(0, 30);
-              }
-            } else {
-              const q = config.q;
-              const url = `https://newsapi.org/v2/everything?q=${encodeURIComponent(q)}&language=en&sortBy=publishedAt&pageSize=30&apiKey=${encodeURIComponent(apiKey)}`;
-              const res = await fetch(url);
-              const data = await res.json();
-              if (res.ok && data.status === 'ok' && Array.isArray(data.articles)) {
-                const normalized = normalizeArticles(data.articles);
-                if (normalized.length) rows = normalized;
-              }
-            }
-          } catch {
-            /* try Google RSS below */
-          }
-        }
+    try {
+      /** @type {Array<{title:string,source:string,url:string,image:null|string,description:string,publishedAt?:string|null,sourceSiteUrl?:string}>|null} */
+      let rows = null;
 
-        if (!rows?.length) {
-          let rss = await fetchLiveFromGoogleRss(topicId);
+      if (apiKey) {
+        try {
           if (topicId === 'others') {
-            rss = rss.filter((a) => !matchesMainTopic(`${a.title} ${a.description || ''}`));
-          }
-          if (rss.length) rows = rss.slice(0, 30);
-        }
-
-        if (!cancelled) {
-          if (rows?.length) {
-            setItems(rows);
-            setError('');
-            enrichNewsItemsWithOgImages(rows).then((enriched) => {
-              if (!cancelled) setItems(enriched);
-            });
+            const res = await fetch(
+              `https://newsapi.org/v2/top-headlines?category=sports&language=en&pageSize=100&apiKey=${encodeURIComponent(apiKey)}`
+            );
+            const data = await res.json();
+            if (data.status === 'ok' && Array.isArray(data.articles)) {
+              const normalized = normalizeArticles(data.articles);
+              const filtered = normalized.filter((a) => {
+                const blob = `${a.title} ${a.description || ''}`;
+                return !matchesMainTopic(blob);
+              });
+              if (filtered.length) rows = filtered.slice(0, 30);
+            }
           } else {
-            setItems([]);
-            setError('Could not load stories. Check your connection or try opening Google News below.');
+            const q = config.q;
+            const url = `https://newsapi.org/v2/everything?q=${encodeURIComponent(q)}&language=en&sortBy=publishedAt&pageSize=30&apiKey=${encodeURIComponent(apiKey)}`;
+            const res = await fetch(url);
+            const data = await res.json();
+            if (res.ok && data.status === 'ok' && Array.isArray(data.articles)) {
+              const normalized = normalizeArticles(data.articles);
+              if (normalized.length) rows = normalized;
+            }
           }
+        } catch {
+          /* try Google RSS below */
         }
-      } catch {
-        if (!cancelled) {
-          setItems([]);
-          setError('Could not load stories. Check your connection or try opening Google News below.');
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
       }
-    };
 
-    load();
-    return () => {
-      cancelled = true;
-    };
+      if (!rows?.length) {
+        let rss = await fetchLiveFromGoogleRss(topicId);
+        if (topicId === 'others') {
+          rss = rss.filter((a) => !matchesMainTopic(`${a.title} ${a.description || ''}`));
+        }
+        if (rss.length) rows = rss.slice(0, 30);
+      }
+
+      if (!rows?.length) {
+        const msg =
+          'Could not load stories. Check your connection or try opening Google News below.';
+        if (isMountedRef.current && token === loadTokenRef.current) {
+          if (initialLoad) setItems([]);
+          setError(msg);
+        }
+        return;
+      }
+
+      const enriched = await enrichNewsItemsWithOgImages(rows);
+      if (isMountedRef.current && token === loadTokenRef.current) {
+        setItems(enriched);
+        setError('');
+      }
+    } catch {
+      const msg =
+        'Could not load stories. Check your connection or try opening Google News below.';
+      if (isMountedRef.current && token === loadTokenRef.current) {
+        if (initialLoad) setItems([]);
+        setError(msg);
+      }
+    } finally {
+      if (!isMountedRef.current || token !== loadTokenRef.current) return;
+      if (initialLoad) setLoading(false);
+      else setRefreshing(false);
+      setPullProgress(0);
+    }
+  };
+
+  useEffect(() => {
+    loadNews({ initialLoad: true });
   }, [topicId, apiKey]);
 
   const HUB = {
@@ -175,9 +199,59 @@ export default function PodSportsTopicPage() {
   };
   const cardStyle = { background: HUB.bg, border: `1px solid ${HUB.divider}` };
 
+  const getScrollTop = () => {
+    const se = document.scrollingElement;
+    if (se) return se.scrollTop || 0;
+    return window.scrollY || document.documentElement.scrollTop || 0;
+  };
+
+  const isAtTop = () => getScrollTop() <= 0;
+
+  const onTouchStart = (e) => {
+    if (loading || refreshing) return;
+    if (!isAtTop()) return;
+    if (!e.touches || e.touches.length !== 1) return;
+    pullStartYRef.current = e.touches[0].clientY;
+    pullDistanceRef.current = 0;
+    setPullProgress(0);
+  };
+
+  const onTouchMove = (e) => {
+    if (loading || refreshing) return;
+    if (!isAtTop()) return;
+    if (pullStartYRef.current == null) return;
+    if (!e.touches || e.touches.length !== 1) return;
+
+    const currentY = e.touches[0].clientY;
+    const delta = currentY - pullStartYRef.current;
+    if (delta <= 0) return;
+
+    pullDistanceRef.current = delta;
+    const progress = Math.max(0, Math.min(1, delta / 80));
+    setPullProgress(progress);
+  };
+
+  const onTouchEnd = () => {
+    if (loading || refreshing) return;
+    if (pullStartYRef.current == null) return;
+
+    const delta = pullDistanceRef.current;
+    pullStartYRef.current = null;
+    pullDistanceRef.current = 0;
+
+    if (isAtTop() && delta >= 70) {
+      loadNews({ initialLoad: false });
+    } else {
+      setPullProgress(0);
+    }
+  };
+
   return (
     <div
       className="min-h-screen px-6 relative overflow-hidden slide-up"
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
       style={{
         background: isDarkMode ? '#131314' : '#B5C4AE',
         paddingTop: 'max(1.5rem, calc(env(safe-area-inset-top, 0px) + 1rem))',
@@ -199,6 +273,19 @@ export default function PodSportsTopicPage() {
         </div>
 
         <div className="rounded-2xl overflow-hidden" style={cardStyle}>
+          <div
+            className="h-8 flex items-center justify-center px-4 text-sm"
+            style={{ color: HUB.textSecondary }}
+            aria-live="polite"
+          >
+            {refreshing
+              ? 'Refreshing…'
+              : pullProgress > 0
+                ? pullProgress >= 0.9
+                  ? 'Release to refresh'
+                  : 'Pull to refresh'
+                : null}
+          </div>
           <div className="px-4 py-4" style={{ borderBottom: `1px solid ${HUB.divider}` }}>
             <h2 className="text-base font-semibold" style={{ color: HUB.text }}>
               <span className="mr-1.5" aria-hidden>🔥</span>
