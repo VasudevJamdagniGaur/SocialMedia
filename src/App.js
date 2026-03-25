@@ -16,6 +16,7 @@ import SplashScreen from './components/SplashScreen';
 import CommunityPage from './components/CommunityPage';
 import PodPage from './components/PodPage';
 import PodSportsPage from './components/PodSportsPage';
+import PodSportsTopicPage from './components/PodSportsTopicPage';
 import PodAiTechPage from './components/PodAiTechPage';
 import PodEntrepreneurshipPage from './components/PodEntrepreneurshipPage';
 import PodCurrentAffairsPage from './components/PodCurrentAffairsPage';
@@ -92,6 +93,9 @@ function AppContent() {
               // Navigate to pod from All Reflections
               console.log('📍 Navigating to pod from All Reflections');
               navigate('/pod', { replace: true });
+            } else if (location.pathname.startsWith('/pod/sports/topic/')) {
+              console.log('📍 Navigating to Sports from sport topic');
+              navigate('/pod/sports', { replace: true });
             } else if (location.pathname === '/pod/sports') {
               // Navigate to pod from Sports
               console.log('📍 Navigating to pod from Sports');
@@ -171,6 +175,7 @@ function AppContent() {
         <Route path="/signup/profile-details" element={<ProfileDetailsPage />} />
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/pod" element={<PodPage />} />
+        <Route path="/pod/sports/topic/:topicId" element={<PodSportsTopicPage />} />
         <Route path="/pod/sports" element={<PodSportsPage />} />
         <Route path="/pod/ai-tech" element={<PodAiTechPage />} />
         <Route path="/pod/entrepreneurship" element={<PodEntrepreneurshipPage />} />

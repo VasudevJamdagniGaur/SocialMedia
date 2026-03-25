@@ -16,7 +16,13 @@ export default function PodSportsPage() {
     'F1 constructor battle getting tighter race by race',
     'Chess streamers and rapid formats attracting younger fans',
   ];
-  const SPORTS_EXPLORE = ['Cricket', 'Football', 'F1', 'Chess', 'Others'];
+  const SPORTS_EXPLORE = [
+    { label: 'Cricket', slug: 'cricket' },
+    { label: 'Football', slug: 'football' },
+    { label: 'F1', slug: 'f1' },
+    { label: 'Chess', slug: 'chess' },
+    { label: 'Others', slug: 'others' },
+  ];
 
   useEffect(() => {
     const apiKey = process.env.REACT_APP_NEWSAPI || process.env.NEWSAPI || '';
@@ -183,16 +189,17 @@ export default function PodSportsPage() {
               </div>
             </div>
             <div className="px-4 py-2">
-              {SPORTS_EXPLORE.map((tag, index) => (
+              {SPORTS_EXPLORE.map((row, index) => (
                 <button
-                  key={tag}
+                  key={row.slug}
                   type="button"
+                  onClick={() => navigate(`/pod/sports/topic/${row.slug}`)}
                   className="w-full flex items-center justify-between py-3 text-left transition-opacity hover:opacity-90"
                   style={{
                     borderTop: index === 0 ? 'none' : `1px solid ${HUB.divider}`,
                   }}
                 >
-                  <span className="text-sm font-medium" style={{ color: HUB.text }}>{tag}</span>
+                  <span className="text-sm font-medium" style={{ color: HUB.text }}>{row.label}</span>
                   <ChevronRight className="w-4 h-4" style={{ color: HUB.textSecondary }} />
                 </button>
               ))}
