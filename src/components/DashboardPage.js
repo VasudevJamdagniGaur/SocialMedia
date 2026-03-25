@@ -23,20 +23,9 @@ const HUB = {
 export default function DashboardPage() {
   const navigate = useNavigate();
   const { isDarkMode, toggleTheme } = useTheme();
-  const [selectedDate, setSelectedDate] = useState(() => {
-    try {
-      if (typeof localStorage !== 'undefined') {
-        const saved = localStorage.getItem('dashboard_selected_date_iso');
-        if (saved) {
-          const d = new Date(saved);
-          if (!Number.isNaN(d.getTime())) return d;
-        }
-      }
-    } catch (_) {
-      // ignore
-    }
-    return new Date();
-  });
+  // Always reopen the dashboard on "today".
+  // We intentionally ignore any previously saved `dashboard_selected_date_iso`.
+  const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [reflection, setReflection] = useState('');
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isLoadingReflection, setIsLoadingReflection] = useState(false);
