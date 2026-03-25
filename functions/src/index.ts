@@ -9,6 +9,8 @@ import * as admin from 'firebase-admin';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { onRequest } from 'firebase-functions/v2/https';
 import { logger } from 'firebase-functions';
+import { JSDOM } from 'jsdom';
+import { Readability } from '@mozilla/readability';
 import {
   getLinkedInConfig,
   exchangeCodeForToken,
@@ -363,7 +365,12 @@ async function handleLinkedInShare(
  */
 async function handleLinkedInAnalytics(
   req: import('firebase-functions/v2/https').Request,
-  res: { set: (k: string, v: string) => void; status: (n: number) => { json: (o: object) => void }; json: (o: object) => void }
+  res: {
+    set: (k: string, v: string) => void;
+    status: (n: number) => { json: (o: object) => void; end: () => void };
+    json: (o: object) => void;
+    end: () => void;
+  }
 ): Promise<void> {
   res.set('Access-Control-Allow-Origin', '*');
   if (req.method === 'OPTIONS') {
@@ -430,7 +437,12 @@ async function handleLinkedInAnalytics(
  */
 async function handleLinkedInPosts(
   req: import('firebase-functions/v2/https').Request,
-  res: { set: (k: string, v: string) => void; status: (n: number) => { json: (o: object) => void }; json: (o: object) => void }
+  res: {
+    set: (k: string, v: string) => void;
+    status: (n: number) => { json: (o: object) => void; end: () => void };
+    json: (o: object) => void;
+    end: () => void;
+  }
 ): Promise<void> {
   res.set('Access-Control-Allow-Origin', '*');
   if (req.method === 'OPTIONS') {
@@ -607,6 +619,228 @@ ${t}`;
   }
 }
 
+function decodeMaybeWrappedNewsUrl(rawUrl: string): string {
+  const trimmed = (rawUrl || '').trim();
+  if (!trimmed) return '';
+  try {
+    const u = new URL(trimmed);
+    const qUrl = u.searchParams.get('url') || u.searchParams.get('q');
+    if (qUrl && /^https?:\/\//i.test(qUrl)) return qUrl;
+  } catch {
+    // ignore parse errors
+  }
+  return trimmed;
+}
+
+function decodeMetaUrl(raw: string): string | null {
+  if (!raw || typeof raw !== 'string') return null;
+  let u = raw.trim().replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+  if (u.startsWith('//')) u = `https:${u}`;
+  return /^https?:\/\//i.test(u) ? u : null;
+}
+
+function decodeGoogleWrappedUrl(href: string): string | null {
+  if (!href || typeof href !== 'string') return null;
+  try {
+    const u = new URL(href, 'https://news.google.com');
+    const inner = u.searchParams.get('url') || u.searchParams.get('q');
+    if (inner && /^https?:\/\//i.test(inner)) return inner;
+  } catch {
+    // ignore
+  }
+  // also handle percent-encoded url=... inside the string
+  const m = href.match(/[?&](?:url|q)=(https%3A%2F%2F[^&]+)/i);
+  if (m) {
+    try {
+      const decoded = decodeURIComponent(m[1]);
+      if (decoded && /^https?:\/\//i.test(decoded)) return decoded;
+    } catch {
+      // ignore
+    }
+  }
+  return null;
+}
+
+function isBlockedOutboundHost(url: string): boolean {
+  try {
+    const h = new URL(url).hostname.toLowerCase();
+    if (h === 'news.google.com' || h.endsWith('.news.google.com')) return true;
+    if (h.endsWith('google.com') || h === 'gstatic.com' || h.endsWith('.gstatic.com')) return true;
+    if (h.endsWith('gstatic.com')) return true;
+    return false;
+  } catch {
+    return true;
+  }
+}
+
+function isGoogleNewsArticleUrl(url: string): boolean {
+  return typeof url === 'string' && /news\.google\.com\/(rss\/)?articles\//i.test(url);
+}
+
+function extractLikelyPublisherUrlFromGoogleNewsPageHtml(html: string): string | null {
+  if (!html || typeof html !== 'string' || html.length < 200) return null;
+  const re = /https?:\/\/[a-z0-9][-a-z0-9.]*[a-z0-9](?::\d+)?\/[^"'\\\s<>)]{12,900}/gi;
+  let m: RegExpExecArray | null;
+  let best: string | null = null;
+  let bestScore = 0;
+  while ((m = re.exec(html)) !== null) {
+    let u = m[0].replace(/[),.;]+$/g, '');
+    const decodedMeta = decodeMetaUrl(u);
+    if (decodedMeta) u = decodedMeta;
+    const unwrapped = decodeGoogleWrappedUrl(u);
+    if (unwrapped) u = unwrapped;
+    if (!u || isBlockedOutboundHost(u)) continue;
+    try {
+      const p = new URL(u);
+      const score = p.pathname.length + (p.search ? 8 : 0);
+      if (score > bestScore) {
+        bestScore = score;
+        best = u;
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return best;
+}
+
+function pickMetaContent(doc: any, selectors: string[]): string {
+  for (const s of selectors) {
+    const el = doc.querySelector(s);
+    const c = (el?.getAttribute('content') || '').trim();
+    if (c) return c;
+  }
+  return '';
+}
+
+function cleanArticleText(raw: string): string {
+  const t = (raw || '').replace(/\r/g, '\n').replace(/[ \t]+\n/g, '\n').trim();
+  return t.length > 16000 ? `${t.slice(0, 16000).trim()}\n...` : t;
+}
+
+/**
+ * GET /api/linkedin/article?url=...
+ * Returns normalized article fields for share generation:
+ * { url, sourceUrl, title, image, text, source, description }
+ */
+async function handleArticleExtract(
+  req: import('firebase-functions/v2/https').Request,
+  res: {
+    set: (k: string, v: string) => void;
+    status: (n: number) => { json: (o: object) => void; end: () => void };
+    json: (o: object) => void;
+  }
+): Promise<void> {
+  res.set('Access-Control-Allow-Origin', '*');
+  if (req.method === 'OPTIONS') {
+    res.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type');
+    res.status(204).end();
+    return;
+  }
+  if (req.method !== 'GET') {
+    res.status(405).json({ error: 'Method not allowed' });
+    return;
+  }
+
+  try {
+    const rawUrl = typeof req.query?.url === 'string' ? req.query.url : '';
+    const resolved = decodeMaybeWrappedNewsUrl(rawUrl);
+    if (!resolved || !/^https?:\/\//i.test(resolved)) {
+      res.status(400).json({ error: 'Missing or invalid url query param' });
+      return;
+    }
+
+    const response = await fetch(resolved, {
+      method: 'GET',
+      redirect: 'follow',
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36',
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+    });
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      logger.warn('[article] fetch not ok', { status: response.status, body: body.slice(0, 180), url: resolved });
+      res.status(502).json({ error: `Could not fetch article (${response.status})` });
+      return;
+    }
+
+    const initialFinalUrl = response.url || resolved;
+    let html = await response.text();
+    let finalUrl = initialFinalUrl;
+
+    // If this is a Google News article shell, try to unpack the publisher URL
+    // from the shell HTML and fetch the publisher page for real text/image.
+    if (isGoogleNewsArticleUrl(finalUrl)) {
+      const extractedPublisher = extractLikelyPublisherUrlFromGoogleNewsPageHtml(html);
+      if (extractedPublisher && extractedPublisher !== finalUrl && !isBlockedOutboundHost(extractedPublisher)) {
+        try {
+          const pubRes = await fetch(extractedPublisher, {
+            method: 'GET',
+            redirect: 'follow',
+            headers: {
+              'User-Agent':
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36',
+              Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            },
+          });
+          if (pubRes.ok) {
+            finalUrl = pubRes.url || extractedPublisher;
+            html = await pubRes.text();
+          }
+        } catch {
+          // keep shell HTML if publisher fetch fails
+        }
+      }
+    }
+
+    const dom = new JSDOM(html, { url: finalUrl });
+    const doc = dom.window.document;
+    const readable = new Readability(doc).parse();
+
+    const title =
+      pickMetaContent(doc, ['meta[property="og:title"]', 'meta[name="twitter:title"]']) ||
+      (readable?.title || '').trim() ||
+      (doc.querySelector('h1')?.textContent || '').trim() ||
+      (doc.title || '').trim();
+    const image = pickMetaContent(doc, [
+      'meta[property="og:image"]',
+      'meta[property="og:image:url"]',
+      'meta[name="twitter:image"]',
+      'meta[name="twitter:image:src"]',
+    ]);
+    const description =
+      pickMetaContent(doc, [
+        'meta[property="og:description"]',
+        'meta[name="description"]',
+        'meta[name="twitter:description"]',
+      ]) || (readable?.excerpt || '').trim();
+    const text = cleanArticleText((readable?.textContent || '').trim());
+    const source = (() => {
+      try {
+        return new URL(finalUrl).hostname.replace(/^www\./, '');
+      } catch {
+        return '';
+      }
+    })();
+
+    res.status(200).json({
+      url: resolved,
+      sourceUrl: finalUrl,
+      title,
+      image,
+      text,
+      source,
+      description,
+    });
+  } catch (e: any) {
+    logger.warn('[article] extraction error', { message: e?.message });
+    res.status(500).json({ error: e?.message || 'Article extraction failed' });
+  }
+}
+
 export const linkedInApi = onRequest(
   { cors: true },
   async (req, res) => {
@@ -625,6 +859,9 @@ export const linkedInApi = onRequest(
     }
     if (path.endsWith('/posts')) {
       return handleLinkedInPosts(req, res);
+    }
+    if (path.endsWith('/article')) {
+      return handleArticleExtract(req, res);
     }
     res.status(404).json({ error: 'Not found' });
   }

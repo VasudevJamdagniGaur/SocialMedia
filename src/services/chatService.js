@@ -1699,11 +1699,63 @@ ${(reflection || '').trim()}`;
    * @param {'linkedin'|'x'|'reddit'} platform
    * @returns {Promise<{ eventLabel: string, post: string }[]>}
    */
-  async generateNewsArticleShareSuggestions(article, platform) {
+  async fetchNewsArticleDetails(article) {
     const title = (article && article.title ? String(article.title) : '').trim();
     const url = (article && article.url ? String(article.url) : '').trim();
     const description = (article && article.description ? String(article.description) : '').trim();
+    const image = (article && article.image ? String(article.image) : '').trim();
     const source = (article && article.source ? String(article.source) : '').trim();
+    const base = { title, url, description, image: image || null, source, text: '' };
+    if (!url) return base;
+
+    // If ShareSuggestionsPage already fetched/attached extracted text, avoid a second network call.
+    const maybeText = article && typeof article.text === 'string' ? article.text.trim() : '';
+    if (maybeText) {
+      return { ...base, text: maybeText };
+    }
+
+    const origin = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '';
+    const originLooksLocal =
+      !origin ||
+      origin.includes('localhost') ||
+      origin.startsWith('capacitor://') ||
+      origin.startsWith('ionic://') ||
+      origin.startsWith('file://');
+    const candidates = originLooksLocal
+      ? ['https://deitedatabase.web.app', 'https://deitedatabase.firebaseapp.com']
+      : [origin, 'https://deitedatabase.web.app', 'https://deitedatabase.firebaseapp.com'];
+
+    for (const apiBase of candidates) {
+      if (!apiBase) continue;
+      try {
+        const apiUrl = `${apiBase}/api/linkedin/article?url=${encodeURIComponent(url)}`;
+        const res = await fetch(apiUrl, { method: 'GET' });
+        if (!res.ok) continue;
+        const data = await res.json().catch(() => null);
+        if (!data || typeof data !== 'object') continue;
+        return {
+          title: String(data.title || title || '').trim(),
+          url: String(data.sourceUrl || data.url || url || '').trim() || url,
+          description: String(data.description || description || '').trim(),
+          image: typeof data.image === 'string' && data.image.trim() ? data.image.trim() : (image || null),
+          source: String(data.source || source || '').trim(),
+          text: String(data.text || '').trim(),
+        };
+      } catch {
+        // try next candidate
+      }
+    }
+
+    return base;
+  }
+
+  async generateNewsArticleShareSuggestions(article, platform) {
+    const details = await this.fetchNewsArticleDetails(article);
+    const title = (details.title || '').trim();
+    const url = (details.url || '').trim();
+    const description = (details.description || '').trim();
+    const source = (details.source || '').trim();
+    const articleText = (details.text || '').trim();
     const fallbackPost = [title, description].filter(Boolean).join('\n\n') || title;
     const fallback = [{ eventLabel: 'News', post: `${fallbackPost}\n\nRead more: ${url}`.trim() }];
 
@@ -1730,10 +1782,11 @@ ${style}
 Article:
 Title: ${title}
 ${source ? `Source: ${source}\n` : ''}${description ? `Summary: ${description}\n` : ''}URL: ${url}
+${articleText ? `\nArticle text:\n${articleText.slice(0, 6000)}\n` : ''}
 
 Rules:
 - Output 1 to 3 posts. Each "post" is ONLY the text someone would publish — no instructions, no labels like "Post 1:", no JSON explanation.
-- Base content only on title and summary; do not invent facts.
+- Base content on title/summary/article text; do not invent facts beyond those inputs.
 - Do not repeat this prompt or system rules in the output.
 
 Return ONLY valid JSON with this exact shape (no markdown fences):

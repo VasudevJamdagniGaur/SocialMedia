@@ -27,7 +27,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.createLinkedInUgcPost = exports.uploadImageToLinkedIn = exports.registerImageUpload = exports.getLinkedInAccessToken = exports.storeLinkedInToken = exports.getLinkedInPersonUrn = exports.exchangeCodeForToken = exports.getLinkedInConfig = void 0;
+exports.getLinkedInPostAnalytics = exports.createLinkedInUgcPost = exports.waitForLinkedInAssetAvailable = exports.getLinkedInAssetStatus = exports.uploadImageToLinkedIn = exports.registerImageUpload = exports.getLinkedInAccessToken = exports.storeLinkedInToken = exports.getLinkedInPersonUrn = exports.exchangeCodeForToken = exports.getLinkedInConfig = void 0;
 const admin = __importStar(require("firebase-admin"));
 const firebase_functions_1 = require("firebase-functions");
 const REDIRECT_URI = 'https://deitedatabase.firebaseapp.com/auth/linkedin/callback';
@@ -35,7 +35,10 @@ const LINKEDIN_TOKEN_URL = 'https://www.linkedin.com/oauth/v2/accessToken';
 const LINKEDIN_ME_URL = 'https://api.linkedin.com/v2/me';
 const LINKEDIN_REGISTER_UPLOAD = 'https://api.linkedin.com/rest/assets?action=registerUpload';
 const LINKEDIN_UGC_POSTS = 'https://api.linkedin.com/v2/ugcPosts';
+const LINKEDIN_SOCIAL_METADATA_BASE = 'https://api.linkedin.com/rest/socialMetadata';
 const RESTLI_HEADER = { 'X-Restli-Protocol-Version': '2.0.0' };
+/** Required for LinkedIn REST APIs (e.g. rest/assets). */
+const LINKEDIN_VERSION_HEADER = { 'LinkedIn-Version': '202410' };
 function getLinkedInConfig() {
     const clientId = (process.env.LINKEDIN_CLIENT_ID || '').trim();
     const clientSecret = (process.env.LINKEDIN_CLIENT_SECRET || '').trim();
@@ -145,6 +148,7 @@ async function registerImageUpload(accessToken, personUrn, fileSizeBytes) {
             Authorization: `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
             ...RESTLI_HEADER,
+            ...LINKEDIN_VERSION_HEADER,
         },
         body: JSON.stringify(body),
     });
@@ -180,6 +184,60 @@ async function uploadImageToLinkedIn(accessToken, uploadUrl, imageBuffer, conten
     }
 }
 exports.uploadImageToLinkedIn = uploadImageToLinkedIn;
+const LINKEDIN_REST_ASSETS = 'https://api.linkedin.com/rest/assets';
+/**
+ * Extract asset id from URN (urn:li:digitalmediaAsset:XXXX -> XXXX).
+ */
+function assetUrnToId(assetUrn) {
+    const prefix = 'urn:li:digitalmediaAsset:';
+    if (assetUrn.startsWith(prefix))
+        return assetUrn.slice(prefix.length);
+    return assetUrn;
+}
+/**
+ * Get asset status from LinkedIn REST API. Returns the recipe status (e.g. PROCESSING, AVAILABLE).
+ */
+async function getLinkedInAssetStatus(accessToken, assetUrn) {
+    const assetId = assetUrnToId(assetUrn);
+    const url = `${LINKEDIN_REST_ASSETS}/${encodeURIComponent(assetId)}`;
+    const res = await fetch(url, {
+        method: 'GET',
+        headers: {
+            Authorization: `Bearer ${accessToken}`,
+            ...RESTLI_HEADER,
+            ...LINKEDIN_VERSION_HEADER,
+        },
+    });
+    if (!res.ok) {
+        const text = await res.text();
+        firebase_functions_1.logger.warn('[linkedin] getAsset failed', { status: res.status, body: text?.slice(0, 200) });
+        throw new Error(`LinkedIn get asset failed: ${res.status}`);
+    }
+    const data = (await res.json());
+    const status = data.recipes?.[0]?.status ?? 'UNKNOWN';
+    return status;
+}
+exports.getLinkedInAssetStatus = getLinkedInAssetStatus;
+/**
+ * Poll asset status until AVAILABLE or timeout. Required so the post is actually visible;
+ * creating ugcPost before the asset is AVAILABLE can return 201 but the post won't appear.
+ */
+async function waitForLinkedInAssetAvailable(accessToken, assetUrn, options = {}) {
+    const maxWaitMs = options.maxWaitMs ?? 30000;
+    const pollIntervalMs = options.pollIntervalMs ?? 2000;
+    const deadline = Date.now() + maxWaitMs;
+    while (Date.now() < deadline) {
+        const status = await getLinkedInAssetStatus(accessToken, assetUrn);
+        if (status === 'AVAILABLE')
+            return;
+        if (status === 'CLIENT_ERROR' || status === 'SERVER_ERROR' || status === 'ABANDONED') {
+            throw new Error(`LinkedIn asset failed with status: ${status}`);
+        }
+        await new Promise((r) => setTimeout(r, pollIntervalMs));
+    }
+    throw new Error('LinkedIn asset did not become AVAILABLE in time');
+}
+exports.waitForLinkedInAssetAvailable = waitForLinkedInAssetAvailable;
 /**
  * Step 3: Create UGC post with caption and image asset.
  */
@@ -217,11 +275,63 @@ async function createLinkedInUgcPost(accessToken, personUrn, caption, assetUrn) 
         firebase_functions_1.logger.warn('[linkedin] ugcPosts failed', { status: res.status, body: text?.slice(0, 300) });
         throw new Error(`LinkedIn create post failed: ${res.status}`);
     }
-    const data = (await res.json());
-    const id = data?.id;
+    // Post ID can be in header (x-restli-id) or in response body (id)
+    const xRestliId = res.headers.get('x-restli-id')?.trim();
+    let data;
+    try {
+        data = (await res.json());
+    }
+    catch {
+        data = {};
+    }
+    const bodyId = data?.id;
+    const id = bodyId || xRestliId;
     if (!id)
-        throw new Error('LinkedIn ugcPosts did not return post id');
+        throw new Error('LinkedIn ugcPosts did not return post id (body or x-restli-id)');
     return id;
 }
 exports.createLinkedInUgcPost = createLinkedInUgcPost;
+/** UGC post URN for social metadata (id from API may be full URN or numeric). */
+function toUgcPostUrn(id) {
+    if (!id)
+        throw new Error('LinkedIn post id is required');
+    if (id.startsWith('urn:li:ugcPost:'))
+        return id;
+    return `urn:li:ugcPost:${id}`;
+}
+/**
+ * Fetch social metadata (reactions + comments) for a UGC post.
+ * Requires r_member_social or equivalent; may be restricted by LinkedIn.
+ */
+async function getLinkedInPostAnalytics(accessToken, ugcPostIdOrUrn) {
+    const urn = toUgcPostUrn(ugcPostIdOrUrn);
+    const url = `${LINKEDIN_SOCIAL_METADATA_BASE}/${encodeURIComponent(urn)}`;
+    const res = await fetch(url, {
+        method: 'GET',
+        headers: {
+            Authorization: `Bearer ${accessToken}`,
+            ...RESTLI_HEADER,
+        },
+    });
+    if (!res.ok) {
+        const text = await res.text();
+        firebase_functions_1.logger.warn('[linkedin] socialMetadata failed', { status: res.status, body: text?.slice(0, 200) });
+        throw new Error(`LinkedIn social metadata failed: ${res.status}`);
+    }
+    const data = (await res.json());
+    let likes = 0;
+    if (data.reactionSummaries && typeof data.reactionSummaries === 'object') {
+        for (const key of Object.keys(data.reactionSummaries)) {
+            const count = data.reactionSummaries[key]?.count ?? 0;
+            likes += count;
+        }
+    }
+    const comments = data.commentSummary?.count ?? 0;
+    return {
+        likes,
+        comments,
+        lastFetchedAt: Date.now(),
+    };
+}
+exports.getLinkedInPostAnalytics = getLinkedInPostAnalytics;
 //# sourceMappingURL=linkedin.js.map

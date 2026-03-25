@@ -33,6 +33,8 @@ const admin = __importStar(require("firebase-admin"));
 const firestore_1 = require("firebase-functions/v2/firestore");
 const https_1 = require("firebase-functions/v2/https");
 const firebase_functions_1 = require("firebase-functions");
+const jsdom_1 = require("jsdom");
+const readability_1 = require("@mozilla/readability");
 const linkedin_1 = require("./linkedin");
 admin.initializeApp();
 function getEmbeddingServiceConfig() {
@@ -264,10 +266,24 @@ async function handleLinkedInShare(req, res) {
             res.status(500).json({ error: 'LinkedIn image upload failed' });
             return;
         }
+        // Step 3.2b: wait for asset to be AVAILABLE so the post actually appears on LinkedIn.
+        // If the status check fails (e.g. 403 on GET asset), wait 5s and proceed anyway.
+        try {
+            await (0, linkedin_1.waitForLinkedInAssetAvailable)(accessToken, assetUrn, { maxWaitMs: 30000, pollIntervalMs: 2000 });
+            firebase_functions_1.logger.info('[linkedin] share step 3.2b: asset AVAILABLE');
+        }
+        catch (e) {
+            const msg = e?.message ?? '';
+            firebase_functions_1.logger.warn('[linkedin] share step 3.2b (wait for asset) failed', { message: msg });
+            // Fallback: wait 5s then create post anyway (GET asset may return 403 for some tokens)
+            firebase_functions_1.logger.info('[linkedin] share step 3.2b: fallback 5s delay before create');
+            await new Promise((r) => setTimeout(r, 5000));
+        }
         // Step 3.3: create UGC post
         let linkedinPostId;
         try {
             linkedinPostId = await (0, linkedin_1.createLinkedInUgcPost)(accessToken, personUrn, caption, assetUrn);
+            firebase_functions_1.logger.info('[linkedin] share step 3.3: post created', { linkedinPostId });
         }
         catch (e) {
             firebase_functions_1.logger.warn('[linkedin] share step 3.3 (ugcPosts) failed', { message: e?.message });
@@ -283,6 +299,11 @@ async function handleLinkedInShare(req, res) {
                     caption,
                     imageUrl,
                     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    analytics: {
+                        likes: 0,
+                        comments: 0,
+                        lastFetchedAt: null,
+                    },
                 }, { merge: true });
             }
             catch (e) {
@@ -300,6 +321,442 @@ async function handleLinkedInShare(req, res) {
         res.status(500).json({ error: e?.message || 'Share failed' });
     }
 }
+/**
+ * GET /api/linkedin/analytics?userId=xxx&postId=xxx
+ * Fetches LinkedIn social metadata for the post and updates Firestore. Returns { likes, comments, lastFetchedAt }.
+ */
+async function handleLinkedInAnalytics(req, res) {
+    res.set('Access-Control-Allow-Origin', '*');
+    if (req.method === 'OPTIONS') {
+        res.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+        res.set('Access-Control-Allow-Headers', 'Content-Type');
+        res.status(204).end();
+        return;
+    }
+    if (req.method !== 'GET') {
+        res.status(405).json({ error: 'Method not allowed' });
+        return;
+    }
+    const userId = req.query?.userId?.trim();
+    const postId = req.query?.postId?.trim();
+    if (!userId || !postId) {
+        res.status(400).json({ error: 'Missing userId or postId' });
+        return;
+    }
+    const db = admin.firestore();
+    try {
+        const postDoc = await db.collection('posts').doc(postId).get();
+        const data = postDoc.data();
+        const linkedinPostId = data?.linkedinPostId;
+        if (!linkedinPostId || data?.userId !== userId) {
+            res.status(404).json({ error: 'Post not found or not a LinkedIn post' });
+            return;
+        }
+        const accessToken = await (0, linkedin_1.getLinkedInAccessToken)(userId);
+        if (!accessToken) {
+            res.status(401).json({ error: 'LinkedIn not connected or token expired' });
+            return;
+        }
+        const analytics = await (0, linkedin_1.getLinkedInPostAnalytics)(accessToken, linkedinPostId);
+        await db.collection('posts').doc(postId).set({
+            analytics: {
+                likes: analytics.likes,
+                comments: analytics.comments,
+                lastFetchedAt: analytics.lastFetchedAt,
+            },
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+        res.status(200).json({
+            likes: analytics.likes,
+            comments: analytics.comments,
+            lastFetchedAt: analytics.lastFetchedAt,
+        });
+    }
+    catch (e) {
+        firebase_functions_1.logger.warn('[linkedin] analytics error', { message: e?.message });
+        res.status(500).json({ error: e?.message || 'Failed to fetch analytics' });
+    }
+}
+/**
+ * GET /api/linkedin/posts?userId=xxx
+ * Returns list of user's LinkedIn posts (postId, caption, linkedinPostId, analytics) for the dashboard.
+ */
+async function handleLinkedInPosts(req, res) {
+    res.set('Access-Control-Allow-Origin', '*');
+    if (req.method === 'OPTIONS') {
+        res.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+        res.set('Access-Control-Allow-Headers', 'Content-Type');
+        res.status(204).end();
+        return;
+    }
+    if (req.method !== 'GET') {
+        res.status(405).json({ error: 'Method not allowed' });
+        return;
+    }
+    const userId = req.query?.userId?.trim();
+    if (!userId) {
+        res.status(400).json({ error: 'Missing userId' });
+        return;
+    }
+    const db = admin.firestore();
+    try {
+        const snapshot = await db
+            .collection('posts')
+            .where('userId', '==', userId)
+            .where('platform', '==', 'linkedin')
+            .limit(100)
+            .get();
+        const posts = snapshot.docs
+            .map((doc) => {
+            const d = doc.data();
+            return {
+                id: doc.id,
+                caption: d.caption ?? '',
+                imageUrl: d.imageUrl ?? null,
+                linkedinPostId: d.linkedinPostId ?? null,
+                analytics: d.analytics ?? { likes: 0, comments: 0, lastFetchedAt: null },
+                createdAt: d.createdAt?.toMillis?.() ?? null,
+            };
+        })
+            .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
+            .slice(0, 50);
+        res.status(200).json({ posts });
+    }
+    catch (e) {
+        firebase_functions_1.logger.warn('[linkedin] posts list error', { message: e?.message });
+        res.status(500).json({ error: e?.message || 'Failed to list posts' });
+    }
+}
+/**
+ * POST /api/linkedin/suggestions — generate platform share suggestions on the backend.
+ * Body: { reflection: string, platform: 'linkedin' | 'x' | 'reddit' }.
+ *
+ * This avoids calling OpenAI directly from the mobile app (which can fail with TypeError: Failed to fetch).
+ */
+async function handleLinkedInSuggestions(req, res) {
+    res.set('Access-Control-Allow-Origin', '*');
+    if (req.method === 'OPTIONS') {
+        res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+        res.set('Access-Control-Allow-Headers', 'Content-Type');
+        res.status(204).end();
+        return;
+    }
+    if (req.method !== 'POST') {
+        res.status(405).json({ error: 'Method not allowed' });
+        return;
+    }
+    try {
+        const { reflection, platform } = (req.body || {});
+        const t = (reflection || '').trim();
+        const p = (platform || 'linkedin').toLowerCase();
+        if (!t) {
+            res.status(400).json({ error: 'Missing reflection' });
+            return;
+        }
+        if (!['linkedin', 'x', 'reddit'].includes(p)) {
+            res.status(400).json({ error: 'Invalid platform' });
+            return;
+        }
+        const apiKey = (process.env.OPENAI_API_KEY || process.env.REACT_APP_OPENAI_API_KEY || '').trim();
+        if (!apiKey) {
+            res.status(500).json({ error: 'OPENAI_API_KEY is not set on backend' });
+            return;
+        }
+        const platformLabel = p === 'x' ? 'X (Twitter)' : p.charAt(0).toUpperCase() + p.slice(1);
+        const platformStyleGuide = {
+            linkedin: `LINKEDIN STYLE (strict):
+- Professional, polished tone. Thought-leadership or reflective professional narrative.
+- Strong opening hook (question, observation, or bold line). Short paragraphs (1–3 lines).
+- First person, authentic but career-friendly. Optional light insight or takeaway.
+- End with 0–3 relevant hashtags. No emoji overload.`,
+            x: `X (TWITTER) STYLE (strict):
+- Very concise. Each post MUST be under 280 characters.
+- Punchy, direct. Line breaks for emphasis. One clear idea per post.
+- 1–2 hashtags max. Emoji sparingly if at all.`,
+            reddit: `REDDIT STYLE (strict):
+- Casual, conversational, like a personal story sub.
+- First-person, relatable, authentic.
+- Natural paragraph flow. No corporate speak.`
+        };
+        const styleGuide = platformStyleGuide[p] || platformStyleGuide.linkedin;
+        const prompt = `You are turning a day's reflection into separate social posts. You MUST create one standalone post for EACH distinct event or moment mentioned in the reflection.
+
+PLATFORM: ${platformLabel}. Write EVERY post in that platform's native style so it reads like a real ${platformLabel} post.
+
+${styleGuide}
+
+Output format (strict):
+- For each post, first write exactly: EVENT: <short event label>
+- Then on the next lines write the full post text.
+- Separate each post with a line that contains only: ---
+
+Reflection:
+${t}`;
+        const apiUrl = 'https://api.openai.com/v1/chat/completions';
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+            body: JSON.stringify({
+                model: 'gpt-4o',
+                messages: [{ role: 'user', content: prompt }],
+                temperature: 0.5,
+                max_tokens: 2400
+            })
+        });
+        if (!response.ok) {
+            const errText = await response.text().catch(() => '');
+            firebase_functions_1.logger.warn('[suggestions] openai not ok', { status: response.status, body: errText.slice(0, 200) });
+            res.status(500).json({ error: `OpenAI error ${response.status}: ${errText.slice(0, 150)}` });
+            return;
+        }
+        const data = (await response.json());
+        const raw = (data?.choices?.[0]?.message?.content || '').trim();
+        if (!raw) {
+            res.status(200).json({ posts: [{ eventLabel: 'Reflection', post: t }] });
+            return;
+        }
+        // Parse EVENT blocks (same parsing rules as frontend)
+        let blocks = raw.split(/\n *--- *\n/).map((s) => s.trim()).filter(Boolean);
+        if (blocks.length <= 1 && (raw.match(/EVENT:\s*/gi) || []).length >= 2) {
+            const eventParts = raw.split(/\s*EVENT:\s*/i);
+            blocks = eventParts
+                .map((p2) => p2.trim())
+                .filter(Boolean)
+                .map((p2) => (p2.match(/^EVENT:/i) ? p2 : 'EVENT: ' + p2));
+        }
+        const result = [];
+        for (const block of blocks) {
+            const eventMatch = block.match(/^EVENT:\s*(.+?)(?:\n|$)/i);
+            const eventLabel = eventMatch ? eventMatch[1].trim() : '';
+            const post = eventMatch ? block.slice(block.indexOf('\n') + 1).trim() : block.trim();
+            if (post)
+                result.push({ eventLabel: eventLabel || 'Moment', post });
+        }
+        res.status(200).json({ posts: result.length ? result : [{ eventLabel: 'Reflection', post: t }] });
+    }
+    catch (e) {
+        firebase_functions_1.logger.warn('[suggestions] unexpected error', { message: e?.message });
+        res.status(500).json({ error: e?.message || 'Suggestions failed' });
+    }
+}
+function decodeMaybeWrappedNewsUrl(rawUrl) {
+    const trimmed = (rawUrl || '').trim();
+    if (!trimmed)
+        return '';
+    try {
+        const u = new URL(trimmed);
+        const qUrl = u.searchParams.get('url') || u.searchParams.get('q');
+        if (qUrl && /^https?:\/\//i.test(qUrl))
+            return qUrl;
+    }
+    catch {
+        // ignore parse errors
+    }
+    return trimmed;
+}
+function decodeMetaUrl(raw) {
+    if (!raw || typeof raw !== 'string')
+        return null;
+    let u = raw.trim().replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+    if (u.startsWith('//'))
+        u = `https:${u}`;
+    return /^https?:\/\//i.test(u) ? u : null;
+}
+function decodeGoogleWrappedUrl(href) {
+    if (!href || typeof href !== 'string')
+        return null;
+    try {
+        const u = new URL(href, 'https://news.google.com');
+        const inner = u.searchParams.get('url') || u.searchParams.get('q');
+        if (inner && /^https?:\/\//i.test(inner))
+            return inner;
+    }
+    catch {
+        // ignore
+    }
+    // also handle percent-encoded url=... inside the string
+    const m = href.match(/[?&](?:url|q)=(https%3A%2F%2F[^&]+)/i);
+    if (m) {
+        try {
+            const decoded = decodeURIComponent(m[1]);
+            if (decoded && /^https?:\/\//i.test(decoded))
+                return decoded;
+        }
+        catch {
+            // ignore
+        }
+    }
+    return null;
+}
+function isBlockedOutboundHost(url) {
+    try {
+        const h = new URL(url).hostname.toLowerCase();
+        if (h === 'news.google.com' || h.endsWith('.news.google.com'))
+            return true;
+        if (h.endsWith('google.com') || h === 'gstatic.com' || h.endsWith('.gstatic.com'))
+            return true;
+        if (h.endsWith('gstatic.com'))
+            return true;
+        return false;
+    }
+    catch {
+        return true;
+    }
+}
+function isGoogleNewsArticleUrl(url) {
+    return typeof url === 'string' && /news\.google\.com\/(rss\/)?articles\//i.test(url);
+}
+function extractLikelyPublisherUrlFromGoogleNewsPageHtml(html) {
+    if (!html || typeof html !== 'string' || html.length < 200)
+        return null;
+    const re = /https?:\/\/[a-z0-9][-a-z0-9.]*[a-z0-9](?::\d+)?\/[^"'\\\s<>)]{12,900}/gi;
+    let m;
+    let best = null;
+    let bestScore = 0;
+    while ((m = re.exec(html)) !== null) {
+        let u = m[0].replace(/[),.;]+$/g, '');
+        const decodedMeta = decodeMetaUrl(u);
+        if (decodedMeta)
+            u = decodedMeta;
+        const unwrapped = decodeGoogleWrappedUrl(u);
+        if (unwrapped)
+            u = unwrapped;
+        if (!u || isBlockedOutboundHost(u))
+            continue;
+        try {
+            const p = new URL(u);
+            const score = p.pathname.length + (p.search ? 8 : 0);
+            if (score > bestScore) {
+                bestScore = score;
+                best = u;
+            }
+        }
+        catch {
+            // ignore
+        }
+    }
+    return best;
+}
+function pickMetaContent(doc, selectors) {
+    for (const s of selectors) {
+        const el = doc.querySelector(s);
+        const c = (el?.getAttribute('content') || '').trim();
+        if (c)
+            return c;
+    }
+    return '';
+}
+function cleanArticleText(raw) {
+    const t = (raw || '').replace(/\r/g, '\n').replace(/[ \t]+\n/g, '\n').trim();
+    return t.length > 16000 ? `${t.slice(0, 16000).trim()}\n...` : t;
+}
+/**
+ * GET /api/linkedin/article?url=...
+ * Returns normalized article fields for share generation:
+ * { url, sourceUrl, title, image, text, source, description }
+ */
+async function handleArticleExtract(req, res) {
+    res.set('Access-Control-Allow-Origin', '*');
+    if (req.method === 'OPTIONS') {
+        res.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+        res.set('Access-Control-Allow-Headers', 'Content-Type');
+        res.status(204).end();
+        return;
+    }
+    if (req.method !== 'GET') {
+        res.status(405).json({ error: 'Method not allowed' });
+        return;
+    }
+    try {
+        const rawUrl = typeof req.query?.url === 'string' ? req.query.url : '';
+        const resolved = decodeMaybeWrappedNewsUrl(rawUrl);
+        if (!resolved || !/^https?:\/\//i.test(resolved)) {
+            res.status(400).json({ error: 'Missing or invalid url query param' });
+            return;
+        }
+        const response = await fetch(resolved, {
+            method: 'GET',
+            redirect: 'follow',
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36',
+                Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            },
+        });
+        if (!response.ok) {
+            const body = await response.text().catch(() => '');
+            firebase_functions_1.logger.warn('[article] fetch not ok', { status: response.status, body: body.slice(0, 180), url: resolved });
+            res.status(502).json({ error: `Could not fetch article (${response.status})` });
+            return;
+        }
+        const initialFinalUrl = response.url || resolved;
+        let html = await response.text();
+        let finalUrl = initialFinalUrl;
+        // If this is a Google News article shell, try to unpack the publisher URL
+        // from the shell HTML and fetch the publisher page for real text/image.
+        if (isGoogleNewsArticleUrl(finalUrl)) {
+            const extractedPublisher = extractLikelyPublisherUrlFromGoogleNewsPageHtml(html);
+            if (extractedPublisher && extractedPublisher !== finalUrl && !isBlockedOutboundHost(extractedPublisher)) {
+                try {
+                    const pubRes = await fetch(extractedPublisher, {
+                        method: 'GET',
+                        redirect: 'follow',
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36',
+                            Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                        },
+                    });
+                    if (pubRes.ok) {
+                        finalUrl = pubRes.url || extractedPublisher;
+                        html = await pubRes.text();
+                    }
+                }
+                catch {
+                    // keep shell HTML if publisher fetch fails
+                }
+            }
+        }
+        const dom = new jsdom_1.JSDOM(html, { url: finalUrl });
+        const doc = dom.window.document;
+        const readable = new readability_1.Readability(doc).parse();
+        const title = pickMetaContent(doc, ['meta[property="og:title"]', 'meta[name="twitter:title"]']) ||
+            (readable?.title || '').trim() ||
+            (doc.querySelector('h1')?.textContent || '').trim() ||
+            (doc.title || '').trim();
+        const image = pickMetaContent(doc, [
+            'meta[property="og:image"]',
+            'meta[property="og:image:url"]',
+            'meta[name="twitter:image"]',
+            'meta[name="twitter:image:src"]',
+        ]);
+        const description = pickMetaContent(doc, [
+            'meta[property="og:description"]',
+            'meta[name="description"]',
+            'meta[name="twitter:description"]',
+        ]) || (readable?.excerpt || '').trim();
+        const text = cleanArticleText((readable?.textContent || '').trim());
+        const source = (() => {
+            try {
+                return new URL(finalUrl).hostname.replace(/^www\./, '');
+            }
+            catch {
+                return '';
+            }
+        })();
+        res.status(200).json({
+            url: resolved,
+            sourceUrl: finalUrl,
+            title,
+            image,
+            text,
+            source,
+            description,
+        });
+    }
+    catch (e) {
+        firebase_functions_1.logger.warn('[article] extraction error', { message: e?.message });
+        res.status(500).json({ error: e?.message || 'Article extraction failed' });
+    }
+}
 exports.linkedInApi = (0, https_1.onRequest)({ cors: true }, async (req, res) => {
     const path = (req.url || '').split('?')[0];
     if (path.endsWith('/exchange')) {
@@ -307,6 +764,18 @@ exports.linkedInApi = (0, https_1.onRequest)({ cors: true }, async (req, res) =>
     }
     if (path.endsWith('/share')) {
         return handleLinkedInShare(req, res);
+    }
+    if (path.endsWith('/suggestions')) {
+        return handleLinkedInSuggestions(req, res);
+    }
+    if (path.endsWith('/analytics')) {
+        return handleLinkedInAnalytics(req, res);
+    }
+    if (path.endsWith('/posts')) {
+        return handleLinkedInPosts(req, res);
+    }
+    if (path.endsWith('/article')) {
+        return handleArticleExtract(req, res);
     }
     res.status(404).json({ error: 'Not found' });
 });

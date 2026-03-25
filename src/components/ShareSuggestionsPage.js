@@ -452,12 +452,50 @@ export default function ShareSuggestionsPage() {
   const reflectionFromState = (state.reflection ?? '').trim();
   const newsArticleFromState = normalizeNewsArticle(state.newsArticle);
   const isNewsShareMode = !!newsArticleFromState;
+  const [newsArticleDetails, setNewsArticleDetails] = useState(null);
+  const [isLoadingNewsDetails, setIsLoadingNewsDetails] = useState(isNewsShareMode);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!isNewsShareMode || !newsArticleFromState?.url) {
+      setNewsArticleDetails(null);
+      setIsLoadingNewsDetails(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setIsLoadingNewsDetails(true);
+    chatService
+      .fetchNewsArticleDetails(newsArticleFromState)
+      .then((d) => {
+        if (cancelled) return;
+        // Only treat as "details loaded" if we got something useful back.
+        const looksUseful = d && (d.title || d.description || d.text || d.image || d.source);
+        setNewsArticleDetails(looksUseful ? d : null);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setNewsArticleDetails(null);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setIsLoadingNewsDetails(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isNewsShareMode, newsArticleFromState?.url]);
+
+  const effectiveNewsArticle = isNewsShareMode ? (newsArticleDetails || newsArticleFromState) : null;
+
   const suggestionPromptText = isNewsShareMode
-    ? buildNewsSharePromptContext(newsArticleFromState)
+    ? buildNewsSharePromptContext(effectiveNewsArticle)
     : reflectionFromState;
   const baselineShareText = isNewsShareMode
-    ? [newsArticleFromState.title, newsArticleFromState.description].filter(Boolean).join('\n\n') ||
-      newsArticleFromState.title
+    ? [effectiveNewsArticle.title, effectiveNewsArticle.description].filter(Boolean).join('\n\n') ||
+      effectiveNewsArticle.title
     : reflectionFromState;
   const eventLabelDefault = isNewsShareMode ? 'News' : 'Reflection';
   const shareReturnTo =
@@ -755,12 +793,13 @@ export default function ShareSuggestionsPage() {
   // When user selects a platform (from state or by tapping an icon), fetch that platform's suggestions only
   useEffect(() => {
     if (!selectedPlatform || !suggestionPromptText) return;
+    if (isNewsShareMode && isLoadingNewsDetails) return;
     let cancelled = false;
     setIsLoadingSuggestions(true);
     setSuggestionError(null);
     setSuggestionImageUrls([]);
     const suggestionsPromise = isNewsShareMode
-      ? chatService.generateNewsArticleShareSuggestions(newsArticleFromState, selectedPlatform)
+      ? chatService.generateNewsArticleShareSuggestions(effectiveNewsArticle, selectedPlatform)
       : chatService.generateSocialPostSuggestions(suggestionPromptText, selectedPlatform);
 
     suggestionsPromise.then(async (list) => {
@@ -791,7 +830,7 @@ export default function ShareSuggestionsPage() {
         );
 
         if (isNewsShareMode) {
-          const img = newsArticleFromState.image || null;
+          const img = effectiveNewsArticle?.image || null;
           setSuggestionImageUrls(postsWithText.map(() => img));
           setSuggestionImagesFromChat(postsWithText.map(() => false));
           setIsLoadingImages(false);
@@ -924,7 +963,7 @@ export default function ShareSuggestionsPage() {
           setPlatformSuggestions(mergePostedIntoSuggestions(fallbackPosts, postedSet, captionOverrides));
           setSelectedIndex(0);
           if (isNewsShareMode) {
-            const img = newsArticleFromState.image || null;
+            const img = effectiveNewsArticle?.image || null;
             setSuggestionImageUrls([img]);
           } else {
             setSuggestionImageUrls([]);
@@ -933,7 +972,7 @@ export default function ShareSuggestionsPage() {
         }
       });
     return () => { cancelled = true; };
-  }, [selectedPlatform, suggestionPromptText, dateStr]);
+  }, [selectedPlatform, suggestionPromptText, dateStr, isLoadingNewsDetails, newsArticleDetails]);
 
   const fallbackSuggestions = buildFallbackSuggestions(
     isNewsShareMode ? baselineShareText : reflectionFromState
@@ -2279,22 +2318,22 @@ export default function ShareSuggestionsPage() {
           {isNewsShareMode ? (
             <>
               <a
-                href={newsArticleFromState.url}
+                href={effectiveNewsArticle?.url}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-[15px] font-semibold leading-snug mt-2 block hover:underline"
                 style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}
               >
-                {newsArticleFromState.title}
+                {effectiveNewsArticle?.title}
               </a>
-              {newsArticleFromState.source ? (
+              {effectiveNewsArticle?.source ? (
                 <p className="text-xs mt-1" style={{ color: isDarkMode ? HUB.textSecondary : '#666' }}>
-                  {newsArticleFromState.source}
+                  {effectiveNewsArticle?.source}
                 </p>
               ) : null}
-              {newsArticleFromState.description ? (
+              {effectiveNewsArticle?.description ? (
                 <p className="text-[15px] leading-relaxed mt-2" style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}>
-                  {newsArticleFromState.description}
+                  {effectiveNewsArticle?.description}
                 </p>
               ) : null}
               <p className="text-xs mt-2" style={{ color: isDarkMode ? HUB.textSecondary : '#888' }}>
