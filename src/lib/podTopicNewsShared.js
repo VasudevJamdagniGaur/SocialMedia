@@ -155,11 +155,6 @@ export function isBadHeroImageUrl(url) {
   if (s.includes('google.com/s2/favicons')) return true;
   if (s.includes('gstatic.com/images/branding')) return true;
   if (s.includes('gstatic.com/images/icons')) return true;
-  // Google News thumbnails are frequently delivered from `lh*.googleusercontent.com` using `s0-w###`.
-  // These are often branding / logo thumbs rather than the publisher's story image.
-  if (/lh[0-9]\.googleusercontent\.com/i.test(url) && (s.includes('s0-w') || s.includes('=s0-w'))) {
-    return true;
-  }
   if (/news\.google\.com\/.{0,120}(icon|logo|favicon)/i.test(url)) return true;
   if ((s.includes('logo') || s.includes('icon')) && (s.includes('google') || s.includes('gstatic'))) return true;
   if (/googleusercontent\.com\/.{0,100}(icon|logo|favicon|branding)/i.test(url)) return true;
@@ -413,10 +408,10 @@ async function fetchPageHtmlViaProxies(pageUrl) {
       if (apiUrl.includes('allorigins')) {
         const j = await res.json();
         const c = typeof j.contents === 'string' ? j.contents : '';
-        if (c && c.length > 400) return c;
+        if (c && c.length > 150) return c;
       } else {
         const t = await res.text();
-        if (t && t.length > 400) return t;
+        if (t && t.length > 150) return t;
       }
     } catch {
       /* next proxy */
@@ -446,6 +441,53 @@ async function tryHeroImageFromPublisherPage(targetUrl) {
   return null;
 }
 
+function getApiBaseCandidates() {
+  const origin =
+    typeof window !== 'undefined' && window.location && typeof window.location.origin === 'string'
+      ? window.location.origin
+      : '';
+  const originLooksLocal =
+    !origin ||
+    origin.includes('localhost') ||
+    origin.startsWith('capacitor://') ||
+    origin.startsWith('ionic://') ||
+    origin.startsWith('file://');
+  if (originLooksLocal) {
+    const list = [];
+    if (origin && origin.startsWith('http')) list.push(origin);
+    list.push('https://deitedatabase.web.app');
+    list.push('https://deitedatabase.firebaseapp.com');
+    return list;
+  }
+  return [origin, 'https://deitedatabase.web.app', 'https://deitedatabase.firebaseapp.com'];
+}
+
+async function tryHeroImageFromBackend(articleUrl) {
+  const u = typeof articleUrl === 'string' ? articleUrl.trim() : '';
+  if (!u || !/^https?:\/\//i.test(u)) return null;
+
+  let lastErr = null;
+  for (const apiBase of getApiBaseCandidates()) {
+    try {
+      const apiUrl = `${apiBase}/api/linkedin/article?url=${encodeURIComponent(u)}`;
+      const res = await fetch(apiUrl, { method: 'GET' });
+      if (!res.ok) continue;
+      const data = await res.json().catch(() => null);
+      const img = data && typeof data.image === 'string' ? data.image.trim() : '';
+      if (img && !isBadHeroImageUrl(img)) return img;
+    } catch (e) {
+      // next candidate
+      lastErr = e;
+    }
+  }
+  // Helpful when debugging locally (prevents silent "black thumbnails").
+  // Keep it lightweight: only log for obvious failures (no network or parsing).
+  if (typeof window !== 'undefined' && window?.location?.hostname === 'localhost' && lastErr) {
+    console.warn('[news] backend hero-image extraction failed; falling back to proxies');
+  }
+  return null;
+}
+
 /**
  * Hero image for a story. Google News links need the publisher URL (from RSS &lt;a&gt; or unpacked HTML);
  * Microlink on google.com alone often returns the Google News logo — those URLs are rejected.
@@ -457,6 +499,10 @@ export async function resolveArticleHeroImage(pageUrl, options = {}) {
   const skipUnpack = options.skipGoogleUnpack === true;
   const publisherHint =
     typeof options.publisherUrl === 'string' ? options.publisherUrl.trim() : '';
+
+  // Prefer backend extraction (server-side). Avoids browser CORS/proxy failures.
+  const fromBackend = await tryHeroImageFromBackend(u);
+  if (fromBackend) return fromBackend;
 
   if (publisherHint && !isBlockedOutboundHost(publisherHint)) {
     const fromHint = await tryHeroImageFromPublisherPage(publisherHint);
