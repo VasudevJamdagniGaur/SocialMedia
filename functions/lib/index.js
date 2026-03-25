@@ -757,7 +757,32 @@ async function handleArticleExtract(req, res) {
         res.status(500).json({ error: e?.message || 'Article extraction failed' });
     }
 }
+function applyCorsHeaders(res) {
+    // firebase-functions/v2 response objects differ a bit across runtimes.
+    // Prefer `setHeader`, fall back to `set`.
+    try {
+        if (typeof res?.setHeader === 'function') {
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+            res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+            return;
+        }
+        if (typeof res?.set === 'function') {
+            res.set('Access-Control-Allow-Origin', '*');
+            res.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+            res.set('Access-Control-Allow-Headers', 'Content-Type');
+        }
+    }
+    catch {
+        // If CORS header setting fails, let the request continue.
+    }
+}
 exports.linkedInApi = (0, https_1.onRequest)({ cors: true }, async (req, res) => {
+    // Ensure CORS headers are present even for 404/route misses.
+    applyCorsHeaders(res);
+    if (req.method === 'OPTIONS') {
+        return res.status(204).end();
+    }
     const path = (req.url || '').split('?')[0];
     if (path.endsWith('/exchange')) {
         return handleLinkedInExchange(req, res);

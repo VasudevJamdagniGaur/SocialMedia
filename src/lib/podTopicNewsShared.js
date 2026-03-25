@@ -1,5 +1,38 @@
 import React from 'react';
 
+// #region agent log (debug mode)
+const __AGENT_DEBUG_ENDPOINT =
+  'http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7';
+const __AGENT_DEBUG_SESSION_ID = '6e32d1';
+let __AGENT_DEBUG_COUNTER = 0;
+const __AGENT_DEBUG_LIMIT = 8;
+const __agentDebugShouldLog = () => __AGENT_DEBUG_COUNTER++ < __AGENT_DEBUG_LIMIT;
+
+const __agentDebugPost = (hypothesisId, location, message, data) => {
+  if (!__agentDebugShouldLog()) return;
+  try {
+    fetch(__AGENT_DEBUG_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Debug-Session-Id': __AGENT_DEBUG_SESSION_ID,
+      },
+      body: JSON.stringify({
+        sessionId: __AGENT_DEBUG_SESSION_ID,
+        location,
+        message,
+        data: data || {},
+        timestamp: Date.now(),
+        hypothesisId,
+        runId: 'iter',
+      }),
+    }).catch(() => {});
+  } catch {
+    // ignore
+  }
+};
+// #endregion
+
 /** When there is no direct article URL, open a relevant Google News search. */
 export function googleNewsSearchUrl(query) {
   const q = (query || 'news').trim() || 'news';
@@ -79,24 +112,53 @@ function decodeGoogleWrappedUrl(href) {
 /** Google News RSS often wraps the real story in <a href="..."> or google/url?q=... */
 function extractPublisherUrlFromRssItemHtml(html) {
   if (!html || typeof html !== 'string') return null;
-  const re = /<a[^>]+href=["'](https?:\/\/[^"']+)["']/gi;
+  const candidates = new Set();
+
+  // Common case: <a href="..."> wrappers inside the description HTML.
+  const reA = /<a[^>]+href=["'](https?:\/\/[^"']+)["']/gi;
   let m;
+  while ((m = reA.exec(html)) !== null) {
+    if (m?.[1]) candidates.add(m[1]);
+  }
+
+  // Sometimes the wrapped link appears without a literal <a> tag.
+  // Google wrappers typically look like: https://www.google.com/url?q=https%3A%2F%2Fexample.com%2F...
+  const reWrapped = /https?:\/\/[^"'\s<>]+(?:[?&](?:url|q)=(?:https%3A%2F%2F|http%3A%2F%2F)[^&"'\s<>]+)[^"'\s<>]*/gi;
+  while ((m = reWrapped.exec(html)) !== null) {
+    if (m?.[0]) candidates.add(m[0]);
+  }
+
   let best = null;
-  let bestLen = 0;
-  while ((m = re.exec(html)) !== null) {
-    let u = decodeMetaUrl(m[1]);
+  let bestScore = 0;
+  for (const rawHref of candidates) {
+    let u = decodeMetaUrl(rawHref);
     const unwrapped = decodeGoogleWrappedUrl(u);
     if (unwrapped) u = unwrapped;
     if (!u || isBlockedOutboundHost(u)) continue;
+    if (looksLikeImageAssetUrl(u)) continue;
     try {
-      const len = new URL(u).pathname.length;
-      if (len > bestLen) {
-        bestLen = len;
+      const p = new URL(u);
+      // Prefer "real" publisher deep pages over short paths.
+      const score = p.pathname.length + (p.search ? 8 : 0);
+      if (score > bestScore) {
+        bestScore = score;
         best = u;
       }
     } catch {
       /* skip */
     }
+  }
+
+  // Helpful signal while debugging: avoid silent fallthrough to empty `publisherUrl`.
+  if (
+    typeof window !== 'undefined' &&
+    window?.location?.hostname === 'localhost' &&
+    !best &&
+    candidates.size > 0
+  ) {
+    console.warn('[news] publisherUrl extraction produced no usable result', {
+      candidateSamples: Array.from(candidates).slice(0, 3),
+    });
   }
   return best;
 }
@@ -108,7 +170,8 @@ function isBlockedOutboundHost(url) {
     if (h === 'play.google.com' || h.endsWith('.play.google.com')) return true;
     if (h.endsWith('google.com') || h === 'gstatic.com' || h.endsWith('.gstatic.com')) return true;
     if (h === 'youtube.com' || h.endsWith('.youtube.com')) return true;
-    if (h === 'googleusercontent.com' && /\/(icons?|branding|static\/images)/i.test(url)) return true;
+    // Treat googleusercontent as non-publisher (it’s usually images/assets for our use-case).
+    if (h === 'googleusercontent.com') return true;
     return false;
   } catch {
     return true;
@@ -119,23 +182,120 @@ function isGoogleNewsArticleUrl(url) {
   return typeof url === 'string' && /news\.google\.com\/(rss\/)?articles\//i.test(url);
 }
 
+function looksLikeImageAssetUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  const s = url.toLowerCase();
+  if (/^data:/i.test(s)) return true;
+  // Google News thumbnails often come from `lh*.googleusercontent.com` with varying size params.
+  if (/lh[0-9]\.googleusercontent\.com/i.test(url)) return true;
+  if (/\.(png|jpe?g|gif|webp|avif|bmp|svg)(\?.*)?$/i.test(s)) return true;
+  return false;
+}
+
+function looksLikePublisherPageUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  if (looksLikeImageAssetUrl(url)) return false;
+  try {
+    const p = new URL(url);
+    const host = p.hostname.toLowerCase();
+
+    // Common Google shell "noise" endpoints; not publisher pages.
+    if (host === 'googletagmanager.com' || host.endsWith('.googletagmanager.com')) return false;
+    if (host === 'google-analytics.com' || host.endsWith('.google-analytics.com')) return false;
+    if (host === 'doubleclick.net' || host.endsWith('.doubleclick.net')) return false;
+    if (host === 'w3.org' || host.endsWith('.w3.org')) return false;
+
+    const path = p.pathname.toLowerCase();
+    const last = path.split('/').filter(Boolean).pop() || '';
+
+    // Reject asset-like URLs.
+    if (/\.(js|css|json|xml|rss|atom|txt|map|ico)(\?.*)?$/.test(path)) return false;
+    if (last === 'js' || last === 'css' || last === 'json' || last === 'xml') return false;
+    if (path.includes('/gtag/') && (last === 'js' || path.endsWith('/gtag/js'))) return false;
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Pull a likely publisher article URL from a proxied Google News article HTML shell.
  */
 function extractLikelyPublisherUrlFromGoogleNewsPageHtml(html) {
   if (!html || typeof html !== 'string' || html.length < 200) return null;
-  const re = /https?:\/\/[a-z0-9][-a-z0-9.]*[a-z0-9](?::\d+)?\/[^"'\\\s<>)]{12,900}/gi;
+  // 1) Best-effort: decode explicit `google.com/url?q=...` wrapped publisher links.
+  // This avoids grabbing random URLs like XML namespaces from Google News shell HTML.
+  const wrapperRe = /https?:\/\/(?:www\.)?(?:google\.com|news\.google\.com)\/url\?[^"'\\\s<>]+/gi;
   let m;
   let best = null;
   let bestScore = 0;
+  let wrapperCount = 0;
+  let encodedUrlCount = 0;
+  let encodedBest = null;
+  let encodedBestScore = 0;
+  const consider = (wrappedOrDirect) => {
+    let u = decodeMetaUrl(wrappedOrDirect);
+    const unwrapped = decodeGoogleWrappedUrl(u);
+    if (unwrapped) u = unwrapped;
+    if (!u || isBlockedOutboundHost(u)) return;
+    if (!looksLikePublisherPageUrl(u)) return;
+    // Skip XML namespace noise that sometimes appears in the HTML.
+    try {
+      const p = new URL(u);
+      if (p.hostname === 'www.w3.org' || p.hostname === 'w3.org') return;
+      const score = p.pathname.length + (p.search ? 8 : 0);
+      if (score > bestScore) {
+        bestScore = score;
+        best = u;
+      }
+    } catch {
+      /* ignore */
+    }
+  };
+
+  while ((m = wrapperRe.exec(html)) !== null) {
+    if (m?.[0]) consider(m[0]);
+    wrapperCount++;
+  }
+  if (best) return best;
+
+  // 2b) Some shell HTML includes percent-encoded publisher URLs directly
+  // (e.g. `q=https%3A%2F%2Fexample.com%2F...`). Decode those sequences as a fallback.
+  const encodedUrlRe = /(?:https%3A%2F%2F|http%3A%2F%2F)[A-Za-z0-9%._~!$&'()*+,;=:/?#[\]-]{10,900}/gi;
+  while ((m = encodedUrlRe.exec(html)) !== null) {
+    if (!m?.[0]) continue;
+    encodedUrlCount++;
+    try {
+      const decoded = decodeURIComponent(m[0]);
+      if (!decoded || !/^https?:\/\//i.test(decoded)) continue;
+      if (looksLikeImageAssetUrl(decoded)) continue;
+      if (isBlockedOutboundHost(decoded)) continue;
+      if (!looksLikePublisherPageUrl(decoded)) continue;
+      const p = new URL(decoded);
+      const score = p.pathname.length + (p.search ? 8 : 0);
+      if (score > encodedBestScore) {
+        encodedBestScore = score;
+        encodedBest = decoded;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  if (encodedBest) return encodedBest;
+
+  // 2) Fallback: scan any URLs in the shell HTML, but filter out obvious noise.
+  const re = /https?:\/\/[a-z0-9][-a-z0-9.]*[a-z0-9](?::\d+)?\/[^"'\\\s<>)]{12,900}/gi;
   while ((m = re.exec(html)) !== null) {
     let u = m[0].replace(/[),.;]+$/g, '');
     u = decodeMetaUrl(u);
     const unwrapped = decodeGoogleWrappedUrl(u);
     if (unwrapped) u = unwrapped;
     if (!u || isBlockedOutboundHost(u)) continue;
+    if (!looksLikePublisherPageUrl(u)) continue;
     try {
       const p = new URL(u);
+      if (p.hostname === 'www.w3.org' || p.hostname === 'w3.org') continue;
       const score = p.pathname.length + (p.search ? 8 : 0);
       if (score > bestScore) {
         bestScore = score;
@@ -144,6 +304,50 @@ function extractLikelyPublisherUrlFromGoogleNewsPageHtml(html) {
     } catch {
       /* skip */
     }
+  }
+  if (
+    typeof window !== 'undefined' &&
+    window?.location?.hostname === 'localhost' &&
+    !best &&
+    (wrapperCount > 0 || encodedUrlCount > 0)
+  ) {
+    // #region agent log
+    // If we failed to extract a publisher URL from the shell, check whether the shell
+    // actually contains <a href="https://..."> candidates we can use.
+    try {
+      const reAHref = /<a[^>]+href=["'](https?:\/\/[^"']+)["']/gi;
+      let mm;
+      let hrefCount = 0;
+      let validHrefCount = 0;
+      const examples = [];
+      while ((mm = reAHref.exec(html)) !== null) {
+        hrefCount++;
+        const rawHref = mm?.[1];
+        if (!rawHref) continue;
+        let u = decodeMetaUrl(rawHref);
+        if (!u) continue;
+        const unwrapped = decodeGoogleWrappedUrl(u);
+        if (unwrapped) u = unwrapped;
+        if (!u || isBlockedOutboundHost(u)) continue;
+        if (looksLikeImageAssetUrl(u)) continue;
+        if (!looksLikePublisherPageUrl(u)) continue;
+        validHrefCount++;
+        if (examples.length < 5) examples.push(u);
+      }
+      console.warn('[news] google shell href candidate stats', {
+        hrefCount,
+        validHrefCount,
+        examples: examples.slice(0, 5).map((x) => String(x).slice(0, 120)),
+      });
+    } catch {
+      // ignore debug failures
+    }
+    // #endregion
+    console.warn('[news] google shell url extraction stats', {
+      wrapperCount,
+      encodedUrlCount,
+      encodedBestPreview: encodedBest ? String(encodedBest).slice(0, 90) : null,
+    });
   }
   return best;
 }
@@ -155,6 +359,14 @@ export function isBadHeroImageUrl(url) {
   if (s.includes('google.com/s2/favicons')) return true;
   if (s.includes('gstatic.com/images/branding')) return true;
   if (s.includes('gstatic.com/images/icons')) return true;
+  // Google News branding thumbs often come from `lh*.googleusercontent.com` using `s0-w###`.
+  // These are frequently not the publisher's main article image, so treat them as bad.
+  if (
+    /lh[0-9]\.googleusercontent\.com/i.test(url) &&
+    (s.includes('s0-w') || s.includes('=s0-w'))
+  ) {
+    return true;
+  }
   if (/news\.google\.com\/.{0,120}(icon|logo|favicon)/i.test(url)) return true;
   if ((s.includes('logo') || s.includes('icon')) && (s.includes('google') || s.includes('gstatic'))) return true;
   if (/googleusercontent\.com\/.{0,100}(icon|logo|favicon|branding)/i.test(url)) return true;
@@ -425,10 +637,19 @@ async function tryHeroImageFromPublisherPage(targetUrl) {
   if (!u || !/^https?:\/\//i.test(u) || isBlockedOutboundHost(u)) return null;
 
   try {
+    if (typeof window !== 'undefined' && window?.location?.hostname === 'localhost') {
+      console.warn('[news] microlink attempt', { targetPreview: String(u).slice(0, 90) });
+    }
     const ml = await fetch(`https://api.microlink.io/?url=${encodeURIComponent(u)}`);
     if (ml.ok) {
       const j = await ml.json().catch(() => null);
       const fixed = decodeMetaUrl(j?.data?.image?.url);
+      if (typeof window !== 'undefined' && window?.location?.hostname === 'localhost') {
+        console.warn('[news] microlink returned image', {
+          imagePreview: fixed ? String(fixed).slice(0, 120) : null,
+          isBad: fixed ? isBadHeroImageUrl(fixed) : null,
+        });
+      }
       if (fixed && !isBadHeroImageUrl(fixed)) return fixed;
     }
   } catch {
@@ -437,6 +658,13 @@ async function tryHeroImageFromPublisherPage(targetUrl) {
 
   const html = await fetchPageHtmlViaProxies(u);
   const og = parseOgImageFromHtml(html);
+  if (typeof window !== 'undefined' && window?.location?.hostname === 'localhost') {
+    console.warn('[news] og parse after microlink', {
+      ogPreview: og ? String(og).slice(0, 120) : null,
+      ogIsBad: og ? isBadHeroImageUrl(og) : null,
+      ogHtmlLen: typeof html === 'string' ? html.length : 0,
+    });
+  }
   if (og && !isBadHeroImageUrl(og)) return og;
   return null;
 }
@@ -465,6 +693,7 @@ function getApiBaseCandidates() {
 async function tryHeroImageFromBackend(articleUrl) {
   const u = typeof articleUrl === 'string' ? articleUrl.trim() : '';
   if (!u || !/^https?:\/\//i.test(u)) return null;
+  if (looksLikeImageAssetUrl(u)) return null;
 
   let lastErr = null;
   for (const apiBase of getApiBaseCandidates()) {
@@ -474,6 +703,36 @@ async function tryHeroImageFromBackend(articleUrl) {
       if (!res.ok) continue;
       const data = await res.json().catch(() => null);
       const img = data && typeof data.image === 'string' ? data.image.trim() : '';
+
+      // #region agent log
+      if (
+        __agentDebugShouldLog() &&
+        isGoogleNewsArticleUrl(u) &&
+        img
+      ) {
+        fetch(__AGENT_DEBUG_ENDPOINT, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Debug-Session-Id': __AGENT_DEBUG_SESSION_ID,
+          },
+          body: JSON.stringify({
+            sessionId: __AGENT_DEBUG_SESSION_ID,
+            hypothesisId: 'H1',
+            runId: 'pre-fix',
+            location: 'podTopicNewsShared.js:tryHeroImageFromBackend.afterResponse',
+            message: 'Backend returned an image value',
+            data: {
+              apiBase,
+              inputUrl: u,
+              returnedImage: img.slice(0, 140),
+              returnedIsBad: isBadHeroImageUrl(img),
+            },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+      }
+      // #endregion
       if (img && !isBadHeroImageUrl(img)) return img;
     } catch (e) {
       // next candidate
@@ -501,10 +760,40 @@ export async function resolveArticleHeroImage(pageUrl, options = {}) {
     typeof options.publisherUrl === 'string' ? options.publisherUrl.trim() : '';
 
   // Prefer backend extraction (server-side). Avoids browser CORS/proxy failures.
-  const fromBackend = await tryHeroImageFromBackend(u);
+  let fromBackend = null;
+  if (publisherHint && !isBlockedOutboundHost(publisherHint) && !looksLikeImageAssetUrl(publisherHint)) {
+    fromBackend = await tryHeroImageFromBackend(publisherHint);
+    if (fromBackend) return fromBackend;
+  }
+  fromBackend = await tryHeroImageFromBackend(u);
+  // #region agent log
+  if (__agentDebugShouldLog() && isGoogleNewsArticleUrl(u)) {
+    fetch(__AGENT_DEBUG_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Debug-Session-Id': __AGENT_DEBUG_SESSION_ID,
+      },
+      body: JSON.stringify({
+        sessionId: __AGENT_DEBUG_SESSION_ID,
+        hypothesisId: 'H1',
+        runId: 'pre-fix',
+        location: 'podTopicNewsShared.js:resolveArticleHeroImage.afterBackend',
+        message: 'fromBackend result',
+        data: {
+          inputUrl: u,
+          hasFromBackend: typeof fromBackend === 'string' && !!fromBackend,
+          fromBackendPreview: typeof fromBackend === 'string' ? fromBackend.slice(0, 90) : null,
+          fromBackendIsBad: fromBackend ? isBadHeroImageUrl(fromBackend) : null,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+  }
+  // #endregion
   if (fromBackend) return fromBackend;
 
-  if (publisherHint && !isBlockedOutboundHost(publisherHint)) {
+  if (publisherHint && !isBlockedOutboundHost(publisherHint) && !looksLikeImageAssetUrl(publisherHint)) {
     const fromHint = await tryHeroImageFromPublisherPage(publisherHint);
     if (fromHint) return fromHint;
   }
@@ -512,7 +801,88 @@ export async function resolveArticleHeroImage(pageUrl, options = {}) {
   if (!skipUnpack && isGoogleNewsArticleUrl(u)) {
     const shellHtml = await fetchPageHtmlViaProxies(u);
     const extracted = extractLikelyPublisherUrlFromGoogleNewsPageHtml(shellHtml);
-    if (extracted && extracted !== u && !isBlockedOutboundHost(extracted)) {
+
+    if (typeof window !== 'undefined' && window?.location?.hostname === 'localhost') {
+      const shellLen = typeof shellHtml === 'string' ? shellHtml.length : 0;
+      const hasOgImage = !!(shellHtml && shellHtml.includes('property="og:image"'));
+      const hasTwitterImage = !!(shellHtml && shellHtml.includes('twitter:image'));
+      const hasGoogleUrlWrap = !!(shellHtml && /google\.com\/url\?/.test(shellHtml));
+      console.warn('[news] google shell HTML scan', {
+        shellUrlPreview: String(u).slice(0, 90),
+        shellLen,
+        hasOgImage,
+        hasTwitterImage,
+        hasGoogleUrlWrap,
+        extractedPreview: extracted ? String(extracted).slice(0, 90) : null,
+        extractedLooksLikeImage: extracted ? looksLikeImageAssetUrl(extracted) : null,
+      });
+    }
+
+    // #region agent log
+    // Confirm whether OG/Twitter image URLs are extractable from the Google News shell HTML.
+    if (
+      typeof window !== 'undefined' &&
+      window?.location?.hostname === 'localhost' &&
+      typeof shellHtml === 'string' &&
+      shellHtml.length > 100
+    ) {
+      const shellOg = parseOgImageFromHtml(shellHtml);
+      const shellOgIsBad = shellOg ? isBadHeroImageUrl(shellOg) : null;
+      const blockedPublisherAttempt = isBlockedOutboundHost(u);
+
+      fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Debug-Session-Id': '6e32d1',
+        },
+        body: JSON.stringify({
+          sessionId: '6e32d1',
+          runId: 'pre-fix',
+          hypothesisId: 'H1',
+          location: 'podTopicNewsShared.js:resolveArticleHeroImage.googleShell.ogParse',
+          message: 'OG/Twitter parse from google shell HTML + blocked publisher check',
+          data: {
+            inputUrl: String(u).slice(0, 120),
+            blockedPublisherAttempt,
+            shellOgPreview: shellOg ? String(shellOg).slice(0, 120) : null,
+            shellOgIsBad,
+            shellOgParsed: !!shellOg,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+
+      console.warn('[news] google shell OG parse debug', {
+        shellOgPreview: shellOg ? String(shellOg).slice(0, 120) : null,
+        shellOgIsBad,
+        blockedPublisherAttempt,
+      });
+    }
+    // #endregion
+
+    if (typeof window !== 'undefined' && window?.location?.hostname === 'localhost' && extracted) {
+      console.warn('[news] google shell unpack extracted candidate', {
+        extractedPreview: String(extracted).slice(0, 120),
+        extractedIsBlockedOutbound: isBlockedOutboundHost(extracted),
+        extractedLooksLikeImage: looksLikeImageAssetUrl(extracted),
+      });
+    }
+    if (
+      extracted &&
+      extracted !== u &&
+      !isBlockedOutboundHost(extracted) &&
+      !looksLikeImageAssetUrl(extracted)
+    ) {
+      if (
+        typeof window !== 'undefined' &&
+        window?.location?.hostname === 'localhost'
+      ) {
+        console.warn('[news] google shell unpack extracted url', {
+          extractedPreview: String(extracted).slice(0, 120),
+          extractedLooksLikeImage: looksLikeImageAssetUrl(extracted),
+        });
+      }
       const fromPublisher = await resolveArticleHeroImage(extracted, {
         skipGoogleUnpack: true,
         publisherUrl: '',
@@ -521,6 +891,12 @@ export async function resolveArticleHeroImage(pageUrl, options = {}) {
     }
     const shellImg = await tryHeroImageFromPublisherPage(u);
     if (shellImg && !isBadHeroImageUrl(shellImg)) return shellImg;
+    if (typeof window !== 'undefined' && window?.location?.hostname === 'localhost') {
+      console.warn('[news] google shell fallback returned empty', {
+        shellUrlPreview: String(u).slice(0, 90),
+        shellImgPreview: shellImg ? String(shellImg).slice(0, 90) : null,
+      });
+    }
     return null;
   }
 
@@ -543,6 +919,38 @@ export async function enrichNewsItemsWithOgImages(items, options = {}) {
       const badGoogleThumb = it.image && isBadHeroImageUrl(it.image);
       const fromGoogleNews = isGoogleNewsArticleUrl(it.url);
       const googleNewsBrandingThumb = fromGoogleNews && it.image && looksLikeGoogleNewsBrandingThumb(it.image);
+      // #region agent log
+      if (
+        __agentDebugShouldLog() &&
+        googleNewsBrandingThumb &&
+        typeof it?.image === 'string' &&
+        (it.image.includes('googleusercontent.com') && (it.image.includes('s0-w') || it.image.includes('=s0-w')))
+      ) {
+        fetch(__AGENT_DEBUG_ENDPOINT, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Debug-Session-Id': __AGENT_DEBUG_SESSION_ID,
+          },
+          body: JSON.stringify({
+            sessionId: __AGENT_DEBUG_SESSION_ID,
+            hypothesisId: 'H2',
+            runId: 'pre-fix',
+            location: 'podTopicNewsShared.js:enrichNewsItemsWithOgImages.filter',
+            message: 'google news logo candidate selected for re-resolve',
+            data: {
+              itemUrl: it.url,
+              fromGoogleNews,
+              missing,
+              badGoogleThumb: !!badGoogleThumb,
+              googleNewsBrandingThumb: !!googleNewsBrandingThumb,
+              beforeImage: it.image.slice(0, 140),
+            },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+      }
+      // #endregion
       return missing || badGoogleThumb || googleNewsBrandingThumb;
     })
     .slice(0, maxResolve);
@@ -557,9 +965,58 @@ export async function enrichNewsItemsWithOgImages(items, options = {}) {
       if (k >= slots.length) return;
       const { i } = slots[k];
       try {
+        // #region agent log
+        if (__agentDebugShouldLog()) {
+          const it = out[i];
+          fetch(__AGENT_DEBUG_ENDPOINT, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Debug-Session-Id': __AGENT_DEBUG_SESSION_ID,
+            },
+            body: JSON.stringify({
+              sessionId: __AGENT_DEBUG_SESSION_ID,
+              hypothesisId: 'H3',
+              runId: 'pre-fix',
+              location: 'podTopicNewsShared.js:enrichNewsItemsWithOgImages.runWorker.beforeResolve',
+              message: 'Resolving hero image for candidate',
+              data: {
+                itemUrl: it?.url,
+                publisherUrlHint: it?.publisherUrl || '',
+                beforeImage: typeof it?.image === 'string' ? it.image.slice(0, 140) : null,
+              },
+              timestamp: Date.now(),
+            }),
+          }).catch(() => {});
+        }
+        // #endregion
+
         const img = await resolveArticleHeroImage(out[i].url, {
           publisherUrl: out[i].publisherUrl || '',
         });
+        // #region agent log
+        if (__agentDebugShouldLog()) {
+          fetch(__AGENT_DEBUG_ENDPOINT, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Debug-Session-Id': __AGENT_DEBUG_SESSION_ID,
+            },
+            body: JSON.stringify({
+              sessionId: __AGENT_DEBUG_SESSION_ID,
+              hypothesisId: 'H3',
+              runId: 'pre-fix',
+              location: 'podTopicNewsShared.js:enrichNewsItemsWithOgImages.runWorker.afterResolve',
+              message: 'resolveArticleHeroImage returned',
+              data: {
+                resolvedImage: img ? String(img).slice(0, 140) : null,
+                resolvedIsBad: img ? isBadHeroImageUrl(img) : null,
+              },
+              timestamp: Date.now(),
+            }),
+          }).catch(() => {});
+        }
+        // #endregion
         if (img && !isBadHeroImageUrl(img)) out[i] = { ...out[i], image: img };
       } catch {
         /* ignore */
