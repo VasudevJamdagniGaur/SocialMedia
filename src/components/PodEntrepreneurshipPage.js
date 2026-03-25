@@ -23,7 +23,13 @@ export default function PodEntrepreneurshipPage() {
     'AI copilots are becoming table stakes in internal ops—not just customer-facing products',
   ];
 
-  const EXPLORE = ['Startups', 'Founders', 'Growth', 'Funding', 'Mindset'];
+  const EXPLORE = [
+    { label: 'Startups', slug: 'startups' },
+    { label: 'Founders', slug: 'founders' },
+    { label: 'Growth', slug: 'growth' },
+    { label: 'Funding', slug: 'funding' },
+    { label: 'Mindset', slug: 'mindset' },
+  ];
 
   const FALLBACK_FOUNDER = [
     'Your first 10 customers teach you more than any pitch deck. Talk to them weekly, write down objections, and let that shape the roadmap—not the other way around.',
@@ -301,16 +307,17 @@ export default function PodEntrepreneurshipPage() {
               </h2>
             </div>
             <div className="px-4 py-2">
-              {EXPLORE.map((label, index) => (
+              {EXPLORE.map((row, index) => (
                 <button
-                  key={label}
+                  key={row.slug}
                   type="button"
+                  onClick={() => navigate(`/pod/explore/entrepreneurship/${row.slug}`)}
                   className="w-full flex items-center justify-between py-3 text-left transition-opacity hover:opacity-90"
                   style={{
                     borderTop: index === 0 ? 'none' : `1px solid ${HUB.divider}`,
                   }}
                 >
-                  <span className="text-sm font-medium" style={{ color: HUB.text }}>{label}</span>
+                  <span className="text-sm font-medium" style={{ color: HUB.text }}>{row.label}</span>
                   <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: HUB.textSecondary }} />
                 </button>
               ))}

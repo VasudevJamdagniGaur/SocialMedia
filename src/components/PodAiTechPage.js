@@ -17,7 +17,13 @@ export default function PodAiTechPage() {
     'Enterprise buyers want clearer ROI stories—not just demos',
   ];
 
-  const EXPLORE = ['AI Models', 'Startups', 'Tools', 'Insights', 'Big Tech'];
+  const EXPLORE = [
+    { label: 'AI Models', slug: 'ai-models' },
+    { label: 'Startups', slug: 'startups' },
+    { label: 'Tools', slug: 'tools' },
+    { label: 'Insights', slug: 'insights' },
+    { label: 'Big Tech', slug: 'big-tech' },
+  ];
 
   useEffect(() => {
     const apiKey = process.env.REACT_APP_NEWSAPI || process.env.NEWSAPI || '';
@@ -194,16 +200,17 @@ export default function PodAiTechPage() {
               </h2>
             </div>
             <div className="px-4 py-2">
-              {EXPLORE.map((label, index) => (
+              {EXPLORE.map((row, index) => (
                 <button
-                  key={label}
+                  key={row.slug}
                   type="button"
+                  onClick={() => navigate(`/pod/explore/ai-tech/${row.slug}`)}
                   className="w-full flex items-center justify-between py-3 text-left transition-opacity hover:opacity-90"
                   style={{
                     borderTop: index === 0 ? 'none' : `1px solid ${HUB.divider}`,
                   }}
                 >
-                  <span className="text-sm font-medium" style={{ color: HUB.text }}>{label}</span>
+                  <span className="text-sm font-medium" style={{ color: HUB.text }}>{row.label}</span>
                   <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: HUB.textSecondary }} />
                 </button>
               ))}

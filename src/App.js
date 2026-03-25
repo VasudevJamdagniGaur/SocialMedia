@@ -20,6 +20,7 @@ import PodSportsTopicPage from './components/PodSportsTopicPage';
 import PodAiTechPage from './components/PodAiTechPage';
 import PodEntrepreneurshipPage from './components/PodEntrepreneurshipPage';
 import PodCurrentAffairsPage from './components/PodCurrentAffairsPage';
+import PodExploreTopicPage from './components/PodExploreTopicPage';
 import PodGroupChatPage from './components/PodGroupChatPage';
 import AllReflectionsPage from './components/AllReflectionsPage';
 import AllDayReflectionsPage from './components/AllDayReflectionsPage';
@@ -96,6 +97,19 @@ function AppContent() {
             } else if (location.pathname.startsWith('/pod/sports/topic/')) {
               console.log('📍 Navigating to Sports from sport topic');
               navigate('/pod/sports', { replace: true });
+            } else if (location.pathname.startsWith('/pod/explore/')) {
+              const parts = location.pathname.split('/').filter(Boolean);
+              const sec = parts[2];
+              const home =
+                sec === 'ai-tech'
+                  ? '/pod/ai-tech'
+                  : sec === 'entrepreneurship'
+                    ? '/pod/entrepreneurship'
+                    : sec === 'current-affairs'
+                      ? '/pod/current-affairs'
+                      : '/pod';
+              console.log('📍 Navigating to pod hub from explore topic');
+              navigate(home, { replace: true });
             } else if (location.pathname === '/pod/sports') {
               // Navigate to pod from Sports
               console.log('📍 Navigating to pod from Sports');
@@ -177,6 +191,7 @@ function AppContent() {
         <Route path="/pod" element={<PodPage />} />
         <Route path="/pod/sports/topic/:topicId" element={<PodSportsTopicPage />} />
         <Route path="/pod/sports" element={<PodSportsPage />} />
+        <Route path="/pod/explore/:section/:topicId" element={<PodExploreTopicPage />} />
         <Route path="/pod/ai-tech" element={<PodAiTechPage />} />
         <Route path="/pod/entrepreneurship" element={<PodEntrepreneurshipPage />} />
         <Route path="/pod/current-affairs" element={<PodCurrentAffairsPage />} />
