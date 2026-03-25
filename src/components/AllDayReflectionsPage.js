@@ -15,7 +15,21 @@ export default function AllDayReflectionsPage() {
   const [reflections, setReflections] = useState([]);
   const [filteredReflections, setFilteredReflections] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedDate, setSelectedDate] = useState(null);
+  const SELECTED_DATE_SESSION_KEY = 'dashboard_selected_date_iso';
+  const [selectedDate, setSelectedDate] = useState(() => {
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        const saved = sessionStorage.getItem(SELECTED_DATE_SESSION_KEY);
+        if (saved) {
+          const d = new Date(saved);
+          if (!Number.isNaN(d.getTime())) return d;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return new Date();
+  });
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [reflectionDays, setReflectionDays] = useState([]);
   const [selectedReflection, setSelectedReflection] = useState(null);
@@ -345,8 +359,8 @@ export default function AllDayReflectionsPage() {
 
     // Persist so Dashboard keeps the same selected date after user navigates back.
     try {
-      if (typeof localStorage !== 'undefined' && date) {
-        localStorage.setItem('dashboard_selected_date_iso', date.toISOString());
+      if (typeof sessionStorage !== 'undefined' && date) {
+        sessionStorage.setItem(SELECTED_DATE_SESSION_KEY, date.toISOString());
       }
     } catch (_) {
       // ignore
@@ -400,6 +414,13 @@ export default function AllDayReflectionsPage() {
 
   const handleClearDateFilter = () => {
     setSelectedDate(null);
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem(SELECTED_DATE_SESSION_KEY);
+      }
+    } catch (_) {
+      // ignore
+    }
   };
 
   // Load profile picture for share preview

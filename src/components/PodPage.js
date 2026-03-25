@@ -15,7 +15,21 @@ export default function PodPage() {
   const [podReflection, setPodReflection] = useState('');
   const [isLoadingPodReflection, setIsLoadingPodReflection] = useState(false);
   const [isReflectionExpanded, setIsReflectionExpanded] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const SELECTED_DATE_SESSION_KEY = 'dashboard_selected_date_iso';
+  const [selectedDate, setSelectedDate] = useState(() => {
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        const saved = sessionStorage.getItem(SELECTED_DATE_SESSION_KEY);
+        if (saved) {
+          const d = new Date(saved);
+          if (!Number.isNaN(d.getTime())) return d;
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    return new Date();
+  });
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [podDays, setPodDays] = useState([]);
   const [crewMembers, setCrewMembers] = useState([]);
@@ -337,6 +351,17 @@ export default function PodPage() {
     setSelectedDate(date);
     setIsCalendarOpen(false);
   };
+
+  // Persist selected date for this app session only (clears when the app is fully closed).
+  useEffect(() => {
+    try {
+      if (typeof sessionStorage !== 'undefined' && selectedDate) {
+        sessionStorage.setItem(SELECTED_DATE_SESSION_KEY, selectedDate.toISOString());
+      }
+    } catch {
+      // ignore quota/private mode
+    }
+  }, [selectedDate]);
 
 
   const handleGeneratePodReflection = async () => {

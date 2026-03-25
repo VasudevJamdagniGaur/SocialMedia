@@ -23,9 +23,21 @@ const HUB = {
 export default function DashboardPage() {
   const navigate = useNavigate();
   const { isDarkMode, toggleTheme } = useTheme();
-  // Always reopen the dashboard on "today".
-  // We intentionally ignore any previously saved `dashboard_selected_date_iso`.
-  const [selectedDate, setSelectedDate] = useState(() => new Date());
+  const SELECTED_DATE_SESSION_KEY = 'dashboard_selected_date_iso';
+  const [selectedDate, setSelectedDate] = useState(() => {
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        const saved = sessionStorage.getItem(SELECTED_DATE_SESSION_KEY);
+        if (saved) {
+          const d = new Date(saved);
+          if (!Number.isNaN(d.getTime())) return d;
+        }
+      }
+    } catch (_) {
+      // ignore
+    }
+    return new Date();
+  });
   const [reflection, setReflection] = useState('');
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isLoadingReflection, setIsLoadingReflection] = useState(false);
@@ -35,8 +47,8 @@ export default function DashboardPage() {
   // Persist selected date so it stays the same after navigation/back.
   useEffect(() => {
     try {
-      if (typeof localStorage !== 'undefined' && selectedDate) {
-        localStorage.setItem('dashboard_selected_date_iso', selectedDate.toISOString());
+      if (typeof sessionStorage !== 'undefined' && selectedDate) {
+        sessionStorage.setItem(SELECTED_DATE_SESSION_KEY, selectedDate.toISOString());
       }
     } catch (_) {
       // ignore
@@ -326,8 +338,8 @@ export default function DashboardPage() {
     setSelectedDate(date);
     setIsCalendarOpen(false);
     try {
-      if (typeof localStorage !== 'undefined' && date) {
-        localStorage.setItem('dashboard_selected_date_iso', date.toISOString());
+      if (typeof sessionStorage !== 'undefined' && date) {
+        sessionStorage.setItem(SELECTED_DATE_SESSION_KEY, date.toISOString());
       }
     } catch (_) {
       // ignore
