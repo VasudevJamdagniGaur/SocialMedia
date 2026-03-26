@@ -110,6 +110,21 @@ function browseGoogleQuery(googleRssQuery) {
   return googleNewsSearchUrl((googleRssQuery || '').replace(/\s+when:\d+d$/i, '').trim());
 }
 
+function buildFallbackRows(label, googleQuery) {
+  const baseUrl = browseGoogleQuery(googleQuery || 'news');
+  const now = new Date().toISOString();
+  return Array.from({ length: 6 }, (_, i) => ({
+    title: `${label} update ${i + 1}`,
+    source: 'Google News',
+    url: baseUrl,
+    image: null,
+    description: `${label} roundup`,
+    publishedAt: now,
+    sourceSiteUrl: '',
+    publisherUrl: '',
+  }));
+}
+
 export default function PodExploreTopicPage() {
   const { section, topicId } = useParams();
   const navigate = useNavigate();
@@ -183,10 +198,10 @@ export default function PodExploreTopicPage() {
       }
 
       if (!rows?.length) {
-        const msg =
-          'Could not load stories. Check your connection or try opening Google News below.';
+        const msg = 'Live sources unavailable. Showing quick fallback headlines.';
+        const fallbackRows = buildFallbackRows(title, cfg.google);
         if (isMountedRef.current && token === loadTokenRef.current) {
-          if (initialLoad) setItems([]);
+          setItems(fallbackRows);
           setError(msg);
         }
         return;
@@ -198,10 +213,10 @@ export default function PodExploreTopicPage() {
         setError('');
       }
     } catch {
-      const msg =
-        'Could not load stories. Check your connection or try opening Google News below.';
+      const msg = 'Live sources unavailable. Showing quick fallback headlines.';
+      const fallbackRows = buildFallbackRows(title, topicConfig?.google || '');
       if (isMountedRef.current && token === loadTokenRef.current) {
-        if (initialLoad) setItems([]);
+        setItems(fallbackRows);
         setError(msg);
       }
     } finally {

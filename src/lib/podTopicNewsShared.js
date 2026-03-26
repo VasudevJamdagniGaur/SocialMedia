@@ -22,6 +22,10 @@ const __NEWS_FALLBACK_IMAGE_URL =
 
 function ensureNonEmptyImageUrl(url) {
   const u = typeof url === 'string' ? url.trim() : '';
+  // Hide low-value Google News thumbnail icons (e.g. lh3.googleusercontent ... s0-w300).
+  if (/^https?:\/\/lh[0-9]\.googleusercontent\.com\/.+(?:=s0-w|s0-w)\d+/i.test(u)) {
+    return __NEWS_FALLBACK_IMAGE_URL;
+  }
   return u || __NEWS_FALLBACK_IMAGE_URL;
 }
 
@@ -126,24 +130,7 @@ function firstImageUrlFromHtml(html) {
     }
   }
 
-  const chosen = bestNonBad || best;
-  // #region agent log
-  if (
-    typeof window !== 'undefined' &&
-    window?.location?.hostname === 'localhost' &&
-    chosen
-  ) {
-    __agentDebugPost('H3', 'podTopicNewsShared.js:firstImageUrlFromHtml.choose', 'firstImageUrlFromHtml chose image', {
-      chosenPreview: String(chosen).slice(0, 140),
-      chosenIsBad: isBadHeroImageUrl(chosen),
-      candidatesCount: candidates.size,
-      bestScore,
-      bestNonBadScore,
-    });
-  }
-  // #endregion
-
-  return chosen;
+  return bestNonBad || best;
 }
 
 function decodeGoogleWrappedUrl(href) {
@@ -242,17 +229,6 @@ export function decodeGoogleNewsUrl(inputUrl) {
     };
 
     const urls = extractAsciiUrlsFromBytes(bytes);
-
-    // #region agent log
-    if (typeof window !== 'undefined' && window?.location?.hostname === 'localhost') {
-      __agentDebugPost('H1', 'podTopicNewsShared.js:decodeGoogleNewsUrl.bytesScan', 'decoded google news id bytes scan', {
-        idLen: id.length,
-        decodedBytesLen: bytes.length,
-        foundUrlCount: urls.length,
-        firstUrlPreview: urls[0] ? String(urls[0]).slice(0, 140) : null,
-      });
-    }
-    // #endregion
 
     for (const cand of urls) {
       const unwrapped = decodeGoogleWrappedUrl(cand) || cand;
@@ -412,6 +388,15 @@ function cleanPublisherSuffixFromTitle(rawTitle, sourceName) {
   return cut.length >= 12 ? cut : t;
 }
 
+function normalizeSourceLabel(rawSource) {
+  const s = (rawSource || '').replace(/\s+/g, ' ').trim();
+  if (!s) return 'News';
+  // rss2json feed title for Google RSS often contains the literal query.
+  if (/google news/i.test(s)) return 'Google News';
+  if (/^".+"\s*-\s*google news$/i.test(s)) return 'Google News';
+  return s;
+}
+
 function parseRssPubDate(pubDateStr) {
   if (!pubDateStr) return null;
   const d = new Date(pubDateStr);
@@ -471,7 +456,7 @@ function parseGoogleNewsRssXml(xml) {
       item.getElementsByTagName('guid')[0]?.textContent?.trim();
     if (!rawTitle || !link) continue;
     const sourceNode = item.getElementsByTagName('source')[0];
-    const source = sourceNode?.textContent?.trim() || 'Google News';
+    const source = normalizeSourceLabel(sourceNode?.textContent?.trim() || 'Google News');
     const sourceSiteUrl = sourceNode?.getAttribute('url')?.trim() || '';
     const pubDateRaw = item.getElementsByTagName('pubDate')[0]?.textContent?.trim();
     const publishedAt = parseRssPubDate(pubDateRaw);
@@ -509,7 +494,7 @@ async function fetchItemsThroughRss2Json(rssUrl) {
         const rawTitle = it.title?.replace(/\s+/g, ' ').trim();
         const url = typeof it.link === 'string' ? it.link.trim() : '';
         if (!rawTitle || !url) return null;
-        const source = it.author || data.feed?.title || 'Google News';
+        const source = normalizeSourceLabel(it.author || data.feed?.title || 'Google News');
         const htmlBlob = [it.content, it.description, it.contentSnippet].filter(Boolean).join(' ');
         const description = (it.contentSnippet || '')
           .replace(/<[^>]*>/g, ' ')
@@ -636,21 +621,7 @@ export function parseOgImageFromHtml(html) {
     }
   }
 
-  const chosen = bestNonBad || best;
-  // #region agent log
-  if (typeof window !== 'undefined' && window?.location?.hostname === 'localhost') {
-    __agentDebugPost('H3', 'podTopicNewsShared.js:parseOgImageFromHtml.choose', 'parseOgImageFromHtml chose image', {
-      chosenPreview: chosen ? String(chosen).slice(0, 140) : null,
-      chosenIsBad: chosen ? isBadHeroImageUrl(chosen) : null,
-      bestNonBadPreview: bestNonBad ? String(bestNonBad).slice(0, 140) : null,
-      bestScore,
-      bestNonBadScore,
-      candidatesCount: candidates.size,
-    });
-  }
-  // #endregion
-
-  return chosen;
+  return bestNonBad || best;
 }
 
 function extractBestGoogleThumbFromHtml(html) {
@@ -851,38 +822,6 @@ export async function enrichNewsItemsWithOgImages(items, options = {}) {
       const missing = !it.image;
       const fromGoogleNews = isGoogleNewsArticleUrl(it.url);
       const googleNewsBrandingThumb = fromGoogleNews && it.image && looksLikeGoogleNewsBrandingThumb(it.image);
-      // #region agent log
-      if (
-        __agentDebugShouldLog() &&
-        googleNewsBrandingThumb &&
-        typeof it?.image === 'string' &&
-        (it.image.includes('googleusercontent.com') && (it.image.includes('s0-w') || it.image.includes('=s0-w')))
-      ) {
-        fetch(__AGENT_DEBUG_ENDPOINT, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Debug-Session-Id': __AGENT_DEBUG_SESSION_ID,
-          },
-          body: JSON.stringify({
-            sessionId: __AGENT_DEBUG_SESSION_ID,
-            hypothesisId: 'H2',
-            runId: 'pre-fix',
-            location: 'podTopicNewsShared.js:enrichNewsItemsWithOgImages.filter',
-            message: 'google news logo candidate selected for re-resolve',
-            data: {
-              itemUrl: it.url,
-              fromGoogleNews,
-              missing,
-              badGoogleThumb: !!badGoogleThumb,
-              googleNewsBrandingThumb: !!googleNewsBrandingThumb,
-              beforeImage: it.image.slice(0, 140),
-            },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {});
-      }
-      // #endregion
       return missing || googleNewsBrandingThumb;
     })
     .slice(0, maxResolve);
@@ -897,58 +836,9 @@ export async function enrichNewsItemsWithOgImages(items, options = {}) {
       if (k >= slots.length) return;
       const { i } = slots[k];
       try {
-        // #region agent log
-        if (__agentDebugShouldLog()) {
-          const it = out[i];
-          fetch(__AGENT_DEBUG_ENDPOINT, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Debug-Session-Id': __AGENT_DEBUG_SESSION_ID,
-            },
-            body: JSON.stringify({
-              sessionId: __AGENT_DEBUG_SESSION_ID,
-              hypothesisId: 'H3',
-              runId: 'pre-fix',
-              location: 'podTopicNewsShared.js:enrichNewsItemsWithOgImages.runWorker.beforeResolve',
-              message: 'Resolving hero image for candidate',
-              data: {
-                itemUrl: it?.url,
-                publisherUrlHint: it?.publisherUrl || '',
-                beforeImage: typeof it?.image === 'string' ? it.image.slice(0, 140) : null,
-              },
-              timestamp: Date.now(),
-            }),
-          }).catch(() => {});
-        }
-        // #endregion
-
         const img = await resolveArticleHeroImage(out[i].url, {
           publisherUrl: out[i].publisherUrl || '',
         });
-        // #region agent log
-        if (__agentDebugShouldLog()) {
-          fetch(__AGENT_DEBUG_ENDPOINT, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Debug-Session-Id': __AGENT_DEBUG_SESSION_ID,
-            },
-            body: JSON.stringify({
-              sessionId: __AGENT_DEBUG_SESSION_ID,
-              hypothesisId: 'H3',
-              runId: 'pre-fix',
-              location: 'podTopicNewsShared.js:enrichNewsItemsWithOgImages.runWorker.afterResolve',
-              message: 'resolveArticleHeroImage returned',
-              data: {
-                resolvedImage: img ? String(img).slice(0, 140) : null,
-                resolvedIsBad: img ? isBadHeroImageUrl(img) : null,
-              },
-              timestamp: Date.now(),
-            }),
-          }).catch(() => {});
-        }
-        // #endregion
         if (img && !isBadHeroImageUrl(img)) out[i] = { ...out[i], image: img };
       } catch {
         /* ignore */
@@ -961,35 +851,11 @@ export async function enrichNewsItemsWithOgImages(items, options = {}) {
 }
 
 export function NewsFeedRow({ item, hub, isLast, onOpenShare }) {
-  const icon = faviconUrl(item);
   const rel = formatRelativeTime(item.publishedAt);
 
   const inner = (
     <>
       <div className="flex-1 min-w-0 flex flex-col gap-1.5">
-        <div className="flex items-center gap-2 min-w-0">
-          {icon ? (
-            <img
-              src={icon}
-              alt=""
-              className="w-[18px] h-[18px] rounded-sm flex-shrink-0 bg-white/10"
-              width={18}
-              height={18}
-              loading="lazy"
-            />
-          ) : (
-            <span
-              className="w-[18px] h-[18px] rounded-sm flex-shrink-0 flex items-center justify-center text-[9px] font-bold bg-white/10"
-              style={{ color: hub.textSecondary }}
-              aria-hidden
-            >
-              {(item.source || '?').slice(0, 1).toUpperCase()}
-            </span>
-          )}
-          <span className="text-xs truncate font-medium" style={{ color: hub.textSecondary }}>
-            {item.source}
-          </span>
-        </div>
         <p className="text-base leading-snug font-semibold tracking-tight line-clamp-4" style={{ color: hub.text }}>
           {item.title}
         </p>
@@ -998,21 +864,6 @@ export function NewsFeedRow({ item, hub, isLast, onOpenShare }) {
             {rel}
           </span>
         ) : null}
-      </div>
-      <div className="flex-shrink-0 w-[4.5rem] h-[4.5rem] rounded-lg overflow-hidden bg-black/25">
-        <img
-          src={ensureNonEmptyImageUrl(item?.image)}
-          alt=""
-          className="w-full h-full object-cover"
-          loading="lazy"
-          referrerPolicy="no-referrer"
-          onError={(e) => {
-            // Avoid infinite onError loops if even the fallback fails.
-            if (e?.target?.dataset?.fallbackApplied) return;
-            e.target.dataset.fallbackApplied = '1';
-            e.target.src = __NEWS_FALLBACK_IMAGE_URL;
-          }}
-        />
       </div>
     </>
   );

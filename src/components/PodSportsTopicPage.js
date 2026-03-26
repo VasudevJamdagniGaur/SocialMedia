@@ -67,6 +67,22 @@ function browseTopicOnGoogleNews(topicId) {
   return googleNewsSearchUrl(q.replace(/\s+when:\d+d$/i, '').trim());
 }
 
+function buildFallbackRows(topicId, label) {
+  const q = GOOGLE_RSS_QUERY[topicId] || GOOGLE_RSS_QUERY.others;
+  const baseUrl = googleNewsSearchUrl(q.replace(/\s+when:\d+d$/i, '').trim());
+  const now = new Date().toISOString();
+  return Array.from({ length: 6 }, (_, i) => ({
+    title: `${label} update ${i + 1}`,
+    source: 'Google News',
+    url: baseUrl,
+    image: null,
+    description: `${label} roundup`,
+    publishedAt: now,
+    sourceSiteUrl: '',
+    publisherUrl: '',
+  }));
+}
+
 export default function PodSportsTopicPage() {
   const { topicId } = useParams();
   const navigate = useNavigate();
@@ -157,10 +173,10 @@ export default function PodSportsTopicPage() {
       }
 
       if (!rows?.length) {
-        const msg =
-          'Could not load stories. Check your connection or try opening Google News below.';
+        const msg = 'Live sources unavailable. Showing quick fallback headlines.';
+        const fallbackRows = buildFallbackRows(topicId, title);
         if (isMountedRef.current && token === loadTokenRef.current) {
-          if (initialLoad) setItems([]);
+          setItems(fallbackRows);
           setError(msg);
         }
         return;
@@ -172,10 +188,10 @@ export default function PodSportsTopicPage() {
         setError('');
       }
     } catch {
-      const msg =
-        'Could not load stories. Check your connection or try opening Google News below.';
+      const msg = 'Live sources unavailable. Showing quick fallback headlines.';
+      const fallbackRows = buildFallbackRows(topicId, title);
       if (isMountedRef.current && token === loadTokenRef.current) {
-        if (initialLoad) setItems([]);
+        setItems(fallbackRows);
         setError(msg);
       }
     } finally {
