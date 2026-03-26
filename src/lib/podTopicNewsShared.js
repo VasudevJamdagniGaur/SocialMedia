@@ -5,7 +5,7 @@ const __AGENT_DEBUG_ENDPOINT =
   'http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7';
 const __AGENT_DEBUG_SESSION_ID = '6e32d1';
 let __AGENT_DEBUG_COUNTER = 0;
-const __AGENT_DEBUG_LIMIT = 8;
+const __AGENT_DEBUG_LIMIT = 60;
 const __agentDebugShouldLog = () => __AGENT_DEBUG_COUNTER++ < __AGENT_DEBUG_LIMIT;
 
 const __agentDebugPost = (hypothesisId, location, message, data) => {
@@ -31,7 +31,42 @@ const __agentDebugPost = (hypothesisId, location, message, data) => {
     // ignore
   }
 };
+
+// #region agent log
+// Prove the debug transport works (creates NDJSON file) even if no news actions run yet.
+if (typeof window !== 'undefined') {
+  __agentDebugPost('H0', 'podTopicNewsShared.js:init', 'debug logger initialized', {
+    origin: typeof window?.location?.origin === 'string' ? window.location.origin : null,
+    hostname: typeof window?.location?.hostname === 'string' ? window.location.hostname : null,
+  });
+}
 // #endregion
+// #endregion
+
+const __NEWS_FALLBACK_IMAGE_URL =
+  'data:image/svg+xml;charset=utf-8,' +
+  encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300">
+      <defs>
+        <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
+          <stop stop-color="#0b1220"/><stop offset="1" stop-color="#111827"/>
+        </linearGradient>
+        <filter id="n"><feTurbulence type="fractalNoise" baseFrequency=".8" numOctaves="2" stitchTiles="stitch"/><feColorMatrix type="saturate" values=".2"/><feComponentTransfer><feFuncA type="table" tableValues="0 0.22"/></feComponentTransfer></filter>
+      </defs>
+      <rect width="300" height="300" rx="24" fill="url(#g)"/>
+      <rect width="300" height="300" rx="24" filter="url(#n)" opacity=".35"/>
+      <g fill="none" stroke="#94a3b8" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" opacity=".9">
+        <path d="M86 206l36-38 32 28 22-22 38 32"/>
+        <rect x="78" y="92" width="144" height="126" rx="18"/>
+        <circle cx="124" cy="130" r="10" fill="#94a3b8" stroke="none"/>
+      </g>
+    </svg>`
+  );
+
+function ensureNonEmptyImageUrl(url) {
+  const u = typeof url === 'string' ? url.trim() : '';
+  return u || __NEWS_FALLBACK_IMAGE_URL;
+}
 
 /** When there is no direct article URL, open a relevant Google News search. */
 export function googleNewsSearchUrl(query) {
@@ -85,11 +120,73 @@ async function fetchRssXmlViaProxies(targetUrl) {
 
 function firstImageUrlFromHtml(html) {
   if (!html || typeof html !== 'string') return null;
-  const abs = html.match(/src=["'](https?:[^"'>\s]+)["']/i);
-  if (abs?.[1] && /^https?:\/\//i.test(abs[1])) return abs[1];
-  const proto = html.match(/src=["'](\/\/[^"'>\s]+)["']/i);
-  if (proto?.[1]) return `https:${proto[1]}`;
-  return null;
+  // Instead of taking the very first image, pick the "best" one from the HTML blob.
+  // Google News RSS descriptions often contain multiple Googleusercontent thumbs where
+  // the first one is frequently the branding/logo.
+  const candidates = new Set();
+  const absRe = /src=["'](https?:\/\/[^"'>\s]+)["']/gi;
+  const protoRe = /src=["'](\/\/[^"'>\s]+)["']/gi;
+  let m;
+  while ((m = absRe.exec(html)) !== null) {
+    if (m?.[1]) candidates.add(m[1]);
+  }
+  while ((m = protoRe.exec(html)) !== null) {
+    if (m?.[1]) candidates.add(`https:${m[1]}`);
+  }
+
+  // Fallback: legacy single-match behavior.
+  if (!candidates.size) {
+    const abs = html.match(/src=["'](https?:[^"'>\s]+)["']/i);
+    if (abs?.[1] && /^https?:\/\//i.test(abs[1])) return abs[1];
+    const proto = html.match(/src=["'](\/\/[^"'>\s]+)["']/i);
+    if (proto?.[1]) return `https:${proto[1]}`;
+    return null;
+  }
+
+  const score = (url) => {
+    const s = String(url).toLowerCase();
+    const w = s.match(/(?:s0-w|=s0-w)(\d+)/i)?.[1];
+    const wi = w ? parseInt(w, 10) : null;
+    if (wi && Number.isFinite(wi)) return wi;
+    if (/\.(png|jpe?g|gif|webp|avif|bmp|svg)(\?.*)?$/i.test(s)) return 1000;
+    return s.length;
+  };
+
+  let best = null;
+  let bestScore = -Infinity;
+  let bestNonBad = null;
+  let bestNonBadScore = -Infinity;
+
+  for (const u of candidates) {
+    const sc = score(u);
+    if (sc > bestScore) {
+      best = u;
+      bestScore = sc;
+    }
+    if (!isBadHeroImageUrl(u) && sc > bestNonBadScore) {
+      bestNonBad = u;
+      bestNonBadScore = sc;
+    }
+  }
+
+  const chosen = bestNonBad || best;
+  // #region agent log
+  if (
+    typeof window !== 'undefined' &&
+    window?.location?.hostname === 'localhost' &&
+    chosen
+  ) {
+    __agentDebugPost('H3', 'podTopicNewsShared.js:firstImageUrlFromHtml.choose', 'firstImageUrlFromHtml chose image', {
+      chosenPreview: String(chosen).slice(0, 140),
+      chosenIsBad: isBadHeroImageUrl(chosen),
+      candidatesCount: candidates.size,
+      bestScore,
+      bestNonBadScore,
+    });
+  }
+  // #endregion
+
+  return chosen;
 }
 
 function decodeGoogleWrappedUrl(href) {
@@ -109,10 +206,123 @@ function decodeGoogleWrappedUrl(href) {
   return null;
 }
 
+/**
+ * Decode a Google News `.../articles/<id>` URL into the real publisher URL.
+ *
+ * Evidence-driven goal: avoid scraping Google News HTML altogether.
+ */
+export function decodeGoogleNewsUrl(inputUrl) {
+  const raw = typeof inputUrl === 'string' ? inputUrl.trim() : '';
+  if (!raw) return null;
+  try {
+    const u = new URL(raw);
+    if (!/news\.google\.com$/i.test(u.hostname)) return null;
+    const m = u.pathname.match(/\/articles\/([^/?#]+)/i);
+    const id = m?.[1];
+    if (!id) return null;
+
+    // The article id is a base64-ish blob. Decode and search for embedded URLs.
+    const b64 = id.replace(/-/g, '+').replace(/_/g, '/');
+    const pad = '='.repeat((4 - (b64.length % 4)) % 4);
+    let bin = '';
+    try {
+      bin = atob(b64 + pad);
+    } catch {
+      return null;
+    }
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+
+    const isUrlCharByte = (b) => {
+      // Conservative ASCII subset for URLs.
+      return (
+        (b >= 0x30 && b <= 0x39) || // 0-9
+        (b >= 0x41 && b <= 0x5a) || // A-Z
+        (b >= 0x61 && b <= 0x7a) || // a-z
+        b === 0x3a || // :
+        b === 0x2f || // /
+        b === 0x2e || // .
+        b === 0x3f || // ?
+        b === 0x23 || // #
+        b === 0x26 || // &
+        b === 0x25 || // %
+        b === 0x3d || // =
+        b === 0x2d || // -
+        b === 0x5f || // _
+        b === 0x7e || // ~
+        b === 0x2b || // +
+        b === 0x40 || // @
+        b === 0x21 || // !
+        b === 0x24 || // $
+        b === 0x2a || // *
+        b === 0x27 || // '
+        b === 0x28 || // (
+        b === 0x29 || // )
+        b === 0x2c || // ,
+        b === 0x3b || // ;
+        b === 0x5b || // [
+        b === 0x5d // ]
+      );
+    };
+
+    const extractAsciiUrlsFromBytes = (buf) => {
+      const out = [];
+      const n = buf.length;
+      // Look for "http" ASCII sequence.
+      for (let i = 0; i + 4 < n; i++) {
+        if (buf[i] !== 0x68 || buf[i + 1] !== 0x74 || buf[i + 2] !== 0x74 || buf[i + 3] !== 0x70)
+          continue;
+        let j = i;
+        let s = '';
+        while (j < n && isUrlCharByte(buf[j]) && s.length < 2000) {
+          s += String.fromCharCode(buf[j]);
+          j++;
+        }
+        if (/^https?:\/\//i.test(s) && s.length >= 12) out.push(s);
+        i = j;
+      }
+      return out;
+    };
+
+    const urls = extractAsciiUrlsFromBytes(bytes);
+
+    // #region agent log
+    if (typeof window !== 'undefined' && window?.location?.hostname === 'localhost') {
+      __agentDebugPost('H1', 'podTopicNewsShared.js:decodeGoogleNewsUrl.bytesScan', 'decoded google news id bytes scan', {
+        idLen: id.length,
+        decodedBytesLen: bytes.length,
+        foundUrlCount: urls.length,
+        firstUrlPreview: urls[0] ? String(urls[0]).slice(0, 140) : null,
+      });
+    }
+    // #endregion
+
+    for (const cand of urls) {
+      const unwrapped = decodeGoogleWrappedUrl(cand) || cand;
+      if (!unwrapped) continue;
+      if (isBlockedOutboundHost(unwrapped)) continue;
+      if (!looksLikePublisherPageUrl(unwrapped)) continue;
+      return unwrapped;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 /** Google News RSS often wraps the real story in <a href="..."> or google/url?q=... */
 function extractPublisherUrlFromRssItemHtml(html) {
   if (!html || typeof html !== 'string') return null;
   const candidates = new Set();
+
+  // #region agent log
+  __agentDebugPost('H1', 'podTopicNewsShared.js:extractPublisherUrlFromRssItemHtml.entry', 'extractPublisherUrlFromRssItemHtml input stats', {
+    htmlLen: typeof html === 'string' ? html.length : 0,
+    hasAnchor: typeof html === 'string' ? /<a[^>]+href=["']https?:\/\//i.test(html) : false,
+    hasWrapped: typeof html === 'string' ? /(?:[?&](?:url|q)=(?:https%3A%2F%2F|http%3A%2F%2F))/i.test(html) : false,
+    hasNewsGoogle: typeof html === 'string' ? /news\.google\.com\/(rss\/)?articles\//i.test(html) : false,
+  });
+  // #endregion
 
   // Common case: <a href="..."> wrappers inside the description HTML.
   const reA = /<a[^>]+href=["'](https?:\/\/[^"']+)["']/gi;
@@ -130,12 +340,40 @@ function extractPublisherUrlFromRssItemHtml(html) {
 
   let best = null;
   let bestScore = 0;
+  // #region agent log
+  let rejectBlocked = 0;
+  let rejectImageAsset = 0;
+  let rejectLooksBad = 0;
+  let rejectParse = 0;
+  let acceptCount = 0;
+  const acceptSamples = [];
+  const rejectSamples = [];
+  // #endregion
   for (const rawHref of candidates) {
     let u = decodeMetaUrl(rawHref);
     const unwrapped = decodeGoogleWrappedUrl(u);
     if (unwrapped) u = unwrapped;
-    if (!u || isBlockedOutboundHost(u)) continue;
-    if (looksLikeImageAssetUrl(u)) continue;
+    if (!u) {
+      // #region agent log
+      rejectLooksBad++;
+      if (rejectSamples.length < 3) rejectSamples.push({ rawHref: String(rawHref).slice(0, 120), reason: 'decodeMetaUrl:null' });
+      // #endregion
+      continue;
+    }
+    if (isBlockedOutboundHost(u)) {
+      // #region agent log
+      rejectBlocked++;
+      if (rejectSamples.length < 3) rejectSamples.push({ u: String(u).slice(0, 120), reason: 'blockedOutboundHost' });
+      // #endregion
+      continue;
+    }
+    if (looksLikeImageAssetUrl(u)) {
+      // #region agent log
+      rejectImageAsset++;
+      if (rejectSamples.length < 3) rejectSamples.push({ u: String(u).slice(0, 120), reason: 'looksLikeImageAssetUrl' });
+      // #endregion
+      continue;
+    }
     try {
       const p = new URL(u);
       // Prefer "real" publisher deep pages over short paths.
@@ -144,22 +382,52 @@ function extractPublisherUrlFromRssItemHtml(html) {
         bestScore = score;
         best = u;
       }
+      // #region agent log
+      acceptCount++;
+      if (acceptSamples.length < 3) acceptSamples.push(String(u).slice(0, 120));
+      // #endregion
     } catch {
       /* skip */
+      // #region agent log
+      rejectParse++;
+      if (rejectSamples.length < 3) rejectSamples.push({ u: String(u).slice(0, 120), reason: 'URL_parse_failed' });
+      // #endregion
     }
   }
 
+  // #region agent log
+  __agentDebugPost('H1', 'podTopicNewsShared.js:extractPublisherUrlFromRssItemHtml.exit', 'extractPublisherUrlFromRssItemHtml decision', {
+    candidatesCount: candidates.size,
+    bestPreview: best ? String(best).slice(0, 140) : null,
+    bestScore,
+    rejectBlocked,
+    rejectImageAsset,
+    rejectLooksBad,
+    rejectParse,
+    acceptCount,
+    acceptSamples,
+    rejectSamples,
+  });
+  // #endregion
+
   // Helpful signal while debugging: avoid silent fallthrough to empty `publisherUrl`.
-  if (
-    typeof window !== 'undefined' &&
-    window?.location?.hostname === 'localhost' &&
-    !best &&
-    candidates.size > 0
-  ) {
-    console.warn('[news] publisherUrl extraction produced no usable result', {
-      candidateSamples: Array.from(candidates).slice(0, 3),
-    });
+  // #region agent log
+  if (typeof window !== 'undefined' && window?.location?.hostname === 'localhost' && !best) {
+    try {
+      __agentDebugPost(
+        'H1',
+        'podTopicNewsShared.js:extractPublisherUrlFromRssItemHtml.noResult',
+        'publisherUrl extraction produced no usable result',
+        {
+          candidatesCount: candidates.size,
+          candidateSamples: Array.from(candidates).slice(0, 3).map((x) => String(x).slice(0, 160)),
+        }
+      );
+    } catch {
+      // ignore
+    }
   }
+  // #endregion
   return best;
 }
 
@@ -219,158 +487,10 @@ function looksLikePublisherPageUrl(url) {
   }
 }
 
-/**
- * Pull a likely publisher article URL from a proxied Google News article HTML shell.
- */
-function extractLikelyPublisherUrlFromGoogleNewsPageHtml(html) {
-  if (!html || typeof html !== 'string' || html.length < 200) return null;
-  // 1) Best-effort: decode explicit `google.com/url?q=...` wrapped publisher links.
-  // This avoids grabbing random URLs like XML namespaces from Google News shell HTML.
-  const wrapperRe = /https?:\/\/(?:www\.)?(?:google\.com|news\.google\.com)\/url\?[^"'\\\s<>]+/gi;
-  let m;
-  let best = null;
-  let bestScore = 0;
-  let wrapperCount = 0;
-  let encodedUrlCount = 0;
-  let encodedBest = null;
-  let encodedBestScore = 0;
-  const consider = (wrappedOrDirect) => {
-    let u = decodeMetaUrl(wrappedOrDirect);
-    const unwrapped = decodeGoogleWrappedUrl(u);
-    if (unwrapped) u = unwrapped;
-    if (!u || isBlockedOutboundHost(u)) return;
-    if (!looksLikePublisherPageUrl(u)) return;
-    // Skip XML namespace noise that sometimes appears in the HTML.
-    try {
-      const p = new URL(u);
-      if (p.hostname === 'www.w3.org' || p.hostname === 'w3.org') return;
-      const score = p.pathname.length + (p.search ? 8 : 0);
-      if (score > bestScore) {
-        bestScore = score;
-        best = u;
-      }
-    } catch {
-      /* ignore */
-    }
-  };
-
-  while ((m = wrapperRe.exec(html)) !== null) {
-    if (m?.[0]) consider(m[0]);
-    wrapperCount++;
-  }
-  if (best) return best;
-
-  // 2b) Some shell HTML includes percent-encoded publisher URLs directly
-  // (e.g. `q=https%3A%2F%2Fexample.com%2F...`). Decode those sequences as a fallback.
-  const encodedUrlRe = /(?:https%3A%2F%2F|http%3A%2F%2F)[A-Za-z0-9%._~!$&'()*+,;=:/?#[\]-]{10,900}/gi;
-  while ((m = encodedUrlRe.exec(html)) !== null) {
-    if (!m?.[0]) continue;
-    encodedUrlCount++;
-    try {
-      const decoded = decodeURIComponent(m[0]);
-      if (!decoded || !/^https?:\/\//i.test(decoded)) continue;
-      if (looksLikeImageAssetUrl(decoded)) continue;
-      if (isBlockedOutboundHost(decoded)) continue;
-      if (!looksLikePublisherPageUrl(decoded)) continue;
-      const p = new URL(decoded);
-      const score = p.pathname.length + (p.search ? 8 : 0);
-      if (score > encodedBestScore) {
-        encodedBestScore = score;
-        encodedBest = decoded;
-      }
-    } catch {
-      /* ignore */
-    }
-  }
-  if (encodedBest) return encodedBest;
-
-  // 2) Fallback: scan any URLs in the shell HTML, but filter out obvious noise.
-  const re = /https?:\/\/[a-z0-9][-a-z0-9.]*[a-z0-9](?::\d+)?\/[^"'\\\s<>)]{12,900}/gi;
-  while ((m = re.exec(html)) !== null) {
-    let u = m[0].replace(/[),.;]+$/g, '');
-    u = decodeMetaUrl(u);
-    const unwrapped = decodeGoogleWrappedUrl(u);
-    if (unwrapped) u = unwrapped;
-    if (!u || isBlockedOutboundHost(u)) continue;
-    if (!looksLikePublisherPageUrl(u)) continue;
-    try {
-      const p = new URL(u);
-      if (p.hostname === 'www.w3.org' || p.hostname === 'w3.org') continue;
-      const score = p.pathname.length + (p.search ? 8 : 0);
-      if (score > bestScore) {
-        bestScore = score;
-        best = u;
-      }
-    } catch {
-      /* skip */
-    }
-  }
-  if (
-    typeof window !== 'undefined' &&
-    window?.location?.hostname === 'localhost' &&
-    !best &&
-    (wrapperCount > 0 || encodedUrlCount > 0)
-  ) {
-    // #region agent log
-    // If we failed to extract a publisher URL from the shell, check whether the shell
-    // actually contains <a href="https://..."> candidates we can use.
-    try {
-      const reAHref = /<a[^>]+href=["'](https?:\/\/[^"']+)["']/gi;
-      let mm;
-      let hrefCount = 0;
-      let validHrefCount = 0;
-      const examples = [];
-      while ((mm = reAHref.exec(html)) !== null) {
-        hrefCount++;
-        const rawHref = mm?.[1];
-        if (!rawHref) continue;
-        let u = decodeMetaUrl(rawHref);
-        if (!u) continue;
-        const unwrapped = decodeGoogleWrappedUrl(u);
-        if (unwrapped) u = unwrapped;
-        if (!u || isBlockedOutboundHost(u)) continue;
-        if (looksLikeImageAssetUrl(u)) continue;
-        if (!looksLikePublisherPageUrl(u)) continue;
-        validHrefCount++;
-        if (examples.length < 5) examples.push(u);
-      }
-      console.warn('[news] google shell href candidate stats', {
-        hrefCount,
-        validHrefCount,
-        examples: examples.slice(0, 5).map((x) => String(x).slice(0, 120)),
-      });
-    } catch {
-      // ignore debug failures
-    }
-    // #endregion
-    console.warn('[news] google shell url extraction stats', {
-      wrapperCount,
-      encodedUrlCount,
-      encodedBestPreview: encodedBest ? String(encodedBest).slice(0, 90) : null,
-    });
-  }
-  return best;
-}
-
 /** Microlink / RSS sometimes return Google branding, not the story photo. */
 export function isBadHeroImageUrl(url) {
   if (!url || typeof url !== 'string') return true;
-  const s = url.toLowerCase();
-  if (s.includes('google.com/s2/favicons')) return true;
-  if (s.includes('gstatic.com/images/branding')) return true;
-  if (s.includes('gstatic.com/images/icons')) return true;
-  // Google News branding thumbs often come from `lh*.googleusercontent.com` using `s0-w###`.
-  // These are frequently not the publisher's main article image, so treat them as bad.
-  if (
-    /lh[0-9]\.googleusercontent\.com/i.test(url) &&
-    (s.includes('s0-w') || s.includes('=s0-w'))
-  ) {
-    return true;
-  }
-  if (/news\.google\.com\/.{0,120}(icon|logo|favicon)/i.test(url)) return true;
-  if ((s.includes('logo') || s.includes('icon')) && (s.includes('google') || s.includes('gstatic'))) return true;
-  if (/googleusercontent\.com\/.{0,100}(icon|logo|favicon|branding)/i.test(url)) return true;
-  return false;
+  return /^data:/i.test(url.trim());
 }
 
 function looksLikeGoogleNewsBrandingThumb(url) {
@@ -472,18 +592,20 @@ function parseGoogleNewsRssXml(xml) {
     const rawDesc = item.getElementsByTagName('description')[0]?.textContent || '';
     const description = rawDesc.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
     let image = firstImageUrlFromHtml(rawDesc);
-    if (isBadHeroImageUrl(image)) image = null;
+    if (!image) image = null;
     const publisherUrl = extractPublisherUrlFromRssItemHtml(rawDesc);
+    const decoded = isGoogleNewsArticleUrl(link) ? decodeGoogleNewsUrl(link) : null;
+    const finalUrl = decoded || publisherUrl || link;
     const title = cleanPublisherSuffixFromTitle(rawTitle, source);
     out.push({
       title,
       source,
-      url: link,
+      url: finalUrl,
       image,
       description,
       publishedAt,
       sourceSiteUrl,
-      publisherUrl: publisherUrl || '',
+      publisherUrl: decoded || publisherUrl || '',
     });
   }
   return out;
@@ -496,6 +618,14 @@ async function fetchItemsThroughRss2Json(rssUrl) {
     if (!res.ok) return [];
     const data = await res.json();
     if (data.status !== 'ok' || !Array.isArray(data.items)) return [];
+    // #region agent log
+    __agentDebugPost('H3', 'podTopicNewsShared.js:fetchItemsThroughRss2Json.afterFetch', 'rss2json response stats', {
+      feedTitle: typeof data?.feed?.title === 'string' ? data.feed.title.slice(0, 80) : null,
+      itemsCount: data.items.length,
+      hasItemsWithContent: data.items.slice(0, 10).some((x) => typeof x?.content === 'string' && x.content.length > 50),
+      hasItemsWithDescription: data.items.slice(0, 10).some((x) => typeof x?.description === 'string' && x.description.length > 50),
+    });
+    // #endregion
     return data.items
       .map((it) => {
         const rawTitle = it.title?.replace(/\s+/g, ' ').trim();
@@ -510,14 +640,31 @@ async function fetchItemsThroughRss2Json(rssUrl) {
         let image =
           (it.enclosure?.link && /^https?:/i.test(it.enclosure.link) ? it.enclosure.link : null) ||
           firstImageUrlFromHtml(htmlBlob);
-        if (isBadHeroImageUrl(image)) image = null;
-        const publisherUrl = extractPublisherUrlFromRssItemHtml(htmlBlob) || '';
+        if (!image) image = null;
+        const decoded = isGoogleNewsArticleUrl(url) ? decodeGoogleNewsUrl(url) : null;
+        const publisherUrl = decoded || extractPublisherUrlFromRssItemHtml(htmlBlob) || '';
         const publishedAt = parseRssPubDate(it.pubDate);
         const title = cleanPublisherSuffixFromTitle(rawTitle, source);
+        // #region agent log
+        if (__agentDebugShouldLog()) {
+          __agentDebugPost('H3', 'podTopicNewsShared.js:fetchItemsThroughRss2Json.itemMap', 'rss2json item mapped', {
+            title: title.slice(0, 90),
+            urlPreview: url.slice(0, 120),
+            isGoogleNewsUrl: isGoogleNewsArticleUrl(url),
+            htmlBlobLen: htmlBlob.length,
+            htmlHasAnchor: /<a[^>]+href=["']https?:\/\//i.test(htmlBlob),
+            htmlHasImgSrc: /src=["']https?:\/\//i.test(htmlBlob) || /src=["']\/\//i.test(htmlBlob),
+            imagePreview: image ? String(image).slice(0, 120) : null,
+            imageIsBad: image ? isBadHeroImageUrl(image) : null,
+            publisherUrlPreview: publisherUrl ? String(publisherUrl).slice(0, 120) : null,
+            publisherUrlBlocked: publisherUrl ? isBlockedOutboundHost(publisherUrl) : null,
+          });
+        }
+        // #endregion
         return {
           title,
           source,
-          url,
+          url: decoded || url,
           image,
           description,
           publishedAt,
@@ -555,7 +702,7 @@ export function normalizeArticles(list) {
         typeof a.publishedAt === 'string' && a.publishedAt ? a.publishedAt : null;
       const rawTitle = a.title;
       let img = a.urlToImage || firstImageUrlFromHtml(a.description || '') || null;
-      if (isBadHeroImageUrl(img)) img = null;
+      if (!img) img = null;
       const pubFromDesc = extractPublisherUrlFromRssItemHtml(a.description || '');
       return {
         title: cleanPublisherSuffixFromTitle(rawTitle, source),
@@ -580,39 +727,97 @@ function decodeMetaUrl(raw) {
 /** Extract Open Graph / Twitter image from raw HTML (best-effort). */
 export function parseOgImageFromHtml(html) {
   if (!html || typeof html !== 'string') return null;
-  const res = [
-    /<meta\s+[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i,
-    /<meta\s+[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["']/i,
-    /<meta\s+[^>]*property=["']og:image:url["'][^>]*content=["']([^"']+)["']/i,
-    /<meta\s+[^>]*name=["']twitter:image["'][^>]*content=["']([^"']+)["']/i,
-    /<meta\s+[^>]*name=["']twitter:image:src["'][^>]*content=["']([^"']+)["']/i,
-    /<meta\s+[^>]*content=["']([^"']+)["'][^>]*name=["']twitter:image["']/i,
+  const patterns = [
+    /<meta\s+[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/gi,
+    /<meta\s+[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["']/gi,
+    /<meta\s+[^>]*property=["']og:image:url["'][^>]*content=["']([^"']+)["']/gi,
+    /<meta\s+[^>]*name=["']twitter:image["'][^>]*content=["']([^"']+)["']/gi,
+    /<meta\s+[^>]*name=["']twitter:image:src["'][^>]*content=["']([^"']+)["']/gi,
+    /<meta\s+[^>]*content=["']([^"']+)["'][^>]*name=["']twitter:image["']/gi,
   ];
-  for (const re of res) {
-    const m = html.match(re);
-    const d = decodeMetaUrl(m?.[1]);
-    if (d) return d;
+
+  const candidates = new Set();
+  for (const re of patterns) {
+    for (const m of html.matchAll(re)) {
+      const raw = m?.[1];
+      const d = decodeMetaUrl(raw);
+      if (d) candidates.add(d);
+    }
   }
-  return null;
+
+  if (!candidates.size) return null;
+
+  const score = (url) => {
+    const s = String(url).toLowerCase();
+    // Prefer the biggest size variant when Googleusercontent thumbs are present.
+    const m = s.match(/(?:s0-w|=s0-w)(\d+)/i);
+    const w = m?.[1] ? parseInt(m[1], 10) : null;
+    if (w && Number.isFinite(w)) return w;
+    return s.length;
+  };
+
+  // Prefer a non-"bad" candidate if present. This avoids picking generic Google branding images.
+  let bestNonBad = null;
+  let bestNonBadScore = -Infinity;
+  let best = null;
+  let bestScore = -Infinity;
+
+  for (const u of candidates) {
+    const sc = score(u);
+    if (!isBadHeroImageUrl(u) && sc > bestNonBadScore) {
+      bestNonBadScore = sc;
+      bestNonBad = u;
+    }
+    if (sc > bestScore) {
+      bestScore = sc;
+      best = u;
+    }
+  }
+
+  const chosen = bestNonBad || best;
+  // #region agent log
+  if (typeof window !== 'undefined' && window?.location?.hostname === 'localhost') {
+    __agentDebugPost('H3', 'podTopicNewsShared.js:parseOgImageFromHtml.choose', 'parseOgImageFromHtml chose image', {
+      chosenPreview: chosen ? String(chosen).slice(0, 140) : null,
+      chosenIsBad: chosen ? isBadHeroImageUrl(chosen) : null,
+      bestNonBadPreview: bestNonBad ? String(bestNonBad).slice(0, 140) : null,
+      bestScore,
+      bestNonBadScore,
+      candidatesCount: candidates.size,
+    });
+  }
+  // #endregion
+
+  return chosen;
+}
+
+function extractBestGoogleThumbFromHtml(html) {
+  if (!html || typeof html !== 'string') return null;
+  // Google News shells frequently embed thumbnail URLs directly in HTML.
+  // We specifically look for `lh*.googleusercontent.com/...=s0-w####`.
+  const re = /https?:\/\/lh\d+\.googleusercontent\.com\/[^"' >]+?=s0-w(\d+)[^"' >]*/gi;
+  let m;
+  let best = null;
+  let bestW = -1;
+  while ((m = re.exec(html)) !== null) {
+    const url = m?.[0];
+    const w = m?.[1] ? parseInt(m[1], 10) : NaN;
+    if (!url || !Number.isFinite(w)) continue;
+    if (w > bestW) {
+      bestW = w;
+      best = url;
+    }
+  }
+  return best;
 }
 
 async function fetchPageHtmlViaProxies(pageUrl) {
   const encoded = encodeURIComponent(pageUrl);
-  // Important: some proxies (notably allorigins) do NOT send CORS headers,
-  // which causes the browser to block the response entirely.
-  // So for Google News, prefer proxies that work from the browser.
-  const attempts = /news\.google\.com/i.test(pageUrl)
-    ? [
-        `https://api.codetabs.com/v1/proxy?quest=${encoded}`,
-        `https://corsproxy.io/?${encoded}`,
-        // last resort: might still be blocked by CORS depending on browser/proxy config
-        `https://api.allorigins.win/get?url=${encoded}`,
-      ]
-    : [
-        `https://api.codetabs.com/v1/proxy?quest=${encoded}`,
-        `https://corsproxy.io/?${encoded}`,
-        `https://api.allorigins.win/get?url=${encoded}`,
-      ];
+  const attempts = [
+    `https://api.codetabs.com/v1/proxy?quest=${encoded}`,
+    `https://corsproxy.io/?${encoded}`,
+    `https://api.allorigins.win/get?url=${encoded}`,
+  ];
   for (const apiUrl of attempts) {
     try {
       const res = await fetch(apiUrl);
@@ -747,23 +952,80 @@ async function tryHeroImageFromBackend(articleUrl) {
   return null;
 }
 
+async function tryResolvePublisherAndImageViaMicrolink(googleNewsUrl) {
+  const u = typeof googleNewsUrl === 'string' ? googleNewsUrl.trim() : '';
+  if (!u || !/^https?:\/\//i.test(u)) return { realUrl: null, image: null };
+  try {
+    const ml = await fetch(`https://api.microlink.io/?url=${encodeURIComponent(u)}`);
+    if (!ml.ok) return { realUrl: null, image: null };
+    const j = await ml.json().catch(() => null);
+    const realUrl = decodeMetaUrl(j?.data?.url) || decodeMetaUrl(j?.data?.publisher?.url) || null;
+    const image = decodeMetaUrl(j?.data?.image?.url) || null;
+    // #region agent log
+    if (typeof window !== 'undefined' && window?.location?.hostname === 'localhost') {
+      __agentDebugPost(
+        'H1',
+        'podTopicNewsShared.js:tryResolvePublisherAndImageViaMicrolink',
+        'microlink resolved google news',
+        {
+          inputUrl: u.slice(0, 140),
+          realUrlPreview: realUrl ? String(realUrl).slice(0, 140) : null,
+          imagePreview: image ? String(image).slice(0, 140) : null,
+          imageIsBad: image ? isBadHeroImageUrl(image) : null,
+        }
+      );
+    }
+    // #endregion
+    return { realUrl, image };
+  } catch {
+    return { realUrl: null, image: null };
+  }
+}
+
 /**
  * Hero image for a story. Google News links need the publisher URL (from RSS &lt;a&gt; or unpacked HTML);
  * Microlink on google.com alone often returns the Google News logo — those URLs are rejected.
  */
 export async function resolveArticleHeroImage(pageUrl, options = {}) {
   const u = typeof pageUrl === 'string' ? pageUrl.trim() : '';
-  if (!u || !/^https?:\/\//i.test(u)) return null;
+  if (!u || !/^https?:\/\//i.test(u)) return ensureNonEmptyImageUrl(null);
 
-  const skipUnpack = options.skipGoogleUnpack === true;
+  const skipDecode = options.skipGoogleDecode === true;
   const publisherHint =
     typeof options.publisherUrl === 'string' ? options.publisherUrl.trim() : '';
+
+  // Google News URLs: decode to publisher URL and stop here (no Google HTML scraping).
+  if (!skipDecode && isGoogleNewsArticleUrl(u)) {
+    const realUrl = decodeGoogleNewsUrl(u);
+    // #region agent log
+    if (typeof window !== 'undefined' && window?.location?.hostname === 'localhost') {
+      __agentDebugPost('H1', 'podTopicNewsShared.js:decodeGoogleNewsUrl', 'decoded Google News URL', {
+        inputUrl: u.slice(0, 140),
+        realUrlPreview: realUrl ? String(realUrl).slice(0, 140) : null,
+      });
+    }
+    // #endregion
+    if (realUrl && !isBlockedOutboundHost(realUrl) && !looksLikeImageAssetUrl(realUrl)) {
+      const img = await resolveArticleHeroImage(realUrl, { ...options, skipGoogleDecode: true });
+      return ensureNonEmptyImageUrl(img);
+    }
+
+    // If decode failed, let Microlink resolve to publisher + image (no Google HTML scraping).
+    const ml = await tryResolvePublisherAndImageViaMicrolink(u);
+    if (ml?.image && !isBadHeroImageUrl(ml.image)) return ensureNonEmptyImageUrl(ml.image);
+    if (ml?.realUrl && !isBlockedOutboundHost(ml.realUrl) && !looksLikeImageAssetUrl(ml.realUrl)) {
+      const img = await resolveArticleHeroImage(ml.realUrl, { ...options, skipGoogleDecode: true });
+      return ensureNonEmptyImageUrl(img);
+    }
+
+    return ensureNonEmptyImageUrl(null);
+  }
 
   // Prefer backend extraction (server-side). Avoids browser CORS/proxy failures.
   let fromBackend = null;
   if (publisherHint && !isBlockedOutboundHost(publisherHint) && !looksLikeImageAssetUrl(publisherHint)) {
     fromBackend = await tryHeroImageFromBackend(publisherHint);
-    if (fromBackend) return fromBackend;
+    if (fromBackend) return ensureNonEmptyImageUrl(fromBackend);
   }
   fromBackend = await tryHeroImageFromBackend(u);
   // #region agent log
@@ -791,132 +1053,44 @@ export async function resolveArticleHeroImage(pageUrl, options = {}) {
     }).catch(() => {});
   }
   // #endregion
-  if (fromBackend) return fromBackend;
+  if (fromBackend) return ensureNonEmptyImageUrl(fromBackend);
 
   if (publisherHint && !isBlockedOutboundHost(publisherHint) && !looksLikeImageAssetUrl(publisherHint)) {
     const fromHint = await tryHeroImageFromPublisherPage(publisherHint);
-    if (fromHint) return fromHint;
+    if (fromHint) return ensureNonEmptyImageUrl(fromHint);
   }
-
-  if (!skipUnpack && isGoogleNewsArticleUrl(u)) {
-    const shellHtml = await fetchPageHtmlViaProxies(u);
-    const extracted = extractLikelyPublisherUrlFromGoogleNewsPageHtml(shellHtml);
-
-    if (typeof window !== 'undefined' && window?.location?.hostname === 'localhost') {
-      const shellLen = typeof shellHtml === 'string' ? shellHtml.length : 0;
-      const hasOgImage = !!(shellHtml && shellHtml.includes('property="og:image"'));
-      const hasTwitterImage = !!(shellHtml && shellHtml.includes('twitter:image'));
-      const hasGoogleUrlWrap = !!(shellHtml && /google\.com\/url\?/.test(shellHtml));
-      console.warn('[news] google shell HTML scan', {
-        shellUrlPreview: String(u).slice(0, 90),
-        shellLen,
-        hasOgImage,
-        hasTwitterImage,
-        hasGoogleUrlWrap,
-        extractedPreview: extracted ? String(extracted).slice(0, 90) : null,
-        extractedLooksLikeImage: extracted ? looksLikeImageAssetUrl(extracted) : null,
-      });
-    }
-
-    // #region agent log
-    // Confirm whether OG/Twitter image URLs are extractable from the Google News shell HTML.
-    if (
-      typeof window !== 'undefined' &&
-      window?.location?.hostname === 'localhost' &&
-      typeof shellHtml === 'string' &&
-      shellHtml.length > 100
-    ) {
-      const shellOg = parseOgImageFromHtml(shellHtml);
-      const shellOgIsBad = shellOg ? isBadHeroImageUrl(shellOg) : null;
-      const blockedPublisherAttempt = isBlockedOutboundHost(u);
-
-      fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Debug-Session-Id': '6e32d1',
-        },
-        body: JSON.stringify({
-          sessionId: '6e32d1',
-          runId: 'pre-fix',
-          hypothesisId: 'H1',
-          location: 'podTopicNewsShared.js:resolveArticleHeroImage.googleShell.ogParse',
-          message: 'OG/Twitter parse from google shell HTML + blocked publisher check',
-          data: {
-            inputUrl: String(u).slice(0, 120),
-            blockedPublisherAttempt,
-            shellOgPreview: shellOg ? String(shellOg).slice(0, 120) : null,
-            shellOgIsBad,
-            shellOgParsed: !!shellOg,
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-
-      console.warn('[news] google shell OG parse debug', {
-        shellOgPreview: shellOg ? String(shellOg).slice(0, 120) : null,
-        shellOgIsBad,
-        blockedPublisherAttempt,
-      });
-    }
-    // #endregion
-
-    if (typeof window !== 'undefined' && window?.location?.hostname === 'localhost' && extracted) {
-      console.warn('[news] google shell unpack extracted candidate', {
-        extractedPreview: String(extracted).slice(0, 120),
-        extractedIsBlockedOutbound: isBlockedOutboundHost(extracted),
-        extractedLooksLikeImage: looksLikeImageAssetUrl(extracted),
-      });
-    }
-    if (
-      extracted &&
-      extracted !== u &&
-      !isBlockedOutboundHost(extracted) &&
-      !looksLikeImageAssetUrl(extracted)
-    ) {
-      if (
-        typeof window !== 'undefined' &&
-        window?.location?.hostname === 'localhost'
-      ) {
-        console.warn('[news] google shell unpack extracted url', {
-          extractedPreview: String(extracted).slice(0, 120),
-          extractedLooksLikeImage: looksLikeImageAssetUrl(extracted),
-        });
-      }
-      const fromPublisher = await resolveArticleHeroImage(extracted, {
-        skipGoogleUnpack: true,
-        publisherUrl: '',
-      });
-      if (fromPublisher) return fromPublisher;
-    }
-    const shellImg = await tryHeroImageFromPublisherPage(u);
-    if (shellImg && !isBadHeroImageUrl(shellImg)) return shellImg;
-    if (typeof window !== 'undefined' && window?.location?.hostname === 'localhost') {
-      console.warn('[news] google shell fallback returned empty', {
-        shellUrlPreview: String(u).slice(0, 90),
-        shellImgPreview: shellImg ? String(shellImg).slice(0, 90) : null,
-      });
-    }
-    return null;
+  const img = await tryHeroImageFromPublisherPage(u);
+  // #region agent log
+  if (typeof window !== 'undefined' && window?.location?.hostname === 'localhost') {
+    __agentDebugPost('H3', 'podTopicNewsShared.js:resolveArticleHeroImage.final', 'resolveArticleHeroImage final decision', {
+      inputUrl: u.slice(0, 140),
+      usedFallback: !(img && !isBadHeroImageUrl(img)),
+      resolvedPreview: img ? String(img).slice(0, 140) : null,
+      ogFound: !!img,
+    });
   }
-
-  return tryHeroImageFromPublisherPage(u);
+  // #endregion
+  return ensureNonEmptyImageUrl(img);
 }
 
 /**
  * Fills missing `item.image` by resolving publisher og:image (concurrency-limited).
  */
 export async function enrichNewsItemsWithOgImages(items, options = {}) {
+  const enableOgFallback = options.enableOgFallback === true;
   const maxResolve = typeof options.maxResolve === 'number' ? options.maxResolve : 18;
   const concurrency = typeof options.concurrency === 'number' ? options.concurrency : 4;
   if (!Array.isArray(items) || !items.length) return items;
+
+  if (!enableOgFallback) {
+    return items.map((it) => ({ ...it, image: ensureNonEmptyImageUrl(it?.image || null) }));
+  }
 
   const slots = items
     .map((it, i) => ({ i, it }))
     .filter(({ it }) => {
       if (!it || typeof it.url !== 'string' || !/^https?:\/\//i.test(it.url.trim())) return false;
       const missing = !it.image;
-      const badGoogleThumb = it.image && isBadHeroImageUrl(it.image);
       const fromGoogleNews = isGoogleNewsArticleUrl(it.url);
       const googleNewsBrandingThumb = fromGoogleNews && it.image && looksLikeGoogleNewsBrandingThumb(it.image);
       // #region agent log
@@ -951,11 +1125,11 @@ export async function enrichNewsItemsWithOgImages(items, options = {}) {
         }).catch(() => {});
       }
       // #endregion
-      return missing || badGoogleThumb || googleNewsBrandingThumb;
+      return missing || googleNewsBrandingThumb;
     })
     .slice(0, maxResolve);
 
-  if (!slots.length) return items;
+  if (!slots.length) return items.map((it) => ({ ...it, image: ensureNonEmptyImageUrl(it?.image || null) }));
 
   const out = items.map((it) => ({ ...it }));
   let job = 0;
@@ -1025,12 +1199,15 @@ export async function enrichNewsItemsWithOgImages(items, options = {}) {
   };
   const workers = Math.min(concurrency, slots.length);
   await Promise.all(Array.from({ length: workers }, () => runWorker()));
-  return out;
+  return out.map((it) => ({ ...it, image: ensureNonEmptyImageUrl(it?.image || null) }));
 }
 
 export function NewsFeedRow({ item, hub, isLast, onOpenShare }) {
   const icon = faviconUrl(item);
   const rel = formatRelativeTime(item.publishedAt);
+  // Debug visibility for final image value.
+  // eslint-disable-next-line no-console
+  console.log('FINAL IMAGE:', item?.image);
 
   const inner = (
     <>
@@ -1068,18 +1245,19 @@ export function NewsFeedRow({ item, hub, isLast, onOpenShare }) {
         ) : null}
       </div>
       <div className="flex-shrink-0 w-[4.5rem] h-[4.5rem] rounded-lg overflow-hidden bg-black/25">
-        {item.image ? (
-          <img
-            src={item.image}
-            alt=""
-            className="w-full h-full object-cover"
-            loading="lazy"
-            referrerPolicy="no-referrer"
-            onError={(e) => {
-              e.target.style.display = 'none';
-            }}
-          />
-        ) : null}
+        <img
+          src={ensureNonEmptyImageUrl(item?.image)}
+          alt=""
+          className="w-full h-full object-cover"
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          onError={(e) => {
+            // Avoid infinite onError loops if even the fallback fails.
+            if (e?.target?.dataset?.fallbackApplied) return;
+            e.target.dataset.fallbackApplied = '1';
+            e.target.src = __NEWS_FALLBACK_IMAGE_URL;
+          }}
+        />
       </div>
     </>
   );

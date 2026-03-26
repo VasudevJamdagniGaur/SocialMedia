@@ -166,7 +166,7 @@ export default function PodSportsTopicPage() {
         return;
       }
 
-      const enriched = await enrichNewsItemsWithOgImages(rows);
+      const enriched = await enrichNewsItemsWithOgImages(rows, { enableOgFallback: true });
       if (isMountedRef.current && token === loadTokenRef.current) {
         setItems(enriched);
         setError('');
