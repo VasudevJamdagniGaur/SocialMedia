@@ -1,48 +1,5 @@
 import React from 'react';
 
-// #region agent log (debug mode)
-const __AGENT_DEBUG_ENDPOINT =
-  'http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7';
-const __AGENT_DEBUG_SESSION_ID = '6e32d1';
-let __AGENT_DEBUG_COUNTER = 0;
-const __AGENT_DEBUG_LIMIT = 60;
-const __agentDebugShouldLog = () => __AGENT_DEBUG_COUNTER++ < __AGENT_DEBUG_LIMIT;
-
-const __agentDebugPost = (hypothesisId, location, message, data) => {
-  if (!__agentDebugShouldLog()) return;
-  try {
-    fetch(__AGENT_DEBUG_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Debug-Session-Id': __AGENT_DEBUG_SESSION_ID,
-      },
-      body: JSON.stringify({
-        sessionId: __AGENT_DEBUG_SESSION_ID,
-        location,
-        message,
-        data: data || {},
-        timestamp: Date.now(),
-        hypothesisId,
-        runId: 'iter',
-      }),
-    }).catch(() => {});
-  } catch {
-    // ignore
-  }
-};
-
-// #region agent log
-// Prove the debug transport works (creates NDJSON file) even if no news actions run yet.
-if (typeof window !== 'undefined') {
-  __agentDebugPost('H0', 'podTopicNewsShared.js:init', 'debug logger initialized', {
-    origin: typeof window?.location?.origin === 'string' ? window.location.origin : null,
-    hostname: typeof window?.location?.hostname === 'string' ? window.location.hostname : null,
-  });
-}
-// #endregion
-// #endregion
-
 const __NEWS_FALLBACK_IMAGE_URL =
   'data:image/svg+xml;charset=utf-8,' +
   encodeURIComponent(
@@ -315,15 +272,6 @@ function extractPublisherUrlFromRssItemHtml(html) {
   if (!html || typeof html !== 'string') return null;
   const candidates = new Set();
 
-  // #region agent log
-  __agentDebugPost('H1', 'podTopicNewsShared.js:extractPublisherUrlFromRssItemHtml.entry', 'extractPublisherUrlFromRssItemHtml input stats', {
-    htmlLen: typeof html === 'string' ? html.length : 0,
-    hasAnchor: typeof html === 'string' ? /<a[^>]+href=["']https?:\/\//i.test(html) : false,
-    hasWrapped: typeof html === 'string' ? /(?:[?&](?:url|q)=(?:https%3A%2F%2F|http%3A%2F%2F))/i.test(html) : false,
-    hasNewsGoogle: typeof html === 'string' ? /news\.google\.com\/(rss\/)?articles\//i.test(html) : false,
-  });
-  // #endregion
-
   // Common case: <a href="..."> wrappers inside the description HTML.
   const reA = /<a[^>]+href=["'](https?:\/\/[^"']+)["']/gi;
   let m;
@@ -340,38 +288,17 @@ function extractPublisherUrlFromRssItemHtml(html) {
 
   let best = null;
   let bestScore = 0;
-  // #region agent log
-  let rejectBlocked = 0;
-  let rejectImageAsset = 0;
-  let rejectLooksBad = 0;
-  let rejectParse = 0;
-  let acceptCount = 0;
-  const acceptSamples = [];
-  const rejectSamples = [];
-  // #endregion
   for (const rawHref of candidates) {
     let u = decodeMetaUrl(rawHref);
     const unwrapped = decodeGoogleWrappedUrl(u);
     if (unwrapped) u = unwrapped;
     if (!u) {
-      // #region agent log
-      rejectLooksBad++;
-      if (rejectSamples.length < 3) rejectSamples.push({ rawHref: String(rawHref).slice(0, 120), reason: 'decodeMetaUrl:null' });
-      // #endregion
       continue;
     }
     if (isBlockedOutboundHost(u)) {
-      // #region agent log
-      rejectBlocked++;
-      if (rejectSamples.length < 3) rejectSamples.push({ u: String(u).slice(0, 120), reason: 'blockedOutboundHost' });
-      // #endregion
       continue;
     }
     if (looksLikeImageAssetUrl(u)) {
-      // #region agent log
-      rejectImageAsset++;
-      if (rejectSamples.length < 3) rejectSamples.push({ u: String(u).slice(0, 120), reason: 'looksLikeImageAssetUrl' });
-      // #endregion
       continue;
     }
     try {
@@ -382,52 +309,11 @@ function extractPublisherUrlFromRssItemHtml(html) {
         bestScore = score;
         best = u;
       }
-      // #region agent log
-      acceptCount++;
-      if (acceptSamples.length < 3) acceptSamples.push(String(u).slice(0, 120));
-      // #endregion
     } catch {
       /* skip */
-      // #region agent log
-      rejectParse++;
-      if (rejectSamples.length < 3) rejectSamples.push({ u: String(u).slice(0, 120), reason: 'URL_parse_failed' });
-      // #endregion
     }
   }
 
-  // #region agent log
-  __agentDebugPost('H1', 'podTopicNewsShared.js:extractPublisherUrlFromRssItemHtml.exit', 'extractPublisherUrlFromRssItemHtml decision', {
-    candidatesCount: candidates.size,
-    bestPreview: best ? String(best).slice(0, 140) : null,
-    bestScore,
-    rejectBlocked,
-    rejectImageAsset,
-    rejectLooksBad,
-    rejectParse,
-    acceptCount,
-    acceptSamples,
-    rejectSamples,
-  });
-  // #endregion
-
-  // Helpful signal while debugging: avoid silent fallthrough to empty `publisherUrl`.
-  // #region agent log
-  if (typeof window !== 'undefined' && window?.location?.hostname === 'localhost' && !best) {
-    try {
-      __agentDebugPost(
-        'H1',
-        'podTopicNewsShared.js:extractPublisherUrlFromRssItemHtml.noResult',
-        'publisherUrl extraction produced no usable result',
-        {
-          candidatesCount: candidates.size,
-          candidateSamples: Array.from(candidates).slice(0, 3).map((x) => String(x).slice(0, 160)),
-        }
-      );
-    } catch {
-      // ignore
-    }
-  }
-  // #endregion
   return best;
 }
 
@@ -618,14 +504,6 @@ async function fetchItemsThroughRss2Json(rssUrl) {
     if (!res.ok) return [];
     const data = await res.json();
     if (data.status !== 'ok' || !Array.isArray(data.items)) return [];
-    // #region agent log
-    __agentDebugPost('H3', 'podTopicNewsShared.js:fetchItemsThroughRss2Json.afterFetch', 'rss2json response stats', {
-      feedTitle: typeof data?.feed?.title === 'string' ? data.feed.title.slice(0, 80) : null,
-      itemsCount: data.items.length,
-      hasItemsWithContent: data.items.slice(0, 10).some((x) => typeof x?.content === 'string' && x.content.length > 50),
-      hasItemsWithDescription: data.items.slice(0, 10).some((x) => typeof x?.description === 'string' && x.description.length > 50),
-    });
-    // #endregion
     return data.items
       .map((it) => {
         const rawTitle = it.title?.replace(/\s+/g, ' ').trim();
@@ -645,22 +523,6 @@ async function fetchItemsThroughRss2Json(rssUrl) {
         const publisherUrl = decoded || extractPublisherUrlFromRssItemHtml(htmlBlob) || '';
         const publishedAt = parseRssPubDate(it.pubDate);
         const title = cleanPublisherSuffixFromTitle(rawTitle, source);
-        // #region agent log
-        if (__agentDebugShouldLog()) {
-          __agentDebugPost('H3', 'podTopicNewsShared.js:fetchItemsThroughRss2Json.itemMap', 'rss2json item mapped', {
-            title: title.slice(0, 90),
-            urlPreview: url.slice(0, 120),
-            isGoogleNewsUrl: isGoogleNewsArticleUrl(url),
-            htmlBlobLen: htmlBlob.length,
-            htmlHasAnchor: /<a[^>]+href=["']https?:\/\//i.test(htmlBlob),
-            htmlHasImgSrc: /src=["']https?:\/\//i.test(htmlBlob) || /src=["']\/\//i.test(htmlBlob),
-            imagePreview: image ? String(image).slice(0, 120) : null,
-            imageIsBad: image ? isBadHeroImageUrl(image) : null,
-            publisherUrlPreview: publisherUrl ? String(publisherUrl).slice(0, 120) : null,
-            publisherUrlBlocked: publisherUrl ? isBlockedOutboundHost(publisherUrl) : null,
-          });
-        }
-        // #endregion
         return {
           title,
           source,
@@ -842,19 +704,10 @@ async function tryHeroImageFromPublisherPage(targetUrl) {
   if (!u || !/^https?:\/\//i.test(u) || isBlockedOutboundHost(u)) return null;
 
   try {
-    if (typeof window !== 'undefined' && window?.location?.hostname === 'localhost') {
-      console.warn('[news] microlink attempt', { targetPreview: String(u).slice(0, 90) });
-    }
     const ml = await fetch(`https://api.microlink.io/?url=${encodeURIComponent(u)}`);
     if (ml.ok) {
       const j = await ml.json().catch(() => null);
       const fixed = decodeMetaUrl(j?.data?.image?.url);
-      if (typeof window !== 'undefined' && window?.location?.hostname === 'localhost') {
-        console.warn('[news] microlink returned image', {
-          imagePreview: fixed ? String(fixed).slice(0, 120) : null,
-          isBad: fixed ? isBadHeroImageUrl(fixed) : null,
-        });
-      }
       if (fixed && !isBadHeroImageUrl(fixed)) return fixed;
     }
   } catch {
@@ -863,13 +716,6 @@ async function tryHeroImageFromPublisherPage(targetUrl) {
 
   const html = await fetchPageHtmlViaProxies(u);
   const og = parseOgImageFromHtml(html);
-  if (typeof window !== 'undefined' && window?.location?.hostname === 'localhost') {
-    console.warn('[news] og parse after microlink', {
-      ogPreview: og ? String(og).slice(0, 120) : null,
-      ogIsBad: og ? isBadHeroImageUrl(og) : null,
-      ogHtmlLen: typeof html === 'string' ? html.length : 0,
-    });
-  }
   if (og && !isBadHeroImageUrl(og)) return og;
   return null;
 }
@@ -908,36 +754,6 @@ async function tryHeroImageFromBackend(articleUrl) {
       if (!res.ok) continue;
       const data = await res.json().catch(() => null);
       const img = data && typeof data.image === 'string' ? data.image.trim() : '';
-
-      // #region agent log
-      if (
-        __agentDebugShouldLog() &&
-        isGoogleNewsArticleUrl(u) &&
-        img
-      ) {
-        fetch(__AGENT_DEBUG_ENDPOINT, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Debug-Session-Id': __AGENT_DEBUG_SESSION_ID,
-          },
-          body: JSON.stringify({
-            sessionId: __AGENT_DEBUG_SESSION_ID,
-            hypothesisId: 'H1',
-            runId: 'pre-fix',
-            location: 'podTopicNewsShared.js:tryHeroImageFromBackend.afterResponse',
-            message: 'Backend returned an image value',
-            data: {
-              apiBase,
-              inputUrl: u,
-              returnedImage: img.slice(0, 140),
-              returnedIsBad: isBadHeroImageUrl(img),
-            },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {});
-      }
-      // #endregion
       if (img && !isBadHeroImageUrl(img)) return img;
     } catch (e) {
       // next candidate
@@ -961,21 +777,6 @@ async function tryResolvePublisherAndImageViaMicrolink(googleNewsUrl) {
     const j = await ml.json().catch(() => null);
     const realUrl = decodeMetaUrl(j?.data?.url) || decodeMetaUrl(j?.data?.publisher?.url) || null;
     const image = decodeMetaUrl(j?.data?.image?.url) || null;
-    // #region agent log
-    if (typeof window !== 'undefined' && window?.location?.hostname === 'localhost') {
-      __agentDebugPost(
-        'H1',
-        'podTopicNewsShared.js:tryResolvePublisherAndImageViaMicrolink',
-        'microlink resolved google news',
-        {
-          inputUrl: u.slice(0, 140),
-          realUrlPreview: realUrl ? String(realUrl).slice(0, 140) : null,
-          imagePreview: image ? String(image).slice(0, 140) : null,
-          imageIsBad: image ? isBadHeroImageUrl(image) : null,
-        }
-      );
-    }
-    // #endregion
     return { realUrl, image };
   } catch {
     return { realUrl: null, image: null };
@@ -997,14 +798,6 @@ export async function resolveArticleHeroImage(pageUrl, options = {}) {
   // Google News URLs: decode to publisher URL and stop here (no Google HTML scraping).
   if (!skipDecode && isGoogleNewsArticleUrl(u)) {
     const realUrl = decodeGoogleNewsUrl(u);
-    // #region agent log
-    if (typeof window !== 'undefined' && window?.location?.hostname === 'localhost') {
-      __agentDebugPost('H1', 'podTopicNewsShared.js:decodeGoogleNewsUrl', 'decoded Google News URL', {
-        inputUrl: u.slice(0, 140),
-        realUrlPreview: realUrl ? String(realUrl).slice(0, 140) : null,
-      });
-    }
-    // #endregion
     if (realUrl && !isBlockedOutboundHost(realUrl) && !looksLikeImageAssetUrl(realUrl)) {
       const img = await resolveArticleHeroImage(realUrl, { ...options, skipGoogleDecode: true });
       return ensureNonEmptyImageUrl(img);
@@ -1028,31 +821,6 @@ export async function resolveArticleHeroImage(pageUrl, options = {}) {
     if (fromBackend) return ensureNonEmptyImageUrl(fromBackend);
   }
   fromBackend = await tryHeroImageFromBackend(u);
-  // #region agent log
-  if (__agentDebugShouldLog() && isGoogleNewsArticleUrl(u)) {
-    fetch(__AGENT_DEBUG_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Debug-Session-Id': __AGENT_DEBUG_SESSION_ID,
-      },
-      body: JSON.stringify({
-        sessionId: __AGENT_DEBUG_SESSION_ID,
-        hypothesisId: 'H1',
-        runId: 'pre-fix',
-        location: 'podTopicNewsShared.js:resolveArticleHeroImage.afterBackend',
-        message: 'fromBackend result',
-        data: {
-          inputUrl: u,
-          hasFromBackend: typeof fromBackend === 'string' && !!fromBackend,
-          fromBackendPreview: typeof fromBackend === 'string' ? fromBackend.slice(0, 90) : null,
-          fromBackendIsBad: fromBackend ? isBadHeroImageUrl(fromBackend) : null,
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-  }
-  // #endregion
   if (fromBackend) return ensureNonEmptyImageUrl(fromBackend);
 
   if (publisherHint && !isBlockedOutboundHost(publisherHint) && !looksLikeImageAssetUrl(publisherHint)) {
@@ -1060,16 +828,6 @@ export async function resolveArticleHeroImage(pageUrl, options = {}) {
     if (fromHint) return ensureNonEmptyImageUrl(fromHint);
   }
   const img = await tryHeroImageFromPublisherPage(u);
-  // #region agent log
-  if (typeof window !== 'undefined' && window?.location?.hostname === 'localhost') {
-    __agentDebugPost('H3', 'podTopicNewsShared.js:resolveArticleHeroImage.final', 'resolveArticleHeroImage final decision', {
-      inputUrl: u.slice(0, 140),
-      usedFallback: !(img && !isBadHeroImageUrl(img)),
-      resolvedPreview: img ? String(img).slice(0, 140) : null,
-      ogFound: !!img,
-    });
-  }
-  // #endregion
   return ensureNonEmptyImageUrl(img);
 }
 
@@ -1205,9 +963,6 @@ export async function enrichNewsItemsWithOgImages(items, options = {}) {
 export function NewsFeedRow({ item, hub, isLast, onOpenShare }) {
   const icon = faviconUrl(item);
   const rel = formatRelativeTime(item.publishedAt);
-  // Debug visibility for final image value.
-  // eslint-disable-next-line no-console
-  console.log('FINAL IMAGE:', item?.image);
 
   const inner = (
     <>
