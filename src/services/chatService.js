@@ -1857,12 +1857,45 @@ Return ONLY valid JSON with this exact shape (no markdown fences):
       }
     }
     const list = parsed && Array.isArray(parsed.posts) ? parsed.posts : [];
-    const looksLikeInternalPrompt = (text) =>
-      /The user wants social posts based on this NEWS ARTICLE/i.test(text || '') ||
-      /Ground posts only in the headline and summary/i.test(text || '');
+    const looksLikeInternalPrompt = (text) => {
+      const t = String(text || '');
+      return (
+        /The user wants social posts based on this NEWS ARTICLE/i.test(t) ||
+        /Ground posts only in the headline and summary/i.test(t) ||
+        /Your job is to turn news into a tweet/i.test(t) ||
+        /\bCRITICAL RULES\b/i.test(t) ||
+        /\bHUMAN STYLE\b/i.test(t) ||
+        /\bCONTENT STYLE\b/i.test(t) ||
+        /\bIMPORTANT\b/i.test(t)
+      );
+    };
+
+    const stripPromptLeak = (text) => {
+      const t = String(text || '').trim();
+      if (!t) return '';
+      // If the model appended an instruction block, cut it off.
+      const cutMarkers = [
+        '\n\nYour job is to turn news into a tweet',
+        '\nYour job is to turn news into a tweet',
+        '\n\nCRITICAL RULES:',
+        '\nCRITICAL RULES:',
+        '\n\nHUMAN STYLE:',
+        '\nHUMAN STYLE:',
+        '\n\nCONTENT STYLE',
+        '\nCONTENT STYLE',
+      ];
+      let cutAt = -1;
+      for (const m of cutMarkers) {
+        const idx = t.toLowerCase().indexOf(m.toLowerCase());
+        if (idx >= 0 && (cutAt < 0 || idx < cutAt)) cutAt = idx;
+      }
+      const cleaned = (cutAt >= 0 ? t.slice(0, cutAt) : t).trim();
+      return cleaned;
+    };
     const out = list
       .map((row) => {
-        const post = typeof row?.post === 'string' ? row.post.trim() : '';
+        const postRaw = typeof row?.post === 'string' ? row.post.trim() : '';
+        const post = stripPromptLeak(postRaw);
         if (!post || post.length < 8 || looksLikeInternalPrompt(post)) return null;
         const ev = typeof row?.eventLabel === 'string' && row.eventLabel.trim() ? row.eventLabel.trim() : 'News';
         return { eventLabel: ev, post };
