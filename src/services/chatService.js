@@ -1746,6 +1746,22 @@ ${(reflection || '').trim()}`;
       }
     }
 
+    // Fallback: fetch readable article text without relying on the backend endpoint.
+    // r.jina.ai returns a text/markdown representation for many public pages.
+    try {
+      const readerUrl = `https://r.jina.ai/http://${url.replace(/^https?:\/\//i, '')}`;
+      const res = await fetch(readerUrl, { method: 'GET' });
+      if (res.ok) {
+        const rawText = await res.text().catch(() => '');
+        const cleaned = String(rawText || '').replace(/\s+/g, ' ').trim();
+        if (cleaned.length > 200) {
+          return { ...base, text: cleaned.slice(0, 12000) };
+        }
+      }
+    } catch {
+      // keep base fallback
+    }
+
     return base;
   }
 
