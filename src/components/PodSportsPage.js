@@ -10,12 +10,6 @@ export default function PodSportsPage() {
   const [isLoadingSportsNews, setIsLoadingSportsNews] = useState(false);
   const [sportsNewsError, setSportsNewsError] = useState('');
 
-  const SPORTS_TOP_BUZZ = [
-    'Transfer window rumors heating up this week',
-    'IPL and T20 leagues driving global cricket viewership',
-    'F1 constructor battle getting tighter race by race',
-    'Chess streamers and rapid formats attracting younger fans',
-  ];
   const SPORTS_EXPLORE = [
     { label: 'Cricket', slug: 'cricket' },
     { label: 'Football', slug: 'football' },
@@ -165,19 +159,6 @@ export default function PodSportsPage() {
                   )}
                 </>
               )}
-            </div>
-          </div>
-
-          <div className="rounded-2xl overflow-hidden" style={cardStyle}>
-            <div className="flex items-center justify-between px-4 py-4" style={{ borderBottom: `1px solid ${HUB.divider}` }}>
-              <h2 className="text-base font-semibold" style={{ color: HUB.text }}>Top Buzz</h2>
-            </div>
-            <div className="px-4 py-3 space-y-2">
-              {SPORTS_TOP_BUZZ.map((buzz) => (
-                <p key={buzz} className="text-sm leading-relaxed" style={{ color: HUB.text }}>
-                  • {buzz}
-                </p>
-              ))}
             </div>
           </div>
 

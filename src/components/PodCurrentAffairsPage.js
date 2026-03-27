@@ -22,13 +22,6 @@ export default function PodCurrentAffairsPage() {
   const [isLoadingWhy, setIsLoadingWhy] = useState(false);
   const [whyError, setWhyError] = useState('');
 
-  const TOP_BUZZ = [
-    'Major economies are watching inflation and jobs data for the next policy moves',
-    'Climate and energy headlines continue to drive infrastructure and investment debates',
-    'Diplomatic shifts are reshaping trade routes and regional security narratives',
-    'Election cycles and protests are drawing more scrutiny on information integrity online',
-  ];
-
   const EXPLORE = [
     { label: 'World News', slug: 'world-news' },
     { label: 'Politics', slug: 'politics' },
@@ -238,22 +231,6 @@ export default function PodCurrentAffairsPage() {
                   )}
                 </>
               )}
-            </div>
-          </div>
-
-          <div className="rounded-2xl overflow-hidden" style={cardStyle}>
-            <div className="flex items-center justify-between px-4 py-4" style={{ borderBottom: `1px solid ${HUB.divider}` }}>
-              <h2 className="text-base font-semibold" style={{ color: HUB.text }}>
-                <span className="mr-1.5" aria-hidden>⚡</span>
-                Top Buzz
-              </h2>
-            </div>
-            <div className="px-4 py-3 space-y-2">
-              {TOP_BUZZ.map((buzz) => (
-                <p key={buzz} className="text-sm leading-relaxed" style={{ color: HUB.text }}>
-                  • {buzz}
-                </p>
-              ))}
             </div>
           </div>
 

@@ -10,13 +10,6 @@ export default function PodAiTechPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [newsError, setNewsError] = useState('');
 
-  const TOP_BUZZ = [
-    'Foundation models keep shrinking latency for on-device assistants',
-    'Open-weight stacks are accelerating startup iteration cycles',
-    'Regulators and platforms are tightening AI disclosure rules',
-    'Enterprise buyers want clearer ROI stories—not just demos',
-  ];
-
   const EXPLORE = [
     { label: 'AI Models', slug: 'ai-models' },
     { label: 'Startups', slug: 'startups' },
@@ -171,23 +164,6 @@ export default function PodAiTechPage() {
                   )}
                 </>
               )}
-            </div>
-          </div>
-
-          {/* Top Buzz */}
-          <div className="rounded-2xl overflow-hidden" style={cardStyle}>
-            <div className="flex items-center justify-between px-4 py-4" style={{ borderBottom: `1px solid ${HUB.divider}` }}>
-              <h2 className="text-base font-semibold" style={{ color: HUB.text }}>
-                <span className="mr-1.5" aria-hidden>⚡</span>
-                Top Buzz
-              </h2>
-            </div>
-            <div className="px-4 py-3 space-y-2">
-              {TOP_BUZZ.map((buzz) => (
-                <p key={buzz} className="text-sm leading-relaxed" style={{ color: HUB.text }}>
-                  • {buzz}
-                </p>
-              ))}
             </div>
           </div>
 

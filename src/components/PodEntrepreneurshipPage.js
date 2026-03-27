@@ -16,13 +16,6 @@ export default function PodEntrepreneurshipPage() {
   const [isLoadingFounder, setIsLoadingFounder] = useState(false);
   const [founderError, setFounderError] = useState('');
 
-  const TOP_BUZZ = [
-    'Lean teams are prioritizing distribution experiments over feature depth early on',
-    'Investors are asking for clearer paths to profitability, not just growth curves',
-    'Founder-led content and community loops are replacing cold outbound for many B2B plays',
-    'AI copilots are becoming table stakes in internal ops—not just customer-facing products',
-  ];
-
   const EXPLORE = [
     { label: 'Startups', slug: 'startups' },
     { label: 'Founders', slug: 'founders' },
@@ -246,23 +239,6 @@ export default function PodEntrepreneurshipPage() {
                   )}
                 </>
               )}
-            </div>
-          </div>
-
-          {/* Top Buzz */}
-          <div className="rounded-2xl overflow-hidden" style={cardStyle}>
-            <div className="flex items-center justify-between px-4 py-4" style={{ borderBottom: `1px solid ${HUB.divider}` }}>
-              <h2 className="text-base font-semibold" style={{ color: HUB.text }}>
-                <span className="mr-1.5" aria-hidden>💡</span>
-                Top Buzz
-              </h2>
-            </div>
-            <div className="px-4 py-3 space-y-2">
-              {TOP_BUZZ.map((buzz) => (
-                <p key={buzz} className="text-sm leading-relaxed" style={{ color: HUB.text }}>
-                  • {buzz}
-                </p>
-              ))}
             </div>
           </div>
 
