@@ -1908,7 +1908,7 @@ Return ONLY valid JSON with this exact shape (no markdown fences):
   /**
    * Rewrite a list of news titles into spicy, non-repeating headings.
    * One OpenAI call for the whole list (fast + consistent).
-   * @param {{title:string,url?:string,description?:string}[]} items
+   * @param {{title:string,url?:string,description?:string,mustMention?:string[]}[]} items
    * @param {{tone?:'spicy', maxHeadlines?:number}} [options]
    * @returns {Promise<string[]>} headings aligned to input order (best-effort)
    */
@@ -1927,6 +1927,7 @@ Return ONLY valid JSON with this exact shape (no markdown fences):
       title: String(x?.title || '').trim(),
       url: typeof x?.url === 'string' ? x.url.trim() : '',
       description: typeof x?.description === 'string' ? x.description.trim() : '',
+      mustMention: Array.isArray(x?.mustMention) ? x.mustMention.slice(0, 6) : [],
     }));
 
     const userContent = `You are rewriting news titles into punchy "Today’s News" headings like a viral feed.
@@ -1936,6 +1937,8 @@ Input: a list of stories with {id,title,url,description}.
 Rules:
 - Output exactly ${payloadItems.length} headings, one per id, in the same order.
 - Each heading must be UNIQUE (no duplicates or near-duplicates).
+- Each heading MUST mention at least 1 specific identifier from the input title (team/company/person/place), not generic placeholders like "a team" or "a company".
+- If the input includes mustMention tokens, include at least ONE of them verbatim in the heading.
 - Do NOT repeat the outlet name or "Google News".
 - Keep it short: 6–14 words. Title-case is OK but not required.
 - Make it spicy / human: attitude, tension, humor, but do NOT invent facts.

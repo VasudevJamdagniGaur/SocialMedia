@@ -211,7 +211,31 @@ export default function PodSportsTopicPage() {
         }
 
         // 2) Rewrite headlines with OpenAI, enforce uniqueness, retry conflicts once.
-        const payload = deduped.map((x) => ({ title: x.title, url: x.url, description: x.description || '' }));
+        const extractMustMention = (titleText) => {
+          const t = String(titleText || '');
+          const out = [];
+          const push = (w) => {
+            const s = String(w || '').trim();
+            if (!s) return;
+            if (out.includes(s)) return;
+            out.push(s);
+          };
+          // Proper nouns / acronyms
+          for (const m of t.matchAll(/\b[A-Z]{2,}\b/g)) push(m[0]);
+          for (const m of t.matchAll(/\b[A-Z][a-z]{2,}\b/g)) push(m[0]);
+          // Money/number signals (keep short)
+          for (const m of t.matchAll(/\$?\d[\d.,]*\s?(?:B|BN|M|million|billion|crore)?\b/g)) push(m[0]);
+          // Remove generic tokens
+          const generic = new Set(['The', 'A', 'An', 'And', 'For', 'With', 'From', 'Into', 'Over', 'After', 'More', 'New', 'Team', 'Teams', 'Sold', 'Buy', 'Buys', 'Deal']);
+          return out.filter((x) => !generic.has(x)).slice(0, 6);
+        };
+
+        const payload = deduped.map((x) => ({
+          title: x.title,
+          url: x.url,
+          description: x.description || '',
+          mustMention: extractMustMention(x.title),
+        }));
         const headings1 = await chatService.rewriteNewsHeadlines(payload, {
           maxHeadlines: Math.min(30, payload.length),
         });
@@ -227,7 +251,11 @@ export default function PodSportsTopicPage() {
         const finalHeadings = headings1.map((h, idx) => {
           const cleaned = String(h || '').trim();
           const key = normalizedKey(cleaned);
-          if (!cleaned || !key || used.has(key)) {
+          const must = Array.isArray(payload[idx]?.mustMention) ? payload[idx].mustMention : [];
+          const hasMust =
+            !must.length ||
+            must.some((tok) => cleaned.toLowerCase().includes(String(tok).toLowerCase()));
+          if (!cleaned || !key || used.has(key) || !hasMust) {
             conflicts.push(idx);
             return '';
           }
@@ -246,7 +274,11 @@ export default function PodSportsTopicPage() {
             const idx = conflicts[i];
             const candidate = String(headings2?.[i] || '').trim();
             const key = normalizedKey(candidate);
-            if (candidate && key && !used.has(key)) {
+            const must = Array.isArray(payload[idx]?.mustMention) ? payload[idx].mustMention : [];
+            const hasMust =
+              !must.length ||
+              must.some((tok) => candidate.toLowerCase().includes(String(tok).toLowerCase()));
+            if (candidate && key && !used.has(key) && hasMust) {
               used.add(key);
               finalHeadings[idx] = candidate;
             } else {
