@@ -1906,6 +1906,87 @@ Return ONLY valid JSON with this exact shape (no markdown fences):
   }
 
   /**
+   * Create a 60–80 word event summary for the ShareSuggestionsPage news card.
+   * Uses already-fetched details (title/description/text) and MUST NOT invent facts.
+   * @param {{title?:string,url?:string,description?:string,source?:string,text?:string}} details
+   * @param {{minWords?:number,maxWords?:number}} [options]
+   * @returns {Promise<string>}
+   */
+  async summarizeNewsArticle(details, options = {}) {
+    const title = String(details?.title || '').trim();
+    const description = String(details?.description || '').trim();
+    const text = String(details?.text || '').trim();
+    const minWords = typeof options.minWords === 'number' ? options.minWords : 60;
+    const maxWords = typeof options.maxWords === 'number' ? options.maxWords : 80;
+
+    if (!title) return '';
+
+    this.openaiApiKey = (process.env.REACT_APP_OPENAI_API_KEY || process.env.OPENAI_API_KEY || this.openaiApiKey || '').trim();
+    const apiKey = this.openaiApiKey;
+    if (!apiKey) return '';
+
+    const sourceText = [description, text].filter(Boolean).join('\n\n').slice(0, 7000);
+    if (!sourceText) return '';
+
+    const userContent = `Summarize this news event in ${minWords}–${maxWords} words.
+
+Rules:
+- One paragraph, plain text only.
+- Include the key "what happened" plus the most important concrete details (names, dates, amounts, scores, locations) that are present in the input.
+- Do NOT add anything not stated or clearly implied by the input.
+- No intro like "In this article". No hashtags. No emojis.
+
+Return ONLY valid JSON (no markdown) with this exact shape:
+{"summary":"..."}
+
+Input:
+Title: ${title}
+${description ? `Description: ${description}\n` : ''}${text ? `Article text: ${text.slice(0, 6000)}\n` : ''}`.trim();
+
+    const apiUrl = `${this.openaiBaseURL}/chat/completions`;
+    const requestBody = {
+      model: this.openaiModelName,
+      messages: [{ role: 'user', content: userContent }],
+      temperature: 0.35,
+      max_tokens: 260,
+      response_format: { type: 'json_object' },
+    };
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    try {
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (!response.ok) return '';
+      const data = await response.json().catch(() => null);
+      const raw = data?.choices?.[0]?.message?.content ? String(data.choices[0].message.content) : '';
+      let parsed = null;
+      try {
+        parsed = raw ? JSON.parse(raw.trim()) : null;
+      } catch {
+        const m = (raw || '').match(/\{[\s\S]*"summary"[\s\S]*\}/);
+        if (m) {
+          try {
+            parsed = JSON.parse(m[0]);
+          } catch {
+            parsed = null;
+          }
+        }
+      }
+      const summary = typeof parsed?.summary === 'string' ? parsed.summary.trim() : '';
+      return summary;
+    } catch {
+      clearTimeout(timeoutId);
+      return '';
+    }
+  }
+
+  /**
    * Rewrite a list of news titles into spicy, non-repeating headings.
    * One OpenAI call for the whole list (fast + consistent).
    * @param {{title:string,url?:string,description?:string,mustMention?:string[]}[]} items
@@ -1932,17 +2013,19 @@ Return ONLY valid JSON with this exact shape (no markdown fences):
 
     const userContent = `You are rewriting news titles into punchy "Today’s News" headings like a viral feed.
 
-Input: a list of stories with {id,title,url,description}.
+Input: a list of stories with {id,title,url,description,mustMention}.
 
 Rules:
 - Output exactly ${payloadItems.length} headings, one per id, in the same order.
 - Each heading must be UNIQUE (no duplicates or near-duplicates).
 - Each heading MUST mention at least 1 specific identifier from the input title (team/company/person/place), not generic placeholders like "a team" or "a company".
 - If the input includes mustMention tokens, include at least ONE of them verbatim in the heading.
+- Include at least ONE concrete detail from title/description when available (a date/month, number, score, amount, rank, location). Make it feel like "what happened" not "what to know".
 - Do NOT repeat the outlet name or "Google News".
 - Keep it short: 6–14 words. Title-case is OK but not required.
 - Make it spicy / human: attitude, tension, humor, but do NOT invent facts.
 - No emojis. No hashtags. No quotes.
+- Banned templates: "All you need to know", "Everything you need to know", "Here’s what we know", "Explained".
 - Do NOT reuse any of these existing headings (even partially): ${avoid.length ? JSON.stringify(avoid.slice(0, 40)) : '[]'}
 
 Return ONLY valid JSON (no markdown) with shape:

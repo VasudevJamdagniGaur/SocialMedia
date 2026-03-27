@@ -454,12 +454,14 @@ export default function ShareSuggestionsPage() {
   const isNewsShareMode = !!newsArticleFromState;
   const [newsArticleDetails, setNewsArticleDetails] = useState(null);
   const [isLoadingNewsDetails, setIsLoadingNewsDetails] = useState(isNewsShareMode);
+  const [newsCardSummary, setNewsCardSummary] = useState('');
 
   useEffect(() => {
     let cancelled = false;
     if (!isNewsShareMode || !newsArticleFromState?.url) {
       setNewsArticleDetails(null);
       setIsLoadingNewsDetails(false);
+      setNewsCardSummary('');
       return () => {
         cancelled = true;
       };
@@ -468,15 +470,22 @@ export default function ShareSuggestionsPage() {
     setIsLoadingNewsDetails(true);
     chatService
       .fetchNewsArticleDetails(newsArticleFromState)
-      .then((d) => {
+      .then(async (d) => {
         if (cancelled) return;
         // Only treat as "details loaded" if we got something useful back.
         const looksUseful = d && (d.title || d.description || d.text || d.image || d.source);
-        setNewsArticleDetails(looksUseful ? d : null);
+        const details = looksUseful ? d : null;
+        setNewsArticleDetails(details);
+        setNewsCardSummary('');
+        if (details) {
+          const summary = await chatService.summarizeNewsArticle(details, { minWords: 60, maxWords: 80 });
+          if (!cancelled && summary) setNewsCardSummary(summary);
+        }
       })
       .catch(() => {
         if (cancelled) return;
         setNewsArticleDetails(null);
+        setNewsCardSummary('');
       })
       .finally(() => {
         if (cancelled) return;
@@ -489,12 +498,16 @@ export default function ShareSuggestionsPage() {
   }, [isNewsShareMode, newsArticleFromState?.url]);
 
   const effectiveNewsArticle = isNewsShareMode ? (newsArticleDetails || newsArticleFromState) : null;
+  const effectiveNewsCardText =
+    isNewsShareMode && newsCardSummary
+      ? newsCardSummary
+      : (effectiveNewsArticle?.description || '');
 
   const suggestionPromptText = isNewsShareMode
-    ? buildNewsSharePromptContext(effectiveNewsArticle)
+    ? buildNewsSharePromptContext({ ...effectiveNewsArticle, description: effectiveNewsCardText })
     : reflectionFromState;
   const baselineShareText = isNewsShareMode
-    ? [effectiveNewsArticle.title, effectiveNewsArticle.description].filter(Boolean).join('\n\n') ||
+    ? [effectiveNewsArticle.title, effectiveNewsCardText].filter(Boolean).join('\n\n') ||
       effectiveNewsArticle.title
     : reflectionFromState;
   const eventLabelDefault = isNewsShareMode ? 'News' : 'Reflection';
@@ -2333,7 +2346,7 @@ export default function ShareSuggestionsPage() {
               ) : null}
               {effectiveNewsArticle?.description ? (
                 <p className="text-[15px] leading-relaxed mt-2" style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}>
-                  {effectiveNewsArticle?.description}
+                  {effectiveNewsCardText}
                 </p>
               ) : null}
               <p className="text-xs mt-2" style={{ color: isDarkMode ? HUB.textSecondary : '#888' }}>

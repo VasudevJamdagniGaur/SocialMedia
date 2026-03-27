@@ -230,11 +230,33 @@ export default function PodSportsTopicPage() {
           return out.filter((x) => !generic.has(x)).slice(0, 6);
         };
 
+        const extractFactTokens = (titleText, descriptionText) => {
+          const t = `${String(titleText || '')} ${String(descriptionText || '')}`;
+          const out = [];
+          const push = (w) => {
+            const s = String(w || '').trim();
+            if (!s) return;
+            if (out.includes(s)) return;
+            out.push(s);
+          };
+          // Dates/months
+          for (const m of t.matchAll(/\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b/gi)) push(m[0]);
+          for (const m of t.matchAll(/\b\d{1,2}\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b/gi)) push(m[0]);
+          // Numbers with context / money / percentages
+          for (const m of t.matchAll(/\b(?:₹|\$|€|£)\s?\d[\d,]*(?:\.\d+)?\s?(?:k|m|bn|b|crore|lakh|million|billion)?\b/gi)) push(m[0]);
+          for (const m of t.matchAll(/\b\d[\d,]*(?:\.\d+)?\s?(?:k|m|bn|b|crore|lakh|million|billion|%)\b/gi)) push(m[0]);
+          // Scores like 3-1, 212/4
+          for (const m of t.matchAll(/\b\d{1,3}\s?[-–]\s?\d{1,3}\b/g)) push(m[0]);
+          for (const m of t.matchAll(/\b\d{1,3}\/\d{1,2}\b/g)) push(m[0]);
+          return out.slice(0, 6);
+        };
+
         const payload = deduped.map((x) => ({
           title: x.title,
           url: x.url,
           description: x.description || '',
           mustMention: extractMustMention(x.title),
+          factTokens: extractFactTokens(x.title, x.description || ''),
         }));
         const headings1 = await chatService.rewriteNewsHeadlines(payload, {
           maxHeadlines: Math.min(30, payload.length),
@@ -255,7 +277,12 @@ export default function PodSportsTopicPage() {
           const hasMust =
             !must.length ||
             must.some((tok) => cleaned.toLowerCase().includes(String(tok).toLowerCase()));
-          if (!cleaned || !key || used.has(key) || !hasMust) {
+          const facts = Array.isArray(payload[idx]?.factTokens) ? payload[idx].factTokens : [];
+          const hasFact =
+            !facts.length ||
+            facts.some((tok) => cleaned.toLowerCase().includes(String(tok).toLowerCase()));
+          const bannedTemplate = /\b(all you need to know|everything you need to know|here(?:’|')?s what we know|explained)\b/i.test(cleaned);
+          if (!cleaned || !key || used.has(key) || !hasMust || !hasFact || bannedTemplate) {
             conflicts.push(idx);
             return '';
           }
@@ -278,7 +305,12 @@ export default function PodSportsTopicPage() {
             const hasMust =
               !must.length ||
               must.some((tok) => candidate.toLowerCase().includes(String(tok).toLowerCase()));
-            if (candidate && key && !used.has(key) && hasMust) {
+            const facts = Array.isArray(payload[idx]?.factTokens) ? payload[idx].factTokens : [];
+            const hasFact =
+              !facts.length ||
+              facts.some((tok) => candidate.toLowerCase().includes(String(tok).toLowerCase()));
+            const bannedTemplate = /\b(all you need to know|everything you need to know|here(?:’|')?s what we know|explained)\b/i.test(candidate);
+            if (candidate && key && !used.has(key) && hasMust && hasFact && !bannedTemplate) {
               used.add(key);
               finalHeadings[idx] = candidate;
             } else {
