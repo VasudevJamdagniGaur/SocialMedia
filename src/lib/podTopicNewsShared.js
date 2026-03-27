@@ -851,19 +851,12 @@ export async function enrichNewsItemsWithOgImages(items, options = {}) {
 }
 
 export function NewsFeedRow({ item, hub, isLast, onOpenShare }) {
-  const rel = formatRelativeTime(item.publishedAt);
-
   const inner = (
     <>
       <div className="flex-1 min-w-0 flex flex-col gap-1.5">
         <p className="text-base leading-snug font-semibold tracking-tight line-clamp-4" style={{ color: hub.text }}>
           {item.title}
         </p>
-        {rel ? (
-          <span className="text-xs pt-0.5" style={{ color: hub.textSecondary }}>
-            {rel}
-          </span>
-        ) : null}
       </div>
     </>
   );
