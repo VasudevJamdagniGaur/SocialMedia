@@ -2339,11 +2339,6 @@ export default function ShareSuggestionsPage() {
               >
                 {effectiveNewsArticle?.title}
               </a>
-              {effectiveNewsArticle?.source ? (
-                <p className="text-xs mt-1" style={{ color: isDarkMode ? HUB.textSecondary : '#666' }}>
-                  {effectiveNewsArticle?.source}
-                </p>
-              ) : null}
               {effectiveNewsCardText ? (
                 <p className="text-[15px] leading-relaxed mt-2" style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}>
                   {effectiveNewsCardText}
