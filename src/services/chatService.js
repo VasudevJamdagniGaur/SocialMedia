@@ -1905,6 +1905,98 @@ Return ONLY valid JSON with this exact shape (no markdown fences):
     return out;
   }
 
+  /**
+   * Rewrite a list of news titles into spicy, non-repeating headings.
+   * One OpenAI call for the whole list (fast + consistent).
+   * @param {{title:string,url?:string,description?:string}[]} items
+   * @param {{tone?:'spicy', maxHeadlines?:number}} [options]
+   * @returns {Promise<string[]>} headings aligned to input order (best-effort)
+   */
+  async rewriteNewsHeadlines(items, options = {}) {
+    const maxHeadlines = typeof options.maxHeadlines === 'number' ? options.maxHeadlines : 30;
+    const list = Array.isArray(items) ? items.slice(0, maxHeadlines) : [];
+    if (!list.length) return [];
+
+    this.openaiApiKey = (process.env.REACT_APP_OPENAI_API_KEY || process.env.OPENAI_API_KEY || this.openaiApiKey || '').trim();
+    const apiKey = this.openaiApiKey;
+    if (!apiKey) return list.map((x) => String(x?.title || '').trim()).filter(Boolean);
+
+    const payloadItems = list.map((x, idx) => ({
+      id: idx,
+      title: String(x?.title || '').trim(),
+      url: typeof x?.url === 'string' ? x.url.trim() : '',
+      description: typeof x?.description === 'string' ? x.description.trim() : '',
+    }));
+
+    const userContent = `You are rewriting news titles into punchy "Today’s News" headings like a viral feed.
+
+Input: a list of stories with {id,title,url,description}.
+
+Rules:
+- Output exactly ${payloadItems.length} headings, one per id, in the same order.
+- Each heading must be UNIQUE (no duplicates or near-duplicates).
+- Do NOT repeat the outlet name or "Google News".
+- Keep it short: 6–14 words. Title-case is OK but not required.
+- Make it spicy / human: attitude, tension, humor, but do NOT invent facts.
+- No emojis. No hashtags. No quotes.
+
+Return ONLY valid JSON (no markdown) with shape:
+{"headings":[{"id":0,"heading":"..."}]}
+
+Stories:
+${JSON.stringify(payloadItems)}`;
+
+    const apiUrl = `${this.openaiBaseURL}/chat/completions`;
+    const requestBody = {
+      model: this.openaiModelName,
+      messages: [{ role: 'user', content: userContent }],
+      temperature: 0.8,
+      max_tokens: 1800,
+      response_format: { type: 'json_object' },
+    };
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    let response;
+    try {
+      response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
+      });
+    } catch {
+      clearTimeout(timeoutId);
+      return list.map((x) => String(x?.title || '').trim()).filter(Boolean);
+    }
+    clearTimeout(timeoutId);
+    if (!response.ok) return list.map((x) => String(x?.title || '').trim()).filter(Boolean);
+
+    let data;
+    try {
+      data = await response.json();
+    } catch {
+      return list.map((x) => String(x?.title || '').trim()).filter(Boolean);
+    }
+    const raw =
+      data?.choices?.[0]?.message?.content ? String(data.choices[0].message.content) : '';
+    let parsed;
+    try {
+      parsed = JSON.parse(raw.trim());
+    } catch {
+      return list.map((x) => String(x?.title || '').trim()).filter(Boolean);
+    }
+    const headings = Array.isArray(parsed?.headings) ? parsed.headings : [];
+    const map = new Map();
+    for (const row of headings) {
+      const id = typeof row?.id === 'number' ? row.id : null;
+      const h = typeof row?.heading === 'string' ? row.heading.trim() : '';
+      if (id == null || !h) continue;
+      map.set(id, h);
+    }
+    return payloadItems.map((x) => map.get(x.id) || x.title).map((s) => String(s || '').trim());
+  }
+
   // ---------- Image: context + user profile → Gemini (same style for LinkedIn and X) ----------
 
   /**

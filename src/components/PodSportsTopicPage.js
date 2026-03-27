@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
+import chatService from '../services/chatService';
 import {
   googleNewsSearchUrl,
   fetchLiveFromGoogleRssByQuery,
@@ -184,7 +185,30 @@ export default function PodSportsTopicPage() {
 
       const enriched = await enrichNewsItemsWithOgImages(rows, { enableOgFallback: true });
       if (isMountedRef.current && token === loadTokenRef.current) {
-        setItems(enriched);
+        // Rewrite into spicy, non-repeating headings (one OpenAI call).
+        const unique = [];
+        const seen = new Set();
+        for (const it of enriched) {
+          const key = (it?.url || it?.title || '').trim().toLowerCase();
+          if (!key || seen.has(key)) continue;
+          seen.add(key);
+          unique.push(it);
+        }
+
+        const headings = await chatService.rewriteNewsHeadlines(
+          unique.map((x) => ({ title: x.title, url: x.url, description: x.description || '' })),
+          { maxHeadlines: Math.min(30, unique.length) }
+        );
+
+        const rewritten = unique.map((x, idx) => ({
+          ...x,
+          title:
+            typeof headings?.[idx] === 'string' && headings[idx].trim()
+              ? headings[idx].trim()
+              : x.title,
+        }));
+
+        setItems(rewritten);
         setError('');
       }
     } catch {
