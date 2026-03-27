@@ -456,6 +456,42 @@ export default function ShareSuggestionsPage() {
   const [isLoadingNewsDetails, setIsLoadingNewsDetails] = useState(isNewsShareMode);
   const [newsCardSummary, setNewsCardSummary] = useState('');
 
+  const buildLocalNewsCardSummary = useCallback((details) => {
+    try {
+      if (!details) return '';
+      const title = String(details?.title || '').trim();
+      const description = String(details?.description || '').trim();
+      const text = String(details?.text || '').trim();
+
+      const maxWords = 78; // user requirement: less than 80 words
+      const minWords = 40;
+
+      if (!title) return '';
+
+      const pickSentence = (t) => {
+        const s = String(t || '').trim();
+        if (!s) return '';
+        // Grab up to the first "sentence-like" chunk to keep it event-y.
+        const first = s.split(/[\.\!\?]\s+/)[0];
+        return first ? first.trim() : s.slice(0, 180).trim();
+      };
+
+      const snippet = text ? pickSentence(text.slice(0, 1200)) : '';
+      const base = [description || '', snippet || ''].filter(Boolean).join(' ');
+      const combined = description ? description : `${title}${snippet ? `: ${snippet}` : ''}`;
+      const finalBase = base ? `${title}: ${base}` : combined;
+
+      const cleaned = finalBase.replace(/\s+/g, ' ').trim();
+      if (!cleaned) return '';
+      const words = cleaned.split(/\s+/).filter(Boolean);
+      const limited = words.slice(0, maxWords).join(' ');
+      if (limited && limited.split(/\s+/).filter(Boolean).length >= minWords) return limited;
+      return limited || cleaned;
+    } catch {
+      return '';
+    }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     if (!isNewsShareMode || !newsArticleFromState?.url) {
@@ -479,7 +515,11 @@ export default function ShareSuggestionsPage() {
         setNewsCardSummary('');
         if (details) {
           const summary = await chatService.summarizeNewsArticle(details, { minWords: 60, maxWords: 80 });
-          if (!cancelled && summary) setNewsCardSummary(summary);
+          if (!cancelled && summary) {
+            setNewsCardSummary(summary);
+          } else if (!cancelled) {
+            setNewsCardSummary(buildLocalNewsCardSummary(details));
+          }
         }
       })
       .catch(() => {
@@ -499,9 +539,9 @@ export default function ShareSuggestionsPage() {
 
   const effectiveNewsArticle = isNewsShareMode ? (newsArticleDetails || newsArticleFromState) : null;
   const effectiveNewsCardText =
-    isNewsShareMode && newsCardSummary
-      ? newsCardSummary
-      : (effectiveNewsArticle?.description || '');
+    isNewsShareMode
+      ? newsCardSummary || buildLocalNewsCardSummary(effectiveNewsArticle)
+      : '';
 
   const suggestionPromptText = isNewsShareMode
     ? buildNewsSharePromptContext({ ...effectiveNewsArticle, description: effectiveNewsCardText })

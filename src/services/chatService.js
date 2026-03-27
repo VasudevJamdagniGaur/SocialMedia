@@ -1979,7 +1979,15 @@ ${description ? `Description: ${description}\n` : ''}${text ? `Article text: ${t
         }
       }
       const summary = typeof parsed?.summary === 'string' ? parsed.summary.trim() : '';
-      return summary;
+      const cleaned = String(summary || '')
+        .replace(/\s+/g, ' ')
+        .replace(/\s+\.\s+/g, '. ')
+        .trim();
+      if (!cleaned) return '';
+      const words = cleaned.split(/\s+/).filter(Boolean);
+      const limited = words.slice(0, maxWords).join(' ');
+      // Ensure it's a single paragraph and ends nicely (without inventing content).
+      return limited.replace(/\s+/g, ' ').trim();
     } catch {
       clearTimeout(timeoutId);
       return '';
