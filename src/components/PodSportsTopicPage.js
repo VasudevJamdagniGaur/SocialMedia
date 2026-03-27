@@ -185,29 +185,78 @@ export default function PodSportsTopicPage() {
 
       const enriched = await enrichNewsItemsWithOgImages(rows, { enableOgFallback: true });
       if (isMountedRef.current && token === loadTokenRef.current) {
-        // Rewrite into spicy, non-repeating headings (one OpenAI call).
-        const unique = [];
-        const seen = new Set();
+        // 1) De-dupe stories by near-duplicate TITLE (not just URL).
+        const normWords = (s) =>
+          String(s || '')
+            .toLowerCase()
+            .replace(/https?:\/\/\S+/g, ' ')
+            .replace(/[^a-z0-9\s]/g, ' ')
+            .split(/\s+/)
+            .filter(Boolean)
+            .filter((w) => w.length > 2);
+        const jaccard = (a, b) => {
+          const A = new Set(normWords(a));
+          const B = new Set(normWords(b));
+          if (!A.size || !B.size) return 0;
+          let inter = 0;
+          for (const w of A) if (B.has(w)) inter++;
+          const uni = A.size + B.size - inter;
+          return uni ? inter / uni : 0;
+        };
+        const deduped = [];
         for (const it of enriched) {
-          const key = (it?.url || it?.title || '').trim().toLowerCase();
-          if (!key || seen.has(key)) continue;
-          seen.add(key);
-          unique.push(it);
+          if (!it?.title) continue;
+          const already = deduped.some((x) => jaccard(x.title, it.title) >= 0.62);
+          if (!already) deduped.push(it);
         }
 
-        const headings = await chatService.rewriteNewsHeadlines(
-          unique.map((x) => ({ title: x.title, url: x.url, description: x.description || '' })),
-          { maxHeadlines: Math.min(30, unique.length) }
-        );
+        // 2) Rewrite headlines with OpenAI, enforce uniqueness, retry conflicts once.
+        const payload = deduped.map((x) => ({ title: x.title, url: x.url, description: x.description || '' }));
+        const headings1 = await chatService.rewriteNewsHeadlines(payload, {
+          maxHeadlines: Math.min(30, payload.length),
+        });
+        const normalizedKey = (h) =>
+          String(h || '')
+            .toLowerCase()
+            .replace(/[^a-z0-9\s]/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
 
-        const rewritten = unique.map((x, idx) => ({
-          ...x,
-          title:
-            typeof headings?.[idx] === 'string' && headings[idx].trim()
-              ? headings[idx].trim()
-              : x.title,
-        }));
+        const used = new Set();
+        const conflicts = [];
+        const finalHeadings = headings1.map((h, idx) => {
+          const cleaned = String(h || '').trim();
+          const key = normalizedKey(cleaned);
+          if (!cleaned || !key || used.has(key)) {
+            conflicts.push(idx);
+            return '';
+          }
+          used.add(key);
+          return cleaned;
+        });
 
+        if (conflicts.length) {
+          const avoidHeadings = Array.from(used).slice(0, 60);
+          const conflictItems = conflicts.map((idx) => payload[idx]);
+          const headings2 = await chatService.rewriteNewsHeadlines(conflictItems, {
+            maxHeadlines: conflictItems.length,
+            avoidHeadings,
+          });
+          for (let i = 0; i < conflicts.length; i++) {
+            const idx = conflicts[i];
+            const candidate = String(headings2?.[i] || '').trim();
+            const key = normalizedKey(candidate);
+            if (candidate && key && !used.has(key)) {
+              used.add(key);
+              finalHeadings[idx] = candidate;
+            } else {
+              // Deterministic last resort: fall back to original title (still unique after title-dedupe).
+              finalHeadings[idx] = payload[idx].title;
+            }
+          }
+        }
+
+        const rewritten = deduped.map((x, idx) => ({ ...x, title: finalHeadings[idx] || x.title }));
         setItems(rewritten);
         setError('');
       }

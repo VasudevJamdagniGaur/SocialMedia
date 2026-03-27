@@ -1914,6 +1914,7 @@ Return ONLY valid JSON with this exact shape (no markdown fences):
    */
   async rewriteNewsHeadlines(items, options = {}) {
     const maxHeadlines = typeof options.maxHeadlines === 'number' ? options.maxHeadlines : 30;
+    const avoid = Array.isArray(options.avoidHeadings) ? options.avoidHeadings : [];
     const list = Array.isArray(items) ? items.slice(0, maxHeadlines) : [];
     if (!list.length) return [];
 
@@ -1939,6 +1940,7 @@ Rules:
 - Keep it short: 6–14 words. Title-case is OK but not required.
 - Make it spicy / human: attitude, tension, humor, but do NOT invent facts.
 - No emojis. No hashtags. No quotes.
+- Do NOT reuse any of these existing headings (even partially): ${avoid.length ? JSON.stringify(avoid.slice(0, 40)) : '[]'}
 
 Return ONLY valid JSON (no markdown) with shape:
 {"headings":[{"id":0,"heading":"..."}]}
