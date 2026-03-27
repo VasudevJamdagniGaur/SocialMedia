@@ -2344,9 +2344,13 @@ export default function ShareSuggestionsPage() {
                   {effectiveNewsArticle?.source}
                 </p>
               ) : null}
-              {effectiveNewsArticle?.description ? (
+              {effectiveNewsCardText ? (
                 <p className="text-[15px] leading-relaxed mt-2" style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}>
                   {effectiveNewsCardText}
+                </p>
+              ) : isLoadingNewsDetails ? (
+                <p className="text-[15px] leading-relaxed mt-2" style={{ color: isDarkMode ? HUB.textSecondary : '#666' }}>
+                  Generating 60–80 word summary…
                 </p>
               ) : null}
               <p className="text-xs mt-2" style={{ color: isDarkMode ? HUB.textSecondary : '#888' }}>
