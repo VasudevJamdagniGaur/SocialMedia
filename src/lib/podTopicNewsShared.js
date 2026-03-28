@@ -585,6 +585,128 @@ export function filterNewsRowsIndiaLocal(rows) {
 
 const NEWSAPI_V2 = 'https://newsapi.org/v2';
 
+/** Lowercase ISO codes accepted by NewsAPI top-headlines `country` (see newsapi.org docs). */
+export const NEWSAPI_TOP_HEADLINES_COUNTRIES = new Set([
+  'ae',
+  'ar',
+  'at',
+  'au',
+  'be',
+  'bg',
+  'br',
+  'ca',
+  'ch',
+  'cn',
+  'co',
+  'cu',
+  'cz',
+  'de',
+  'eg',
+  'fr',
+  'gb',
+  'gr',
+  'hk',
+  'hu',
+  'id',
+  'ie',
+  'il',
+  'in',
+  'it',
+  'jp',
+  'kr',
+  'lt',
+  'lv',
+  'ma',
+  'mx',
+  'my',
+  'ng',
+  'nl',
+  'no',
+  'nz',
+  'ph',
+  'pl',
+  'pt',
+  'ro',
+  'rs',
+  'ru',
+  'sa',
+  'se',
+  'sg',
+  'si',
+  'sk',
+  'th',
+  'tr',
+  'tw',
+  'ua',
+  'us',
+  've',
+  'za',
+]);
+
+const POD_TRENDING_COUNTRY_STORAGE = 'podTrendingNewsCountry';
+
+function regionLabelFromCountryCode(code) {
+  const c = String(code || '').toUpperCase();
+  if (!c || c.length !== 2) return 'your area';
+  try {
+    return new Intl.DisplayNames(['en'], { type: 'region' }).of(c);
+  } catch {
+    return c;
+  }
+}
+
+function countryCodeFromNavigatorLanguages() {
+  const list = [navigator.language, ...(navigator.languages || [])].filter(Boolean);
+  for (const raw of list) {
+    const m = String(raw).match(/[-_]([A-Za-z]{2})$/);
+    if (!m?.[1]) continue;
+    const candidate = m[1].toLowerCase();
+    if (NEWSAPI_TOP_HEADLINES_COUNTRIES.has(candidate)) return candidate;
+  }
+  return null;
+}
+
+/**
+ * Country + label for location-aware top headlines (e.g. Sports trending).
+ * Order: explicit localStorage → IP (ipapi.co) → browser locale region → US.
+ * Optional override: `localStorage.setItem('podTrendingNewsCountry', 'in')`.
+ */
+export async function resolveUserNewsRegionForNewsApi() {
+  try {
+    const stored = localStorage.getItem(POD_TRENDING_COUNTRY_STORAGE)?.trim().toLowerCase();
+    if (stored && NEWSAPI_TOP_HEADLINES_COUNTRIES.has(stored)) {
+      return { code: stored, label: regionLabelFromCountryCode(stored) };
+    }
+  } catch {
+    /* private mode */
+  }
+
+  try {
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 5000);
+    const res = await fetch('https://ipapi.co/json/', { signal: ctrl.signal });
+    clearTimeout(tid);
+    const data = await res.json().catch(() => null);
+    const c = String(data?.country_code || '').toLowerCase();
+    if (c && NEWSAPI_TOP_HEADLINES_COUNTRIES.has(c)) {
+      const name =
+        typeof data?.country_name === 'string' && data.country_name.trim()
+          ? data.country_name.trim()
+          : regionLabelFromCountryCode(c);
+      return { code: c, label: name };
+    }
+  } catch {
+    /* offline / adblock / CORS */
+  }
+
+  const fromLang = countryCodeFromNavigatorLanguages();
+  if (fromLang) {
+    return { code: fromLang, label: regionLabelFromCountryCode(fromLang) };
+  }
+
+  return { code: 'us', label: regionLabelFromCountryCode('us') };
+}
+
 /** NewsAPI key available in the browser only when set as REACT_APP_NEWSAPI (Create React App). */
 export function getNewsApiKey() {
   return (process.env.REACT_APP_NEWSAPI || process.env.REACT_APP_NEWS_API_KEY || '').trim();
@@ -629,7 +751,8 @@ export async function fetchNewsApiEverythingNormalized(opts = {}) {
 }
 
 /**
- * @param {{ category?: string, q?: string, country?: string, pageSize?: number, language?: string, sources?: string }} opts
+ * @param {{ category?: string, q?: string, country?: string, pageSize?: number, language?: string|false, sources?: string }} opts
+ * Pass `language: false` to omit the language filter (more local headlines when country is set).
  * @returns {Promise<object[]>} NewsAPI `articles` array (raw)
  */
 export async function fetchNewsApiTopHeadlinesRaw(opts = {}) {
@@ -644,8 +767,12 @@ export async function fetchNewsApiTopHeadlinesRaw(opts = {}) {
     pageSize: String(pageSize),
     apiKey,
   });
-  const language = opts.language || 'en';
-  if (language) params.set('language', language);
+  if (opts.language === false) {
+    /* omit language — broader in-country results */
+  } else {
+    const language = opts.language || 'en';
+    if (language) params.set('language', language);
+  }
   if (category) params.set('category', category);
   if (q) params.set('q', q);
   if (sources) params.set('sources', sources);

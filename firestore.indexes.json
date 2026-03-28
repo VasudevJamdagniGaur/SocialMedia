@@ -1,0 +1,13 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "podSportsTrending",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "country", "order": "ASCENDING" },
+        { "fieldPath": "trendingScore", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

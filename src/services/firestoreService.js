@@ -14,7 +14,8 @@ import {
   increment,
   deleteDoc,
   onSnapshot,
-  deleteField
+  deleteField,
+  runTransaction,
 } from 'firebase/firestore';
 import { getStorage, ref, uploadString, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db } from '../firebase/config';
@@ -2451,6 +2452,131 @@ class FirestoreService {
     } catch (error) {
       console.error('Error setting up crew sphere messages listener:', error);
       return () => {}; // Return empty unsubscribe function
+    }
+  }
+
+  /**
+   * Stable doc id for `podSportsTrending` from article URL (sync with client merges).
+   */
+  sportsTrendingDocIdFromUrl(url) {
+    const s = String(url || '');
+    let h = 0;
+    for (let i = 0; i < s.length; i++) {
+      h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+    }
+    return `st_${Math.abs(h).toString(36)}`;
+  }
+
+  /**
+   * Engagement score: likes×3 + shares×5 + views×1 (ranking field in Firestore).
+   */
+  computeSportsTrendingScore(likes, shares, views) {
+    const l = Number(likes) || 0;
+    const s = Number(shares) || 0;
+    const v = Number(views) || 0;
+    return l * 3 + s * 5 + v;
+  }
+
+  /**
+   * Top sports trending rows for a country (uppercase ISO-2, e.g. IN, US).
+   */
+  async getSportsTrendingByCountry(countryUpper, limitCount = 10) {
+    try {
+      const c = String(countryUpper || '').toUpperCase().slice(0, 2);
+      if (!c || c.length !== 2) return { success: true, items: [] };
+      const col = collection(this.db, 'podSportsTrending');
+      const q = query(
+        col,
+        where('country', '==', c),
+        orderBy('trendingScore', 'desc'),
+        limit(Math.min(Math.max(1, limitCount), 30))
+      );
+      const snap = await getDocs(q);
+      const items = snap.docs.map((d) => {
+        const x = d.data();
+        return {
+          id: d.id,
+          firestoreId: d.id,
+          title: x.title || '',
+          source: x.source || 'News',
+          url: x.url || '',
+          image: x.image || null,
+          category: x.category || '',
+          country: x.country || c,
+          likes: Number(x.likes) || 0,
+          shares: Number(x.shares) || 0,
+          views: Number(x.views) || 0,
+          trendingScore: Number(x.trendingScore) || 0,
+        };
+      });
+      return { success: true, items };
+    } catch (error) {
+      console.warn('getSportsTrendingByCountry:', error?.message || error);
+      return { success: false, items: [], error: error?.message || String(error) };
+    }
+  }
+
+  /**
+   * Create stub doc (score 0) if missing — used when hydrating from NewsAPI.
+   */
+  async ensureSportsTrendingNewsItem(payload) {
+    try {
+      const url = String(payload.url || '').trim();
+      if (!url) return { success: false, error: 'missing url' };
+      const id = this.sportsTrendingDocIdFromUrl(url);
+      const ref = doc(this.db, 'podSportsTrending', id);
+      const snap = await getDoc(ref);
+      if (snap.exists()) return { success: true, id, existed: true };
+      const country = String(payload.country || '')
+        .toUpperCase()
+        .replace(/[^A-Z]/g, '')
+        .slice(0, 2);
+      if (country.length !== 2) return { success: false, error: 'invalid country' };
+      await setDoc(ref, {
+        title: String(payload.title || '').slice(0, 500),
+        source: String(payload.source || 'News').slice(0, 200),
+        url,
+        image: payload.image || null,
+        category: String(payload.category || '').slice(0, 80),
+        country,
+        likes: 0,
+        shares: 0,
+        views: 0,
+        trendingScore: 0,
+        createdAt: serverTimestamp(),
+      });
+      return { success: true, id, existed: false };
+    } catch (error) {
+      console.warn('ensureSportsTrendingNewsItem:', error?.message || error);
+      return { success: false, error: error?.message || String(error) };
+    }
+  }
+
+  /**
+   * Increment like | share | view and recompute trendingScore in a transaction.
+   */
+  async incrementSportsTrendingEngagement(docId, kind) {
+    try {
+      const id = String(docId || '').trim();
+      if (!id || !['like', 'share', 'view'].includes(kind)) return { success: false };
+      const ref = doc(this.db, 'podSportsTrending', id);
+      await runTransaction(this.db, async (transaction) => {
+        const snap = await transaction.get(ref);
+        if (!snap.exists()) return;
+        const d = snap.data();
+        let likes = Number(d.likes) || 0;
+        let shares = Number(d.shares) || 0;
+        let views = Number(d.views) || 0;
+        if (kind === 'like') likes += 1;
+        else if (kind === 'share') shares += 1;
+        else if (kind === 'view') views += 1;
+        const trendingScore = this.computeSportsTrendingScore(likes, shares, views);
+        transaction.update(ref, { likes, shares, views, trendingScore });
+      });
+      return { success: true };
+    } catch (error) {
+      console.warn('incrementSportsTrendingEngagement:', error?.message || error);
+      return { success: false, error: error?.message || String(error) };
     }
   }
 }
