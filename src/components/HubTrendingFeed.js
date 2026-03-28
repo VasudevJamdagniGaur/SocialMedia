@@ -7,7 +7,10 @@ import {
   recordHubNewsClick,
 } from '../services/hubNewsService';
 
-function HubTrendingRow({ item, HUB, userId, textColor, textSecondary, engagementEnabled }) {
+/**
+ * Horizontal swipe card — same interaction model as Sports → Trending carousel.
+ */
+function HubTrendingCard({ item, idx, HUB, userId, engagementEnabled }) {
   const rootRef = useRef(null);
   const [liked, setLiked] = useState(() =>
     item.id ? sessionStorage.getItem(`hn_like_${item.id}`) === '1' : false
@@ -65,90 +68,95 @@ function HubTrendingRow({ item, HUB, userId, textColor, textSecondary, engagemen
     [engagementEnabled, userId, item.id, item.title, item.url]
   );
 
-  const openArticle = useCallback(() => {
+  const onOpenClick = useCallback(() => {
     if (userId && item.category) recordHubNewsClick(userId, item.category);
-    if (item.url) window.open(item.url, '_blank', 'noopener,noreferrer');
-  }, [userId, item.category, item.url]);
+  }, [userId, item.category]);
 
   const tag = item.feedTag;
+  const gradients = [
+    'linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%)',
+    'linear-gradient(135deg,#2d132c 0%,#801336 50%,#c72c41 100%)',
+    'linear-gradient(135deg,#0f2027 0%,#203a43 50%,#2c5364 100%)',
+    'linear-gradient(135deg,#1e3c72 0%,#2a5298 50%,#7e8ba3 100%)',
+    'linear-gradient(135deg,#232526 0%,#414345 100%)',
+  ];
+  const bg = item.image
+    ? `linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.15) 40%, transparent 60%), url(${item.image}) center/cover no-repeat`
+    : gradients[idx % gradients.length];
 
   return (
     <div
       ref={rootRef}
-      className="relative rounded-xl overflow-hidden border mb-3 last:mb-0"
-      style={{ borderColor: HUB.divider, background: HUB.bg }}
+      className="relative flex-shrink-0 w-[min(260px,78vw)] snap-start snap-always rounded-xl overflow-hidden border transition-transform active:scale-[0.98] hover:opacity-95"
+      style={{
+        borderColor: HUB.divider,
+        minHeight: 200,
+      }}
     >
-      <button
-        type="button"
-        onClick={openArticle}
-        className="w-full text-left relative z-0 min-h-[100px]"
+      <a
+        href={item.url || undefined}
+        target={item.url ? '_blank' : undefined}
+        rel={item.url ? 'noopener noreferrer' : undefined}
+        onClick={onOpenClick}
+        className="absolute inset-0 z-0"
         aria-label={item.title}
-      >
-        <div className="flex gap-3 p-3">
-          <div
-            className="w-24 h-24 flex-shrink-0 rounded-lg overflow-hidden bg-black/30"
-            style={{
-              backgroundImage: item.image ? `url(${item.image})` : undefined,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-            }}
-          />
-          <div className="flex-1 min-w-0 py-0.5">
-            {tag ? (
-              <span
-                className="inline-flex items-center gap-0.5 text-[10px] font-semibold uppercase tracking-wide mb-1"
-                style={{ color: HUB.accent }}
-              >
-                <span aria-hidden>{tag.emoji}</span> {tag.label}
-              </span>
-            ) : null}
-            <p className="text-sm font-semibold leading-snug line-clamp-3" style={{ color: textColor }}>
-              {item.title}
-            </p>
-            <p className="text-[11px] mt-1.5" style={{ color: textSecondary }}>
-              {item.source}
-              {item.category ? ` · ${item.category}` : ''}
-              {typeof item.trendingScore === 'number' ? ` · ${item.trendingScore.toFixed(1)}` : ''}
-            </p>
-          </div>
-        </div>
-      </button>
+      />
+      <div
+        className="absolute inset-0 z-[1] pointer-events-none"
+        style={{
+          background: bg,
+          backgroundSize: item.image ? 'cover' : 'auto',
+          backgroundPosition: item.image ? 'center' : undefined,
+        }}
+      />
       {engagementEnabled && userId ? (
-        <div className="absolute top-2 right-2 z-[2] flex gap-1">
+        <div className="absolute top-2 right-2 z-[3] flex gap-1 pointer-events-auto">
           <button
             type="button"
             onClick={onLike}
-            className="w-9 h-9 rounded-full flex items-center justify-center border"
-            style={{
-              background: 'rgba(0,0,0,0.5)',
-              borderColor: HUB.divider,
-              color: liked ? '#f472b6' : textSecondary,
-            }}
-            aria-label="Like"
+            className="w-9 h-9 rounded-full flex items-center justify-center backdrop-blur-sm border border-white/15"
+            style={{ background: 'rgba(0,0,0,0.45)', color: liked ? '#f472b6' : 'rgba(255,255,255,0.9)' }}
+            aria-label={liked ? 'Liked' : 'Like'}
           >
             <Heart className="w-4 h-4" fill={liked ? 'currentColor' : 'none'} strokeWidth={2} />
           </button>
           <button
             type="button"
             onClick={onShare}
-            className="w-9 h-9 rounded-full flex items-center justify-center border"
-            style={{
-              background: 'rgba(0,0,0,0.5)',
-              borderColor: HUB.divider,
-              color: textSecondary,
-            }}
+            className="w-9 h-9 rounded-full flex items-center justify-center backdrop-blur-sm border border-white/15"
+            style={{ background: 'rgba(0,0,0,0.45)', color: 'rgba(255,255,255,0.9)' }}
             aria-label="Share"
           >
             <Share2 className="w-4 h-4" strokeWidth={2} />
           </button>
         </div>
       ) : null}
+      <div className="absolute inset-x-0 bottom-0 z-[2] p-3 pt-10 bg-gradient-to-t from-black via-black/80 to-transparent pointer-events-none">
+        {tag ? (
+          <p className="text-[10px] font-bold uppercase tracking-wide mb-1" style={{ color: HUB.accent }}>
+            <span aria-hidden>{tag.emoji}</span> {tag.label}
+          </p>
+        ) : null}
+        <p className="text-sm font-semibold leading-snug line-clamp-3" style={{ color: '#fff' }}>
+          {item.title}
+        </p>
+        <p
+          className="text-[11px] mt-1.5 font-medium uppercase tracking-wide"
+          style={{ color: 'rgba(255,255,255,0.65)' }}
+        >
+          {item.source}
+          {item.category ? ` · ${item.category}` : ''}
+          {typeof item.trendingScore === 'number' && item.trendingScore > 0 ? (
+            <span className="normal-case"> · {item.trendingScore.toFixed(1)}</span>
+          ) : null}
+        </p>
+      </div>
     </div>
   );
 }
 
 /**
- * Hub (Crew home) personalized trending: country + interests + engagement + time decay + mixed feed.
+ * Hub (Crew home) personalized trending — horizontal swipe carousel (matches Sports trending).
  */
 export default function HubTrendingFeed({ isDarkMode }) {
   const [userId, setUserId] = useState(() => getCurrentUser()?.uid || null);
@@ -210,14 +218,13 @@ export default function HubTrendingFeed({ isDarkMode }) {
     accent: '#A855F7',
   };
 
-  const textColor = isDarkMode ? HUB.text : '#111827';
-  const textSecondary = isDarkMode ? HUB.textSecondary : '#6B7280';
-
   const cardStyle = {
     background: isDarkMode ? HUB.bg : '#FFFFFF',
     border: `1px solid ${isDarkMode ? HUB.divider : '#E5E7EB'}`,
   };
   const headerBorder = { borderBottom: `1px solid ${isDarkMode ? HUB.divider : '#E5E7EB'}` };
+
+  const carouselItems = items.slice(0, 15);
 
   return (
     <div className="rounded-2xl overflow-hidden mb-4" style={cardStyle}>
@@ -243,31 +250,37 @@ export default function HubTrendingFeed({ isDarkMode }) {
           {feedNotice}
         </p>
       ) : null}
-      <div className="px-3 py-3">
+      <div className="py-3 pl-4">
         {!userId ? (
-          <p className={`text-sm px-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+          <p className={`text-sm pr-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
             Trending mixes what people engage with near you—not just what&apos;s newest. Sign in to see your feed.
           </p>
         ) : loading ? (
-          <p className={`text-sm px-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Loading your feed…</p>
+          <p className={`text-sm pr-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Loading your feed…</p>
         ) : error ? (
-          <p className={`text-sm px-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{error}</p>
+          <p className={`text-sm pr-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{error}</p>
         ) : items.length === 0 ? (
-          <p className={`text-sm px-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+          <p className={`text-sm pr-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
             No stories yet. Open Sports or add a News API key—new articles will appear here for your region.
           </p>
         ) : (
-          items.map((item) => (
-            <HubTrendingRow
-              key={item.id}
-              item={item}
-              HUB={HUB}
-              userId={userId}
-              textColor={textColor}
-              textSecondary={textSecondary}
-              engagementEnabled={userId && !item.fromNewsApiFallback}
-            />
-          ))
+          <div
+            className="flex gap-3 overflow-x-auto overflow-y-hidden pb-2 pr-4 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            style={{ WebkitOverflowScrolling: 'touch' }}
+            role="region"
+            aria-label="Trending news carousel"
+          >
+            {carouselItems.map((item, idx) => (
+              <HubTrendingCard
+                key={item.id}
+                item={item}
+                idx={idx}
+                HUB={HUB}
+                userId={userId}
+                engagementEnabled={userId && !item.fromNewsApiFallback}
+              />
+            ))}
+          </div>
         )}
       </div>
     </div>
