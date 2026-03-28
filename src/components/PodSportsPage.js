@@ -159,7 +159,6 @@ export default function PodSportsPage() {
   const [sportsNewsError, setSportsNewsError] = useState('');
   const [trendingRegionLabel, setTrendingRegionLabel] = useState('');
   const [userId, setUserId] = useState(() => getCurrentUser()?.uid || null);
-  const [communityRanking, setCommunityRanking] = useState(false);
 
   const SPORTS_EXPLORE = [
     { label: 'Cricket', slug: 'cricket' },
@@ -188,7 +187,6 @@ export default function PodSportsPage() {
     const loadSportsNews = async () => {
       setIsLoadingSportsNews(true);
       setSportsNewsError('');
-      setCommunityRanking(false);
       try {
         const { code: country, label: regionLabel } = await resolveUserNewsRegionForNewsApi();
         const countryUpper = String(country || 'us').toUpperCase().slice(0, 2);
@@ -249,7 +247,6 @@ export default function PodSportsPage() {
           const fb = await firestoreService.getSportsTrendingByCountry(countryUpper, 12);
           if (fb.success && fb.items.length) {
             merged = fb.items;
-            if (!cancelled) setCommunityRanking(true);
           }
         }
 
@@ -298,20 +295,6 @@ export default function PodSportsPage() {
   };
   const cardStyle = { background: HUB.bg, border: `1px solid ${HUB.divider}` };
 
-  const subtitlePrimary =
-    isLoadingSportsNews && !trendingRegionLabel
-      ? 'Detecting your region…'
-      : trendingRegionLabel
-        ? `Popular sports in ${trendingRegionLabel}${
-            communityRanking && userId ? ' · Ranked by likes, shares & views' : ''
-          }`
-        : 'Popular sports stories near you';
-
-  const subtitleSecondary =
-    !userId && !isLoadingSportsNews
-      ? ' Sign in to influence rankings with likes and shares.'
-      : '';
-
   return (
     <div
       className="min-h-screen px-6 relative overflow-hidden slide-up"
@@ -339,10 +322,6 @@ export default function PodSportsPage() {
           <div className="rounded-2xl overflow-hidden" style={cardStyle}>
             <div className="px-4 py-4" style={{ borderBottom: `1px solid ${HUB.divider}` }}>
               <h2 className="text-base font-semibold" style={{ color: HUB.text }}>Trending</h2>
-              <p className="text-xs mt-1 leading-snug" style={{ color: HUB.textSecondary }}>
-                {subtitlePrimary}
-                {subtitleSecondary ? <span>{subtitleSecondary}</span> : null}
-              </p>
             </div>
             <div className="py-3 pl-4">
               {isLoadingSportsNews ? (
