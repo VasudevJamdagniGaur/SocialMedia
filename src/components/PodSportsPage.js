@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Sparkles, ChevronRight, Heart, Share2, Flame } from 'lucide-react';
+import { ArrowLeft, Sparkles, ChevronRight, Heart, Flame } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { onAuthStateChange, getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
@@ -29,7 +29,7 @@ function docIdForTrendingUrl(url) {
 }
 
 /**
- * Carousel card — same interaction model as Crew Hub trending (share sheet + optional engagement).
+ * Carousel card — tap opens share suggestions; optional like when signed in.
  */
 function SportsTrendingCard({ item, idx, HUB, isSignedIn, navigate, returnTo }) {
   const rootRef = useRef(null);
@@ -103,24 +103,6 @@ function SportsTrendingCard({ item, idx, HUB, isSignedIn, navigate, returnTo }) 
     [isSignedIn, item.firestoreId]
   );
 
-  const onShare = useCallback(
-    async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (!isSignedIn || !item.firestoreId) return;
-      const url = item.url || '';
-      try {
-        if (url && typeof navigator !== 'undefined' && navigator.share) {
-          await navigator.share({ title: item.title, url });
-        }
-      } catch {
-        /* user cancelled or share failed */
-      }
-      await firestoreService.incrementSportsTrendingEngagement(item.firestoreId, 'share');
-    },
-    [isSignedIn, item.firestoreId, item.title, item.url]
-  );
-
   return (
     <div
       ref={rootRef}
@@ -175,29 +157,11 @@ function SportsTrendingCard({ item, idx, HUB, isSignedIn, navigate, returnTo }) 
           >
             <Heart className="w-4 h-4" fill={liked ? 'currentColor' : 'none'} strokeWidth={2} />
           </button>
-          <button
-            type="button"
-            onClick={onShare}
-            className="w-9 h-9 rounded-full flex items-center justify-center backdrop-blur-sm border border-white/15"
-            style={{ background: 'rgba(0,0,0,0.45)', color: 'rgba(255,255,255,0.9)' }}
-            aria-label="Share story"
-          >
-            <Share2 className="w-4 h-4" strokeWidth={2} />
-          </button>
         </div>
       ) : null}
       <div className="absolute inset-x-0 bottom-0 z-[3] p-3 pt-8 bg-gradient-to-t from-black via-black/80 to-transparent pointer-events-none">
         <p className="text-sm font-semibold leading-snug line-clamp-4" style={{ color: '#fff' }}>
           {item.title}
-        </p>
-        <p
-          className="text-[11px] mt-1.5 font-medium uppercase tracking-wide"
-          style={{ color: 'rgba(255,255,255,0.65)' }}
-        >
-          {item.source}
-          {typeof item.trendingScore === 'number' && item.trendingScore > 0 ? (
-            <span className="normal-case ml-1.5 opacity-90">· score {item.trendingScore}</span>
-          ) : null}
         </p>
       </div>
     </div>

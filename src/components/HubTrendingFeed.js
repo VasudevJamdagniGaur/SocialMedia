@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Flame, Heart, Share2 } from 'lucide-react';
+import { Flame, Heart } from 'lucide-react';
 import { getCurrentUser, onAuthStateChange } from '../services/authService';
 import {
   fetchHubPersonalizedFeed,
@@ -9,7 +9,7 @@ import {
 } from '../services/hubNewsService';
 
 /**
- * Horizontal swipe card — same interaction model as Sports → Trending carousel.
+ * Horizontal swipe card — tap opens share suggestions; optional like when signed in.
  */
 function HubTrendingCard({ item, idx, HUB, userId, engagementEnabled, navigate, returnTo }) {
   const rootRef = useRef(null);
@@ -49,24 +49,6 @@ function HubTrendingCard({ item, idx, HUB, userId, engagementEnabled, navigate, 
       await incrementHubNewsEngagement(item.id, 'like');
     },
     [engagementEnabled, userId, item.id]
-  );
-
-  const onShare = useCallback(
-    async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (!engagementEnabled || !userId || !item.id) return;
-      const url = item.url || '';
-      try {
-        if (url && typeof navigator !== 'undefined' && navigator.share) {
-          await navigator.share({ title: item.title, url });
-        }
-      } catch {
-        /* cancelled */
-      }
-      await incrementHubNewsEngagement(item.id, 'share');
-    },
-    [engagementEnabled, userId, item.id, item.title, item.url]
   );
 
   const openShareSuggestions = useCallback(() => {
@@ -131,15 +113,6 @@ function HubTrendingCard({ item, idx, HUB, userId, engagementEnabled, navigate, 
             aria-label={liked ? 'Liked' : 'Like'}
           >
             <Heart className="w-4 h-4" fill={liked ? 'currentColor' : 'none'} strokeWidth={2} />
-          </button>
-          <button
-            type="button"
-            onClick={onShare}
-            className="w-9 h-9 rounded-full flex items-center justify-center backdrop-blur-sm border border-white/15"
-            style={{ background: 'rgba(0,0,0,0.45)', color: 'rgba(255,255,255,0.9)' }}
-            aria-label="Share"
-          >
-            <Share2 className="w-4 h-4" strokeWidth={2} />
           </button>
         </div>
       ) : null}
