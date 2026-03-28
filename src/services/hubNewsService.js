@@ -16,6 +16,7 @@ import {
   computeHubTrendingScore,
   effectiveHubRankScore,
   mixHubFeedSegments,
+  shuffleInPlace,
   HUB_DEFAULT_INTERESTS,
 } from '../lib/hubTrendingAlgorithms';
 import {
@@ -191,6 +192,7 @@ async function queryNewsTrending(country, categories, maxDocs) {
     const snap = await getDocs(q);
     return snap.docs.map((d) => mapNewsDoc(d.id, d.data()));
   } catch (e) {
+    if (e?.code === 'permission-denied') throw e;
     console.warn('queryNewsTrending', e?.message || e);
     return [];
   }
@@ -212,6 +214,7 @@ async function queryNewsLatest(country, categories, maxDocs) {
     const snap = await getDocs(q);
     return snap.docs.map((d) => mapNewsDoc(d.id, d.data()));
   } catch (e) {
+    if (e?.code === 'permission-denied') throw e;
     console.warn('queryNewsLatest', e?.message || e);
     return [];
   }
@@ -242,6 +245,54 @@ const INTEREST_QUERIES = {
   chess: '(chess OR FIDE OR "world chess")',
   others: '(sports OR athletics OR Olympics)',
 };
+
+/**
+ * When Firestore `news` is blocked or empty: same interest mix from NewsAPI only (no writes).
+ */
+async function buildNewsApiFallbackFeed(profile, targetSize = 20) {
+  const apiKey = getNewsApiKey();
+  const cats = (profile?.interests?.length ? profile.interests : HUB_DEFAULT_INTERESTS).slice(0, 5);
+  if (!apiKey) return [];
+  const collected = [];
+  for (const cat of cats) {
+    const qExtra = INTEREST_QUERIES[cat] || cat;
+    const rows = await fetchNewsApiEverythingNormalized({
+      q: qExtra,
+      pageSize: 6,
+      language: 'en',
+    });
+    for (const row of rows || []) {
+      if (!row.url || !row.title) continue;
+      collected.push({
+        id: hubNewsDocIdFromUrl(row.url),
+        title: row.title,
+        image: row.image || null,
+        source: row.source || 'News',
+        url: row.url,
+        category: cat,
+        country: profile.country || '',
+        city: profile.city || '',
+        likes: 0,
+        shares: 0,
+        views: 0,
+        trendingScore: 0,
+        createdAt: null,
+        fromNewsApiFallback: true,
+        feedTag: { label: 'For you', emoji: '📰' },
+        mixBucket: 'trending',
+      });
+    }
+  }
+  const seen = new Set();
+  const unique = [];
+  for (const r of collected) {
+    if (seen.has(r.url)) continue;
+    seen.add(r.url);
+    unique.push(r);
+  }
+  shuffleInPlace(unique);
+  return unique.slice(0, targetSize);
+}
 
 /**
  * Pull headlines per interest and upsert into `news` (bounded API usage).
@@ -302,22 +353,43 @@ export async function fetchHubPersonalizedFeed(uid, options = {}) {
   if (!uid) return { success: false, items: [], error: 'not_signed_in' };
 
   let profile = await getUserHubFeedProfile(uid);
-  if (!profile.country || profile.country.length !== 2) {
-    await syncUserHubLocationFromIp(uid);
-    profile = await getUserHubFeedProfile(uid);
+  try {
+    if (!profile.country || profile.country.length !== 2) {
+      await syncUserHubLocationFromIp(uid);
+      profile = await getUserHubFeedProfile(uid);
+    }
+  } catch {
+    /* location merge optional */
   }
   if (!profile.country || profile.country.length !== 2) {
-    profile = { ...profile, country: 'US', city: profile.city || '', interests: profile.interests?.length ? profile.interests : [...HUB_DEFAULT_INTERESTS] };
+    profile = {
+      ...profile,
+      country: 'US',
+      city: profile.city || '',
+      interests: profile.interests?.length ? profile.interests : [...HUB_DEFAULT_INTERESTS],
+    };
   }
 
   const interestsLower = (profile.interests || []).map((x) => String(x).toLowerCase());
   const cats = profile.interests.slice(0, 10);
   if (!cats.length) return { success: true, items: [], profile };
 
-  await hydrateHubNewsFromApi(profile.country, profile.city, cats);
+  let trending = [];
+  let latest = [];
+  let firestoreNewsOk = true;
 
-  let trending = await queryNewsTrending(profile.country, cats, 40);
-  let latest = await queryNewsLatest(profile.country, cats, 40);
+  try {
+    await hydrateHubNewsFromApi(profile.country, profile.city, cats);
+    trending = await queryNewsTrending(profile.country, cats, 40);
+    latest = await queryNewsLatest(profile.country, cats, 40);
+  } catch (e) {
+    firestoreNewsOk = false;
+    const code = e?.code || '';
+    const msg = e?.message || String(e);
+    console.warn('[HubTrending] Firestore `news` unavailable:', code || msg);
+    trending = [];
+    latest = [];
+  }
 
   trending = [...trending].sort(
     (a, b) =>
@@ -325,8 +397,31 @@ export async function fetchHubPersonalizedFeed(uid, options = {}) {
       effectiveHubRankScore(a, profile.city, interestsLower)
   );
 
-  const items = mixHubFeedSegments(trending, latest, targetSize);
-  return { success: true, items, profile };
+  let items = mixHubFeedSegments(trending, latest, targetSize);
+
+  if (items.length === 0) {
+    items = await buildNewsApiFallbackFeed(profile, targetSize);
+    return {
+      success: true,
+      items,
+      profile,
+      usedFirestore: false,
+      feedNotice:
+        !firestoreNewsOk && items.length > 0
+          ? 'Showing live headlines. Deploy Firestore rules for the `news` collection (and indexes) to enable saved rankings, likes, and views.'
+          : items.length === 0 && !getNewsApiKey()
+            ? 'Add REACT_APP_NEWSAPI in .env to load stories here.'
+            : null,
+    };
+  }
+
+  return {
+    success: true,
+    items,
+    profile,
+    usedFirestore: true,
+    feedNotice: null,
+  };
 }
 
 export default {

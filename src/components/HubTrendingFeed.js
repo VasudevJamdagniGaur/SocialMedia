@@ -7,14 +7,14 @@ import {
   recordHubNewsClick,
 } from '../services/hubNewsService';
 
-function HubTrendingRow({ item, HUB, userId, textColor, textSecondary }) {
+function HubTrendingRow({ item, HUB, userId, textColor, textSecondary, engagementEnabled }) {
   const rootRef = useRef(null);
   const [liked, setLiked] = useState(() =>
     item.id ? sessionStorage.getItem(`hn_like_${item.id}`) === '1' : false
   );
 
   useEffect(() => {
-    if (!userId || !item.id) return;
+    if (!engagementEnabled || !userId || !item.id) return;
     const key = `hn_view_${item.id}`;
     if (sessionStorage.getItem(key)) return;
     const el = rootRef.current;
@@ -32,26 +32,26 @@ function HubTrendingRow({ item, HUB, userId, textColor, textSecondary }) {
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [userId, item.id]);
+  }, [engagementEnabled, userId, item.id]);
 
   const onLike = useCallback(
     async (e) => {
       e.preventDefault();
       e.stopPropagation();
-      if (!userId || !item.id) return;
+      if (!engagementEnabled || !userId || !item.id) return;
       if (sessionStorage.getItem(`hn_like_${item.id}`)) return;
       sessionStorage.setItem(`hn_like_${item.id}`, '1');
       setLiked(true);
       await incrementHubNewsEngagement(item.id, 'like');
     },
-    [userId, item.id]
+    [engagementEnabled, userId, item.id]
   );
 
   const onShare = useCallback(
     async (e) => {
       e.preventDefault();
       e.stopPropagation();
-      if (!userId || !item.id) return;
+      if (!engagementEnabled || !userId || !item.id) return;
       const url = item.url || '';
       try {
         if (url && typeof navigator !== 'undefined' && navigator.share) {
@@ -62,7 +62,7 @@ function HubTrendingRow({ item, HUB, userId, textColor, textSecondary }) {
       }
       await incrementHubNewsEngagement(item.id, 'share');
     },
-    [userId, item.id, item.title, item.url]
+    [engagementEnabled, userId, item.id, item.title, item.url]
   );
 
   const openArticle = useCallback(() => {
@@ -113,7 +113,7 @@ function HubTrendingRow({ item, HUB, userId, textColor, textSecondary }) {
           </div>
         </div>
       </button>
-      {userId ? (
+      {engagementEnabled && userId ? (
         <div className="absolute top-2 right-2 z-[2] flex gap-1">
           <button
             type="button"
@@ -156,6 +156,7 @@ export default function HubTrendingFeed({ isDarkMode }) {
   const [loading, setLoading] = useState(true);
   const [meta, setMeta] = useState({ country: '', city: '', interests: [] });
   const [error, setError] = useState('');
+  const [feedNotice, setFeedNotice] = useState('');
 
   useEffect(() => {
     const unsub = onAuthStateChange((u) => setUserId(u?.uid || null));
@@ -168,10 +169,12 @@ export default function HubTrendingFeed({ isDarkMode }) {
       setItems([]);
       setLoading(false);
       setError('');
+      setFeedNotice('');
       return;
     }
     setLoading(true);
     setError('');
+    setFeedNotice('');
     try {
       const res = await fetchHubPersonalizedFeed(uid, { targetSize: 20 });
       if (!res.success) {
@@ -180,6 +183,7 @@ export default function HubTrendingFeed({ isDarkMode }) {
         return;
       }
       setItems(res.items || []);
+      setFeedNotice(res.feedNotice || '');
       setMeta({
         country: res.profile?.country || '',
         city: res.profile?.city || '',
@@ -187,6 +191,7 @@ export default function HubTrendingFeed({ isDarkMode }) {
       });
     } catch (e) {
       setItems([]);
+      setFeedNotice('');
       setError(e?.message || 'Could not load feed');
     } finally {
       setLoading(false);
@@ -231,6 +236,13 @@ export default function HubTrendingFeed({ isDarkMode }) {
           </p>
         </div>
       </div>
+      {feedNotice ? (
+        <p
+          className={`text-[11px] leading-snug px-4 py-2 ${isDarkMode ? 'text-amber-200/90 bg-amber-950/40' : 'text-amber-900 bg-amber-50'}`}
+        >
+          {feedNotice}
+        </p>
+      ) : null}
       <div className="px-3 py-3">
         {!userId ? (
           <p className={`text-sm px-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
@@ -253,6 +265,7 @@ export default function HubTrendingFeed({ isDarkMode }) {
               userId={userId}
               textColor={textColor}
               textSecondary={textSecondary}
+              engagementEnabled={userId && !item.fromNewsApiFallback}
             />
           ))
         )}
