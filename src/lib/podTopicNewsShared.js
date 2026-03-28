@@ -667,15 +667,16 @@ function countryCodeFromNavigatorLanguages() {
 }
 
 /**
- * Country + label for location-aware top headlines (e.g. Sports trending).
+ * Country + label (+ city when resolved via IP) for location-aware top headlines (e.g. Sports trending).
  * Order: explicit localStorage → IP (ipapi.co) → browser locale region → US.
  * Optional override: `localStorage.setItem('podTrendingNewsCountry', 'in')`.
+ * When country comes from localStorage/locale, `city` is null — use `resolveUserCityFromIp()` if needed.
  */
 export async function resolveUserNewsRegionForNewsApi() {
   try {
     const stored = localStorage.getItem(POD_TRENDING_COUNTRY_STORAGE)?.trim().toLowerCase();
     if (stored && NEWSAPI_TOP_HEADLINES_COUNTRIES.has(stored)) {
-      return { code: stored, label: regionLabelFromCountryCode(stored) };
+      return { code: stored, label: regionLabelFromCountryCode(stored), city: null };
     }
   } catch {
     /* private mode */
@@ -693,7 +694,8 @@ export async function resolveUserNewsRegionForNewsApi() {
         typeof data?.country_name === 'string' && data.country_name.trim()
           ? data.country_name.trim()
           : regionLabelFromCountryCode(c);
-      return { code: c, label: name };
+      const cityRaw = typeof data?.city === 'string' ? data.city.trim() : '';
+      return { code: c, label: name, city: cityRaw || null };
     }
   } catch {
     /* offline / adblock / CORS */
@@ -701,10 +703,25 @@ export async function resolveUserNewsRegionForNewsApi() {
 
   const fromLang = countryCodeFromNavigatorLanguages();
   if (fromLang) {
-    return { code: fromLang, label: regionLabelFromCountryCode(fromLang) };
+    return { code: fromLang, label: regionLabelFromCountryCode(fromLang), city: null };
   }
 
-  return { code: 'us', label: regionLabelFromCountryCode('us') };
+  return { code: 'us', label: regionLabelFromCountryCode('us'), city: null };
+}
+
+/** City name from IP (ipapi.co). Use when country came from localStorage/locale and `city` was not set. */
+export async function resolveUserCityFromIp() {
+  try {
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 5000);
+    const res = await fetch('https://ipapi.co/json/', { signal: ctrl.signal });
+    clearTimeout(tid);
+    const data = await res.json().catch(() => null);
+    const city = typeof data?.city === 'string' ? data.city.trim() : '';
+    return city || '';
+  } catch {
+    return '';
+  }
 }
 
 /** NewsAPI key available in the browser only when set as REACT_APP_NEWSAPI (Create React App). */

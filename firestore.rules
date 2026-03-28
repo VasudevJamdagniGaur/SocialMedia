@@ -261,7 +261,7 @@ service cloud.firestore {
         && request.resource.data.trendingScore <= 10000000;
     }
 
-    // Sports pod — engagement-ranked trending (likes/shares/views → trendingScore)
+    // Sports pod — engagement-ranked trending (likes/shares/views → trendingScore), country + optional city
     match /podSportsTrending/{newsId} {
       allow read: if request.auth != null;
 
@@ -271,6 +271,7 @@ service cloud.firestore {
         && request.resource.data.source is string
         && request.resource.data.country is string
         && request.resource.data.country.size() == 2
+        && (request.resource.data.city == null || request.resource.data.city is string)
         && request.resource.data.likes == 0
         && request.resource.data.shares == 0
         && request.resource.data.views == 0
@@ -287,6 +288,7 @@ service cloud.firestore {
         && request.resource.data.country == resource.data.country
         && request.resource.data.image == resource.data.image
         && request.resource.data.category == resource.data.category
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'shares', 'views', 'trendingScore'])
         && request.resource.data.likes >= resource.data.likes
         && request.resource.data.likes <= resource.data.likes + 3
         && request.resource.data.shares >= resource.data.shares

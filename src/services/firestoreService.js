@@ -2494,6 +2494,14 @@ class FirestoreService {
       const snap = await getDocs(q);
       const items = snap.docs.map((d) => {
         const x = d.data();
+        let createdAtMs = 0;
+        try {
+          const ts = x.createdAt;
+          if (ts?.toMillis) createdAtMs = ts.toMillis();
+          else if (typeof ts?.seconds === 'number') createdAtMs = ts.seconds * 1000;
+        } catch {
+          /* ignore */
+        }
         return {
           id: d.id,
           firestoreId: d.id,
@@ -2503,10 +2511,12 @@ class FirestoreService {
           image: x.image || null,
           category: x.category || '',
           country: x.country || c,
+          city: typeof x.city === 'string' ? x.city : null,
           likes: Number(x.likes) || 0,
           shares: Number(x.shares) || 0,
           views: Number(x.views) || 0,
           trendingScore: Number(x.trendingScore) || 0,
+          createdAtMs,
         };
       });
       return { success: true, items };
@@ -2532,7 +2542,11 @@ class FirestoreService {
         .replace(/[^A-Z]/g, '')
         .slice(0, 2);
       if (country.length !== 2) return { success: false, error: 'invalid country' };
-      await setDoc(ref, {
+      const cityTrim =
+        typeof payload.city === 'string' && payload.city.trim()
+          ? payload.city.trim().slice(0, 120)
+          : '';
+      const row = {
         title: String(payload.title || '').slice(0, 500),
         source: String(payload.source || 'News').slice(0, 200),
         url,
@@ -2544,7 +2558,9 @@ class FirestoreService {
         views: 0,
         trendingScore: 0,
         createdAt: serverTimestamp(),
-      });
+      };
+      if (cityTrim) row.city = cityTrim;
+      await setDoc(ref, row);
       return { success: true, id, existed: false };
     } catch (error) {
       console.warn('ensureSportsTrendingNewsItem:', error?.message || error);

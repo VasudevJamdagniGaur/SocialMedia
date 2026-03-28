@@ -9,7 +9,16 @@ import {
   fetchNewsApiTopHeadlinesRaw,
   normalizeArticles,
   resolveUserNewsRegionForNewsApi,
+  resolveUserCityFromIp,
 } from '../lib/podTopicNewsShared';
+
+/** Engagement rank plus same-city boost (Firestore `trendingScore` is likes×3 + shares×5 + views). */
+function effectiveSportsTrendRank(item, userCityNorm) {
+  const base = Number(item.trendingScore) || 0;
+  const ic = String(item.city || '').trim().toLowerCase();
+  const boost = userCityNorm && ic && ic === userCityNorm ? 50 : 0;
+  return base + boost;
+}
 
 function docIdForTrendingUrl(url) {
   return firestoreService.sportsTrendingDocIdFromUrl(url);
@@ -188,7 +197,13 @@ export default function PodSportsPage() {
       setIsLoadingSportsNews(true);
       setSportsNewsError('');
       try {
-        const { code: country, label: regionLabel } = await resolveUserNewsRegionForNewsApi();
+        const { code: country, label: regionLabel, city: cityFromRegion } =
+          await resolveUserNewsRegionForNewsApi();
+        let userCityRaw = typeof cityFromRegion === 'string' ? cityFromRegion.trim() : '';
+        if (!userCityRaw) {
+          userCityRaw = await resolveUserCityFromIp();
+        }
+        const userCityNorm = userCityRaw.trim().toLowerCase();
         const countryUpper = String(country || 'us').toUpperCase().slice(0, 2);
         if (!cancelled) setTrendingRegionLabel(regionLabel);
 
@@ -206,14 +221,14 @@ export default function PodSportsPage() {
           category: 'sports',
           country,
           language: 'en',
-          pageSize: 12,
+          pageSize: 20,
         });
         if (!articles.length) {
           articles = await fetchNewsApiTopHeadlinesRaw({
             category: 'sports',
             country,
             language: false,
-            pageSize: 12,
+            pageSize: 20,
           });
         }
 
@@ -222,6 +237,8 @@ export default function PodSportsPage() {
           source: a.source,
           url: a.url,
           image: a.image,
+          publishedAt: a.publishedAt,
+          city: null,
           firestoreId: docIdForTrendingUrl(a.url),
           trendingScore: 0,
           likes: 0,
@@ -241,10 +258,11 @@ export default function PodSportsPage() {
                 image: n.image,
                 category: 'sports',
                 country: countryUpper,
+                city: userCityRaw || undefined,
               })
             )
           );
-          const fb = await firestoreService.getSportsTrendingByCountry(countryUpper, 12);
+          const fb = await firestoreService.getSportsTrendingByCountry(countryUpper, 25);
           if (fb.success && fb.items.length) {
             merged = fb.items;
           }
@@ -264,7 +282,15 @@ export default function PodSportsPage() {
           merged = [...newsNormalized];
         }
 
-        merged.sort((a, b) => (b.trendingScore || 0) - (a.trendingScore || 0));
+        merged.sort((a, b) => {
+          const ra = effectiveSportsTrendRank(a, userCityNorm);
+          const rb = effectiveSportsTrendRank(b, userCityNorm);
+          if (rb !== ra) return rb - ra;
+          const ta = a.publishedAt ? Date.parse(a.publishedAt) : 0;
+          const tb = b.publishedAt ? Date.parse(b.publishedAt) : 0;
+          if (tb !== ta) return tb - ta;
+          return (b.createdAtMs || 0) - (a.createdAtMs || 0);
+        });
 
         if (!cancelled) {
           setSportsTrending(merged.length ? merged.slice(0, 10) : fallbackTrending);
