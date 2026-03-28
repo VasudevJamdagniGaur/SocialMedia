@@ -162,7 +162,6 @@ export default function HubTrendingFeed({ isDarkMode }) {
   const [userId, setUserId] = useState(() => getCurrentUser()?.uid || null);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [meta, setMeta] = useState({ country: '', city: '', interests: [] });
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -188,11 +187,6 @@ export default function HubTrendingFeed({ isDarkMode }) {
         return;
       }
       setItems(res.items || []);
-      setMeta({
-        country: res.profile?.country || '',
-        city: res.profile?.city || '',
-        interests: res.profile?.interests || [],
-      });
     } catch (e) {
       setItems([]);
       setError(e?.message || 'Could not load feed');
@@ -229,13 +223,6 @@ export default function HubTrendingFeed({ isDarkMode }) {
         </div>
         <div className="flex-1 min-w-0">
           <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Trending</h2>
-          <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-            {userId
-              ? meta.country
-                ? `Near ${meta.city ? `${meta.city}, ` : ''}${meta.country} · Ranked by engagement over time`
-                : 'Personalized for your interests'
-              : 'Sign in for a ranked feed by location and interests'}
-          </p>
         </div>
       </div>
       <div className="py-3 pl-4">
