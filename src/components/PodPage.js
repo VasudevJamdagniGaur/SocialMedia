@@ -524,9 +524,6 @@ export default function PodPage() {
               )}
             </div>
           </div>
-          <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-            Your personal wellness crew
-          </p>
         </div>
 
         {/* Shared theme for all Crew cards - same as Crew's Activity / Community */}
