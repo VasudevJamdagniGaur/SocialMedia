@@ -271,9 +271,6 @@ export default function PodSportsPage() {
 
         if (!cancelled) {
           setSportsTrending(merged.length ? merged.slice(0, 10) : fallbackTrending);
-          if (!merged.length) {
-            setSportsNewsError('No headlines available. Showing top picks.');
-          }
         }
       } catch {
         if (!cancelled) {
