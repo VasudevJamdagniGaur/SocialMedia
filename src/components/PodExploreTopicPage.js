@@ -6,6 +6,7 @@ import {
   googleNewsSearchUrl,
   getNewsApiKey,
   fetchNewsApiEverythingNormalized,
+  filterNewsRowsIndiaLocal,
   enrichNewsItemsWithOgImages,
   NewsFeedRow,
 } from '../lib/podTopicNewsShared';
@@ -35,7 +36,7 @@ const EXPLORE_TOPICS = {
       qInternational:
         '("AI startup" OR "tech startup" AND (funding OR raises OR launches) OR "seed round" OR "Series A" AI)',
       qLocal:
-        '((India OR Indian OR Bengaluru OR Bangalore OR Mumbai OR Delhi OR Hyderabad OR Pune OR Chennai) AND ("AI startup" OR "tech startup" OR "machine learning startup" OR "GenAI startup")) AND (funding OR seed OR Series OR launch OR raises)',
+        '((India OR Indian OR Bharat OR Bengaluru OR Bangalore OR Mumbai OR Delhi OR Hyderabad OR Pune OR Chennai) AND ("AI startup" OR "tech startup" OR "machine learning startup" OR "GenAI startup")) AND (funding OR seed OR Series OR launch OR raises)',
       google: '(AI startup OR machine learning startup OR tech startup funding) when:7d',
       googleLocal: '(India AI startup OR Bengaluru tech startup funding OR Indian startup AI) when:7d',
       googleInternational: '(AI startup OR machine learning startup OR tech startup funding) when:7d',
@@ -63,9 +64,9 @@ const EXPLORE_TOPICS = {
       qInternational:
         '(startup OR unicorn OR "Series A" OR "Series B" OR accelerator OR "Y Combinator" OR venture)',
       qLocal:
-        '((India OR Indian OR Mumbai OR Delhi OR Bengaluru OR Bangalore OR Hyderabad OR Pune OR Chennai OR Noida OR Gurugram OR "Startup India" OR SME IPO OR BSE OR NSE) AND (startup OR unicorn OR funding OR "Series A" OR "Series B" OR VC OR accelerator OR entrepreneur OR IPO))',
+        '((India OR Indian OR Bharat OR Mumbai OR Delhi OR Bengaluru OR Bangalore OR Hyderabad OR Pune OR Chennai OR Noida OR Gurugram OR "Startup India" OR SME IPO OR BSE OR NSE OR SEBI) AND (startup OR unicorn OR funding OR "Series A" OR "Series B" OR VC OR accelerator OR IPO OR incubat OR "seed round"))',
       google: '(startup funding OR Y Combinator OR venture capital startup) when:7d',
-      googleLocal: '(Indian startup funding OR India unicorn OR Mumbai Delhi Bengaluru startup Series A) when:7d',
+      googleLocal: '("India startup" OR "Indian startup" funding OR India unicorn OR Mumbai Bengaluru startup Series A) when:7d',
       googleInternational: '(startup funding OR Y Combinator OR venture capital startup) when:7d',
     },
     founders: {
@@ -223,8 +224,15 @@ export default function PodExploreTopicPage() {
       }
 
       if (newsQ) {
-        rows = await fetchNewsApiEverythingNormalized({ q: newsQ, pageSize: 30 });
-        if (rows?.length) rows = rows.slice(0, 30);
+        const pageSize =
+          isStartupsRegionTopic(section, topicId) && startupRegion === 'local' ? 50 : 30;
+        rows = await fetchNewsApiEverythingNormalized({ q: newsQ, pageSize });
+        if (rows?.length) {
+          if (isStartupsRegionTopic(section, topicId) && startupRegion === 'local') {
+            rows = filterNewsRowsIndiaLocal(rows);
+          }
+          rows = rows.slice(0, 30);
+        }
       }
 
       if (!rows?.length) {

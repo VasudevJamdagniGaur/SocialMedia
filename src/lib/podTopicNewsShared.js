@@ -564,6 +564,25 @@ export function normalizeArticles(list) {
     });
 }
 
+/**
+ * Keep rows that clearly relate to India; drop South Asian digests (e.g. Nepal-only)
+ * when title/description never mention India, INR, major Indian hubs, or local markets.
+ * NewsAPI `everything` cannot filter by country; this runs after fetch for Explore → Startups → Local.
+ */
+export function filterNewsRowsIndiaLocal(rows) {
+  if (!Array.isArray(rows) || !rows.length) return rows;
+  const indiaSignal =
+    /\bIndia\b|\bIndian\b|\bBharat\b|Rs\.?\s*\d[\d,]*|₹|\bcrore\b|\blakh\b|\bNSE\b|\bBSE\b|\bSEBI\b|Startup India|Mumbai|Delhi|Bengaluru|Bangalore|Hyderabad|Pune|Chennai|Kolkata|Ahmedabad|Gurugram|Gurgaon|Noida|Kochi|Jaipur|Indore|Lucknow|Vadodara|Chandigarh/i;
+  const neighborLean =
+    /\bNepal\b|\bNepalese\b|\bKathmandu\b|\bBangladesh\b|\bDhaka\b|\bSri Lanka\b|\bColombo\b|\bPakistan\b|\bKarachi\b|\bLahore\b|\bIslamabad\b/i;
+  return rows.filter((r) => {
+    const blob = `${r.title || ''} ${r.description || ''}`;
+    if (!blob.trim()) return false;
+    if (neighborLean.test(blob) && !indiaSignal.test(blob)) return false;
+    return indiaSignal.test(blob);
+  });
+}
+
 const NEWSAPI_V2 = 'https://newsapi.org/v2';
 
 /** NewsAPI key available in the browser only when set as REACT_APP_NEWSAPI (Create React App). */
