@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
 const __NEWS_FALLBACK_IMAGE_URL =
   'data:image/svg+xml;charset=utf-8,' +
@@ -936,15 +936,46 @@ export async function enrichNewsItemsWithOgImages(items, options = {}) {
   return out.map((it) => ({ ...it, image: ensureNonEmptyImageUrl(it?.image || null) }));
 }
 
+/** Show a row thumbnail only for real remote images (e.g. NewsAPI `urlToImage`), not data-URL placeholders. */
+function isUsableNewsFeedThumbnailUrl(url) {
+  const u = typeof url === 'string' ? url.trim() : '';
+  if (!u || !/^https?:\/\//i.test(u) || /^data:/i.test(u)) return false;
+  if (/^https?:\/\/lh[0-9]\.googleusercontent\.com\/.+(?:=s0-w|s0-w)\d+/i.test(u)) return false;
+  return true;
+}
+
 export function NewsFeedRow({ item, hub, isLast, onOpenShare }) {
+  const [thumbFailed, setThumbFailed] = useState(false);
+  useEffect(() => {
+    setThumbFailed(false);
+  }, [item?.url, item?.image]);
+
+  const thumbSrc = !thumbFailed && isUsableNewsFeedThumbnailUrl(item?.image) ? String(item.image).trim() : null;
+
   const inner = (
-    <>
+    <div className="flex w-full min-w-0 gap-3 items-start">
+      {thumbSrc ? (
+        <div
+          className="w-[76px] h-[76px] flex-shrink-0 overflow-hidden rounded-xl"
+          style={{ background: hub.divider }}
+        >
+          <img
+            src={thumbSrc}
+            alt=""
+            className="h-full w-full object-cover"
+            loading="lazy"
+            decoding="async"
+            referrerPolicy="no-referrer"
+            onError={() => setThumbFailed(true)}
+          />
+        </div>
+      ) : null}
       <div className="flex-1 min-w-0 flex flex-col gap-1.5">
         <p className="text-base leading-snug font-semibold tracking-tight line-clamp-4" style={{ color: hub.text }}>
           {item.title}
         </p>
       </div>
-    </>
+    </div>
   );
 
   const rowStyle = { borderBottom: isLast ? 'none' : `1px solid ${hub.divider}` };
