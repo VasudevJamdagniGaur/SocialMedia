@@ -2797,6 +2797,73 @@ ${text}`;
   }
 
   /**
+   * Edit an existing share image using Gemini (same image model as generation).
+   * Loads http(s) or data URLs via _getProfileImageAsBase64.
+   * @param {string} instruction - What to change (user wording)
+   * @param {string} imageUrlOrDataUrl
+   * @returns {Promise<string|null>} New image as data URL, or null
+   */
+  async editImageWithInstruction(instruction, imageUrlOrDataUrl) {
+    const instr = String(instruction || '').trim();
+    if (!instr) return null;
+    const apiKey = (this.geminiApiKey || process.env.REACT_APP_GOOGLE_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
+    if (!apiKey) {
+      console.warn('[Image edit] Gemini API key not set (REACT_APP_GOOGLE_API_KEY)');
+      return null;
+    }
+    const source = await this._getProfileImageAsBase64(imageUrlOrDataUrl);
+    if (!source) {
+      console.warn('[Image edit] Could not load source image (CORS or invalid URL)');
+      return null;
+    }
+    const prompt = [
+      'TASK: Edit the image attached above according to the user instruction.',
+      `USER INSTRUCTION: ${instr}`,
+      'OUTPUT REQUIREMENTS: Return exactly one edited image. Preserve subject identity and scene coherence unless the instruction explicitly asks to remove or replace them. Match photorealistic style unless the user requests otherwise.',
+    ].join('\n\n');
+    return this._generateImageWithGeminiEdit(prompt, apiKey, source);
+  }
+
+  async _generateImageWithGeminiEdit(prompt, apiKey, sourceImage) {
+    try {
+      const parts = [
+        {
+          inlineData: {
+            mimeType: sourceImage.mimeType,
+            data: sourceImage.base64,
+          },
+        },
+        { text: prompt },
+      ];
+      const apiUrl = `${this.geminiBaseURL}/models/${this.geminiImageModelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const res = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts }],
+          generationConfig: {
+            responseModalities: ['TEXT', 'IMAGE'],
+            imageConfig: { aspectRatio: '1:1', imageSize: '2K' },
+          },
+        }),
+      });
+      if (!res.ok) {
+        console.warn('[Image edit] Gemini API error:', res.status, await res.text());
+        return null;
+      }
+      const data = await res.json();
+      const responseParts = data.candidates?.[0]?.content?.parts ?? [];
+      const imagePart = responseParts.find((p) => p.inlineData && p.inlineData.data);
+      if (!imagePart?.inlineData) return null;
+      const { mimeType = 'image/png', data: base64 } = imagePart.inlineData;
+      return `data:${mimeType};base64,${base64}`;
+    } catch (e) {
+      console.warn('[Image edit] Gemini edit failed:', e.message);
+      return null;
+    }
+  }
+
+  /**
    * Returns image prompt from post content. Kept for compatibility.
    */
   async getImageSearchQueryForPost(postText) {

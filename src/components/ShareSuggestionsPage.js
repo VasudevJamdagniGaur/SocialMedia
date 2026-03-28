@@ -563,6 +563,10 @@ export default function ShareSuggestionsPage() {
   const [sharePanelOpen, setSharePanelOpen] = useState(false);
   const [editableShareText, setEditableShareText] = useState('');
   const [imageEditMenuOpen, setImageEditMenuOpen] = useState(false);
+  const [aiEditImageOpen, setAiEditImageOpen] = useState(false);
+  const [aiEditInstruction, setAiEditInstruction] = useState('');
+  const [aiEditLoading, setAiEditLoading] = useState(false);
+  const [aiEditError, setAiEditError] = useState('');
   const [linkedInCaptionToastVisible, setLinkedInCaptionToastVisible] = useState(false);
   const [linkedInToastMessage, setLinkedInToastMessage] = useState('caption'); // 'caption' | 'connect' | 'success' | 'error'
   const [linkedInErrorText, setLinkedInErrorText] = useState('');
@@ -593,6 +597,15 @@ export default function ShareSuggestionsPage() {
     webShareFile: null,
   });
   const [sharePanelPrepStatus, setSharePanelPrepStatus] = useState({ status: 'idle', error: null });
+
+  useEffect(() => {
+    if (!sharePanelOpen) {
+      setAiEditImageOpen(false);
+      setAiEditInstruction('');
+      setAiEditError('');
+      setAiEditLoading(false);
+    }
+  }, [sharePanelOpen]);
 
   /**
    * X + Reddit: share image via native share sheet and copy caption.
@@ -1370,6 +1383,13 @@ export default function ShareSuggestionsPage() {
     setImageEditMenuOpen((prev) => !prev);
   };
 
+  const handleEditWithAi = () => {
+    setImageEditMenuOpen(false);
+    setAiEditInstruction('');
+    setAiEditError('');
+    setAiEditImageOpen(true);
+  };
+
   const handleReplacePhoto = () => {
     setImageEditMenuOpen(false);
     imageReplaceInputRef.current?.click();
@@ -1463,6 +1483,50 @@ export default function ShareSuggestionsPage() {
       }
     }
     return null;
+  };
+
+  const handleApplyAiEdit = async () => {
+    const instr = (aiEditInstruction || '').trim();
+    if (!instr) {
+      setAiEditError('Describe the change you want.');
+      return;
+    }
+    const raw = suggestionImageUrls[selectedIndex];
+    if (!raw || typeof raw !== 'string') return;
+    setAiEditLoading(true);
+    setAiEditError('');
+    try {
+      let source = raw;
+      if (raw.startsWith('http://') || raw.startsWith('https://')) {
+        const data = await getImageAsDataUrl(raw);
+        if (!data) {
+          throw new Error('Could not load this image URL. Try “Replace photo” with a file from your device, then edit with AI.');
+        }
+        source = data;
+      }
+      const out = await chatService.editImageWithInstruction(instr, source);
+      if (!out) {
+        throw new Error(
+          'No image returned. Add REACT_APP_GOOGLE_API_KEY to .env (Gemini), restart the dev server, and try again.'
+        );
+      }
+      setSuggestionImageUrls((prev) => {
+        const next = [...(prev || [])];
+        next[selectedIndex] = out;
+        return next;
+      });
+      setSuggestionImagesFromChat((prev) => {
+        const next = [...(prev || [])];
+        next[selectedIndex] = false;
+        return next;
+      });
+      setAiEditImageOpen(false);
+      setAiEditInstruction('');
+    } catch (e) {
+      setAiEditError(e?.message || 'Edit failed');
+    } finally {
+      setAiEditLoading(false);
+    }
   };
 
   /** Convert data URL to Blob (for shareImageToX). */
@@ -2598,6 +2662,7 @@ export default function ShareSuggestionsPage() {
         )}
 
         {sharePanelOpen && (
+          <>
           <div
             className="fixed inset-0 z-50"
             style={{ background: 'rgba(0,0,0,0.5)' }}
@@ -2660,7 +2725,7 @@ export default function ShareSuggestionsPage() {
                         </button>
                         {imageEditMenuOpen && (
                           <div
-                            className="mt-1 py-1 rounded-lg shadow-xl border min-w-[160px]"
+                            className="mt-1 py-1 rounded-lg shadow-xl border min-w-[176px]"
                             style={{
                               background: isDarkMode ? HUB.bgSecondary : '#FFF',
                               borderColor: isDarkMode ? HUB.divider : 'rgba(0,0,0,0.1)',
@@ -2676,9 +2741,23 @@ export default function ShareSuggestionsPage() {
                             </button>
                             <button
                               type="button"
+                              onClick={handleEditWithAi}
+                              className="w-full text-left px-4 py-2.5 text-sm hover:opacity-90 border-t"
+                              style={{
+                                color: isDarkMode ? HUB.accentHighlight : '#7C3AED',
+                                borderColor: isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)',
+                              }}
+                            >
+                              Edit with AI
+                            </button>
+                            <button
+                              type="button"
                               onClick={handleRemoveImage}
-                              className="w-full text-left px-4 py-2.5 text-sm hover:opacity-90"
-                              style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}
+                              className="w-full text-left px-4 py-2.5 text-sm hover:opacity-90 border-t"
+                              style={{
+                                color: isDarkMode ? HUB.text : '#1A1A1A',
+                                borderColor: isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)',
+                              }}
                             >
                               Remove image
                             </button>
@@ -2693,7 +2772,7 @@ export default function ShareSuggestionsPage() {
                         onChange={handleReplaceImageFile}
                       />
                       <p className="text-xs mt-1" style={{ color: isDarkMode ? HUB.textSecondary : '#666' }}>
-                        This image will be shared with your post. Tap the pencil to make the changes you want: replace with another photo or remove it.
+                        This image will be shared with your post. Tap the pencil to replace it, remove it, or edit it with AI (uses your Google / Gemini key).
                       </p>
                     </div>
                   )}
@@ -2760,6 +2839,86 @@ export default function ShareSuggestionsPage() {
               </div>
             </div>
           </div>
+          {aiEditImageOpen ? (
+            <div
+              className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+              style={{ background: 'rgba(0,0,0,0.72)' }}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="ai-edit-image-title"
+              onClick={() => {
+                if (!aiEditLoading) setAiEditImageOpen(false);
+              }}
+            >
+              <div
+                className="w-full max-w-md rounded-2xl border p-4 shadow-2xl"
+                style={{
+                  background: isDarkMode ? HUB.bgSecondary : '#FFFFFF',
+                  borderColor: isDarkMode ? HUB.divider : 'rgba(0,0,0,0.1)',
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h3
+                  id="ai-edit-image-title"
+                  className="text-base font-semibold mb-1"
+                  style={{ color: isDarkMode ? HUB.text : '#111' }}
+                >
+                  Edit with AI
+                </h3>
+                <p className="text-xs mb-3" style={{ color: isDarkMode ? HUB.textSecondary : '#666' }}>
+                  Describe how you want the image changed (e.g. &quot;warmer lighting&quot;, &quot;crop to the person&quot;, &quot;more contrast&quot;). Uses Gemini via{' '}
+                  <code className="text-[11px]">REACT_APP_GOOGLE_API_KEY</code>.
+                </p>
+                <textarea
+                  value={aiEditInstruction}
+                  onChange={(e) => setAiEditInstruction(e.target.value)}
+                  placeholder="What should change?"
+                  rows={3}
+                  disabled={aiEditLoading}
+                  className="w-full rounded-xl p-3 text-sm resize-none border outline-none focus:ring-2 mb-2"
+                  style={{
+                    background: isDarkMode ? HUB.bg : '#F5F5F5',
+                    borderColor: isDarkMode ? HUB.divider : 'rgba(0,0,0,0.12)',
+                    color: isDarkMode ? HUB.text : '#1A1A1A',
+                  }}
+                />
+                {aiEditError ? (
+                  <p className="text-xs mb-2" style={{ color: '#f87171' }}>
+                    {aiEditError}
+                  </p>
+                ) : null}
+                <div className="flex gap-2 justify-end mt-2">
+                  <button
+                    type="button"
+                    disabled={aiEditLoading}
+                    onClick={() => {
+                      if (!aiEditLoading) {
+                        setAiEditImageOpen(false);
+                        setAiEditError('');
+                      }
+                    }}
+                    className="px-4 py-2 rounded-xl text-sm font-medium transition-opacity disabled:opacity-50"
+                    style={{
+                      background: isDarkMode ? HUB.divider : '#E5E7EB',
+                      color: isDarkMode ? HUB.text : '#111',
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={aiEditLoading || !(aiEditInstruction || '').trim()}
+                    onClick={handleApplyAiEdit}
+                    className="px-4 py-2 rounded-xl text-sm font-medium transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{ background: HUB.accent, color: '#FFF' }}
+                  >
+                    {aiEditLoading ? 'Working…' : 'Apply'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+          </>
         )}
       </div>
     </div>
