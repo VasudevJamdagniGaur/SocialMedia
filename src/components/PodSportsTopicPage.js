@@ -21,6 +21,48 @@ const GOOGLE_BROWSE_QUERY = {
   others: 'sports',
 };
 
+/** Keep only articles that clearly belong to the sports tab (NewsAPI “everything” often returns noise). */
+function sportArticleMatchesTopic(topicId, item) {
+  const blob = `${item?.title || ''} ${item?.description || ''}`;
+  if (!blob.trim()) return false;
+  switch (topicId) {
+    case 'cricket':
+      return (
+        /\b(cricket|cricketer|cricketers|cricketing)\b/i.test(blob) ||
+        /\b(ipl|wpl|psl|bbl|cpl|ilt20|sa20)\b/i.test(blob) ||
+        /\b(ashes|wicket|wickets|super over|follow[- ]on)\b/i.test(blob) ||
+        /\b(t20|t-20|twenty-?20)\b/i.test(blob) ||
+        /\b(odi|one[- ]day international|one[- ]dayers)\b/i.test(blob) ||
+        /\b(test match|test series|pink[- ]ball|day[- ]night test)\b/i.test(blob) ||
+        /\b(bcci|pcb\b|slc|nzc)\b/i.test(blob) ||
+        /\b(batsman|batsmen|batters?|bowlers?|stumping|lbw|googly|yorker|bouncer|maiden)\b/i.test(blob)
+      );
+    case 'football':
+      return (
+        /\b(soccer|fifa|uefa|mls|nwsl)\b/i.test(blob) ||
+        /\b(premier league|champions league|la liga|bundesliga|serie a|ligue 1|eredivisie)\b/i.test(blob) ||
+        /\b(world cup|euros?|european championship|copa america|afcon)\b/i.test(blob) ||
+        /\b(nfl|ncaa football|touchdown|quarterback|super bowl)\b/i.test(blob) ||
+        (/\bfootball\b/i.test(blob) &&
+          !/\b(cricket|ipl|wicket|t20|odi|bcci|ashes)\b/i.test(blob))
+      );
+    case 'f1':
+      return (
+        /\b(formula\s*1|formula one|\bf1\b)\b/i.test(blob) ||
+        /\b(grand prix|qualifying|paddock|constructor|pit stop|pole position)\b/i.test(blob) ||
+        /\b(verstappen|hamilton|leclerc|norris|red bull racing|ferrari f1|mclaren f1|mercedes f1)\b/i.test(blob)
+      );
+    case 'chess':
+      return (
+        /\b(chess|fide|grandmaster|grandmasters|lichess|chess\.com)\b/i.test(blob) ||
+        /\b(carlsen|nakamura|firouzja|ding liren|gukesh|praggnanandhaa)\b/i.test(blob) ||
+        /\b(fide candidates|candidates tournament|tata steel chess|grand chess tour)\b/i.test(blob)
+      );
+    default:
+      return true;
+  }
+}
+
 /** Match article text to one of the four main Explore topics (used to strip them from “Others”). */
 function matchesMainTopic(text) {
   const t = (text || '').toLowerCase();
@@ -150,8 +192,9 @@ export default function PodSportsTopicPage() {
         });
         if (filtered.length) rows = filtered.slice(0, 30);
       } else if (config.q) {
-        rows = await fetchNewsApiEverythingNormalized({ q: config.q, pageSize: 30 });
-        if (rows?.length) rows = rows.slice(0, 30);
+        const fetched = await fetchNewsApiEverythingNormalized({ q: config.q, pageSize: 100 });
+        const onTopic = (fetched || []).filter((a) => sportArticleMatchesTopic(topicId, a));
+        rows = onTopic.slice(0, 30);
       }
 
       if (!rows?.length) {
