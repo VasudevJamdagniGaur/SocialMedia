@@ -401,17 +401,16 @@ export async function fetchHubPersonalizedFeed(uid, options = {}) {
 
   if (items.length === 0) {
     items = await buildNewsApiFallbackFeed(profile, targetSize);
+    if (!firestoreNewsOk && items.length > 0) {
+      console.info(
+        '[HubTrending] Using live headlines (NewsAPI). To persist rankings/likes in Firestore, deploy rules + indexes for the `news` collection — see firestore.rules and firestore.indexes.json.'
+      );
+    }
     return {
       success: true,
       items,
       profile,
       usedFirestore: false,
-      feedNotice:
-        !firestoreNewsOk && items.length > 0
-          ? 'Showing live headlines. Deploy Firestore rules for the `news` collection (and indexes) to enable saved rankings, likes, and views.'
-          : items.length === 0 && !getNewsApiKey()
-            ? 'Add REACT_APP_NEWSAPI in .env to load stories here.'
-            : null,
     };
   }
 
@@ -420,7 +419,6 @@ export async function fetchHubPersonalizedFeed(uid, options = {}) {
     items,
     profile,
     usedFirestore: true,
-    feedNotice: null,
   };
 }
 

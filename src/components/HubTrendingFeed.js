@@ -164,7 +164,6 @@ export default function HubTrendingFeed({ isDarkMode }) {
   const [loading, setLoading] = useState(true);
   const [meta, setMeta] = useState({ country: '', city: '', interests: [] });
   const [error, setError] = useState('');
-  const [feedNotice, setFeedNotice] = useState('');
 
   useEffect(() => {
     const unsub = onAuthStateChange((u) => setUserId(u?.uid || null));
@@ -177,12 +176,10 @@ export default function HubTrendingFeed({ isDarkMode }) {
       setItems([]);
       setLoading(false);
       setError('');
-      setFeedNotice('');
       return;
     }
     setLoading(true);
     setError('');
-    setFeedNotice('');
     try {
       const res = await fetchHubPersonalizedFeed(uid, { targetSize: 20 });
       if (!res.success) {
@@ -191,7 +188,6 @@ export default function HubTrendingFeed({ isDarkMode }) {
         return;
       }
       setItems(res.items || []);
-      setFeedNotice(res.feedNotice || '');
       setMeta({
         country: res.profile?.country || '',
         city: res.profile?.city || '',
@@ -199,7 +195,6 @@ export default function HubTrendingFeed({ isDarkMode }) {
       });
     } catch (e) {
       setItems([]);
-      setFeedNotice('');
       setError(e?.message || 'Could not load feed');
     } finally {
       setLoading(false);
@@ -243,13 +238,6 @@ export default function HubTrendingFeed({ isDarkMode }) {
           </p>
         </div>
       </div>
-      {feedNotice ? (
-        <p
-          className={`text-[11px] leading-snug px-4 py-2 ${isDarkMode ? 'text-amber-200/90 bg-amber-950/40' : 'text-amber-900 bg-amber-50'}`}
-        >
-          {feedNotice}
-        </p>
-      ) : null}
       <div className="py-3 pl-4">
         {!userId ? (
           <p className={`text-sm pr-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
