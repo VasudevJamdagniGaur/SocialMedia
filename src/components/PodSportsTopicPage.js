@@ -15,7 +15,7 @@ import {
 /** Google News browse queries (for “Open on Google News” links only). */
 const GOOGLE_BROWSE_QUERY = {
   cricket: 'cricket OR IPL OR T20 OR Ashes',
-  football: 'soccer OR NFL OR FIFA OR UEFA OR "Premier League"',
+  football: '"Major League Soccer" OR MLS OR NWSL OR USMNT OR USWNT OR "US Soccer"',
   f1: '"Formula 1" OR F1 OR "Grand Prix"',
   chess: 'chess OR FIDE OR grandmaster OR Candidates',
   others: 'sports',
@@ -37,15 +37,36 @@ function sportArticleMatchesTopic(topicId, item) {
         /\b(bcci|pcb\b|slc|nzc)\b/i.test(blob) ||
         /\b(batsman|batsmen|batters?|bowlers?|stumping|lbw|googly|yorker|bouncer|maiden)\b/i.test(blob)
       );
-    case 'football':
-      return (
-        /\b(soccer|fifa|uefa|mls|nwsl)\b/i.test(blob) ||
-        /\b(premier league|champions league|la liga|bundesliga|serie a|ligue 1|eredivisie)\b/i.test(blob) ||
-        /\b(world cup|euros?|european championship|copa america|afcon)\b/i.test(blob) ||
-        /\b(nfl|ncaa football|touchdown|quarterback|super bowl)\b/i.test(blob) ||
-        (/\bfootball\b/i.test(blob) &&
-          !/\b(cricket|ipl|wicket|t20|odi|bcci|ashes)\b/i.test(blob))
-      );
+    case 'football': {
+      // American soccer only: MLS / NWSL / US national teams / USSF / US-based clubs — not NFL, not random int'l friendlies.
+      if (
+        /\b(nfl|super bowl|touchdown|quarterback|ncaa football|nfl draft|afc championship|nfc championship|gridiron)\b/i.test(
+          blob
+        ) &&
+        !/\b(soccer|mls|nwsl|fifa|goalkeeper|usmnt|uswnt)\b/i.test(blob)
+      ) {
+        return false;
+      }
+      const mlsNwslFed =
+        /\b(mls|nwsl|major league soccer|national women's soccer league)\b/i.test(blob) ||
+        /\b(usmnt|uswnt)\b/i.test(blob) ||
+        /\b(us soccer|u\.s\. soccer|ussf|united states soccer federation)\b/i.test(blob);
+      const usNatTeam =
+        /\bsoccer\b/i.test(blob) &&
+        /\b(united states|u\.s\.|usa)\b/i.test(blob) &&
+        /\b(men'?s national|women'?s national|national team)\b/i.test(blob);
+      const mlsClub =
+        /\b(inter miami|lafc|la galaxy|atlanta united|seattle sounders|portland timbers|orlando city|philadelphia union|austin fc|st\.?\s*louis city sc|columbus crew|sporting kansas city|new york city fc|nycfc|dc united|chicago fire|minnesota united|houston dynamo|fc dallas|colorado rapids|real salt lake|san jose earthquakes|vancouver whitecaps|toronto fc|cf montreal|new england revolution|nashville sc|charlotte fc|red bulls|rb ny)\b/i.test(
+          blob
+        );
+      const usCup =
+        /\b(leagues cup|gold cup)\b/i.test(blob) &&
+        /\b(united states|u\.s\.|usa|usmnt|uswnt|american)\b/i.test(blob);
+      const soccerInAmerica =
+        /\bsoccer\b/i.test(blob) &&
+        /\b(united states|u\.s\.|usa|american|mls|nwsl|usmnt|uswnt)\b/i.test(blob);
+      return !!(mlsNwslFed || usNatTeam || mlsClub || usCup || soccerInAmerica);
+    }
     case 'f1':
       return (
         /\b(formula\s*1|formula one|\bf1\b)\b/i.test(blob) ||
@@ -85,7 +106,7 @@ const TOPIC_META = {
   },
   football: {
     label: 'Football',
-    q: '(soccer OR NFL OR FIFA OR UEFA OR "Premier League" OR "Champions League" OR "La Liga" OR Bundesliga OR MLS OR "World Cup")',
+    q: '("Major League Soccer" OR MLS OR NWSL OR USMNT OR USWNT OR "US Soccer" OR "U.S. Soccer" OR "Inter Miami" OR LAFC OR "LA Galaxy" OR "Atlanta United" OR "Seattle Sounders" OR "Leagues Cup")',
   },
   f1: {
     label: 'F1',
