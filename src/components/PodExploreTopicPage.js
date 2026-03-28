@@ -32,7 +32,13 @@ const EXPLORE_TOPICS = {
     startups: {
       label: 'Startups',
       q: '("AI startup" OR "tech startup" AND (funding OR raises OR launches) OR "seed round" OR "Series A" AI)',
+      qInternational:
+        '("AI startup" OR "tech startup" AND (funding OR raises OR launches) OR "seed round" OR "Series A" AI)',
+      qLocal:
+        '((India OR Indian OR Bengaluru OR Bangalore OR Mumbai OR Delhi OR Hyderabad OR Pune OR Chennai) AND ("AI startup" OR "tech startup" OR "machine learning startup" OR "GenAI startup")) AND (funding OR seed OR Series OR launch OR raises)',
       google: '(AI startup OR machine learning startup OR tech startup funding) when:7d',
+      googleLocal: '(India AI startup OR Bengaluru tech startup funding OR Indian startup AI) when:7d',
+      googleInternational: '(AI startup OR machine learning startup OR tech startup funding) when:7d',
     },
     tools: {
       label: 'Tools',
@@ -54,7 +60,13 @@ const EXPLORE_TOPICS = {
     startups: {
       label: 'Startups',
       q: '(startup OR unicorn OR "Series A" OR "Series B" OR accelerator OR "Y Combinator" OR venture)',
+      qInternational:
+        '(startup OR unicorn OR "Series A" OR "Series B" OR accelerator OR "Y Combinator" OR venture)',
+      qLocal:
+        '((India OR Indian OR Mumbai OR Delhi OR Bengaluru OR Bangalore OR Hyderabad OR Pune OR Chennai OR Noida OR Gurugram OR "Startup India" OR SME IPO OR BSE OR NSE) AND (startup OR unicorn OR funding OR "Series A" OR "Series B" OR VC OR accelerator OR entrepreneur OR IPO))',
       google: '(startup funding OR Y Combinator OR venture capital startup) when:7d',
+      googleLocal: '(Indian startup funding OR India unicorn OR Mumbai Delhi Bengaluru startup Series A) when:7d',
+      googleInternational: '(startup funding OR Y Combinator OR venture capital startup) when:7d',
     },
     founders: {
       label: 'Founders',
@@ -106,6 +118,26 @@ const EXPLORE_TOPICS = {
   },
 };
 
+function isStartupsRegionTopic(section, topicId) {
+  return topicId === 'startups' && (section === 'entrepreneurship' || section === 'ai-tech');
+}
+
+function resolveExploreNewsQuery(cfg, startupRegion) {
+  if (!cfg) return '';
+  if (cfg.qInternational && cfg.qLocal) {
+    return startupRegion === 'local' ? cfg.qLocal : cfg.qInternational;
+  }
+  return cfg.q || '';
+}
+
+function resolveExploreGoogleQuery(cfg, startupRegion) {
+  if (!cfg) return '';
+  if (cfg.googleInternational && cfg.googleLocal) {
+    return startupRegion === 'local' ? cfg.googleLocal : cfg.googleInternational;
+  }
+  return cfg.google || '';
+}
+
 function browseGoogleQuery(googleRssQuery) {
   return googleNewsSearchUrl((googleRssQuery || '').replace(/\s+when:\d+d$/i, '').trim());
 }
@@ -135,6 +167,7 @@ export default function PodExploreTopicPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [pullProgress, setPullProgress] = useState(0);
+  const [startupRegion, setStartupRegion] = useState('international');
 
   const pullStartYRef = useRef(null);
   const pullDistanceRef = useRef(0);
@@ -144,6 +177,7 @@ export default function PodExploreTopicPage() {
   const topicConfig = EXPLORE_TOPICS[section]?.[topicId];
   const title = topicConfig?.label ?? 'Explore';
   const backTo = POD_EXPLORE_SECTION_HOME[section] || '/pod';
+  const browseGoogleForTopic = resolveExploreGoogleQuery(topicConfig, startupRegion);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -173,11 +207,14 @@ export default function PodExploreTopicPage() {
       /** @type {Array<{title:string,source:string,url:string,image:null|string,description:string,publishedAt?:string|null,sourceSiteUrl?:string}>|null} */
       let rows = null;
 
+      const newsQ = resolveExploreNewsQuery(cfg, startupRegion);
+      const googleQ = resolveExploreGoogleQuery(cfg, startupRegion);
+
       const apiKey = getNewsApiKey();
       if (!apiKey) {
         const msg =
           'Add REACT_APP_NEWSAPI to your .env file and restart the dev server. Showing browse links only.';
-        const fallbackRows = buildFallbackRows(title, cfg.google);
+        const fallbackRows = buildFallbackRows(title, googleQ);
         if (isMountedRef.current && token === loadTokenRef.current) {
           setItems(fallbackRows);
           setError(msg);
@@ -185,15 +222,15 @@ export default function PodExploreTopicPage() {
         return;
       }
 
-      if (cfg.q) {
-        rows = await fetchNewsApiEverythingNormalized({ q: cfg.q, pageSize: 30 });
+      if (newsQ) {
+        rows = await fetchNewsApiEverythingNormalized({ q: newsQ, pageSize: 30 });
         if (rows?.length) rows = rows.slice(0, 30);
       }
 
       if (!rows?.length) {
         const msg =
           'NewsAPI returned no articles (check your key, plan limits, or query). Showing quick fallback headlines.';
-        const fallbackRows = buildFallbackRows(title, cfg.google);
+        const fallbackRows = buildFallbackRows(title, googleQ);
         if (isMountedRef.current && token === loadTokenRef.current) {
           setItems(fallbackRows);
           setError(msg);
@@ -208,7 +245,8 @@ export default function PodExploreTopicPage() {
       }
     } catch {
       const msg = 'Live sources unavailable. Showing quick fallback headlines.';
-      const fallbackRows = buildFallbackRows(title, topicConfig?.google || '');
+      const fallbackGoogle = resolveExploreGoogleQuery(topicConfig, startupRegion);
+      const fallbackRows = buildFallbackRows(title, fallbackGoogle || '');
       if (isMountedRef.current && token === loadTokenRef.current) {
         setItems(fallbackRows);
         setError(msg);
@@ -223,7 +261,7 @@ export default function PodExploreTopicPage() {
 
   useEffect(() => {
     loadNews({ initialLoad: true });
-  }, [section, topicId]);
+  }, [section, topicId, startupRegion]);
 
   const HUB = {
     bg: '#0F0F0F',
@@ -307,6 +345,35 @@ export default function PodExploreTopicPage() {
           <h1 className="text-xl font-bold" style={{ color: HUB.text }}>{title}</h1>
         </div>
 
+        {isStartupsRegionTopic(section, topicId) ? (
+          <div
+            className="mb-4 flex rounded-xl p-1 gap-1"
+            style={{ background: HUB.bg, border: `1px solid ${HUB.divider}` }}
+            role="tablist"
+            aria-label="Startup news region"
+          >
+            {(['local', 'international']).map((key) => {
+              const active = startupRegion === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setStartupRegion(key)}
+                  className="flex-1 py-2.5 text-sm font-semibold rounded-lg transition-colors"
+                  style={{
+                    background: active ? `${HUB.accent}33` : 'transparent',
+                    color: active ? HUB.text : HUB.textSecondary,
+                  }}
+                >
+                  {key === 'local' ? 'Local' : 'International'}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+
         <div className="rounded-2xl overflow-hidden" style={cardStyle}>
           <div
             className="h-8 flex items-center justify-center px-4 text-sm"
@@ -335,9 +402,9 @@ export default function PodExploreTopicPage() {
                 <p className="text-sm leading-relaxed" style={{ color: HUB.textSecondary }}>
                   {error || 'No stories to show yet.'}
                 </p>
-                {topicConfig?.google ? (
+                {browseGoogleForTopic ? (
                   <a
-                    href={browseGoogleQuery(topicConfig.google)}
+                    href={browseGoogleQuery(browseGoogleForTopic)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-block mt-4 text-sm font-semibold underline underline-offset-2"
