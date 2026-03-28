@@ -323,7 +323,7 @@ export default function PodSportsTopicPage() {
 
   useEffect(() => {
     loadNews({ initialLoad: true });
-  }, [topicId, apiKey]);
+  }, [topicId]);
 
   const HUB = {
     bg: '#0F0F0F',

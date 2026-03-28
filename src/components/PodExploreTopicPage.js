@@ -223,7 +223,7 @@ export default function PodExploreTopicPage() {
 
   useEffect(() => {
     loadNews({ initialLoad: true });
-  }, [section, topicId, apiKey]);
+  }, [section, topicId]);
 
   const HUB = {
     bg: '#0F0F0F',
