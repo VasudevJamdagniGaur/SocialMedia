@@ -6,6 +6,7 @@ import { getCurrentUser } from '../services/authService';
 import reflectionService from '../services/reflectionService';
 import firestoreService from '../services/firestoreService';
 import CalendarPopup from './CalendarPopup';
+import HubTrendingFeed from './HubTrendingFeed';
 import { getDateId, formatDateForDisplay } from '../utils/dateUtils';
 
 export default function PodPage() {
@@ -546,6 +547,9 @@ export default function PodPage() {
 
           return (
         <>
+        <div className="px-1 mb-1">
+          <HubTrendingFeed isDarkMode={isDarkMode} />
+        </div>
         {/* Categories */}
         <div className="space-y-4 px-1">
           <div className={cardClass} style={cardStyle}>
