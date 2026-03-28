@@ -1,15 +1,18 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Sparkles, ChevronRight, Heart, Share2 } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { ArrowLeft, Sparkles, ChevronRight, Heart, Share2, Flame } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { onAuthStateChange, getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
 import {
   getNewsApiKey,
   fetchNewsApiTopHeadlinesRaw,
+  fetchNewsApiEverythingRaw,
   normalizeArticles,
   resolveUserNewsRegionForNewsApi,
   resolveUserCityFromIp,
+  enrichNewsItemsWithOgImages,
+  googleNewsSearchUrl,
 } from '../lib/podTopicNewsShared';
 import { prefetchSportsExploreTopics } from '../lib/podSportsTopicPrefetchCache';
 
@@ -26,13 +29,14 @@ function docIdForTrendingUrl(url) {
 }
 
 /**
- * Carousel card: link to article + optional engagement (signed-in users, Firestore-backed).
+ * Carousel card — same interaction model as Crew Hub trending (share sheet + optional engagement).
  */
-function SportsTrendingCard({ item, idx, HUB, isSignedIn }) {
+function SportsTrendingCard({ item, idx, HUB, isSignedIn, navigate, returnTo }) {
   const rootRef = useRef(null);
   const [liked, setLiked] = useState(() =>
     item.firestoreId ? sessionStorage.getItem(`st_liked_${item.firestoreId}`) === '1' : false
   );
+  const [heroFailed, setHeroFailed] = useState(false);
 
   const gradients = [
     'linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%)',
@@ -41,9 +45,29 @@ function SportsTrendingCard({ item, idx, HUB, isSignedIn }) {
     'linear-gradient(135deg,#1e3c72 0%,#2a5298 50%,#7e8ba3 100%)',
     'linear-gradient(135deg,#232526 0%,#414345 100%)',
   ];
-  const bg = item.image
-    ? `linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.15) 40%, transparent 60%), url(${item.image}) center/cover no-repeat`
-    : gradients[idx % gradients.length];
+
+  const src = typeof item.image === 'string' ? item.image.trim() : '';
+  const showImg = Boolean(src && (/^https?:\/\//i.test(src) || src.startsWith('data:')));
+
+  useEffect(() => {
+    setHeroFailed(false);
+  }, [src]);
+
+  const openShareSuggestions = useCallback(() => {
+    if (!item.url) return;
+    navigate('/share-suggestions', {
+      state: {
+        newsArticle: {
+          title: item.title,
+          url: item.url,
+          description: item.description || '',
+          image: item.image || null,
+          source: item.source || '',
+        },
+        returnTo,
+      },
+    });
+  }, [item, navigate, returnTo]);
 
   useEffect(() => {
     if (!isSignedIn || !item.firestoreId) return;
@@ -106,23 +130,42 @@ function SportsTrendingCard({ item, idx, HUB, isSignedIn }) {
         minHeight: 200,
       }}
     >
-      <a
-        href={item.url || undefined}
-        target={item.url ? '_blank' : undefined}
-        rel={item.url ? 'noopener noreferrer' : undefined}
-        className="absolute inset-0 z-0"
+      <button
+        type="button"
+        onClick={openShareSuggestions}
+        disabled={!item.url}
+        className="absolute inset-0 z-0 cursor-pointer border-0 bg-transparent p-0 text-left disabled:cursor-not-allowed disabled:opacity-60"
         aria-label={item.title}
       />
-      <div
-        className="absolute inset-0 z-[1] pointer-events-none"
-        style={{
-          background: bg,
-          backgroundSize: item.image ? 'cover' : 'auto',
-          backgroundPosition: item.image ? 'center' : undefined,
-        }}
-      />
+      {showImg && !heroFailed ? (
+        <img
+          src={src}
+          alt=""
+          className="absolute inset-0 z-[1] h-full w-full object-cover pointer-events-none"
+          loading="lazy"
+          decoding="async"
+          referrerPolicy="no-referrer"
+          onError={() => setHeroFailed(true)}
+        />
+      ) : (
+        <div
+          className="absolute inset-0 z-[1] pointer-events-none"
+          style={{ background: gradients[idx % gradients.length] }}
+        />
+      )}
+      {showImg && !heroFailed ? (
+        <div
+          className="absolute inset-0 z-[2] pointer-events-none"
+          style={{
+            background:
+              'linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.15) 40%, transparent 60%)',
+          }}
+        />
+      ) : (
+        <div className="absolute inset-0 z-[2] pointer-events-none bg-gradient-to-t from-black/88 via-black/25 to-transparent" />
+      )}
       {isSignedIn && item.firestoreId ? (
-        <div className="absolute top-2 right-2 z-[3] flex gap-1 pointer-events-auto">
+        <div className="absolute top-2 right-2 z-[4] flex gap-1 pointer-events-auto">
           <button
             type="button"
             onClick={onLike}
@@ -143,8 +186,8 @@ function SportsTrendingCard({ item, idx, HUB, isSignedIn }) {
           </button>
         </div>
       ) : null}
-      <div className="absolute inset-x-0 bottom-0 z-[2] p-3 pt-10 bg-gradient-to-t from-black via-black/80 to-transparent pointer-events-none">
-        <p className="text-sm font-semibold leading-snug line-clamp-3" style={{ color: '#fff' }}>
+      <div className="absolute inset-x-0 bottom-0 z-[3] p-3 pt-8 bg-gradient-to-t from-black via-black/80 to-transparent pointer-events-none">
+        <p className="text-sm font-semibold leading-snug line-clamp-4" style={{ color: '#fff' }}>
           {item.title}
         </p>
         <p
@@ -163,6 +206,8 @@ function SportsTrendingCard({ item, idx, HUB, isSignedIn }) {
 
 export default function PodSportsPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnTo = `${location.pathname}${location.search || ''}`;
   const { isDarkMode } = useTheme();
   const [sportsTrending, setSportsTrending] = useState([]);
   const [isLoadingSportsNews, setIsLoadingSportsNews] = useState(false);
@@ -192,10 +237,30 @@ export default function PodSportsPage() {
     let cancelled = false;
 
     const fallbackTrending = [
-      { title: 'Global football season enters decisive phase', source: 'Sports Desk', image: null },
-      { title: 'Cricket boards announce major tournament updates', source: 'Sports Desk', image: null },
-      { title: 'F1 teams prepare new aero packages for upcoming races', source: 'Motorsport Wire', image: null },
-      { title: 'Top chess stars set for high-stakes rapid events', source: 'Chess Chronicle', image: null },
+      {
+        title: 'Global football season enters decisive phase',
+        source: 'Sports Desk',
+        image: null,
+        url: googleNewsSearchUrl('football soccer news'),
+      },
+      {
+        title: 'Cricket boards announce major tournament updates',
+        source: 'Sports Desk',
+        image: null,
+        url: googleNewsSearchUrl('cricket news'),
+      },
+      {
+        title: 'F1 teams prepare new aero packages for upcoming races',
+        source: 'Motorsport Wire',
+        image: null,
+        url: googleNewsSearchUrl('Formula 1 news'),
+      },
+      {
+        title: 'Top chess stars set for high-stakes rapid events',
+        source: 'Chess Chronicle',
+        image: null,
+        url: googleNewsSearchUrl('chess grandmaster news'),
+      },
     ];
 
     const loadSportsNews = async () => {
@@ -215,9 +280,15 @@ export default function PodSportsPage() {
         const user = getCurrentUser();
 
         if (!apiKey) {
+          const rows = await enrichNewsItemsWithOgImages(fallbackTrending, {
+            enableOgFallback: true,
+            maxResolve: 4,
+          });
           if (!cancelled) {
-            setSportsTrending(fallbackTrending);
-            setSportsNewsError('Set REACT_APP_NEWSAPI in .env to load live headlines.');
+            setSportsTrending(rows);
+            setSportsNewsError(
+              'Add REACT_APP_NEWSAPI to .env (see .env.example), restart the dev server, then reload — plain NEWSAPI= is not available in the browser.'
+            );
           }
           return;
         }
@@ -234,6 +305,13 @@ export default function PodSportsPage() {
             country,
             language: false,
             pageSize: 20,
+          });
+        }
+        if (!articles.length) {
+          articles = await fetchNewsApiEverythingRaw({
+            q: 'sports',
+            pageSize: 20,
+            language: 'en',
           });
         }
 
@@ -287,6 +365,19 @@ export default function PodSportsPage() {
           merged = [...newsNormalized];
         }
 
+        const newsByUrl = new Map(newsNormalized.map((n) => [n.url, n]));
+        merged = merged.map((row) => {
+          const api = newsByUrl.get(row.url);
+          if (!api) return row;
+          const image = row.image || api.image || null;
+          return {
+            ...row,
+            image,
+            publishedAt: row.publishedAt || api.publishedAt,
+            description: row.description || api.description || '',
+          };
+        });
+
         merged.sort((a, b) => {
           const ra = effectiveSportsTrendRank(a, userCityNorm);
           const rb = effectiveSportsTrendRank(b, userCityNorm);
@@ -298,13 +389,24 @@ export default function PodSportsPage() {
         });
 
         if (!cancelled) {
-          setSportsTrending(merged.length ? merged.slice(0, 10) : fallbackTrending);
+          const baseRows = merged.length ? merged.slice(0, 10) : fallbackTrending;
+          const rows = await enrichNewsItemsWithOgImages(baseRows, {
+            enableOgFallback: true,
+            maxResolve: 10,
+          });
+          if (!cancelled) setSportsTrending(rows);
         }
       } catch {
         if (!cancelled) {
           setTrendingRegionLabel('');
-          setSportsTrending(fallbackTrending);
-          setSportsNewsError('Could not load live headlines, showing top picks.');
+          const rows = await enrichNewsItemsWithOgImages(fallbackTrending, {
+            enableOgFallback: true,
+            maxResolve: 4,
+          });
+          if (!cancelled) {
+            setSportsTrending(rows);
+            setSportsNewsError('Could not load live headlines, showing top picks.');
+          }
         }
       } finally {
         if (!cancelled) setIsLoadingSportsNews(false);
@@ -350,9 +452,22 @@ export default function PodSportsPage() {
         </div>
 
         <div className="space-y-4">
-          <div className="rounded-2xl overflow-hidden" style={cardStyle}>
-            <div className="px-4 py-4" style={{ borderBottom: `1px solid ${HUB.divider}` }}>
-              <h2 className="text-base font-semibold" style={{ color: HUB.text }}>Trending</h2>
+          <div className="rounded-2xl overflow-hidden mb-1" style={cardStyle}>
+            <div className="flex items-center gap-2 px-4 py-4" style={{ borderBottom: `1px solid ${HUB.divider}` }}>
+              <div
+                className="w-8 h-8 rounded-full flex items-center justify-center"
+                style={{ backgroundColor: `${HUB.accent}30` }}
+              >
+                <Flame className="w-4 h-4" style={{ color: HUB.accent }} strokeWidth={2} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h2 className="text-lg font-semibold" style={{ color: HUB.text }}>Trending</h2>
+                {trendingRegionLabel ? (
+                  <p className="text-xs mt-0.5 truncate" style={{ color: HUB.textSecondary }}>
+                    {trendingRegionLabel}
+                  </p>
+                ) : null}
+              </div>
             </div>
             <div className="py-3 pl-4">
               {isLoadingSportsNews ? (
@@ -380,6 +495,8 @@ export default function PodSportsPage() {
                         idx={idx}
                         HUB={HUB}
                         isSignedIn={!!userId}
+                        navigate={navigate}
+                        returnTo={returnTo}
                       />
                     ))}
                   </div>

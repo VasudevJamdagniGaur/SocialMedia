@@ -724,9 +724,17 @@ export async function resolveUserCityFromIp() {
   }
 }
 
-/** NewsAPI key available in the browser only when set as REACT_APP_NEWSAPI (Create React App). */
+/**
+ * NewsAPI key in the CRA bundle — must use REACT_APP_ prefix (see .env.example).
+ * Plain `NEWSAPI=` in .env is NOT exposed to the browser by Create React App.
+ */
 export function getNewsApiKey() {
-  return (process.env.REACT_APP_NEWSAPI || process.env.REACT_APP_NEWS_API_KEY || '').trim();
+  return (
+    process.env.REACT_APP_NEWSAPI ||
+    process.env.REACT_APP_NEWS_API_KEY ||
+    process.env.REACT_APP_NEWSAPI_KEY ||
+    ''
+  ).trim();
 }
 
 function newsApiDefaultFromISO(days = 7) {
