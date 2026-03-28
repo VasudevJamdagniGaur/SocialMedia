@@ -7,11 +7,22 @@ import reflectionService from '../services/reflectionService';
 import firestoreService from '../services/firestoreService';
 import CalendarPopup from './CalendarPopup';
 import HubTrendingFeed from './HubTrendingFeed';
+import { prefetchSportsExploreTopics } from '../lib/podSportsTopicPrefetchCache';
 import { getDateId, formatDateForDisplay } from '../utils/dateUtils';
 
 export default function PodPage() {
   const navigate = useNavigate();
   const { isDarkMode, toggleTheme } = useTheme();
+
+  useEffect(() => {
+    const run = () => prefetchSportsExploreTopics();
+    if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(run, { timeout: 4000 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const t = window.setTimeout(run, 900);
+    return () => window.clearTimeout(t);
+  }, []);
   const [profilePicture, setProfilePicture] = useState(null);
   const [podReflection, setPodReflection] = useState('');
   const [isLoadingPodReflection, setIsLoadingPodReflection] = useState(false);

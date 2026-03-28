@@ -11,6 +11,7 @@ import {
   resolveUserNewsRegionForNewsApi,
   resolveUserCityFromIp,
 } from '../lib/podTopicNewsShared';
+import { prefetchSportsExploreTopics } from '../lib/podSportsTopicPrefetchCache';
 
 /** Engagement rank plus same-city boost (Firestore `trendingScore` is likes×3 + shares×5 + views). */
 function effectiveSportsTrendRank(item, userCityNorm) {
@@ -180,6 +181,10 @@ export default function PodSportsPage() {
   useEffect(() => {
     const unsub = onAuthStateChange((u) => setUserId(u?.uid || null));
     return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    prefetchSportsExploreTopics();
   }, []);
 
   useEffect(() => {
