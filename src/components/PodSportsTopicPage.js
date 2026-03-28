@@ -1,29 +1,25 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import chatService from '../services/chatService';
 import {
   googleNewsSearchUrl,
-  fetchLiveFromGoogleRssByQuery,
-  normalizeArticles,
+  getNewsApiKey,
+  fetchNewsApiEverythingNormalized,
+  fetchNewsApiTopHeadlinesNormalized,
   enrichNewsItemsWithOgImages,
   NewsFeedRow,
 } from '../lib/podTopicNewsShared';
 
-/** Google News RSS search strings (browser-friendly; no NewsAPI key required). */
-const GOOGLE_RSS_QUERY = {
-  cricket: 'cricket OR IPL OR T20 OR Ashes when:7d',
-  football: 'soccer OR NFL OR FIFA OR UEFA OR "Premier League" when:7d',
-  f1: '"Formula 1" OR F1 OR "Grand Prix" when:7d',
-  chess: 'chess OR FIDE OR grandmaster OR Candidates when:7d',
-  others: 'sports when:7d',
+/** Google News browse queries (for “Open on Google News” links only). */
+const GOOGLE_BROWSE_QUERY = {
+  cricket: 'cricket OR IPL OR T20 OR Ashes',
+  football: 'soccer OR NFL OR FIFA OR UEFA OR "Premier League"',
+  f1: '"Formula 1" OR F1 OR "Grand Prix"',
+  chess: 'chess OR FIDE OR grandmaster OR Candidates',
+  others: 'sports',
 };
-
-function fetchLiveFromGoogleRss(topicId) {
-  const q = GOOGLE_RSS_QUERY[topicId];
-  return fetchLiveFromGoogleRssByQuery(q || '');
-}
 
 /** Match article text to one of the four main Explore topics (used to strip them from “Others”). */
 function matchesMainTopic(text) {
@@ -64,17 +60,17 @@ const TOPIC_META = {
 };
 
 function browseTopicOnGoogleNews(topicId) {
-  const q = GOOGLE_RSS_QUERY[topicId] || GOOGLE_RSS_QUERY.others;
-  return googleNewsSearchUrl(q.replace(/\s+when:\d+d$/i, '').trim());
+  const q = GOOGLE_BROWSE_QUERY[topicId] || GOOGLE_BROWSE_QUERY.others;
+  return googleNewsSearchUrl(q.trim());
 }
 
 function buildFallbackRows(topicId, label) {
-  const q = GOOGLE_RSS_QUERY[topicId] || GOOGLE_RSS_QUERY.others;
-  const baseUrl = googleNewsSearchUrl(q.replace(/\s+when:\d+d$/i, '').trim());
+  const q = GOOGLE_BROWSE_QUERY[topicId] || GOOGLE_BROWSE_QUERY.others;
+  const baseUrl = googleNewsSearchUrl(q.trim());
   const now = new Date().toISOString();
   return Array.from({ length: 6 }, (_, i) => ({
     title: `${label} update ${i + 1}`,
-    source: 'Google News',
+    source: 'News',
     url: baseUrl,
     image: null,
     description: `${label} roundup`,
@@ -103,11 +99,6 @@ export default function PodSportsTopicPage() {
   const configForTitle = TOPIC_META[topicId];
   const title = configForTitle?.label ?? 'Sports';
 
-  const apiKey = useMemo(
-    () => process.env.REACT_APP_NEWSAPI || process.env.NEWSAPI || '',
-    []
-  );
-
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
@@ -135,46 +126,37 @@ export default function PodSportsTopicPage() {
       /** @type {Array<{title:string,source:string,url:string,image:null|string,description:string,publishedAt?:string|null,sourceSiteUrl?:string}>|null} */
       let rows = null;
 
-      if (apiKey) {
-        try {
-          if (topicId === 'others') {
-            const res = await fetch(
-              `https://newsapi.org/v2/top-headlines?category=sports&language=en&pageSize=100&apiKey=${encodeURIComponent(apiKey)}`
-            );
-            const data = await res.json();
-            if (data.status === 'ok' && Array.isArray(data.articles)) {
-              const normalized = normalizeArticles(data.articles);
-              const filtered = normalized.filter((a) => {
-                const blob = `${a.title} ${a.description || ''}`;
-                return !matchesMainTopic(blob);
-              });
-              if (filtered.length) rows = filtered.slice(0, 30);
-            }
-          } else {
-            const q = config.q;
-            const url = `https://newsapi.org/v2/everything?q=${encodeURIComponent(q)}&language=en&sortBy=publishedAt&pageSize=30&apiKey=${encodeURIComponent(apiKey)}`;
-            const res = await fetch(url);
-            const data = await res.json();
-            if (res.ok && data.status === 'ok' && Array.isArray(data.articles)) {
-              const normalized = normalizeArticles(data.articles);
-              if (normalized.length) rows = normalized;
-            }
-          }
-        } catch {
-          /* try Google RSS below */
+      const apiKey = getNewsApiKey();
+      if (!apiKey) {
+        const msg =
+          'Add REACT_APP_NEWSAPI to your .env file and restart the dev server. Showing browse links only.';
+        const fallbackRows = buildFallbackRows(topicId, title);
+        if (isMountedRef.current && token === loadTokenRef.current) {
+          setItems(fallbackRows);
+          setError(msg);
         }
+        return;
+      }
+
+      if (topicId === 'others') {
+        const normalized = await fetchNewsApiTopHeadlinesNormalized({
+          category: 'sports',
+          language: 'en',
+          pageSize: 100,
+        });
+        const filtered = normalized.filter((a) => {
+          const blob = `${a.title} ${a.description || ''}`;
+          return !matchesMainTopic(blob);
+        });
+        if (filtered.length) rows = filtered.slice(0, 30);
+      } else if (config.q) {
+        rows = await fetchNewsApiEverythingNormalized({ q: config.q, pageSize: 30 });
+        if (rows?.length) rows = rows.slice(0, 30);
       }
 
       if (!rows?.length) {
-        let rss = await fetchLiveFromGoogleRss(topicId);
-        if (topicId === 'others') {
-          rss = rss.filter((a) => !matchesMainTopic(`${a.title} ${a.description || ''}`));
-        }
-        if (rss.length) rows = rss.slice(0, 30);
-      }
-
-      if (!rows?.length) {
-        const msg = 'Live sources unavailable. Showing quick fallback headlines.';
+        const msg =
+          'NewsAPI returned no articles (check your key, plan limits, or query). Showing quick fallback headlines.';
         const fallbackRows = buildFallbackRows(topicId, title);
         if (isMountedRef.current && token === loadTokenRef.current) {
           setItems(fallbackRows);

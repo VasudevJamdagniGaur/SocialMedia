@@ -463,30 +463,26 @@ export default function ShareSuggestionsPage() {
       const description = String(details?.description || '').trim();
       const text = String(details?.text || '').trim();
 
-      const maxWords = 78; // user requirement: less than 80 words
-      const minWords = 40;
+      const maxWords = 78;
+      const titleNorm = title.replace(/\s+/g, ' ').trim().toLowerCase();
+      const descNorm = description.replace(/\s+/g, ' ').trim().toLowerCase();
+      const descIsHeadline =
+        !description ||
+        descNorm === titleNorm ||
+        (titleNorm.length > 12 && (titleNorm.includes(descNorm) || descNorm.includes(titleNorm)));
 
       if (!title) return '';
+      if (text.length < 280) return '';
 
-      const pickSentence = (t) => {
-        const s = String(t || '').trim();
-        if (!s) return '';
-        // Grab up to the first "sentence-like" chunk to keep it event-y.
-        const first = s.split(/[\.\!\?]\s+/)[0];
-        return first ? first.trim() : s.slice(0, 180).trim();
-      };
-
-      const snippet = text ? pickSentence(text.slice(0, 1200)) : '';
-      const base = [description || '', snippet || ''].filter(Boolean).join(' ');
-      const combined = description ? description : `${title}${snippet ? `: ${snippet}` : ''}`;
-      const finalBase = base ? `${title}: ${base}` : combined;
-
-      const cleaned = finalBase.replace(/\s+/g, ' ').trim();
-      if (!cleaned) return '';
-      const words = cleaned.split(/\s+/).filter(Boolean);
+      const body = text.replace(/\s+/g, ' ').trim();
+      const extra = !descIsHeadline && description ? ` ${description}` : '';
+      const combined = `${body}${extra}`.replace(/\s+/g, ' ').trim();
+      const words = combined.split(/\s+/).filter(Boolean);
       const limited = words.slice(0, maxWords).join(' ');
-      if (limited && limited.split(/\s+/).filter(Boolean).length >= minWords) return limited;
-      return limited || cleaned;
+      const out = limited.replace(/\s+/g, ' ').trim();
+      const outNorm = out.replace(/\s+/g, ' ').trim().toLowerCase();
+      if (!out || outNorm === titleNorm) return '';
+      return out;
     } catch {
       return '';
     }
@@ -505,7 +501,7 @@ export default function ShareSuggestionsPage() {
 
     setIsLoadingNewsDetails(true);
     chatService
-      .fetchNewsArticleDetails(newsArticleFromState)
+      .fetchNewsArticleDetails(newsArticleFromState, { minTextLength: 350, resolveGoogleNews: true })
       .then(async (d) => {
         if (cancelled) return;
         // Only treat as "details loaded" if we got something useful back.
@@ -518,7 +514,8 @@ export default function ShareSuggestionsPage() {
           if (!cancelled && summary) {
             setNewsCardSummary(summary);
           } else if (!cancelled) {
-            setNewsCardSummary(buildLocalNewsCardSummary(details));
+            const local = buildLocalNewsCardSummary(details);
+            setNewsCardSummary(local);
           }
         }
       })
@@ -535,7 +532,7 @@ export default function ShareSuggestionsPage() {
     return () => {
       cancelled = true;
     };
-  }, [isNewsShareMode, newsArticleFromState?.url]);
+  }, [isNewsShareMode, newsArticleFromState?.url, buildLocalNewsCardSummary]);
 
   const effectiveNewsArticle = isNewsShareMode ? (newsArticleDetails || newsArticleFromState) : null;
   const effectiveNewsCardText =
@@ -2385,9 +2382,13 @@ export default function ShareSuggestionsPage() {
                 </p>
               ) : isLoadingNewsDetails ? (
                 <p className="text-[15px] leading-relaxed mt-2" style={{ color: isDarkMode ? HUB.textSecondary : '#666' }}>
-                  Generating 60–80 word summary…
+                  Loading full article text and generating a 60–80 word summary…
                 </p>
-              ) : null}
+              ) : (
+                <p className="text-[15px] leading-relaxed mt-2" style={{ color: isDarkMode ? HUB.textSecondary : '#666' }}>
+                  We couldn&apos;t pull enough article text from this link to summarize it here. Tap the headline to read the full story on the publisher site.
+                </p>
+              )}
               <p className="text-xs mt-2" style={{ color: isDarkMode ? HUB.textSecondary : '#888' }}>
                 Tap the headline to open the full article.
               </p>

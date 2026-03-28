@@ -564,6 +564,92 @@ export function normalizeArticles(list) {
     });
 }
 
+const NEWSAPI_V2 = 'https://newsapi.org/v2';
+
+/** NewsAPI key available in the browser only when set as REACT_APP_NEWSAPI (Create React App). */
+export function getNewsApiKey() {
+  return (process.env.REACT_APP_NEWSAPI || process.env.REACT_APP_NEWS_API_KEY || '').trim();
+}
+
+function newsApiDefaultFromISO(days = 7) {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * @param {{ q: string, pageSize?: number, language?: string, sortBy?: string, from?: string }} opts
+ * @returns {Promise<object[]>} NewsAPI `articles` array (raw)
+ */
+export async function fetchNewsApiEverythingRaw(opts = {}) {
+  const apiKey = getNewsApiKey();
+  const q = String(opts.q || '').trim();
+  if (!apiKey || !q) return [];
+  const pageSize = Math.min(Math.max(1, opts.pageSize ?? 30), 100);
+  const params = new URLSearchParams({
+    q,
+    language: opts.language || 'en',
+    sortBy: opts.sortBy || 'publishedAt',
+    pageSize: String(pageSize),
+    apiKey,
+  });
+  params.set('from', opts.from || newsApiDefaultFromISO(7));
+  try {
+    const res = await fetch(`${NEWSAPI_V2}/everything?${params.toString()}`);
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data || data.status !== 'ok' || !Array.isArray(data.articles)) return [];
+    return data.articles;
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchNewsApiEverythingNormalized(opts = {}) {
+  const raw = await fetchNewsApiEverythingRaw(opts);
+  return normalizeArticles(raw);
+}
+
+/**
+ * @param {{ category?: string, q?: string, country?: string, pageSize?: number, language?: string, sources?: string }} opts
+ * @returns {Promise<object[]>} NewsAPI `articles` array (raw)
+ */
+export async function fetchNewsApiTopHeadlinesRaw(opts = {}) {
+  const apiKey = getNewsApiKey();
+  if (!apiKey) return [];
+  const category = String(opts.category || '').trim();
+  const q = String(opts.q || '').trim();
+  const sources = String(opts.sources || '').trim();
+  if (!category && !q && !sources) return [];
+  const pageSize = Math.min(Math.max(1, opts.pageSize ?? 30), 100);
+  const params = new URLSearchParams({
+    pageSize: String(pageSize),
+    apiKey,
+  });
+  const language = opts.language || 'en';
+  if (language) params.set('language', language);
+  if (category) params.set('category', category);
+  if (q) params.set('q', q);
+  if (sources) params.set('sources', sources);
+  if (category && !sources && !q && !opts.country) {
+    params.set('country', 'us');
+  } else if (opts.country) {
+    params.set('country', String(opts.country));
+  }
+  try {
+    const res = await fetch(`${NEWSAPI_V2}/top-headlines?${params.toString()}`);
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data || data.status !== 'ok' || !Array.isArray(data.articles)) return [];
+    return data.articles;
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchNewsApiTopHeadlinesNormalized(opts = {}) {
+  const raw = await fetchNewsApiTopHeadlinesRaw(opts);
+  return normalizeArticles(raw);
+}
+
 function decodeMetaUrl(raw) {
   if (!raw || typeof raw !== 'string') return null;
   let u = raw.trim().replace(/&amp;/g, '&').replace(/&quot;/g, '"');

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Sparkles, ChevronRight } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
+import { getNewsApiKey, fetchNewsApiTopHeadlinesRaw, normalizeArticles } from '../lib/podTopicNewsShared';
 
 export default function PodSportsPage() {
   const navigate = useNavigate();
@@ -19,7 +20,7 @@ export default function PodSportsPage() {
   ];
 
   useEffect(() => {
-    const apiKey = process.env.REACT_APP_NEWSAPI || process.env.NEWSAPI || '';
+    const apiKey = getNewsApiKey();
     let cancelled = false;
 
     const fallbackTrending = [
@@ -35,22 +36,20 @@ export default function PodSportsPage() {
       try {
         if (!apiKey) {
           setSportsTrending(fallbackTrending);
+          setSportsNewsError('Set REACT_APP_NEWSAPI in .env to load live headlines.');
           return;
         }
-        const res = await fetch(
-          `https://newsapi.org/v2/top-headlines?category=sports&language=en&pageSize=7&apiKey=${encodeURIComponent(apiKey)}`
-        );
-        if (!res.ok) throw new Error(`News API ${res.status}`);
-        const data = await res.json();
-        const articles = Array.isArray(data?.articles) ? data.articles : [];
-        const normalized = articles
-          .filter((a) => a?.title)
-          .map((a) => ({
-            title: a.title,
-            source: a?.source?.name || 'News',
-            url: a?.url || null,
-            image: a?.urlToImage || null,
-          }));
+        const articles = await fetchNewsApiTopHeadlinesRaw({
+          category: 'sports',
+          language: 'en',
+          pageSize: 7,
+        });
+        const normalized = normalizeArticles(articles).map((a) => ({
+          title: a.title,
+          source: a.source,
+          url: a.url,
+          image: a.image,
+        }));
         if (!cancelled) setSportsTrending(normalized.length ? normalized : fallbackTrending);
       } catch {
         if (!cancelled) {

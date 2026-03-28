@@ -1,6 +1,7 @@
 import { getCurrentUser } from './authService';
 import firestoreService from './firestoreService';
 import { getDateId } from '../utils/dateUtils';
+import { decodeGoogleNewsUrl } from '../lib/podTopicNewsShared';
 
 class ChatService {
   constructor() {
@@ -1699,7 +1700,78 @@ ${(reflection || '').trim()}`;
    * @param {'linkedin'|'x'|'reddit'} platform
    * @returns {Promise<{ eventLabel: string, post: string }[]>}
    */
-  async fetchNewsArticleDetails(article) {
+  _isGoogleNewsArticleUrl(url) {
+    return typeof url === 'string' && /news\.google\.com\/(rss\/)?articles\//i.test(url);
+  }
+
+  async _fetchReadableTextViaJina(targetUrl) {
+    const path = String(targetUrl || '').replace(/^https?:\/\//i, '').trim();
+    if (!path) return '';
+    const readerUrls = [`https://r.jina.ai/https://${path}`, `https://r.jina.ai/http://${path}`];
+    let best = '';
+    for (const readerUrl of readerUrls) {
+      try {
+        const res = await fetch(readerUrl, { method: 'GET' });
+        if (!res.ok) continue;
+        const rawText = await res.text().catch(() => '');
+        const cleaned = String(rawText || '').replace(/\s+/g, ' ').trim();
+        if (cleaned.length > best.length && cleaned.length > 200) best = cleaned;
+      } catch {
+        /* ignore */
+      }
+    }
+    return best.slice(0, 12000);
+  }
+
+  /**
+   * Pull title/description/body for one URL (backend + Jina). Longest body wins.
+   * @param {string} targetUrl
+   * @param {{title:string,description:string,image:string|null,source:string}} seed
+   * @param {string[]} apiBases
+   */
+  async _fetchArticlePayloadForUrl(targetUrl, seed, apiBases) {
+    let out = {
+      title: String(seed.title || '').trim(),
+      url: String(targetUrl || '').trim(),
+      description: String(seed.description || '').trim(),
+      image: seed.image || null,
+      source: String(seed.source || '').trim(),
+      text: '',
+    };
+
+    for (const apiBase of apiBases) {
+      if (!apiBase) continue;
+      try {
+        const apiUrl = `${apiBase}/api/linkedin/article?url=${encodeURIComponent(targetUrl)}`;
+        const res = await fetch(apiUrl, { method: 'GET' });
+        if (!res.ok) continue;
+        const data = await res.json().catch(() => null);
+        if (!data || typeof data !== 'object') continue;
+        const t = String(data.text || '').trim();
+        if (t.length > out.text.length) {
+          out = {
+            title: String(data.title || out.title || '').trim(),
+            url: String(data.sourceUrl || data.url || targetUrl || '').trim() || targetUrl,
+            description: String(data.description || out.description || '').trim(),
+            image: typeof data.image === 'string' && data.image.trim() ? data.image.trim() : out.image,
+            source: String(data.source || out.source || '').trim(),
+            text: t,
+          };
+        }
+      } catch {
+        /* try next */
+      }
+    }
+
+    const jina = await this._fetchReadableTextViaJina(targetUrl);
+    if (jina.length > out.text.length) {
+      out = { ...out, text: jina };
+    }
+    return out;
+  }
+
+  async fetchNewsArticleDetails(article, options = {}) {
+    const minTextLen = typeof options.minTextLength === 'number' ? options.minTextLength : 400;
     const title = (article && article.title ? String(article.title) : '').trim();
     const url = (article && article.url ? String(article.url) : '').trim();
     const description = (article && article.description ? String(article.description) : '').trim();
@@ -1710,7 +1782,7 @@ ${(reflection || '').trim()}`;
 
     // If ShareSuggestionsPage already fetched/attached extracted text, avoid a second network call.
     const maybeText = article && typeof article.text === 'string' ? article.text.trim() : '';
-    if (maybeText) {
+    if (maybeText && maybeText.length >= minTextLen) {
       return { ...base, text: maybeText };
     }
 
@@ -1721,48 +1793,39 @@ ${(reflection || '').trim()}`;
       origin.startsWith('capacitor://') ||
       origin.startsWith('ionic://') ||
       origin.startsWith('file://');
-    const candidates = originLooksLocal
+    const apiBases = originLooksLocal
       ? ['https://deitedatabase.web.app', 'https://deitedatabase.firebaseapp.com']
-      : [origin, 'https://deitedatabase.web.app', 'https://deitedatabase.firebaseapp.com'];
+      : [origin, 'https://deitedatabase.web.app', 'https://deitedatabase.firebaseapp.com'].filter(Boolean);
 
-    for (const apiBase of candidates) {
-      if (!apiBase) continue;
-      try {
-        const apiUrl = `${apiBase}/api/linkedin/article?url=${encodeURIComponent(url)}`;
-        const res = await fetch(apiUrl, { method: 'GET' });
-        if (!res.ok) continue;
-        const data = await res.json().catch(() => null);
-        if (!data || typeof data !== 'object') continue;
-        return {
-          title: String(data.title || title || '').trim(),
-          url: String(data.sourceUrl || data.url || url || '').trim() || url,
-          description: String(data.description || description || '').trim(),
-          image: typeof data.image === 'string' && data.image.trim() ? data.image.trim() : (image || null),
-          source: String(data.source || source || '').trim(),
-          text: String(data.text || '').trim(),
-        };
-      } catch {
-        // try next candidate
-      }
-    }
+    const seed = { title, description, image: image || null, source };
+    let best = await this._fetchArticlePayloadForUrl(url, seed, apiBases);
 
-    // Fallback: fetch readable article text without relying on the backend endpoint.
-    // r.jina.ai returns a text/markdown representation for many public pages.
-    try {
-      const readerUrl = `https://r.jina.ai/http://${url.replace(/^https?:\/\//i, '')}`;
-      const res = await fetch(readerUrl, { method: 'GET' });
-      if (res.ok) {
-        const rawText = await res.text().catch(() => '');
-        const cleaned = String(rawText || '').replace(/\s+/g, ' ').trim();
-        if (cleaned.length > 200) {
-          return { ...base, text: cleaned.slice(0, 12000) };
+    if (
+      best.text.length < minTextLen &&
+      this._isGoogleNewsArticleUrl(url) &&
+      options.resolveGoogleNews !== false
+    ) {
+      const publisherUrl = decodeGoogleNewsUrl(url);
+      if (publisherUrl && publisherUrl !== url) {
+        const second = await this._fetchArticlePayloadForUrl(publisherUrl, seed, apiBases);
+        if (second.text.length > best.text.length) {
+          best = {
+            ...second,
+            // Prefer opening the real story in the browser when decode succeeds.
+            url: second.url || publisherUrl,
+          };
         }
       }
-    } catch {
-      // keep base fallback
     }
 
-    return base;
+    return {
+      title: best.title || title,
+      url: best.url || url,
+      description: best.description || description,
+      image: best.image || image || null,
+      source: best.source || source,
+      text: best.text || (maybeText || ''),
+    };
   }
 
   async generateNewsArticleShareSuggestions(article, platform) {
@@ -1925,15 +1988,29 @@ Return ONLY valid JSON with this exact shape (no markdown fences):
     const apiKey = this.openaiApiKey;
     if (!apiKey) return '';
 
-    const sourceText = [description, text].filter(Boolean).join('\n\n').slice(0, 7000);
-    if (!sourceText) return '';
+    const titleNorm = title.replace(/\s+/g, ' ').trim().toLowerCase();
+    const descNorm = description.replace(/\s+/g, ' ').trim().toLowerCase();
+    const descIsMostlyHeadline =
+      description &&
+      (descNorm === titleNorm ||
+        (titleNorm.length > 12 && (descNorm === titleNorm || titleNorm.includes(descNorm) || descNorm.includes(titleNorm))));
+
+    const bodyForModel = text.slice(0, 10000);
+    if (bodyForModel.length < 280 && (!description || descIsMostlyHeadline)) {
+      return '';
+    }
+
+    const sourceText = [description, text].filter(Boolean).join('\n\n').slice(0, 12000);
+    if (!sourceText.trim()) return '';
 
     const userContent = `Summarize this news event in ${minWords}–${maxWords} words.
 
 Rules:
 - One paragraph, plain text only.
+- Base the summary primarily on the article text; use the description only as extra context.
 - Include the key "what happened" plus the most important concrete details (names, dates, amounts, scores, locations) that are present in the input.
 - Do NOT add anything not stated or clearly implied by the input.
+- Do NOT repeat or lightly rephrase only the headline — include details from the article body.
 - No intro like "In this article". No hashtags. No emojis.
 
 Return ONLY valid JSON (no markdown) with this exact shape:
@@ -1941,7 +2018,7 @@ Return ONLY valid JSON (no markdown) with this exact shape:
 
 Input:
 Title: ${title}
-${description ? `Description: ${description}\n` : ''}${text ? `Article text: ${text.slice(0, 6000)}\n` : ''}`.trim();
+${description && !descIsMostlyHeadline ? `Description: ${description}\n` : ''}${bodyForModel ? `Article text:\n${bodyForModel}\n` : ''}`.trim();
 
     const apiUrl = `${this.openaiBaseURL}/chat/completions`;
     const requestBody = {
@@ -1986,8 +2063,25 @@ ${description ? `Description: ${description}\n` : ''}${text ? `Article text: ${t
       if (!cleaned) return '';
       const words = cleaned.split(/\s+/).filter(Boolean);
       const limited = words.slice(0, maxWords).join(' ');
-      // Ensure it's a single paragraph and ends nicely (without inventing content).
-      return limited.replace(/\s+/g, ' ').trim();
+      const out = limited.replace(/\s+/g, ' ').trim();
+      const outNorm = out.replace(/\s+/g, ' ').trim().toLowerCase();
+      const tit = title.replace(/\s+/g, ' ').trim().toLowerCase();
+      if (
+        outNorm === tit ||
+        (tit.length > 8 &&
+          outNorm.length <= tit.length + 12 &&
+          tit.includes(outNorm.slice(0, Math.min(24, outNorm.length))))
+      ) {
+        return '';
+      }
+      const titleTokens = tit.split(/\s+/).filter((w) => w.length > 2);
+      if (titleTokens.length >= 3) {
+        const hits = titleTokens.filter((w) => outNorm.includes(w)).length;
+        if (hits / titleTokens.length > 0.9 && out.split(/\s+/).filter(Boolean).length <= title.split(/\s+/).filter(Boolean).length + 6) {
+          return '';
+        }
+      }
+      return out;
     } catch {
       clearTimeout(timeoutId);
       return '';

@@ -1,11 +1,11 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import {
   googleNewsSearchUrl,
-  fetchLiveFromGoogleRssByQuery,
-  normalizeArticles,
+  getNewsApiKey,
+  fetchNewsApiEverythingNormalized,
   enrichNewsItemsWithOgImages,
   NewsFeedRow,
 } from '../lib/podTopicNewsShared';
@@ -115,7 +115,7 @@ function buildFallbackRows(label, googleQuery) {
   const now = new Date().toISOString();
   return Array.from({ length: 6 }, (_, i) => ({
     title: `${label} update ${i + 1}`,
-    source: 'Google News',
+    source: 'News',
     url: baseUrl,
     image: null,
     description: `${label} roundup`,
@@ -145,11 +145,6 @@ export default function PodExploreTopicPage() {
   const title = topicConfig?.label ?? 'Explore';
   const backTo = POD_EXPLORE_SECTION_HOME[section] || '/pod';
 
-  const apiKey = useMemo(
-    () => process.env.REACT_APP_NEWSAPI || process.env.NEWSAPI || '',
-    []
-  );
-
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
@@ -178,27 +173,26 @@ export default function PodExploreTopicPage() {
       /** @type {Array<{title:string,source:string,url:string,image:null|string,description:string,publishedAt?:string|null,sourceSiteUrl?:string}>|null} */
       let rows = null;
 
-      if (apiKey && cfg.q) {
-        try {
-          const url = `https://newsapi.org/v2/everything?q=${encodeURIComponent(cfg.q)}&language=en&sortBy=publishedAt&pageSize=30&apiKey=${encodeURIComponent(apiKey)}`;
-          const res = await fetch(url);
-          const data = await res.json();
-          if (res.ok && data.status === 'ok' && Array.isArray(data.articles)) {
-            const normalized = normalizeArticles(data.articles);
-            if (normalized.length) rows = normalized;
-          }
-        } catch {
-          /* RSS below */
+      const apiKey = getNewsApiKey();
+      if (!apiKey) {
+        const msg =
+          'Add REACT_APP_NEWSAPI to your .env file and restart the dev server. Showing browse links only.';
+        const fallbackRows = buildFallbackRows(title, cfg.google);
+        if (isMountedRef.current && token === loadTokenRef.current) {
+          setItems(fallbackRows);
+          setError(msg);
         }
+        return;
       }
 
-      if (!rows?.length && cfg.google) {
-        const rss = await fetchLiveFromGoogleRssByQuery(cfg.google);
-        if (rss.length) rows = rss.slice(0, 30);
+      if (cfg.q) {
+        rows = await fetchNewsApiEverythingNormalized({ q: cfg.q, pageSize: 30 });
+        if (rows?.length) rows = rows.slice(0, 30);
       }
 
       if (!rows?.length) {
-        const msg = 'Live sources unavailable. Showing quick fallback headlines.';
+        const msg =
+          'NewsAPI returned no articles (check your key, plan limits, or query). Showing quick fallback headlines.';
         const fallbackRows = buildFallbackRows(title, cfg.google);
         if (isMountedRef.current && token === loadTokenRef.current) {
           setItems(fallbackRows);
