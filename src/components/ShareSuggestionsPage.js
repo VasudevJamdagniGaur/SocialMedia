@@ -2389,9 +2389,6 @@ export default function ShareSuggestionsPage() {
                   We couldn&apos;t pull enough article text from this link to summarize it here. Tap the headline to read the full story on the publisher site.
                 </p>
               )}
-              <p className="text-xs mt-2" style={{ color: isDarkMode ? HUB.textSecondary : '#888' }}>
-                Tap the headline to open the full article.
-              </p>
             </>
           ) : (
             <p className="text-[15px] leading-relaxed mt-1" style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}>
