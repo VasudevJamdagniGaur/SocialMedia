@@ -1583,11 +1583,26 @@ ${text}`;
     const platformLabel = platform === 'x' ? 'X (Twitter)' : platform.charAt(0).toUpperCase() + platform.slice(1);
 
     const platformStyleGuide = {
-      linkedin: `LINKEDIN STYLE (strict):
-- Professional, polished tone. Thought-leadership or reflective professional narrative.
-- Strong opening hook (question, observation, or bold line). Short paragraphs (1–3 lines).
-- First person, authentic but career-friendly. Optional light insight or takeaway.
-- End with 0–3 relevant hashtags (e.g. #Learning #Reflection). No emoji overload.`,
+      linkedin: `LINKEDIN STYLE (strict — follow all):
+
+UNIQUE INSIGHT (do not merely summarize the day):
+- Derive a sharp insight from what they wrote: client or colleague questions, building in public, tensions, tradeoffs, or lessons learned.
+- Personal backstory or biography: ONLY if the user explicitly said it in the reflection below. Paraphrase only facts they stated. If nothing relevant appears, omit backstory entirely — never invent or assume a past.
+
+ONE POST = ONE IDEA (journalist mindset):
+- Each post has one clear angle and one main takeaway, like a strong lead — not a laundry list of unrelated points.
+
+STRUCTURE (skimmable):
+- Write for skimmers: short paragraphs, optional bullet points, or a tight framework when it fits (e.g. Problem → tension → lesson, or a short story arc to one point). Plain, simple language.
+
+HOOK (first ~2 lines are critical):
+- Open with something that earns the scroll: a number, direct address ("you"), a striking detail from THEIR reflection, or a sharp question. The hook must match the single idea.
+
+DELIVER + CLOSE:
+- The body must fulfill the hook’s promise. End with a clear call to action (one question, comment prompt, or one concrete next step).
+
+POLISH:
+- First person where natural. 0–3 relevant hashtags (e.g. #Learning). No meta ("here’s my LinkedIn post"). Emoji only if light and natural.`,
       x: `X (TWITTER) STYLE (strict):
 - Very concise. Each post MUST be under 280 characters (count them).
 - Punchy, direct. Line breaks for emphasis. One clear idea per post.
@@ -1599,12 +1614,21 @@ ${text}`;
     };
     const styleGuide = platformStyleGuide[platform] || platformStyleGuide.linkedin;
 
+    const linkedinReflectionExtra =
+      platform === 'linkedin'
+        ? `
+LinkedIn (extra — every post):
+- Again: no invented personal history. Backstory only when the reflection explicitly contains it.
+- Hook in the opening lines; skimmable middle; explicit CTA at the end.
+`
+        : '';
+
     const prompt = `You are turning a day's reflection into separate social posts. You MUST create one standalone post for EACH distinct event or moment mentioned in the reflection.
 
 PLATFORM: ${platformLabel}. Write EVERY post in that platform's native style so it reads like a real ${platformLabel} post.
 
 ${styleGuide}
-
+${linkedinReflectionExtra}
 Step 1 – List EVERY main event/moment in the reflection. Include ALL of these when present:
 - Embarrassing or funny moments (e.g. wrong door, mix-up, mistake)
 - Books, articles, or media mentioned by name (e.g. "The Three-Body Problem", "Source Code", "Crime and Punishment")
@@ -1616,7 +1640,12 @@ Do not skip any major event. If the user mentions a book, there must be a post a
 Step 2 – For EACH event you listed, write ONE complete, standalone post that:
 - Focuses only on that single event
 - Expands on the thoughts, emotions, or insights from that moment
-- Feels natural and reflective, like a real social post (not a summary)
+- Feels natural and reflective, like a real social post (not a dry summary)${
+        platform === 'linkedin'
+          ? `
+- For LinkedIn: one clear angle per post; strong hook in the first two lines; skimmable structure (short paragraphs and/or bullets); deliver on the hook; end with a CTA; never fabricate backstory not present in the reflection`
+          : ''
+      }
 - Is written EXACTLY in the ${platformLabel} style described above (tone, length, structure)
 
 Output format (strict):
@@ -1848,7 +1877,12 @@ ${(reflection || '').trim()}`;
 
     const platformLabel = platform === 'x' ? 'X (Twitter)' : platform.charAt(0).toUpperCase() + platform.slice(1);
     const platformStyleGuide = {
-      linkedin: `LINKEDIN: Professional, hook + short paragraphs, first person where natural. 0–3 hashtags. No meta text.`,
+      linkedin: `LINKEDIN (strict):
+- Unique angle per post: insight or framing from the article — not a bland recap. One post = one idea.
+- Do not invent a personal backstory for the reader or author; only use facts from the article (title, summary, body) provided below.
+- Hook in the first ~2 lines (numbers, direct reader address, or striking fact from the story). Body must deliver on that hook; simple language; skimmable (short paragraphs and/or bullets; PAS-style OK when it fits).
+- End each post with a clear CTA (question, debate prompt, or what to watch next).
+- First person only if natural for commentary; 0–3 hashtags. No meta instructions in the post text.`,
       x: `X: Under 280 characters per post. Punchy. 1–2 hashtags max.`,
       reddit: `REDDIT: Casual first-person, conversational, like r/worldnews discussion — not corporate.`,
     };
