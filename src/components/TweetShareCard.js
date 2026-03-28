@@ -86,12 +86,31 @@ const TweetShareCard = React.forwardRef(function TweetShareCard(props, ref) {
           >
             <span
               style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                minWidth: 0,
                 fontSize: 18,
                 fontWeight: 700,
                 color: '#0F1419',
               }}
             >
-              {displayName}
+              <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {displayName}
+              </span>
+              <img
+                src={`${process.env.PUBLIC_URL || ''}/DEITECIrc.webp`}
+                alt=""
+                width={18}
+                height={18}
+                style={{
+                  width: 18,
+                  height: 18,
+                  flexShrink: 0,
+                  objectFit: 'contain',
+                  display: 'block',
+                }}
+              />
             </span>
             <span
               style={{
@@ -141,18 +160,6 @@ const TweetShareCard = React.forwardRef(function TweetShareCard(props, ref) {
             />
           </div>
         )}
-
-        {/* Watermark */}
-        <div
-          style={{
-            marginTop: 12,
-            fontSize: 12,
-            color: '#8B98A5',
-            textAlign: 'center',
-          }}
-        >
-          Created with Deite
-        </div>
     </div>
   );
 });
