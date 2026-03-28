@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Flame, Heart, Share2 } from 'lucide-react';
 import { getCurrentUser, onAuthStateChange } from '../services/authService';
 import {
@@ -10,7 +11,7 @@ import {
 /**
  * Horizontal swipe card — same interaction model as Sports → Trending carousel.
  */
-function HubTrendingCard({ item, idx, HUB, userId, engagementEnabled }) {
+function HubTrendingCard({ item, idx, HUB, userId, engagementEnabled, navigate, returnTo }) {
   const rootRef = useRef(null);
   const [liked, setLiked] = useState(() =>
     item.id ? sessionStorage.getItem(`hn_like_${item.id}`) === '1' : false
@@ -68,11 +69,23 @@ function HubTrendingCard({ item, idx, HUB, userId, engagementEnabled }) {
     [engagementEnabled, userId, item.id, item.title, item.url]
   );
 
-  const onOpenClick = useCallback(() => {
+  const openShareSuggestions = useCallback(() => {
+    if (!item.url) return;
     if (userId && item.category) recordHubNewsClick(userId, item.category);
-  }, [userId, item.category]);
+    navigate('/share-suggestions', {
+      state: {
+        newsArticle: {
+          title: item.title,
+          url: item.url,
+          description: item.description || '',
+          image: item.image || null,
+          source: item.source || '',
+        },
+        returnTo,
+      },
+    });
+  }, [item, userId, navigate, returnTo]);
 
-  const tag = item.feedTag;
   const gradients = [
     'linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%)',
     'linear-gradient(135deg,#2d132c 0%,#801336 50%,#c72c41 100%)',
@@ -93,12 +106,11 @@ function HubTrendingCard({ item, idx, HUB, userId, engagementEnabled }) {
         minHeight: 200,
       }}
     >
-      <a
-        href={item.url || undefined}
-        target={item.url ? '_blank' : undefined}
-        rel={item.url ? 'noopener noreferrer' : undefined}
-        onClick={onOpenClick}
-        className="absolute inset-0 z-0"
+      <button
+        type="button"
+        onClick={openShareSuggestions}
+        disabled={!item.url}
+        className="absolute inset-0 z-0 cursor-pointer border-0 bg-transparent p-0 text-left disabled:cursor-not-allowed disabled:opacity-60"
         aria-label={item.title}
       />
       <div
@@ -131,24 +143,9 @@ function HubTrendingCard({ item, idx, HUB, userId, engagementEnabled }) {
           </button>
         </div>
       ) : null}
-      <div className="absolute inset-x-0 bottom-0 z-[2] p-3 pt-10 bg-gradient-to-t from-black via-black/80 to-transparent pointer-events-none">
-        {tag ? (
-          <p className="text-[10px] font-bold uppercase tracking-wide mb-1" style={{ color: HUB.accent }}>
-            <span aria-hidden>{tag.emoji}</span> {tag.label}
-          </p>
-        ) : null}
-        <p className="text-sm font-semibold leading-snug line-clamp-3" style={{ color: '#fff' }}>
+      <div className="absolute inset-x-0 bottom-0 z-[2] p-3 pt-8 bg-gradient-to-t from-black via-black/80 to-transparent pointer-events-none">
+        <p className="text-sm font-semibold leading-snug line-clamp-4" style={{ color: '#fff' }}>
           {item.title}
-        </p>
-        <p
-          className="text-[11px] mt-1.5 font-medium uppercase tracking-wide"
-          style={{ color: 'rgba(255,255,255,0.65)' }}
-        >
-          {item.source}
-          {item.category ? ` · ${item.category}` : ''}
-          {typeof item.trendingScore === 'number' && item.trendingScore > 0 ? (
-            <span className="normal-case"> · {item.trendingScore.toFixed(1)}</span>
-          ) : null}
         </p>
       </div>
     </div>
@@ -159,6 +156,9 @@ function HubTrendingCard({ item, idx, HUB, userId, engagementEnabled }) {
  * Hub (Crew home) personalized trending — horizontal swipe carousel (matches Sports trending).
  */
 export default function HubTrendingFeed({ isDarkMode }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const returnTo = `${location.pathname}${location.search || ''}`;
   const [userId, setUserId] = useState(() => getCurrentUser()?.uid || null);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -253,6 +253,8 @@ export default function HubTrendingFeed({ isDarkMode }) {
                 HUB={HUB}
                 userId={userId}
                 engagementEnabled={userId && !item.fromNewsApiFallback}
+                navigate={navigate}
+                returnTo={returnTo}
               />
             ))}
           </div>
