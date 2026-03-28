@@ -113,7 +113,7 @@ export default function PodAiTechPage() {
             <div className="flex items-center justify-between px-4 py-4" style={{ borderBottom: `1px solid ${HUB.divider}` }}>
               <h2 className="text-base font-semibold" style={{ color: HUB.text }}>
                 <span className="mr-1.5" aria-hidden>🔥</span>
-                Trending <span className="font-normal" style={{ color: HUB.textSecondary }}>(Swipe)</span>
+                Trending
               </h2>
             </div>
             <div className="py-3 pl-4">
