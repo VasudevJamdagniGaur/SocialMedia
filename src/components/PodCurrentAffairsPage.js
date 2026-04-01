@@ -5,25 +5,12 @@ import { useTheme } from '../contexts/ThemeContext';
 import { canFetchLiveNews, fetchNewsApiTopHeadlinesRaw, normalizeArticles } from '../lib/podTopicNewsShared';
 import { prefetchExploreTopicRaw } from '../lib/podExploreTopicPrefetchCache';
 
-const GEMINI_MODEL = 'gemini-3-flash-preview';
-const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
-
-const FALLBACK_WHY = [
-  'Staying informed helps you see how distant events ripple into jobs, prices, travel, and safety where you live.',
-  'Headlines move fast; understanding the “why” behind them makes it easier to spot noise, bias, and what actually affects your decisions.',
-  'When communities share a clearer picture of the world, civic conversation, volunteering, and policy engagement tend to stay grounded in facts.',
-].join(' ');
-
 export default function PodCurrentAffairsPage() {
   const navigate = useNavigate();
   const { isDarkMode } = useTheme();
   const [trending, setTrending] = useState([]);
   const [isLoadingNews, setIsLoadingNews] = useState(false);
   const [newsError, setNewsError] = useState('');
-  const [whyItMatters, setWhyItMatters] = useState('');
-  const [isLoadingWhy, setIsLoadingWhy] = useState(false);
-  const [whyError, setWhyError] = useState('');
-
   const EXPLORE = [
     { label: 'World News', slug: 'world-news' },
     { label: 'Politics', slug: 'politics' },
@@ -76,62 +63,6 @@ export default function PodCurrentAffairsPage() {
     };
 
     load();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    const googleKey = (process.env.REACT_APP_GOOGLE_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
-
-    const loadWhy = async () => {
-      setIsLoadingWhy(true);
-      setWhyError('');
-      if (!googleKey) {
-        setWhyItMatters(FALLBACK_WHY);
-        setIsLoadingWhy(false);
-        return;
-      }
-
-      try {
-        const prompt =
-          'Write one cohesive "Why it matters" explainer for a general news reader (not alarmist). ' +
-          '3 short paragraphs, plain language, 120–180 words total. No bullet points, no title line, no hashtags.';
-
-        const res = await fetch(
-          `${GEMINI_BASE}/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(googleKey)}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: { temperature: 0.65, maxOutputTokens: 500 },
-            }),
-          }
-        );
-        if (!res.ok) throw new Error(`Gemini ${res.status}`);
-        const data = await res.json();
-        const text =
-          (data?.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') || '').trim();
-        if (!cancelled) {
-          if (text.length > 40) setWhyItMatters(text);
-          else {
-            setWhyItMatters(FALLBACK_WHY);
-            setWhyError('Showing a curated explainer.');
-          }
-        }
-      } catch {
-        if (!cancelled) {
-          setWhyItMatters(FALLBACK_WHY);
-          setWhyError('Showing a curated explainer while AI is unavailable.');
-        }
-      } finally {
-        if (!cancelled) setIsLoadingWhy(false);
-      }
-    };
-
-    loadWhy();
     return () => {
       cancelled = true;
     };
@@ -229,29 +160,6 @@ export default function PodCurrentAffairsPage() {
                   </div>
                   {!!newsError && (
                     <p className="text-xs mt-2 pr-4" style={{ color: HUB.textSecondary }}>{newsError}</p>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-
-          <div className="rounded-2xl overflow-hidden" style={cardStyle}>
-            <div className="flex items-center justify-between px-4 py-4" style={{ borderBottom: `1px solid ${HUB.divider}` }}>
-              <h2 className="text-base font-semibold" style={{ color: HUB.text }}>
-                <span className="mr-1.5" aria-hidden>🧠</span>
-                Why It Matters
-              </h2>
-            </div>
-            <div className="px-4 py-3">
-              {isLoadingWhy ? (
-                <p className="text-sm" style={{ color: HUB.textSecondary }}>Preparing perspective...</p>
-              ) : (
-                <>
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: HUB.text }}>
-                    {whyItMatters}
-                  </p>
-                  {!!whyError && (
-                    <p className="text-xs mt-2" style={{ color: HUB.textSecondary }}>{whyError}</p>
                   )}
                 </>
               )}
