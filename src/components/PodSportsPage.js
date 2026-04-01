@@ -14,7 +14,7 @@ import {
   enrichNewsItemsWithOgImages,
   googleNewsSearchUrl,
 } from '../lib/podTopicNewsShared';
-import { prefetchSportsExploreTopics } from '../lib/podSportsTopicPrefetchCache';
+import { prefetchSportsExploreTopics, prefetchSportsTopicRaw } from '../lib/podSportsTopicPrefetchCache';
 
 /** Engagement rank plus same-city boost (Firestore `trendingScore` is likes×3 + shares×5 + views). */
 function effectiveSportsTrendRank(item, userCityNorm) {
@@ -483,7 +483,15 @@ export default function PodSportsPage() {
                 <button
                   key={row.slug}
                   type="button"
-                  onClick={() => navigate(`/pod/sports/topic/${row.slug}`)}
+                  onClick={async () => {
+                    // Prefetch first so the topic page opens "already loaded".
+                    try {
+                      await prefetchSportsTopicRaw(row.slug);
+                    } catch {
+                      /* fallback to in-page load */
+                    }
+                    navigate(`/pod/sports/topic/${row.slug}`);
+                  }}
                   className="w-full flex items-center justify-between py-3 text-left transition-opacity hover:opacity-90"
                   style={{
                     borderTop: index === 0 ? 'none' : `1px solid ${HUB.divider}`,
