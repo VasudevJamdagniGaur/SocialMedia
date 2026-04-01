@@ -4,7 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import {
   googleNewsSearchUrl,
-  getNewsApiKey,
+  canFetchLiveNews,
   fetchNewsApiEverythingNormalized,
   filterNewsRowsIndiaLocal,
   enrichNewsItemsWithOgImages,
@@ -211,10 +211,9 @@ export default function PodExploreTopicPage() {
       const newsQ = resolveExploreNewsQuery(cfg, startupRegion);
       const googleQ = resolveExploreGoogleQuery(cfg, startupRegion);
 
-      const apiKey = getNewsApiKey();
-      if (!apiKey) {
+      if (!canFetchLiveNews()) {
         const msg =
-          'Add REACT_APP_NEWSAPI to your .env file and restart the dev server. Showing browse links only.';
+          'Add REACT_APP_NEWSAPI to .env (web) or NEWSAPI_KEY on Firebase Functions (Android). Restart/rebuild. Showing browse links only.';
         const fallbackRows = buildFallbackRows(title, googleQ);
         if (isMountedRef.current && token === loadTokenRef.current) {
           setItems(fallbackRows);

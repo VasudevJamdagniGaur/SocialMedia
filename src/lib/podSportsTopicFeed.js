@@ -1,7 +1,7 @@
 import chatService from '../services/chatService';
 import {
   googleNewsSearchUrl,
-  getNewsApiKey,
+  canFetchLiveNews,
   fetchNewsApiEverythingNormalized,
   fetchNewsApiTopHeadlinesNormalized,
   enrichNewsItemsWithOgImages,
@@ -179,12 +179,11 @@ export async function fetchSportsTopicRawItems(topicId) {
   if (!config) return { items: [], error: '', allowRewrite: false };
 
   const title = config.label;
-  const apiKey = getNewsApiKey();
-  if (!apiKey) {
+  if (!canFetchLiveNews()) {
     return {
       items: buildFallbackRows(topicId, title),
       error:
-        'Add REACT_APP_NEWSAPI to your .env file and restart the dev server. Showing browse links only.',
+        'Add REACT_APP_NEWSAPI to .env (web) or NEWSAPI_KEY on Firebase Functions (Android app). Showing browse links only.',
       allowRewrite: false,
     };
   }

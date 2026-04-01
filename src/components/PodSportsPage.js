@@ -5,7 +5,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { onAuthStateChange, getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
 import {
-  getNewsApiKey,
+  canFetchLiveNews,
   fetchNewsApiTopHeadlinesRaw,
   fetchNewsApiEverythingRaw,
   normalizeArticles,
@@ -197,7 +197,6 @@ export default function PodSportsPage() {
   }, []);
 
   useEffect(() => {
-    const apiKey = getNewsApiKey();
     let cancelled = false;
 
     const fallbackTrending = [
@@ -243,7 +242,7 @@ export default function PodSportsPage() {
 
         const user = getCurrentUser();
 
-        if (!apiKey) {
+        if (!canFetchLiveNews()) {
           const rows = await enrichNewsItemsWithOgImages(fallbackTrending, {
             enableOgFallback: true,
             maxResolve: 4,
@@ -251,7 +250,7 @@ export default function PodSportsPage() {
           if (!cancelled) {
             setSportsTrending(rows);
             setSportsNewsError(
-              'Add REACT_APP_NEWSAPI to .env (see .env.example), restart the dev server, then reload — plain NEWSAPI= is not available in the browser.'
+              'Add REACT_APP_NEWSAPI to .env (web) or set NEWSAPI_KEY on Firebase Functions and deploy (Android app).'
             );
           }
           return;

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
-import { getNewsApiKey, fetchNewsApiTopHeadlinesRaw, normalizeArticles } from '../lib/podTopicNewsShared';
+import { canFetchLiveNews, fetchNewsApiTopHeadlinesRaw, normalizeArticles } from '../lib/podTopicNewsShared';
 
 const GEMINI_MODEL = 'gemini-3-flash-preview';
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
@@ -33,7 +33,6 @@ export default function PodEntrepreneurshipPage() {
 
   // Trending: business / startup headlines
   useEffect(() => {
-    const apiKey = getNewsApiKey();
     let cancelled = false;
 
     const fallbackTrending = [
@@ -47,9 +46,11 @@ export default function PodEntrepreneurshipPage() {
       setIsLoadingNews(true);
       setNewsError('');
       try {
-        if (!apiKey) {
+        if (!canFetchLiveNews()) {
           setTrending(fallbackTrending);
-          setNewsError('Set REACT_APP_NEWSAPI in .env to load live headlines.');
+          setNewsError(
+            'Set REACT_APP_NEWSAPI in .env (web) or NEWSAPI_KEY on Firebase Functions (app) to load live headlines.'
+          );
           return;
         }
         const articles = await fetchNewsApiTopHeadlinesRaw({

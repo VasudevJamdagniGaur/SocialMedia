@@ -20,7 +20,7 @@ import {
   HUB_DEFAULT_INTERESTS,
 } from '../lib/hubTrendingAlgorithms';
 import {
-  getNewsApiKey,
+  canFetchLiveNews,
   fetchNewsApiEverythingNormalized,
 } from '../lib/podTopicNewsShared';
 
@@ -250,9 +250,8 @@ const INTEREST_QUERIES = {
  * When Firestore `news` is blocked or empty: same interest mix from NewsAPI only (no writes).
  */
 async function buildNewsApiFallbackFeed(profile, targetSize = 20) {
-  const apiKey = getNewsApiKey();
   const cats = (profile?.interests?.length ? profile.interests : HUB_DEFAULT_INTERESTS).slice(0, 5);
-  if (!apiKey) return [];
+  if (!canFetchLiveNews()) return [];
   const collected = [];
   for (const cat of cats) {
     const qExtra = INTEREST_QUERIES[cat] || cat;
@@ -298,11 +297,10 @@ async function buildNewsApiFallbackFeed(profile, targetSize = 20) {
  * Pull headlines per interest and upsert into `news` (bounded API usage).
  */
 export async function hydrateHubNewsFromApi(country, city, interests) {
-  const apiKey = getNewsApiKey();
   const ctry = normalizeCountry(country);
   const cit = normalizeCity(city);
   const cats = (interests.length ? interests : HUB_DEFAULT_INTERESTS).slice(0, 5);
-  if (!apiKey || ctry.length !== 2) return { success: false, count: 0 };
+  if (!canFetchLiveNews() || ctry.length !== 2) return { success: false, count: 0 };
 
   let total = 0;
   for (const cat of cats) {

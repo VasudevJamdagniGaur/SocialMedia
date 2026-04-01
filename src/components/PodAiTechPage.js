@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
-import { getNewsApiKey, fetchNewsApiTopHeadlinesRaw, normalizeArticles } from '../lib/podTopicNewsShared';
+import { canFetchLiveNews, fetchNewsApiTopHeadlinesRaw, normalizeArticles } from '../lib/podTopicNewsShared';
 
 export default function PodAiTechPage() {
   const navigate = useNavigate();
@@ -20,7 +20,6 @@ export default function PodAiTechPage() {
   ];
 
   useEffect(() => {
-    const apiKey = getNewsApiKey();
     let cancelled = false;
 
     const fallbackTrending = [
@@ -34,9 +33,11 @@ export default function PodAiTechPage() {
       setIsLoading(true);
       setNewsError('');
       try {
-        if (!apiKey) {
+        if (!canFetchLiveNews()) {
           setTrending(fallbackTrending);
-          setNewsError('Set REACT_APP_NEWSAPI in .env to load live headlines.');
+          setNewsError(
+            'Set REACT_APP_NEWSAPI in .env (web) or NEWSAPI_KEY on Firebase Functions (app) to load live headlines.'
+          );
           return;
         }
         const articles = await fetchNewsApiTopHeadlinesRaw({

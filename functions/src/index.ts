@@ -872,6 +872,8 @@ async function handleArticleExtract(
   }
 }
 
+export { newsApi } from './newsApi';
+
 export const linkedInApi = onRequest(
   { cors: true },
   async (req, res) => {

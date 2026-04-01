@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 
 const __NEWS_FALLBACK_IMAGE_URL =
   'data:image/svg+xml;charset=utf-8,' +
@@ -737,6 +738,76 @@ export function getNewsApiKey() {
   ).trim();
 }
 
+/**
+ * Capacitor WebView uses https://localhost; NewsAPI does not allow that origin (CORS).
+ * Same for capacitor:// / file:// — use Firebase Hosting → /api/news/* proxy.
+ */
+function shouldProxyNewsApi() {
+  if (typeof window === 'undefined') return false;
+  try {
+    if (Capacitor?.isNativePlatform?.()) return true;
+  } catch {
+    /* no native bridge */
+  }
+  const o = window.location?.origin || '';
+  return (
+    !o ||
+    o.includes('localhost') ||
+    o.startsWith('capacitor://') ||
+    o.startsWith('ionic://') ||
+    o.startsWith('file://')
+  );
+}
+
+/** True if live NewsAPI fetch can be attempted (in-app key or native/local → backend proxy). */
+export function canFetchLiveNews() {
+  return !!getNewsApiKey() || shouldProxyNewsApi();
+}
+
+function getFirebaseHostingApiBases() {
+  const origin =
+    typeof window !== 'undefined' && window.location && typeof window.location.origin === 'string'
+      ? window.location.origin
+      : '';
+  const originLooksLocal =
+    !origin ||
+    origin.includes('localhost') ||
+    origin.startsWith('capacitor://') ||
+    origin.startsWith('ionic://') ||
+    origin.startsWith('file://');
+  if (originLooksLocal) {
+    const list = [];
+    if (origin && origin.startsWith('http')) list.push(origin);
+    list.push('https://deitedatabase.web.app');
+    list.push('https://deitedatabase.firebaseapp.com');
+    return list;
+  }
+  return [origin, 'https://deitedatabase.web.app', 'https://deitedatabase.firebaseapp.com'];
+}
+
+/**
+ * @param {'everything' | 'top-headlines'} endpoint
+ * @param {URLSearchParams} baseParams without apiKey
+ * @returns {Promise<object[]|null>} articles, or null if proxy unavailable (caller may try direct)
+ */
+async function fetchNewsApiThroughProxy(endpoint, baseParams) {
+  const p = new URLSearchParams(baseParams);
+  p.delete('apiKey');
+  for (const base of getFirebaseHostingApiBases()) {
+    try {
+      const url = `${base}/api/news/${endpoint}?${p.toString()}`;
+      const res = await fetch(url, { method: 'GET' });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data && data.status === 'ok' && Array.isArray(data.articles)) {
+        return data.articles;
+      }
+    } catch {
+      /* try next base */
+    }
+  }
+  return null;
+}
+
 function newsApiDefaultFromISO(days = 7) {
   const d = new Date();
   d.setDate(d.getDate() - days);
@@ -750,16 +821,27 @@ function newsApiDefaultFromISO(days = 7) {
 export async function fetchNewsApiEverythingRaw(opts = {}) {
   const apiKey = getNewsApiKey();
   const q = String(opts.q || '').trim();
-  if (!apiKey || !q) return [];
+  if (!q) return [];
+  const useProxy = shouldProxyNewsApi();
+  if (!apiKey && !useProxy) return [];
+
   const pageSize = Math.min(Math.max(1, opts.pageSize ?? 30), 100);
-  const params = new URLSearchParams({
+  const baseParams = new URLSearchParams({
     q,
     language: opts.language || 'en',
     sortBy: opts.sortBy || 'publishedAt',
     pageSize: String(pageSize),
-    apiKey,
   });
-  params.set('from', opts.from || newsApiDefaultFromISO(7));
+  baseParams.set('from', opts.from || newsApiDefaultFromISO(7));
+
+  if (useProxy) {
+    const proxied = await fetchNewsApiThroughProxy('everything', baseParams);
+    if (proxied !== null) return proxied;
+  }
+
+  if (!apiKey) return [];
+  const params = new URLSearchParams(baseParams);
+  params.set('apiKey', apiKey);
   try {
     const res = await fetch(`${NEWSAPI_V2}/everything?${params.toString()}`);
     const data = await res.json().catch(() => null);
@@ -782,30 +864,41 @@ export async function fetchNewsApiEverythingNormalized(opts = {}) {
  */
 export async function fetchNewsApiTopHeadlinesRaw(opts = {}) {
   const apiKey = getNewsApiKey();
-  if (!apiKey) return [];
   const category = String(opts.category || '').trim();
   const q = String(opts.q || '').trim();
   const sources = String(opts.sources || '').trim();
   if (!category && !q && !sources) return [];
+
+  const useProxy = shouldProxyNewsApi();
+  if (!apiKey && !useProxy) return [];
+
   const pageSize = Math.min(Math.max(1, opts.pageSize ?? 30), 100);
-  const params = new URLSearchParams({
+  const baseParams = new URLSearchParams({
     pageSize: String(pageSize),
-    apiKey,
   });
   if (opts.language === false) {
     /* omit language — broader in-country results */
   } else {
     const language = opts.language || 'en';
-    if (language) params.set('language', language);
+    if (language) baseParams.set('language', language);
   }
-  if (category) params.set('category', category);
-  if (q) params.set('q', q);
-  if (sources) params.set('sources', sources);
+  if (category) baseParams.set('category', category);
+  if (q) baseParams.set('q', q);
+  if (sources) baseParams.set('sources', sources);
   if (category && !sources && !q && !opts.country) {
-    params.set('country', 'us');
+    baseParams.set('country', 'us');
   } else if (opts.country) {
-    params.set('country', String(opts.country));
+    baseParams.set('country', String(opts.country));
   }
+
+  if (useProxy) {
+    const proxied = await fetchNewsApiThroughProxy('top-headlines', baseParams);
+    if (proxied !== null) return proxied;
+  }
+
+  if (!apiKey) return [];
+  const params = new URLSearchParams(baseParams);
+  params.set('apiKey', apiKey);
   try {
     const res = await fetch(`${NEWSAPI_V2}/top-headlines?${params.toString()}`);
     const data = await res.json().catch(() => null);
@@ -948,34 +1041,13 @@ async function tryHeroImageFromPublisherPage(targetUrl) {
   return null;
 }
 
-function getApiBaseCandidates() {
-  const origin =
-    typeof window !== 'undefined' && window.location && typeof window.location.origin === 'string'
-      ? window.location.origin
-      : '';
-  const originLooksLocal =
-    !origin ||
-    origin.includes('localhost') ||
-    origin.startsWith('capacitor://') ||
-    origin.startsWith('ionic://') ||
-    origin.startsWith('file://');
-  if (originLooksLocal) {
-    const list = [];
-    if (origin && origin.startsWith('http')) list.push(origin);
-    list.push('https://deitedatabase.web.app');
-    list.push('https://deitedatabase.firebaseapp.com');
-    return list;
-  }
-  return [origin, 'https://deitedatabase.web.app', 'https://deitedatabase.firebaseapp.com'];
-}
-
 async function tryHeroImageFromBackend(articleUrl) {
   const u = typeof articleUrl === 'string' ? articleUrl.trim() : '';
   if (!u || !/^https?:\/\//i.test(u)) return null;
   if (looksLikeImageAssetUrl(u)) return null;
 
   let lastErr = null;
-  for (const apiBase of getApiBaseCandidates()) {
+  for (const apiBase of getFirebaseHostingApiBases()) {
     try {
       const apiUrl = `${apiBase}/api/linkedin/article?url=${encodeURIComponent(u)}`;
       const res = await fetch(apiUrl, { method: 'GET' });

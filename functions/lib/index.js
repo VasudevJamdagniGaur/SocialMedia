@@ -23,7 +23,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.linkedInApi = exports.generatePostEmbedding = void 0;
+exports.linkedInApi = exports.newsApi = exports.generatePostEmbedding = void 0;
 const path = __importStar(require("path"));
 const dotenv_1 = require("dotenv");
 // Load functions/.env so LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET are available (local emulator).
@@ -464,11 +464,26 @@ async function handleLinkedInSuggestions(req, res) {
         }
         const platformLabel = p === 'x' ? 'X (Twitter)' : p.charAt(0).toUpperCase() + p.slice(1);
         const platformStyleGuide = {
-            linkedin: `LINKEDIN STYLE (strict):
-- Professional, polished tone. Thought-leadership or reflective professional narrative.
-- Strong opening hook (question, observation, or bold line). Short paragraphs (1–3 lines).
-- First person, authentic but career-friendly. Optional light insight or takeaway.
-- End with 0–3 relevant hashtags. No emoji overload.`,
+            linkedin: `LINKEDIN STYLE (strict — follow all):
+
+UNIQUE INSIGHT (do not merely summarize the day):
+- Derive a sharp insight from what they wrote: client or colleague questions, building in public, tensions, tradeoffs, or lessons learned.
+- Personal backstory or biography: ONLY if the user explicitly said it in the reflection below. Paraphrase only facts they stated. If nothing relevant appears, omit backstory entirely — never invent or assume a past.
+
+ONE POST = ONE IDEA (journalist mindset):
+- Each post has one clear angle and one main takeaway, like a strong lead — not a laundry list of unrelated points.
+
+STRUCTURE (skimmable):
+- Write for skimmers: short paragraphs, optional bullet points, or a tight framework when it fits (e.g. Problem → tension → lesson, or a short story arc to one point). Plain, simple language.
+
+HOOK (first ~2 lines are critical):
+- Open with something that earns the scroll: a number, direct address ("you"), a striking detail from THEIR reflection, or a sharp question. The hook must match the single idea.
+
+DELIVER + CLOSE:
+- The body must fulfill the hook’s promise. End with a clear call to action (one question, comment prompt, or one concrete next step).
+
+POLISH:
+- First person where natural. 0–3 relevant hashtags. No meta ("here’s my LinkedIn post"). Emoji only if light and natural.`,
             x: `X (TWITTER) STYLE (strict):
 - Very concise. Each post MUST be under 280 characters.
 - Punchy, direct. Line breaks for emphasis. One clear idea per post.
@@ -479,12 +494,26 @@ async function handleLinkedInSuggestions(req, res) {
 - Natural paragraph flow. No corporate speak.`
         };
         const styleGuide = platformStyleGuide[p] || platformStyleGuide.linkedin;
+        const linkedinReflectionExtra = p === 'linkedin'
+            ? `
+LinkedIn (extra — every post):
+- Again: no invented personal history. Backstory only when the reflection explicitly contains it.
+- Hook in the opening lines; skimmable middle; explicit CTA at the end.
+`
+            : '';
+        const linkedinStep2 = p === 'linkedin'
+            ? `
+For LinkedIn posts only: one clear angle each; strong hook in the first two lines; skimmable structure (short paragraphs and/or bullets); deliver on the hook; end with a CTA; never fabricate backstory not present in the reflection.
+`
+            : '';
         const prompt = `You are turning a day's reflection into separate social posts. You MUST create one standalone post for EACH distinct event or moment mentioned in the reflection.
 
 PLATFORM: ${platformLabel}. Write EVERY post in that platform's native style so it reads like a real ${platformLabel} post.
 
 ${styleGuide}
-
+${linkedinReflectionExtra}
+Cover every distinct event or moment from the reflection (people, places, media, work, funny moments). Each post focuses on one event only — insightful and reflective, not a dry summary.
+${linkedinStep2}
 Output format (strict):
 - For each post, first write exactly: EVENT: <short event label>
 - Then on the next lines write the full post text.
@@ -757,32 +786,9 @@ async function handleArticleExtract(req, res) {
         res.status(500).json({ error: e?.message || 'Article extraction failed' });
     }
 }
-function applyCorsHeaders(res) {
-    // firebase-functions/v2 response objects differ a bit across runtimes.
-    // Prefer `setHeader`, fall back to `set`.
-    try {
-        if (typeof res?.setHeader === 'function') {
-            res.setHeader('Access-Control-Allow-Origin', '*');
-            res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-            res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-            return;
-        }
-        if (typeof res?.set === 'function') {
-            res.set('Access-Control-Allow-Origin', '*');
-            res.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
-            res.set('Access-Control-Allow-Headers', 'Content-Type');
-        }
-    }
-    catch {
-        // If CORS header setting fails, let the request continue.
-    }
-}
+var newsApi_1 = require("./newsApi");
+Object.defineProperty(exports, "newsApi", { enumerable: true, get: function () { return newsApi_1.newsApi; } });
 exports.linkedInApi = (0, https_1.onRequest)({ cors: true }, async (req, res) => {
-    // Ensure CORS headers are present even for 404/route misses.
-    applyCorsHeaders(res);
-    if (req.method === 'OPTIONS') {
-        return res.status(204).end();
-    }
     const path = (req.url || '').split('?')[0];
     if (path.endsWith('/exchange')) {
         return handleLinkedInExchange(req, res);

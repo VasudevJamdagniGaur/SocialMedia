@@ -1,4 +1,4 @@
-import { getNewsApiKey } from './podTopicNewsShared';
+import { canFetchLiveNews } from './podTopicNewsShared';
 import { fetchSportsTopicRawItems, POD_SPORTS_EXPLORE_SLUGS } from './podSportsTopicFeed';
 
 const TTL_MS = 12 * 60 * 1000;
@@ -33,7 +33,7 @@ export function invalidateSportsTopicFeedCache(topicId) {
  */
 export function prefetchSportsExploreTopics() {
   if (typeof window === 'undefined') return;
-  if (!getNewsApiKey()) return;
+  if (!canFetchLiveNews()) return;
   POD_SPORTS_EXPLORE_SLUGS.forEach((slug, i) => {
     window.setTimeout(() => {
       void prefetchSportsTopicRaw(slug);
@@ -42,7 +42,7 @@ export function prefetchSportsExploreTopics() {
 }
 
 export function prefetchSportsTopicRaw(topicId) {
-  if (!topicId || !getNewsApiKey()) return Promise.resolve();
+  if (!topicId || !canFetchLiveNews()) return Promise.resolve();
   if (getSportsTopicFeedCache(topicId)) return Promise.resolve();
   if (inflight.has(topicId)) return inflight.get(topicId);
 

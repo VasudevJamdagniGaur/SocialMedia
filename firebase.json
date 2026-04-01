@@ -16,6 +16,10 @@
       {
         "source": "/api/linkedin/**",
         "function": "linkedInApi"
+      },
+      {
+        "source": "/api/news/**",
+        "function": "newsApi"
       }
     ]
   }
