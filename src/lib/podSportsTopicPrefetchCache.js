@@ -26,6 +26,30 @@ export function setSportsTopicFeedCache(topicId, entry) {
 
 export function invalidateSportsTopicFeedCache(topicId) {
   store.delete(topicId);
+  inflight.delete(topicId);
+}
+
+/** Clear all Sports → Explore topic caches (Cricket, Football, …). */
+export function invalidateAllSportsTopicExploreCaches() {
+  for (const id of POD_SPORTS_EXPLORE_SLUGS) {
+    store.delete(id);
+    inflight.delete(id);
+  }
+}
+
+/**
+ * Prefetch every explore topic in parallel (Sports hub — open topic screens already warm).
+ * @returns {Promise<void>}
+ */
+export function prefetchAllSportsExploreTopicsNow() {
+  if (typeof window === 'undefined' || !canFetchLiveNews()) return Promise.resolve();
+  return Promise.all(POD_SPORTS_EXPLORE_SLUGS.map((slug) => prefetchSportsTopicRaw(slug))).then(() => {});
+}
+
+/** Pull-to-refresh: drop caches and refetch all explore feeds. */
+export function refreshAllSportsExploreTopicCaches() {
+  invalidateAllSportsTopicExploreCaches();
+  return prefetchAllSportsExploreTopicsNow();
 }
 
 /**

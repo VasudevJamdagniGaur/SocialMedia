@@ -14,7 +14,11 @@ import {
   enrichNewsItemsWithOgImages,
   googleNewsSearchUrl,
 } from '../lib/podTopicNewsShared';
-import { prefetchSportsExploreTopics, prefetchSportsTopicRaw } from '../lib/podSportsTopicPrefetchCache';
+import {
+  prefetchAllSportsExploreTopicsNow,
+  prefetchSportsTopicRaw,
+  refreshAllSportsExploreTopicCaches,
+} from '../lib/podSportsTopicPrefetchCache';
 
 /** Engagement rank plus same-city boost (Firestore `trendingScore` is likes×3 + shares×5 + views). */
 function effectiveSportsTrendRank(item, userCityNorm) {
@@ -168,6 +172,14 @@ function SportsTrendingCard({ item, idx, HUB, isSignedIn, navigate, returnTo }) 
   );
 }
 
+const HUB_COLORS = {
+  bg: '#0F0F0F',
+  text: '#FFFFFF',
+  textSecondary: '#A0A0A0',
+  divider: '#1E1E1E',
+  accent: '#A855F7',
+};
+
 export default function PodSportsPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -178,6 +190,12 @@ export default function PodSportsPage() {
   const [sportsNewsError, setSportsNewsError] = useState('');
   const [trendingRegionLabel, setTrendingRegionLabel] = useState('');
   const [userId, setUserId] = useState(() => getCurrentUser()?.uid || null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [pullProgress, setPullProgress] = useState(0);
+
+  const loadTokenRef = useRef(0);
+  const pullStartYRef = useRef(null);
+  const pullDistanceRef = useRef(0);
 
   const SPORTS_EXPLORE = [
     { label: 'Cricket', slug: 'cricket' },
@@ -192,14 +210,22 @@ export default function PodSportsPage() {
     return () => unsub();
   }, []);
 
+  /** Eager-load all Explore feeds in parallel when Sports hub opens. */
   useEffect(() => {
-    prefetchSportsExploreTopics();
+    void prefetchAllSportsExploreTopicsNow();
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadSportsNews = useCallback(
+    async (opts = {}) => {
+      const skipLoadingBar = !!opts.skipLoadingBar;
+      const token = ++loadTokenRef.current;
 
-    const fallbackTrending = [
+      if (!skipLoadingBar) {
+        setIsLoadingSportsNews(true);
+        setSportsNewsError('');
+      }
+
+      const fallbackTrending = [
       {
         title: 'Global football season enters decisive phase',
         source: 'Sports Desk',
@@ -226,19 +252,18 @@ export default function PodSportsPage() {
       },
     ];
 
-    const loadSportsNews = async () => {
-      setIsLoadingSportsNews(true);
-      setSportsNewsError('');
       try {
         const { code: country, label: regionLabel, city: cityFromRegion } =
           await resolveUserNewsRegionForNewsApi();
+        if (token !== loadTokenRef.current) return;
         let userCityRaw = typeof cityFromRegion === 'string' ? cityFromRegion.trim() : '';
         if (!userCityRaw) {
           userCityRaw = await resolveUserCityFromIp();
         }
+        if (token !== loadTokenRef.current) return;
         const userCityNorm = userCityRaw.trim().toLowerCase();
         const countryUpper = String(country || 'us').toUpperCase().slice(0, 2);
-        if (!cancelled) setTrendingRegionLabel(regionLabel);
+        setTrendingRegionLabel(regionLabel);
 
         const user = getCurrentUser();
 
@@ -247,12 +272,11 @@ export default function PodSportsPage() {
             enableOgFallback: true,
             maxResolve: 4,
           });
-          if (!cancelled) {
-            setSportsTrending(rows);
-            setSportsNewsError(
-              'Add REACT_APP_NEWSAPI to .env (web) or set NEWSAPI_KEY on Firebase Functions and deploy (Android app).'
-            );
-          }
+          if (token !== loadTokenRef.current) return;
+          setSportsTrending(rows);
+          setSportsNewsError(
+            'Add REACT_APP_NEWSAPI to .env (web) or set NEWSAPI_KEY on Firebase Functions and deploy (Android app).'
+          );
           return;
         }
 
@@ -277,6 +301,7 @@ export default function PodSportsPage() {
             language: 'en',
           });
         }
+        if (token !== loadTokenRef.current) return;
 
         const newsNormalized = normalizeArticles(articles).map((a) => ({
           title: a.title,
@@ -351,49 +376,109 @@ export default function PodSportsPage() {
           return (b.createdAtMs || 0) - (a.createdAtMs || 0);
         });
 
-        if (!cancelled) {
-          const baseRows = merged.length ? merged.slice(0, 10) : fallbackTrending;
-          const rows = await enrichNewsItemsWithOgImages(baseRows, {
-            enableOgFallback: true,
-            maxResolve: 10,
-          });
-          if (!cancelled) setSportsTrending(rows);
-        }
+        if (token !== loadTokenRef.current) return;
+        const baseRows = merged.length ? merged.slice(0, 10) : fallbackTrending;
+        const rows = await enrichNewsItemsWithOgImages(baseRows, {
+          enableOgFallback: true,
+          maxResolve: 10,
+        });
+        if (token !== loadTokenRef.current) return;
+        setSportsTrending(rows);
       } catch {
-        if (!cancelled) {
-          setTrendingRegionLabel('');
-          const rows = await enrichNewsItemsWithOgImages(fallbackTrending, {
-            enableOgFallback: true,
-            maxResolve: 4,
-          });
-          if (!cancelled) {
-            setSportsTrending(rows);
-            setSportsNewsError('Could not load live headlines, showing top picks.');
-          }
-        }
+        if (token !== loadTokenRef.current) return;
+        setTrendingRegionLabel('');
+        const rows = await enrichNewsItemsWithOgImages(fallbackTrending, {
+          enableOgFallback: true,
+          maxResolve: 4,
+        });
+        if (token !== loadTokenRef.current) return;
+        setSportsTrending(rows);
+        setSportsNewsError('Could not load live headlines, showing top picks.');
       } finally {
-        if (!cancelled) setIsLoadingSportsNews(false);
+        if (token === loadTokenRef.current && !skipLoadingBar) {
+          setIsLoadingSportsNews(false);
+        }
       }
-    };
+    },
+    [userId]
+  );
 
+  useEffect(() => {
     loadSportsNews();
     return () => {
-      cancelled = true;
+      loadTokenRef.current += 1;
     };
-  }, [userId]);
+  }, [loadSportsNews]);
 
   const HUB = {
-    bg: '#0F0F0F',
-    text: '#FFFFFF',
-    textSecondary: '#A0A0A0',
-    divider: '#1E1E1E',
-    accent: '#A855F7',
+    bg: HUB_COLORS.bg,
+    text: HUB_COLORS.text,
+    textSecondary: HUB_COLORS.textSecondary,
+    divider: HUB_COLORS.divider,
+    accent: HUB_COLORS.accent,
   };
   const cardStyle = { background: HUB.bg, border: `1px solid ${HUB.divider}` };
+
+  const getScrollTop = () => {
+    const se = document.scrollingElement;
+    if (se) return se.scrollTop || 0;
+    return window.scrollY || document.documentElement.scrollTop || 0;
+  };
+
+  const isAtTop = () => getScrollTop() <= 0;
+
+  const runHardRefresh = useCallback(async () => {
+    setRefreshing(true);
+    setPullProgress(0);
+    try {
+      await refreshAllSportsExploreTopicCaches();
+      await loadSportsNews({ skipLoadingBar: true });
+    } finally {
+      setRefreshing(false);
+      setPullProgress(0);
+    }
+  }, [loadSportsNews]);
+
+  const onTouchStart = (e) => {
+    if (isLoadingSportsNews || refreshing) return;
+    if (!isAtTop()) return;
+    if (!e.touches || e.touches.length !== 1) return;
+    pullStartYRef.current = e.touches[0].clientY;
+    pullDistanceRef.current = 0;
+    setPullProgress(0);
+  };
+
+  const onTouchMove = (e) => {
+    if (isLoadingSportsNews || refreshing) return;
+    if (!isAtTop()) return;
+    if (pullStartYRef.current == null) return;
+    if (!e.touches || e.touches.length !== 1) return;
+    const currentY = e.touches[0].clientY;
+    const delta = currentY - pullStartYRef.current;
+    if (delta <= 0) return;
+    pullDistanceRef.current = delta;
+    setPullProgress(Math.max(0, Math.min(1, delta / 80)));
+  };
+
+  const onTouchEnd = () => {
+    if (isLoadingSportsNews || refreshing) return;
+    if (pullStartYRef.current == null) return;
+    const delta = pullDistanceRef.current;
+    pullStartYRef.current = null;
+    pullDistanceRef.current = 0;
+    if (isAtTop() && delta >= 70) {
+      void runHardRefresh();
+    } else {
+      setPullProgress(0);
+    }
+  };
 
   return (
     <div
       className="min-h-screen px-6 relative overflow-hidden slide-up"
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
       style={{
         background: isDarkMode ? '#131314' : '#B5C4AE',
         paddingTop: 'max(1.5rem, calc(env(safe-area-inset-top, 0px) + 1rem))',
@@ -412,6 +497,20 @@ export default function PodSportsPage() {
             <ArrowLeft className="w-5 h-5" style={{ color: HUB.text }} />
           </button>
           <h1 className="text-xl font-bold" style={{ color: HUB.text }}>Sports</h1>
+        </div>
+
+        <div
+          className="h-8 flex items-center justify-center text-sm -mt-2 mb-2"
+          style={{ color: HUB.textSecondary }}
+          aria-live="polite"
+        >
+          {refreshing
+            ? 'Refreshing…'
+            : pullProgress > 0
+              ? pullProgress >= 0.9
+                ? 'Release to refresh'
+                : 'Pull to refresh'
+              : null}
         </div>
 
         <div className="space-y-4">
