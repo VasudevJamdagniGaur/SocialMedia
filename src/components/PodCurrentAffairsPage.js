@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { canFetchLiveNews, fetchNewsApiTopHeadlinesRaw, normalizeArticles } from '../lib/podTopicNewsShared';
+import { prefetchExploreTopicRaw } from '../lib/podExploreTopicPrefetchCache';
 
 const GEMINI_MODEL = 'gemini-3-flash-preview';
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
@@ -269,7 +270,14 @@ export default function PodCurrentAffairsPage() {
                 <button
                   key={row.slug}
                   type="button"
-                  onClick={() => navigate(`/pod/explore/current-affairs/${row.slug}`)}
+                  onClick={async () => {
+                    try {
+                      await prefetchExploreTopicRaw('current-affairs', row.slug, 'international');
+                    } catch {
+                      /* in-page load */
+                    }
+                    navigate(`/pod/explore/current-affairs/${row.slug}`);
+                  }}
                   className="w-full flex items-center justify-between py-3 text-left transition-opacity hover:opacity-90"
                   style={{
                     borderTop: index === 0 ? 'none' : `1px solid ${HUB.divider}`,

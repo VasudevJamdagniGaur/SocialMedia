@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation, useParams } from 'react-router-dom';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { Capacitor } from '@capacitor/core';
 import LandingPage from './components/LandingPage';
@@ -27,6 +27,12 @@ import AllDayReflectionsPage from './components/AllDayReflectionsPage';
 import ShareReflectionPage from './components/ShareReflectionPage';
 import ShareSuggestionsPage from './components/ShareSuggestionsPage';
 import BottomNavigation from './components/BottomNavigation';
+
+/** Remount when :section / :topicId change so stale feed state is not shown between topics. */
+function PodExploreTopicRoute() {
+  const { section, topicId } = useParams();
+  return <PodExploreTopicPage key={`${section}-${topicId}`} />;
+}
 
 // Lazy load Capacitor App plugin for deep link handling
 const getAppPlugin = async () => {
@@ -200,7 +206,7 @@ function AppContent() {
         <Route path="/pod" element={<PodPage />} />
         <Route path="/pod/sports/topic/:topicId" element={<PodSportsTopicPage />} />
         <Route path="/pod/sports" element={<PodSportsPage />} />
-        <Route path="/pod/explore/:section/:topicId" element={<PodExploreTopicPage />} />
+        <Route path="/pod/explore/:section/:topicId" element={<PodExploreTopicRoute />} />
         <Route path="/pod/ai-tech" element={<PodAiTechPage />} />
         <Route path="/pod/entrepreneurship" element={<PodEntrepreneurshipPage />} />
         <Route path="/pod/current-affairs" element={<PodCurrentAffairsPage />} />

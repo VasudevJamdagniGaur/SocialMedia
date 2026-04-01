@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { canFetchLiveNews, fetchNewsApiTopHeadlinesRaw, normalizeArticles } from '../lib/podTopicNewsShared';
+import { prefetchExploreTopicRaw } from '../lib/podExploreTopicPrefetchCache';
 
 export default function PodAiTechPage() {
   const navigate = useNavigate();
@@ -180,7 +181,14 @@ export default function PodAiTechPage() {
                 <button
                   key={row.slug}
                   type="button"
-                  onClick={() => navigate(`/pod/explore/ai-tech/${row.slug}`)}
+                  onClick={async () => {
+                    try {
+                      await prefetchExploreTopicRaw('ai-tech', row.slug, 'international');
+                    } catch {
+                      /* in-page load */
+                    }
+                    navigate(`/pod/explore/ai-tech/${row.slug}`);
+                  }}
                   className="w-full flex items-center justify-between py-3 text-left transition-opacity hover:opacity-90"
                   style={{
                     borderTop: index === 0 ? 'none' : `1px solid ${HUB.divider}`,
