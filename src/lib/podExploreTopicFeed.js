@@ -2,7 +2,6 @@ import {
   canFetchLiveNews,
   fetchNewsApiEverythingNormalized,
   filterNewsRowsIndiaLocal,
-  getNewsApiKey,
   enrichNewsItemsWithOgImages,
 } from './podTopicNewsShared';
 import {
@@ -32,7 +31,7 @@ export async function fetchExploreTopicFeed({ section, topicId, startupRegion })
       return {
         items: buildFallbackRows(title, googleQ),
         error:
-          'Add REACT_APP_NEWSAPI to .env (web) or NEWSAPI_KEY on Firebase Functions (Android). Restart/rebuild. Showing browse links only.',
+          'Backend NewsAPI is unavailable. Set NEWSAPI_KEY on the server (Firebase Functions: `newsApi`). Showing browse links only.',
       };
     }
 
@@ -53,13 +52,10 @@ export async function fetchExploreTopicFeed({ section, topicId, startupRegion })
     }
 
     if (!rows?.length) {
-      const hasKey = !!getNewsApiKey();
       return {
         items: buildFallbackRows(title, googleQ),
         error:
-          hasKey
-            ? 'NewsAPI returned no articles (check your query/plan limits). Showing quick fallback headlines.'
-            : 'NewsAPI key missing in the APK build. Rebuild the app so REACT_APP_NEWSAPI is injected into the bundle.',
+          'Backend NewsAPI returned no articles. Check that NEWSAPI_KEY is set on the server (Firebase Functions: `newsApi`) and that the query/plan limits are valid.',
       };
     }
 

@@ -2,7 +2,6 @@ import chatService from '../services/chatService';
 import {
   googleNewsSearchUrl,
   canFetchLiveNews,
-  getNewsApiKey,
   fetchNewsApiEverythingNormalized,
   fetchNewsApiTopHeadlinesNormalized,
   enrichNewsItemsWithOgImages,
@@ -184,7 +183,7 @@ export async function fetchSportsTopicRawItems(topicId) {
     return {
       items: buildFallbackRows(topicId, title),
       error:
-        'Add REACT_APP_NEWSAPI to .env (web) or NEWSAPI_KEY on Firebase Functions (Android app). Showing browse links only.',
+        'Backend NewsAPI is unavailable. Set NEWSAPI_KEY on the server (Firebase Functions: `newsApi`). Showing browse links only.',
       allowRewrite: false,
     };
   }
@@ -209,13 +208,10 @@ export async function fetchSportsTopicRawItems(topicId) {
   }
 
   if (!rows?.length) {
-    const hasKey = !!getNewsApiKey();
     return {
       items: buildFallbackRows(topicId, title),
       error:
-        hasKey
-          ? 'NewsAPI returned no articles (check your query/plan limits). Showing quick fallback headlines.'
-          : 'NewsAPI key missing in the APK build. Rebuild the app so REACT_APP_NEWSAPI is injected into the bundle.',
+        'Backend NewsAPI returned no articles. Check that NEWSAPI_KEY is set on the server (Firebase Functions: `newsApi`) and that the query/plan limits are valid.',
       allowRewrite: false,
     };
   }

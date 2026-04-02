@@ -275,7 +275,7 @@ export default function PodSportsPage() {
           if (token !== loadTokenRef.current) return;
           setSportsTrending(rows);
           setSportsNewsError(
-            'Add REACT_APP_NEWSAPI to .env (web) or set NEWSAPI_KEY on Firebase Functions and deploy (Android app).'
+            'Backend NewsAPI is unavailable. Set NEWSAPI_KEY on Firebase Functions (`newsApi`) and deploy.'
           );
           return;
         }

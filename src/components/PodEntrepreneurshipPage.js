@@ -50,7 +50,7 @@ export default function PodEntrepreneurshipPage() {
         if (!canFetchLiveNews()) {
           setTrending(fallbackTrending);
           setNewsError(
-            'Set REACT_APP_NEWSAPI in .env (web) or NEWSAPI_KEY on Firebase Functions (app) to load live headlines.'
+            'Backend NewsAPI is unavailable. Set NEWSAPI_KEY on Firebase Functions (`newsApi`) to load live headlines.'
           );
           return;
         }

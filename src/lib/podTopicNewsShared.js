@@ -761,7 +761,9 @@ function shouldProxyNewsApi() {
 
 /** True if live NewsAPI fetch can be attempted (in-app key or native/local → backend proxy). */
 export function canFetchLiveNews() {
-  return !!getNewsApiKey() || shouldProxyNewsApi();
+  // Backend-only architecture: the app should only talk to the backend proxy,
+  // not directly to NewsAPI from the browser/apk.
+  return typeof window !== 'undefined';
 }
 
 function getFirebaseHostingApiBases() {
@@ -939,11 +941,10 @@ function newsApiDefaultFromISO(days = 7) {
  * @returns {Promise<object[]>} NewsAPI `articles` array (raw)
  */
 export async function fetchNewsApiEverythingRaw(opts = {}) {
-  const apiKey = getNewsApiKey();
   const q = String(opts.q || '').trim();
   if (!q) return [];
-  const useProxy = shouldProxyNewsApi();
-  if (!apiKey && !useProxy) return [];
+  // Always fetch via backend proxy: /api/news/* -> Cloud Function `newsApi`.
+  // This keeps the NewsAPI key on the server.
 
   const pageSize = Math.min(Math.max(1, opts.pageSize ?? 30), 100);
   const baseParams = new URLSearchParams({
@@ -954,27 +955,9 @@ export async function fetchNewsApiEverythingRaw(opts = {}) {
   });
   baseParams.set('from', opts.from || newsApiDefaultFromISO(7));
 
-  if (useProxy) {
-    const proxied = await fetchNewsApiThroughProxy('everything', baseParams);
-    // If proxy returns no articles, it can still be a misrouted request. In that case,
-    // fall back so the APK doesn't get stuck showing placeholder headlines.
-    if (proxied !== null && Array.isArray(proxied) && proxied.length > 0) return proxied;
-    // If Firebase Hosting proxy fails (or returns empty), fall back to a browser-friendly
-    // CORS bypass so the APK still fetches (Android WebView).
-    if (apiKey) return await fetchNewsApiThroughCorsProxies('everything', baseParams, apiKey);
-  }
-
-  if (!apiKey) return [];
-  const params = new URLSearchParams(baseParams);
-  params.set('apiKey', apiKey);
-  try {
-    const res = await fetch(`${NEWSAPI_V2}/everything?${params.toString()}`);
-    const data = await res.json().catch(() => null);
-    if (!res.ok || !data || data.status !== 'ok' || !Array.isArray(data.articles)) return [];
-    return data.articles;
-  } catch {
-    return [];
-  }
+  const proxied = await fetchNewsApiThroughProxy('everything', baseParams);
+  if (Array.isArray(proxied) && proxied.length > 0) return proxied;
+  return [];
 }
 
 export async function fetchNewsApiEverythingNormalized(opts = {}) {
@@ -988,14 +971,13 @@ export async function fetchNewsApiEverythingNormalized(opts = {}) {
  * @returns {Promise<object[]>} NewsAPI `articles` array (raw)
  */
 export async function fetchNewsApiTopHeadlinesRaw(opts = {}) {
-  const apiKey = getNewsApiKey();
   const category = String(opts.category || '').trim();
   const q = String(opts.q || '').trim();
   const sources = String(opts.sources || '').trim();
   if (!category && !q && !sources) return [];
 
-  const useProxy = shouldProxyNewsApi();
-  if (!apiKey && !useProxy) return [];
+  // Always fetch via backend proxy: /api/news/* -> Cloud Function `newsApi`.
+  // This keeps the NewsAPI key on the server.
 
   const pageSize = Math.min(Math.max(1, opts.pageSize ?? 30), 100);
   const baseParams = new URLSearchParams({
@@ -1016,24 +998,9 @@ export async function fetchNewsApiTopHeadlinesRaw(opts = {}) {
     baseParams.set('country', String(opts.country));
   }
 
-  if (useProxy) {
-    const proxied = await fetchNewsApiThroughProxy('top-headlines', baseParams);
-    if (proxied !== null && Array.isArray(proxied) && proxied.length > 0) return proxied;
-    // If Firebase Hosting proxy fails (or returns empty), use CORS bypass as a last resort (APK).
-    if (apiKey) return await fetchNewsApiThroughCorsProxies('top-headlines', baseParams, apiKey);
-  }
-
-  if (!apiKey) return [];
-  const params = new URLSearchParams(baseParams);
-  params.set('apiKey', apiKey);
-  try {
-    const res = await fetch(`${NEWSAPI_V2}/top-headlines?${params.toString()}`);
-    const data = await res.json().catch(() => null);
-    if (!res.ok || !data || data.status !== 'ok' || !Array.isArray(data.articles)) return [];
-    return data.articles;
-  } catch {
-    return [];
-  }
+  const proxied = await fetchNewsApiThroughProxy('top-headlines', baseParams);
+  if (Array.isArray(proxied) && proxied.length > 0) return proxied;
+  return [];
 }
 
 export async function fetchNewsApiTopHeadlinesNormalized(opts = {}) {
