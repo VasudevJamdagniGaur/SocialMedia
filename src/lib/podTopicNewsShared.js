@@ -749,6 +749,22 @@ export function getNewsApiFunctionUrl() {
   return (process.env.REACT_APP_NEWSAPI_FUNCTION_URL || '').trim();
 }
 
+function getDefaultFirebaseProjectId() {
+  // Keep in sync with src/firebase/config.js (projectId).
+  return 'deitedatabase';
+}
+
+function getCandidateNewsApiFunctionUrls() {
+  const explicit = getNewsApiFunctionUrl();
+  const out = [];
+  if (explicit) out.push(explicit);
+  const pid = getDefaultFirebaseProjectId();
+  // Common Firebase Functions regions. We only need one that is actually deployed.
+  const regions = ['us-central1', 'europe-west1', 'asia-south1', 'asia-east1'];
+  for (const r of regions) out.push(`https://${r}-${pid}.cloudfunctions.net/newsApi`);
+  return Array.from(new Set(out));
+}
+
 // #region agent log helper
 function __agentDebugLog({ hypothesisId, location, message, data }) {
   // Never block the user flow; best-effort logging only.
@@ -970,61 +986,66 @@ async function fetchNewsApiThroughProxy(endpoint, baseParams) {
 }
 
 async function fetchNewsApiThroughCloudFunction(endpoint, baseParams) {
-  const fnUrl = getNewsApiFunctionUrl();
-  if (!fnUrl) return null;
-
-  // #region agent log H2 fn_url_present
-  __agentDebugLog({
-    hypothesisId: 'H2',
-    location: 'src/lib/podTopicNewsShared.js:fetchNewsApiThroughCloudFunction',
-    message: 'fn_url_present',
-    data: {
-      fnUrl,
-      endpoint,
-    },
-  });
-  // #endregion
-
   // Backend expects `endpoint` in query so it can choose everything vs top-headlines.
   const p = new URLSearchParams(baseParams);
   p.set('endpoint', endpoint);
 
+  const urls = getCandidateNewsApiFunctionUrls();
+  if (!urls.length) return null;
+
+  // #region agent log H2 fn_candidates
+  __agentDebugLog({
+    hypothesisId: 'H2',
+    location: 'src/lib/podTopicNewsShared.js:fetchNewsApiThroughCloudFunction',
+    message: 'fn_candidates',
+    data: {
+      endpoint,
+      count: urls.length,
+      url0: urls[0],
+    },
+  });
+  // #endregion
+
   const timeoutMs = 12000;
-  const ctrl = new AbortController();
-  const tid = setTimeout(() => ctrl.abort(), timeoutMs);
-  try {
-    const res = await fetch(`${fnUrl}?${p.toString()}`, { method: 'GET', signal: ctrl.signal });
-    // #region agent log H5 cloud_function_response
-    __agentDebugLog({
-      hypothesisId: 'H5',
-      location: 'src/lib/podTopicNewsShared.js:fetchNewsApiThroughCloudFunction',
-      message: 'fn_response',
-      data: {
-        httpStatus: res?.status,
-        ok: !!res?.ok,
-      },
-    });
-    // #endregion
-    const data = await res.json().catch(() => null);
-    if (res.ok && data && data.status === 'ok' && Array.isArray(data.articles)) return data.articles;
-    return null;
-  } catch (e) {
-    // #region agent log H3 fn_fetch_error
-    __agentDebugLog({
-      hypothesisId: 'H3',
-      location: 'src/lib/podTopicNewsShared.js:fetchNewsApiThroughCloudFunction',
-      message: 'fn_fetch_error',
-      data: {
-        fnUrl,
-        endpoint,
-        error: e instanceof Error ? e.message : String(e),
-      },
-    });
-    // #endregion
-    return null;
-  } finally {
-    clearTimeout(tid);
+  for (const fnUrl of urls) {
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const res = await fetch(`${fnUrl}?${p.toString()}`, { method: 'GET', signal: ctrl.signal });
+      // #region agent log H5 cloud_function_response
+      __agentDebugLog({
+        hypothesisId: 'H5',
+        location: 'src/lib/podTopicNewsShared.js:fetchNewsApiThroughCloudFunction',
+        message: 'fn_response',
+        data: {
+          fnUrl,
+          httpStatus: res?.status,
+          ok: !!res?.ok,
+          contentType: res?.headers?.get('content-type'),
+        },
+      });
+      // #endregion
+      const data = await res.json().catch(() => null);
+      if (res.ok && data && data.status === 'ok' && Array.isArray(data.articles)) return data.articles;
+    } catch (e) {
+      // #region agent log H3 fn_fetch_error
+      __agentDebugLog({
+        hypothesisId: 'H3',
+        location: 'src/lib/podTopicNewsShared.js:fetchNewsApiThroughCloudFunction',
+        message: 'fn_fetch_error',
+        data: {
+          fnUrl,
+          endpoint,
+          error: e instanceof Error ? e.message : String(e),
+        },
+      });
+      // #endregion
+    } finally {
+      clearTimeout(tid);
+    }
   }
+
+  return null;
 }
 
 async function fetchNewsApiThroughCorsProxies(endpoint, baseParams, apiKey) {

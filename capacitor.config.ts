@@ -20,6 +20,7 @@ const config: CapacitorConfig = {
       'https://deitedatabase.web.app',
       'https://*.web.app',
       'https://newsapi.org',
+      'https://*.cloudfunctions.net',
     ],
   },
 };
