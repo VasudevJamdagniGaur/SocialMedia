@@ -861,7 +861,16 @@ async function fetchNewsApiThroughCorsProxies(endpoint, baseParams, apiKey) {
           { method: 'GET', signal: ctrl.signal }
         );
         if (!res.ok) return null;
-        return await res.json().catch(() => null);
+        // codetabs can return raw JSON or an object with `contents`
+        const json = await res.json().catch(() => null);
+        if (json?.status && Array.isArray(json?.articles)) return json;
+        const contents =
+          typeof json?.contents === 'string' ? json.contents : typeof json === 'string' ? json : null;
+        if (typeof contents === 'string') {
+          const parsed = JSON.parse(contents).catch(() => null);
+          if (parsed?.status && Array.isArray(parsed?.articles)) return parsed;
+        }
+        return null;
       } finally {
         clearTimeout(tid);
       }
@@ -875,7 +884,12 @@ async function fetchNewsApiThroughCorsProxies(endpoint, baseParams, apiKey) {
           { method: 'GET', signal: ctrl.signal }
         );
         if (!res.ok) return null;
-        return await res.json().catch(() => null);
+        const json = await res.json().catch(async () => {
+          const txt = await res.text().catch(() => '');
+          return txt ? JSON.parse(txt).catch(() => null) : null;
+        });
+        if (json?.status && Array.isArray(json?.articles)) return json;
+        return null;
       } finally {
         clearTimeout(tid);
       }
@@ -891,8 +905,11 @@ async function fetchNewsApiThroughCorsProxies(endpoint, baseParams, apiKey) {
         if (!res.ok) return null;
         const data = await res.json().catch(() => null);
         const contents = typeof data?.contents === 'string' ? data.contents : '';
-        if (!contents) return null;
-        return JSON.parse(contents).catch(() => null);
+        if (contents) {
+          const parsed = JSON.parse(contents).catch(() => null);
+          if (parsed?.status && Array.isArray(parsed?.articles)) return parsed;
+        }
+        return null;
       } finally {
         clearTimeout(tid);
       }
@@ -902,9 +919,7 @@ async function fetchNewsApiThroughCorsProxies(endpoint, baseParams, apiKey) {
   for (const run of attempts) {
     try {
       const data = await run();
-      if (data && data.status === 'ok' && Array.isArray(data.articles)) {
-        return data.articles;
-      }
+      if (data && data.status === 'ok' && Array.isArray(data.articles)) return data.articles;
     } catch {
       /* next proxy */
     }
@@ -941,9 +956,11 @@ export async function fetchNewsApiEverythingRaw(opts = {}) {
 
   if (useProxy) {
     const proxied = await fetchNewsApiThroughProxy('everything', baseParams);
-    if (proxied !== null) return proxied;
-    // If Firebase Hosting proxy fails (missing server key, misrouting, etc.),
-    // fall back to a browser-friendly CORS bypass so the APK still fetches.
+    // If proxy returns no articles, it can still be a misrouted request. In that case,
+    // fall back so the APK doesn't get stuck showing placeholder headlines.
+    if (proxied !== null && Array.isArray(proxied) && proxied.length > 0) return proxied;
+    // If Firebase Hosting proxy fails (or returns empty), fall back to a browser-friendly
+    // CORS bypass so the APK still fetches (Android WebView).
     if (apiKey) return await fetchNewsApiThroughCorsProxies('everything', baseParams, apiKey);
   }
 
@@ -1001,8 +1018,8 @@ export async function fetchNewsApiTopHeadlinesRaw(opts = {}) {
 
   if (useProxy) {
     const proxied = await fetchNewsApiThroughProxy('top-headlines', baseParams);
-    if (proxied !== null) return proxied;
-    // If Firebase Hosting proxy fails, use CORS bypass as a last resort (APK).
+    if (proxied !== null && Array.isArray(proxied) && proxied.length > 0) return proxied;
+    // If Firebase Hosting proxy fails (or returns empty), use CORS bypass as a last resort (APK).
     if (apiKey) return await fetchNewsApiThroughCorsProxies('top-headlines', baseParams, apiKey);
   }
 

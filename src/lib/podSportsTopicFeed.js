@@ -2,6 +2,7 @@ import chatService from '../services/chatService';
 import {
   googleNewsSearchUrl,
   canFetchLiveNews,
+  getNewsApiKey,
   fetchNewsApiEverythingNormalized,
   fetchNewsApiTopHeadlinesNormalized,
   enrichNewsItemsWithOgImages,
@@ -208,10 +209,13 @@ export async function fetchSportsTopicRawItems(topicId) {
   }
 
   if (!rows?.length) {
+    const hasKey = !!getNewsApiKey();
     return {
       items: buildFallbackRows(topicId, title),
       error:
-        'NewsAPI returned no articles (check your key, plan limits, or query). Showing quick fallback headlines.',
+        hasKey
+          ? 'NewsAPI returned no articles (check your query/plan limits). Showing quick fallback headlines.'
+          : 'NewsAPI key missing in the APK build. Rebuild the app so REACT_APP_NEWSAPI is injected into the bundle.',
       allowRewrite: false,
     };
   }
