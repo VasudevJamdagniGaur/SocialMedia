@@ -16,9 +16,12 @@ const config: CapacitorConfig = {
       'https://*.google.com',
       'https://*.googleapis.com',
       'https://deitedatabase.firebaseapp.com',
-      'https://*.firebaseapp.com'
-    ]
-  }
+      'https://*.firebaseapp.com',
+      'https://deitedatabase.web.app',
+      'https://*.web.app',
+      'https://newsapi.org',
+    ],
+  },
 };
 
 export default config;

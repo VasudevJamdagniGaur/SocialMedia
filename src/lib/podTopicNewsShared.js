@@ -765,24 +765,51 @@ export function canFetchLiveNews() {
 }
 
 function getFirebaseHostingApiBases() {
+  const trimOrigin = (u) => (typeof u === 'string' ? u.trim().replace(/\/$/, '') : '');
+  const envOrigin = trimOrigin(process.env.REACT_APP_NEWS_PROXY_ORIGIN || '');
+  const defaultBases = ['https://deitedatabase.web.app', 'https://deitedatabase.firebaseapp.com'];
+  const basesFromEnv = envOrigin
+    ? [envOrigin, ...defaultBases.filter((b) => b !== envOrigin)]
+    : defaultBases;
+
   const origin =
     typeof window !== 'undefined' && window.location && typeof window.location.origin === 'string'
       ? window.location.origin
       : '';
+
+  let isNative = false;
+  try {
+    isNative = Capacitor?.isNativePlatform?.() === true;
+  } catch {
+    /* no native bridge */
+  }
+
   const originLooksLocal =
     !origin ||
     origin.includes('localhost') ||
     origin.startsWith('capacitor://') ||
     origin.startsWith('ionic://') ||
     origin.startsWith('file://');
+
+  // APK/WebView: never hit https://localhost/api/news first — it has no proxy and can hang or 404.
+  if (isNative) {
+    return basesFromEnv;
+  }
+
   if (originLooksLocal) {
     const list = [];
     if (origin && origin.startsWith('http')) list.push(origin);
-    list.push('https://deitedatabase.web.app');
-    list.push('https://deitedatabase.firebaseapp.com');
+    for (const b of basesFromEnv) {
+      if (!list.includes(b)) list.push(b);
+    }
     return list;
   }
-  return [origin, 'https://deitedatabase.web.app', 'https://deitedatabase.firebaseapp.com'];
+
+  const out = [origin];
+  for (const b of basesFromEnv) {
+    if (b !== origin) out.push(b);
+  }
+  return out;
 }
 
 /**
@@ -793,13 +820,23 @@ function getFirebaseHostingApiBases() {
 async function fetchNewsApiThroughProxy(endpoint, baseParams) {
   const p = new URLSearchParams(baseParams);
   p.delete('apiKey');
+  // Backup for Hosting → Functions path quirks (server strips `endpoint` before calling NewsAPI).
+  p.set('endpoint', endpoint);
+
+  const timeoutMs = 12000;
   for (const base of getFirebaseHostingApiBases()) {
     try {
       const url = `${base}/api/news/${endpoint}?${p.toString()}`;
-      const res = await fetch(url, { method: 'GET' });
-      const data = await res.json().catch(() => null);
-      if (res.ok && data && data.status === 'ok' && Array.isArray(data.articles)) {
-        return data.articles;
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), timeoutMs);
+      try {
+        const res = await fetch(url, { method: 'GET', signal: ctrl.signal });
+        const data = await res.json().catch(() => null);
+        if (res.ok && data && data.status === 'ok' && Array.isArray(data.articles)) {
+          return data.articles;
+        }
+      } finally {
+        clearTimeout(tid);
       }
     } catch {
       /* try next base */

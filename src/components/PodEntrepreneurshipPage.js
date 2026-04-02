@@ -288,13 +288,9 @@ export default function PodEntrepreneurshipPage() {
                 <button
                   key={row.slug}
                   type="button"
-                  onClick={async () => {
-                    try {
-                      await prefetchExploreTopicRaw('entrepreneurship', row.slug, 'international');
-                    } catch {
-                      /* in-page load */
-                    }
+                  onClick={() => {
                     navigate(`/pod/explore/entrepreneurship/${row.slug}`);
+                    void prefetchExploreTopicRaw('entrepreneurship', row.slug, 'international').catch(() => {});
                   }}
                   className="w-full flex items-center justify-between py-3 text-left transition-opacity hover:opacity-90"
                   style={{

@@ -178,13 +178,9 @@ export default function PodCurrentAffairsPage() {
                 <button
                   key={row.slug}
                   type="button"
-                  onClick={async () => {
-                    try {
-                      await prefetchExploreTopicRaw('current-affairs', row.slug, 'international');
-                    } catch {
-                      /* in-page load */
-                    }
+                  onClick={() => {
                     navigate(`/pod/explore/current-affairs/${row.slug}`);
+                    void prefetchExploreTopicRaw('current-affairs', row.slug, 'international').catch(() => {});
                   }}
                   className="w-full flex items-center justify-between py-3 text-left transition-opacity hover:opacity-90"
                   style={{

@@ -181,13 +181,9 @@ export default function PodAiTechPage() {
                 <button
                   key={row.slug}
                   type="button"
-                  onClick={async () => {
-                    try {
-                      await prefetchExploreTopicRaw('ai-tech', row.slug, 'international');
-                    } catch {
-                      /* in-page load */
-                    }
+                  onClick={() => {
                     navigate(`/pod/explore/ai-tech/${row.slug}`);
+                    void prefetchExploreTopicRaw('ai-tech', row.slug, 'international').catch(() => {});
                   }}
                   className="w-full flex items-center justify-between py-3 text-left transition-opacity hover:opacity-90"
                   style={{

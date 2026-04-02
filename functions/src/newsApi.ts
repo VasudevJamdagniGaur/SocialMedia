@@ -1,6 +1,26 @@
 import { onRequest } from 'firebase-functions/v2/https';
 import { logger } from 'firebase-functions';
 
+type ReqLike = {
+  path?: string;
+  url?: string;
+  originalUrl?: string;
+  method?: string;
+  query?: Record<string, string | string[] | undefined>;
+};
+
+function resolveNewsEndpoint(req: ReqLike): 'everything' | 'top-headlines' | null {
+  const q = req.query || {};
+  const fromQuery = q.endpoint;
+  const ep = Array.isArray(fromQuery) ? fromQuery[0] : fromQuery;
+  if (ep === 'everything' || ep === 'top-headlines') return ep;
+
+  const haystack = [req.path, req.url, req.originalUrl].filter(Boolean).join(' ');
+  if (haystack.includes('everything')) return 'everything';
+  if (haystack.includes('top-headlines')) return 'top-headlines';
+  return null;
+}
+
 /**
  * Server-side NewsAPI proxy for Capacitor / WebView clients.
  * Browser requests from https://localhost are blocked by NewsAPI CORS; hosting + this function are not.
@@ -32,10 +52,7 @@ export const newsApi = onRequest({ cors: true }, async (req, res) => {
     return;
   }
 
-  const pathOnly = (req.url || '').split('?')[0];
-  let endpoint: 'everything' | 'top-headlines' | null = null;
-  if (pathOnly.includes('everything')) endpoint = 'everything';
-  else if (pathOnly.includes('top-headlines')) endpoint = 'top-headlines';
+  const endpoint = resolveNewsEndpoint(req as ReqLike);
 
   if (!endpoint) {
     res.status(404).json({ error: 'Use /api/news/everything or /api/news/top-headlines' });
@@ -45,7 +62,7 @@ export const newsApi = onRequest({ cors: true }, async (req, res) => {
   const upstream = new URL(`https://newsapi.org/v2/${endpoint}`);
   const q = req.query as Record<string, string | string[] | undefined>;
   for (const [k, v] of Object.entries(q)) {
-    if (!k || k === 'apiKey') continue;
+    if (!k || k === 'apiKey' || k === 'endpoint') continue;
     const val = Array.isArray(v) ? v[0] : v;
     if (val != null && String(val).length) upstream.searchParams.set(k, String(val));
   }

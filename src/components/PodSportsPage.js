@@ -582,14 +582,11 @@ export default function PodSportsPage() {
                 <button
                   key={row.slug}
                   type="button"
-                  onClick={async () => {
-                    // Prefetch first so the topic page opens "already loaded".
-                    try {
-                      await prefetchSportsTopicRaw(row.slug);
-                    } catch {
-                      /* fallback to in-page load */
-                    }
+                  onClick={() => {
                     navigate(`/pod/sports/topic/${row.slug}`);
+                    // Warm cache in background — never block navigation on prefetch (stalled/hung requests
+                    // from hub-wide prefetch would otherwise prevent navigate from ever running).
+                    void prefetchSportsTopicRaw(row.slug).catch(() => {});
                   }}
                   className="w-full flex items-center justify-between py-3 text-left transition-opacity hover:opacity-90"
                   style={{
