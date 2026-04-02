@@ -749,6 +749,31 @@ export function getNewsApiFunctionUrl() {
   return (process.env.REACT_APP_NEWSAPI_FUNCTION_URL || '').trim();
 }
 
+// #region agent log helper
+function __agentDebugLog({ hypothesisId, location, message, data }) {
+  // Never block the user flow; best-effort logging only.
+  try {
+    fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Debug-Session-Id': 'db6096',
+      },
+      body: JSON.stringify({
+        sessionId: 'db6096',
+        hypothesisId,
+        location,
+        message,
+        data: data && typeof data === 'object' ? data : {},
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+  } catch {
+    // ignore
+  }
+}
+// #endregion
+
 /**
  * Capacitor WebView uses https://localhost; NewsAPI does not allow that origin (CORS).
  * Same for capacitor:// / file:// — use Firebase Hosting → /api/news/* proxy.
@@ -838,12 +863,37 @@ async function fetchNewsApiThroughProxy(endpoint, baseParams) {
 
   const timeoutMs = 12000;
   for (const base of getFirebaseHostingApiBases()) {
+    // #region agent log H1 proxy_attempt
+    __agentDebugLog({
+      hypothesisId: 'H1',
+      location: 'src/lib/podTopicNewsShared.js:fetchNewsApiThroughProxy',
+      message: 'proxy_attempt',
+      data: {
+        base,
+        endpoint,
+        hasOriginBases: !!base,
+      },
+    });
+    // #endregion
     try {
       const url = `${base}/api/news/${endpoint}?${p.toString()}`;
       const ctrl = new AbortController();
       const tid = setTimeout(() => ctrl.abort(), timeoutMs);
       try {
         const res = await fetch(url, { method: 'GET', signal: ctrl.signal });
+        // #region agent log H4 proxy_response
+        __agentDebugLog({
+          hypothesisId: 'H4',
+          location: 'src/lib/podTopicNewsShared.js:fetchNewsApiThroughProxy',
+          message: 'proxy_response',
+          data: {
+            url,
+            httpStatus: res?.status,
+            ok: !!res?.ok,
+            contentType: res?.headers?.get('content-type'),
+          },
+        });
+        // #endregion
         const data = await res.json().catch(() => null);
         if (res.ok && data && data.status === 'ok' && Array.isArray(data.articles)) {
           return data.articles;
@@ -862,6 +912,18 @@ async function fetchNewsApiThroughCloudFunction(endpoint, baseParams) {
   const fnUrl = getNewsApiFunctionUrl();
   if (!fnUrl) return null;
 
+  // #region agent log H2 fn_url_present
+  __agentDebugLog({
+    hypothesisId: 'H2',
+    location: 'src/lib/podTopicNewsShared.js:fetchNewsApiThroughCloudFunction',
+    message: 'fn_url_present',
+    data: {
+      fnUrl,
+      endpoint,
+    },
+  });
+  // #endregion
+
   // Backend expects `endpoint` in query so it can choose everything vs top-headlines.
   const p = new URLSearchParams(baseParams);
   p.set('endpoint', endpoint);
@@ -871,6 +933,17 @@ async function fetchNewsApiThroughCloudFunction(endpoint, baseParams) {
   const tid = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const res = await fetch(`${fnUrl}?${p.toString()}`, { method: 'GET', signal: ctrl.signal });
+    // #region agent log H5 cloud_function_response
+    __agentDebugLog({
+      hypothesisId: 'H5',
+      location: 'src/lib/podTopicNewsShared.js:fetchNewsApiThroughCloudFunction',
+      message: 'fn_response',
+      data: {
+        httpStatus: res?.status,
+        ok: !!res?.ok,
+      },
+    });
+    // #endregion
     const data = await res.json().catch(() => null);
     if (res.ok && data && data.status === 'ok' && Array.isArray(data.articles)) return data.articles;
     return null;
@@ -992,6 +1065,19 @@ export async function fetchNewsApiEverythingRaw(opts = {}) {
 
   const proxied = await fetchNewsApiThroughProxy('everything', baseParams);
   if (Array.isArray(proxied) && proxied.length > 0) return proxied;
+  // #region agent log H1_all_paths_empty
+  __agentDebugLog({
+    hypothesisId: 'H1',
+    location: 'src/lib/podTopicNewsShared.js:fetchNewsApiEverythingRaw',
+    message: 'everything_result_empty',
+    data: {
+      directIsArray: Array.isArray(direct),
+      directLen: Array.isArray(direct) ? direct.length : null,
+      proxiedIsArray: Array.isArray(proxied),
+      proxiedLen: Array.isArray(proxied) ? proxied.length : null,
+    },
+  });
+  // #endregion
   return [];
 }
 
@@ -1038,6 +1124,19 @@ export async function fetchNewsApiTopHeadlinesRaw(opts = {}) {
 
   const proxied = await fetchNewsApiThroughProxy('top-headlines', baseParams);
   if (Array.isArray(proxied) && proxied.length > 0) return proxied;
+  // #region agent log H1_all_paths_empty_top
+  __agentDebugLog({
+    hypothesisId: 'H1',
+    location: 'src/lib/podTopicNewsShared.js:fetchNewsApiTopHeadlinesRaw',
+    message: 'topheadlines_result_empty',
+    data: {
+      directIsArray: Array.isArray(direct),
+      directLen: Array.isArray(direct) ? direct.length : null,
+      proxiedIsArray: Array.isArray(proxied),
+      proxiedLen: Array.isArray(proxied) ? proxied.length : null,
+    },
+  });
+  // #endregion
   return [];
 }
 
