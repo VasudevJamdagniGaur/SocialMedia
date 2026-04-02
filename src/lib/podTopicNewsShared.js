@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, CapacitorHttp } from '@capacitor/core';
 
 const __NEWS_FALLBACK_IMAGE_URL =
   'data:image/svg+xml;charset=utf-8,' +
@@ -786,7 +786,7 @@ function __agentDebugLog({ hypothesisId, location, message, data }) {
         window.localStorage?.setItem?.('__NEWSAPI_DEBUG_LAST__', JSON.stringify(payload));
         // Keep the most relevant network snapshots separately so they don't get overwritten
         // by later summary logs (like everything_result_empty).
-        if (payload.message === 'proxy_response') {
+        if (payload.message === 'proxy_response' || payload.message === 'proxy_fetch_error') {
           window.__NEWSAPI_DEBUG_PROXY__ = payload;
           window.localStorage?.setItem?.('__NEWSAPI_DEBUG_PROXY__', JSON.stringify(payload));
         }
@@ -794,7 +794,12 @@ function __agentDebugLog({ hypothesisId, location, message, data }) {
           window.__NEWSAPI_DEBUG_ERR__ = payload;
           window.localStorage?.setItem?.('__NEWSAPI_DEBUG_ERR__', JSON.stringify(payload));
         }
-        if (payload.message === 'fn_response' || payload.message === 'fn_url_present') {
+        if (
+          payload.message === 'fn_response' ||
+          payload.message === 'fn_url_present' ||
+          payload.message === 'fn_candidates' ||
+          payload.message === 'fn_fetch_error'
+        ) {
           window.__NEWSAPI_DEBUG_FN__ = payload;
           window.localStorage?.setItem?.('__NEWSAPI_DEBUG_FN__', JSON.stringify(payload));
         }
@@ -836,6 +841,51 @@ export function getNewsApiDebugSnapshot() {
     return { last, proxy, err, fn };
   } catch {
     return null;
+  }
+}
+
+function isNativeCapacitor() {
+  try {
+    return Capacitor?.isNativePlatform?.() === true;
+  } catch {
+    return false;
+  }
+}
+
+async function fetchJsonMaybeNative(url, { timeoutMs }) {
+  if (isNativeCapacitor() && CapacitorHttp?.request) {
+    // #region agent log H6 native_http_attempt
+    __agentDebugLog({
+      hypothesisId: 'H6',
+      location: 'src/lib/podTopicNewsShared.js:fetchJsonMaybeNative',
+      message: 'native_http_attempt',
+      data: { url },
+    });
+    // #endregion
+    const res = await CapacitorHttp.request({
+      method: 'GET',
+      url,
+      headers: { Accept: 'application/json' },
+      connectTimeout: timeoutMs,
+      readTimeout: timeoutMs,
+    });
+    // CapacitorHttp returns {status, data, headers}
+    return { status: res?.status, ok: res?.status >= 200 && res?.status < 300, data: res?.data, headers: res?.headers };
+  }
+
+  const ctrl = new AbortController();
+  const tid = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { method: 'GET', signal: ctrl.signal });
+    const data = await res.json().catch(() => null);
+    return {
+      status: res?.status,
+      ok: !!res?.ok,
+      data,
+      headers: { 'content-type': res?.headers?.get?.('content-type') || '' },
+    };
+  } finally {
+    clearTimeout(tid);
   }
 }
 
@@ -942,29 +992,23 @@ async function fetchNewsApiThroughProxy(endpoint, baseParams) {
     // #endregion
     try {
       const url = `${base}/api/news/${endpoint}?${p.toString()}`;
-      const ctrl = new AbortController();
-      const tid = setTimeout(() => ctrl.abort(), timeoutMs);
-      try {
-        const res = await fetch(url, { method: 'GET', signal: ctrl.signal });
-        // #region agent log H4 proxy_response
-        __agentDebugLog({
-          hypothesisId: 'H4',
-          location: 'src/lib/podTopicNewsShared.js:fetchNewsApiThroughProxy',
-          message: 'proxy_response',
-          data: {
-            url,
-            httpStatus: res?.status,
-            ok: !!res?.ok,
-            contentType: res?.headers?.get('content-type'),
-          },
-        });
-        // #endregion
-        const data = await res.json().catch(() => null);
-        if (res.ok && data && data.status === 'ok' && Array.isArray(data.articles)) {
-          return data.articles;
-        }
-      } finally {
-        clearTimeout(tid);
+      const jr = await fetchJsonMaybeNative(url, { timeoutMs });
+      // #region agent log H4 proxy_response
+      __agentDebugLog({
+        hypothesisId: 'H4',
+        location: 'src/lib/podTopicNewsShared.js:fetchNewsApiThroughProxy',
+        message: 'proxy_response',
+        data: {
+          url,
+          httpStatus: jr?.status,
+          ok: !!jr?.ok,
+          contentType: jr?.headers?.['content-type'] || jr?.headers?.['Content-Type'] || null,
+        },
+      });
+      // #endregion
+      const data = jr?.data ?? null;
+      if (jr?.ok && data && data.status === 'ok' && Array.isArray(data.articles)) {
+        return data.articles;
       }
     } catch (e) {
       // #region agent log H3 proxy_fetch_error
@@ -1008,10 +1052,9 @@ async function fetchNewsApiThroughCloudFunction(endpoint, baseParams) {
 
   const timeoutMs = 12000;
   for (const fnUrl of urls) {
-    const ctrl = new AbortController();
-    const tid = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
-      const res = await fetch(`${fnUrl}?${p.toString()}`, { method: 'GET', signal: ctrl.signal });
+      const url = `${fnUrl}?${p.toString()}`;
+      const jr = await fetchJsonMaybeNative(url, { timeoutMs });
       // #region agent log H5 cloud_function_response
       __agentDebugLog({
         hypothesisId: 'H5',
@@ -1019,14 +1062,14 @@ async function fetchNewsApiThroughCloudFunction(endpoint, baseParams) {
         message: 'fn_response',
         data: {
           fnUrl,
-          httpStatus: res?.status,
-          ok: !!res?.ok,
-          contentType: res?.headers?.get('content-type'),
+          httpStatus: jr?.status,
+          ok: !!jr?.ok,
+          contentType: jr?.headers?.['content-type'] || jr?.headers?.['Content-Type'] || null,
         },
       });
       // #endregion
-      const data = await res.json().catch(() => null);
-      if (res.ok && data && data.status === 'ok' && Array.isArray(data.articles)) return data.articles;
+      const data = jr?.data ?? null;
+      if (jr?.ok && data && data.status === 'ok' && Array.isArray(data.articles)) return data.articles;
     } catch (e) {
       // #region agent log H3 fn_fetch_error
       __agentDebugLog({
@@ -1040,9 +1083,7 @@ async function fetchNewsApiThroughCloudFunction(endpoint, baseParams) {
         },
       });
       // #endregion
-    } finally {
-      clearTimeout(tid);
-    }
+    } finally {}
   }
 
   return null;
