@@ -211,7 +211,7 @@ export async function fetchSportsTopicRawItems(topicId) {
     return {
       items: buildFallbackRows(topicId, title),
       error:
-        'Backend NewsAPI returned no articles. Check that NEWSAPI_KEY is set on the server (Firebase Functions: `newsApi`) and that the query/plan limits are valid.',
+        'Backend NewsAPI returned no articles. Make sure your backend endpoint is reachable (Firebase Hosting rewrites OR direct function URL) and that `NEWSAPI_KEY` is set on Firebase Functions (`newsApi`). Also verify NewsAPI query/plan limits.',
       allowRewrite: false,
     };
   }

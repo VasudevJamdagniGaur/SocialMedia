@@ -739,6 +739,17 @@ export function getNewsApiKey() {
 }
 
 /**
+ * Optional: call Cloud Function directly (no Firebase Hosting rewrite required).
+ * Set in your .env before `npm run build`.
+ *
+ * Example:
+ * REACT_APP_NEWSAPI_FUNCTION_URL=https://<region>-<project>.cloudfunctions.net/newsApi
+ */
+export function getNewsApiFunctionUrl() {
+  return (process.env.REACT_APP_NEWSAPI_FUNCTION_URL || '').trim();
+}
+
+/**
  * Capacitor WebView uses https://localhost; NewsAPI does not allow that origin (CORS).
  * Same for capacitor:// / file:// — use Firebase Hosting → /api/news/* proxy.
  */
@@ -845,6 +856,27 @@ async function fetchNewsApiThroughProxy(endpoint, baseParams) {
     }
   }
   return null;
+}
+
+async function fetchNewsApiThroughCloudFunction(endpoint, baseParams) {
+  const fnUrl = getNewsApiFunctionUrl();
+  if (!fnUrl) return null;
+
+  // Backend expects `endpoint` in query so it can choose everything vs top-headlines.
+  const p = new URLSearchParams(baseParams);
+  p.set('endpoint', endpoint);
+
+  const timeoutMs = 12000;
+  const ctrl = new AbortController();
+  const tid = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${fnUrl}?${p.toString()}`, { method: 'GET', signal: ctrl.signal });
+    const data = await res.json().catch(() => null);
+    if (res.ok && data && data.status === 'ok' && Array.isArray(data.articles)) return data.articles;
+    return null;
+  } finally {
+    clearTimeout(tid);
+  }
 }
 
 async function fetchNewsApiThroughCorsProxies(endpoint, baseParams, apiKey) {
@@ -955,6 +987,9 @@ export async function fetchNewsApiEverythingRaw(opts = {}) {
   });
   baseParams.set('from', opts.from || newsApiDefaultFromISO(7));
 
+  const direct = await fetchNewsApiThroughCloudFunction('everything', baseParams);
+  if (Array.isArray(direct)) return direct;
+
   const proxied = await fetchNewsApiThroughProxy('everything', baseParams);
   if (Array.isArray(proxied) && proxied.length > 0) return proxied;
   return [];
@@ -997,6 +1032,9 @@ export async function fetchNewsApiTopHeadlinesRaw(opts = {}) {
   } else if (opts.country) {
     baseParams.set('country', String(opts.country));
   }
+
+  const direct = await fetchNewsApiThroughCloudFunction('top-headlines', baseParams);
+  if (Array.isArray(direct)) return direct;
 
   const proxied = await fetchNewsApiThroughProxy('top-headlines', baseParams);
   if (Array.isArray(proxied) && proxied.length > 0) return proxied;
