@@ -753,26 +753,50 @@ export function getNewsApiFunctionUrl() {
 function __agentDebugLog({ hypothesisId, location, message, data }) {
   // Never block the user flow; best-effort logging only.
   try {
+    const payload = {
+      sessionId: 'db6096',
+      hypothesisId,
+      location,
+      message,
+      data: data && typeof data === 'object' ? data : {},
+      timestamp: Date.now(),
+    };
+
+    // In APK builds, 127.0.0.1 points to the device; network log sink won't be reachable.
+    // So we also persist a tiny snapshot locally for screenshot-based debugging.
+    try {
+      if (typeof window !== 'undefined') {
+        window.__NEWSAPI_DEBUG_LAST__ = payload;
+        window.localStorage?.setItem?.('__NEWSAPI_DEBUG_LAST__', JSON.stringify(payload));
+      }
+    } catch {
+      /* ignore */
+    }
+
     fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-Debug-Session-Id': 'db6096',
       },
-      body: JSON.stringify({
-        sessionId: 'db6096',
-        hypothesisId,
-        location,
-        message,
-        data: data && typeof data === 'object' ? data : {},
-        timestamp: Date.now(),
-      }),
+      body: JSON.stringify(payload),
     }).catch(() => {});
   } catch {
     // ignore
   }
 }
 // #endregion
+
+export function getNewsApiDebugLast() {
+  try {
+    if (typeof window === 'undefined') return null;
+    if (window.__NEWSAPI_DEBUG_LAST__) return window.__NEWSAPI_DEBUG_LAST__;
+    const raw = window.localStorage?.getItem?.('__NEWSAPI_DEBUG_LAST__');
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Capacitor WebView uses https://localhost; NewsAPI does not allow that origin (CORS).

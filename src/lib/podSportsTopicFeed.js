@@ -5,6 +5,7 @@ import {
   fetchNewsApiEverythingNormalized,
   fetchNewsApiTopHeadlinesNormalized,
   enrichNewsItemsWithOgImages,
+  getNewsApiDebugLast,
 } from './podTopicNewsShared';
 
 /** Google News browse queries (for “Open on Google News” links only). */
@@ -208,10 +209,15 @@ export async function fetchSportsTopicRawItems(topicId) {
   }
 
   if (!rows?.length) {
+    const dbg = getNewsApiDebugLast?.();
+    const dbgText =
+      dbg && dbg.data
+        ? ` (debug: ${String(dbg.message || '')} ${String(dbg.data.httpStatus || dbg.data.status || '')} ${String(dbg.data.url || dbg.data.base || '')})`
+        : '';
     return {
       items: buildFallbackRows(topicId, title),
       error:
-        'Backend NewsAPI returned no articles. Make sure your backend endpoint is reachable (Firebase Hosting rewrites OR direct function URL) and that `NEWSAPI_KEY` is set on Firebase Functions (`newsApi`). Also verify NewsAPI query/plan limits.',
+        `Backend NewsAPI returned no articles. Make sure your backend endpoint is reachable (Firebase Hosting rewrites OR direct function URL) and that NEWSAPI_KEY is set on Firebase Functions (newsApi). Also verify NewsAPI query/plan limits.${dbgText}`,
       allowRewrite: false,
     };
   }
