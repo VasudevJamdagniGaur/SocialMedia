@@ -214,9 +214,11 @@ export async function fetchSportsTopicRawItems(topicId) {
     const d = last?.data;
     const px = snap?.proxy;
     const pxd = px?.data;
+    const pe = snap?.err;
+    const ped = pe?.data;
     const fx = snap?.fn;
     const fxd = fx?.data;
-    const dbgText = ` (debug:last=${String(last?.message || 'none')}; fnUrl=${d?.fnUrlPresent ? 'yes' : 'no'}; base0=${String(d?.base0 ?? 'null')}; proxyStatus=${String(pxd?.httpStatus ?? 'null')}; proxyType=${String(pxd?.contentType ?? 'null')}; fnStatus=${String(fxd?.httpStatus ?? 'null')})`;
+    const dbgText = ` (debug:last=${String(last?.message || 'none')}; fnUrl=${d?.fnUrlPresent ? 'yes' : 'no'}; base0=${String(d?.base0 ?? 'null')}; proxyStatus=${String(pxd?.httpStatus ?? 'null')}; proxyType=${String(pxd?.contentType ?? 'null')}; err=${String(ped?.error ?? 'null')}; fnStatus=${String(fxd?.httpStatus ?? 'null')})`;
     return {
       items: buildFallbackRows(topicId, title),
       error:

@@ -774,6 +774,10 @@ function __agentDebugLog({ hypothesisId, location, message, data }) {
           window.__NEWSAPI_DEBUG_PROXY__ = payload;
           window.localStorage?.setItem?.('__NEWSAPI_DEBUG_PROXY__', JSON.stringify(payload));
         }
+        if (payload.message === 'proxy_fetch_error' || payload.message === 'fn_fetch_error') {
+          window.__NEWSAPI_DEBUG_ERR__ = payload;
+          window.localStorage?.setItem?.('__NEWSAPI_DEBUG_ERR__', JSON.stringify(payload));
+        }
         if (payload.message === 'fn_response' || payload.message === 'fn_url_present') {
           window.__NEWSAPI_DEBUG_FN__ = payload;
           window.localStorage?.setItem?.('__NEWSAPI_DEBUG_FN__', JSON.stringify(payload));
@@ -811,8 +815,9 @@ export function getNewsApiDebugSnapshot() {
     };
     const last = read('__NEWSAPI_DEBUG_LAST__', '__NEWSAPI_DEBUG_LAST__');
     const proxy = read('__NEWSAPI_DEBUG_PROXY__', '__NEWSAPI_DEBUG_PROXY__');
+    const err = read('__NEWSAPI_DEBUG_ERR__', '__NEWSAPI_DEBUG_ERR__');
     const fn = read('__NEWSAPI_DEBUG_FN__', '__NEWSAPI_DEBUG_FN__');
-    return { last, proxy, fn };
+    return { last, proxy, err, fn };
   } catch {
     return null;
   }
@@ -945,7 +950,19 @@ async function fetchNewsApiThroughProxy(endpoint, baseParams) {
       } finally {
         clearTimeout(tid);
       }
-    } catch {
+    } catch (e) {
+      // #region agent log H3 proxy_fetch_error
+      __agentDebugLog({
+        hypothesisId: 'H3',
+        location: 'src/lib/podTopicNewsShared.js:fetchNewsApiThroughProxy',
+        message: 'proxy_fetch_error',
+        data: {
+          base,
+          endpoint,
+          error: e instanceof Error ? e.message : String(e),
+        },
+      });
+      // #endregion
       /* try next base */
     }
   }
@@ -990,6 +1007,20 @@ async function fetchNewsApiThroughCloudFunction(endpoint, baseParams) {
     // #endregion
     const data = await res.json().catch(() => null);
     if (res.ok && data && data.status === 'ok' && Array.isArray(data.articles)) return data.articles;
+    return null;
+  } catch (e) {
+    // #region agent log H3 fn_fetch_error
+    __agentDebugLog({
+      hypothesisId: 'H3',
+      location: 'src/lib/podTopicNewsShared.js:fetchNewsApiThroughCloudFunction',
+      message: 'fn_fetch_error',
+      data: {
+        fnUrl,
+        endpoint,
+        error: e instanceof Error ? e.message : String(e),
+      },
+    });
+    // #endregion
     return null;
   } finally {
     clearTimeout(tid);
