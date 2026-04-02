@@ -845,6 +845,74 @@ async function fetchNewsApiThroughProxy(endpoint, baseParams) {
   return null;
 }
 
+async function fetchNewsApiThroughCorsProxies(endpoint, baseParams, apiKey) {
+  const params = new URLSearchParams(baseParams);
+  params.set('apiKey', apiKey);
+  const upstreamUrl = `${NEWSAPI_V2}/${endpoint}?${params.toString()}`;
+
+  const timeoutMs = 12000;
+  const attempts = [
+    async () => {
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), timeoutMs);
+      try {
+        const res = await fetch(
+          `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(upstreamUrl)}`,
+          { method: 'GET', signal: ctrl.signal }
+        );
+        if (!res.ok) return null;
+        return await res.json().catch(() => null);
+      } finally {
+        clearTimeout(tid);
+      }
+    },
+    async () => {
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), timeoutMs);
+      try {
+        const res = await fetch(
+          `https://corsproxy.io/?${encodeURIComponent(upstreamUrl)}`,
+          { method: 'GET', signal: ctrl.signal }
+        );
+        if (!res.ok) return null;
+        return await res.json().catch(() => null);
+      } finally {
+        clearTimeout(tid);
+      }
+    },
+    async () => {
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), timeoutMs);
+      try {
+        const res = await fetch(
+          `https://api.allorigins.win/get?url=${encodeURIComponent(upstreamUrl)}`,
+          { method: 'GET', signal: ctrl.signal }
+        );
+        if (!res.ok) return null;
+        const data = await res.json().catch(() => null);
+        const contents = typeof data?.contents === 'string' ? data.contents : '';
+        if (!contents) return null;
+        return JSON.parse(contents).catch(() => null);
+      } finally {
+        clearTimeout(tid);
+      }
+    },
+  ];
+
+  for (const run of attempts) {
+    try {
+      const data = await run();
+      if (data && data.status === 'ok' && Array.isArray(data.articles)) {
+        return data.articles;
+      }
+    } catch {
+      /* next proxy */
+    }
+  }
+
+  return [];
+}
+
 function newsApiDefaultFromISO(days = 7) {
   const d = new Date();
   d.setDate(d.getDate() - days);
@@ -874,6 +942,9 @@ export async function fetchNewsApiEverythingRaw(opts = {}) {
   if (useProxy) {
     const proxied = await fetchNewsApiThroughProxy('everything', baseParams);
     if (proxied !== null) return proxied;
+    // If Firebase Hosting proxy fails (missing server key, misrouting, etc.),
+    // fall back to a browser-friendly CORS bypass so the APK still fetches.
+    if (apiKey) return await fetchNewsApiThroughCorsProxies('everything', baseParams, apiKey);
   }
 
   if (!apiKey) return [];
@@ -931,6 +1002,8 @@ export async function fetchNewsApiTopHeadlinesRaw(opts = {}) {
   if (useProxy) {
     const proxied = await fetchNewsApiThroughProxy('top-headlines', baseParams);
     if (proxied !== null) return proxied;
+    // If Firebase Hosting proxy fails, use CORS bypass as a last resort (APK).
+    if (apiKey) return await fetchNewsApiThroughCorsProxies('top-headlines', baseParams, apiKey);
   }
 
   if (!apiKey) return [];
