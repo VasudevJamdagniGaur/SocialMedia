@@ -890,6 +890,71 @@ async function fetchJsonMaybeNative(url, { timeoutMs }) {
 }
 
 /**
+ * Local CRA dev: no /api/news rewrite unless setupProxy is added, and Functions may be undeployed.
+ * When REACT_APP_NEWSAPI is set, call NewsAPI directly (browser CORS allows newsapi.org). Never on native builds.
+ */
+function allowDirectNewsApiInDev() {
+  return (
+    typeof process !== 'undefined' &&
+    process.env.NODE_ENV === 'development' &&
+    !isNativeCapacitor() &&
+    !!getNewsApiKey()
+  );
+}
+
+async function fetchNewsApiDirectRaw(endpoint, baseParams) {
+  const apiKey = getNewsApiKey();
+  if (!apiKey) return null;
+  const params = new URLSearchParams(baseParams);
+  params.set('apiKey', apiKey);
+  const url = `${NEWSAPI_V2}/${endpoint}?${params.toString()}`;
+  const timeoutMs = 12000;
+  const ctrl = new AbortController();
+  const tid = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { method: 'GET', signal: ctrl.signal });
+    const data = await res.json().catch(() => null);
+    if (res.ok && data?.status === 'ok' && Array.isArray(data.articles)) {
+      // #region agent log H-dev direct_ok
+      __agentDebugLog({
+        hypothesisId: 'H-dev',
+        location: 'src/lib/podTopicNewsShared.js:fetchNewsApiDirectRaw',
+        message: 'dev_direct_newsapi_ok',
+        data: { endpoint, articleCount: data.articles.length },
+      });
+      // #endregion
+      return data.articles;
+    }
+    // #region agent log H-dev direct_fail
+    __agentDebugLog({
+      hypothesisId: 'H-dev',
+      location: 'src/lib/podTopicNewsShared.js:fetchNewsApiDirectRaw',
+      message: 'dev_direct_newsapi_fail',
+      data: {
+        endpoint,
+        httpStatus: res?.status,
+        apiStatus: data?.status,
+        code: data?.code,
+      },
+    });
+    // #endregion
+    return null;
+  } catch (e) {
+    // #region agent log H-dev direct_err
+    __agentDebugLog({
+      hypothesisId: 'H-dev',
+      location: 'src/lib/podTopicNewsShared.js:fetchNewsApiDirectRaw',
+      message: 'dev_direct_newsapi_error',
+      data: { endpoint, error: e instanceof Error ? e.message : String(e) },
+    });
+    // #endregion
+    return null;
+  } finally {
+    clearTimeout(tid);
+  }
+}
+
+/**
  * Capacitor WebView uses https://localhost; NewsAPI does not allow that origin (CORS).
  * Same for capacitor:// / file:// — use Firebase Hosting → /api/news/* proxy.
  */
@@ -1202,6 +1267,12 @@ export async function fetchNewsApiEverythingRaw(opts = {}) {
 
   const proxied = await fetchNewsApiThroughProxy('everything', baseParams);
   if (Array.isArray(proxied) && proxied.length > 0) return proxied;
+
+  if (allowDirectNewsApiInDev()) {
+    const devArticles = await fetchNewsApiDirectRaw('everything', baseParams);
+    if (Array.isArray(devArticles) && devArticles.length > 0) return devArticles;
+  }
+
   // #region agent log H1_all_paths_empty
   const fnUrl = getNewsApiFunctionUrl();
   const bases = (() => {
@@ -1273,6 +1344,12 @@ export async function fetchNewsApiTopHeadlinesRaw(opts = {}) {
 
   const proxied = await fetchNewsApiThroughProxy('top-headlines', baseParams);
   if (Array.isArray(proxied) && proxied.length > 0) return proxied;
+
+  if (allowDirectNewsApiInDev()) {
+    const devArticles = await fetchNewsApiDirectRaw('top-headlines', baseParams);
+    if (Array.isArray(devArticles) && devArticles.length > 0) return devArticles;
+  }
+
   // #region agent log H1_all_paths_empty_top
   const fnUrl = getNewsApiFunctionUrl();
   const bases = (() => {
