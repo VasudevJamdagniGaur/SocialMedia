@@ -3,7 +3,7 @@ import {
   fetchNewsApiEverythingNormalized,
   filterNewsRowsIndiaLocal,
   enrichNewsItemsWithOgImages,
-  getNewsApiDebugLast,
+  getNewsApiDebugSnapshot,
 } from './podTopicNewsShared';
 import {
   EXPLORE_TOPICS,
@@ -53,12 +53,14 @@ export async function fetchExploreTopicFeed({ section, topicId, startupRegion })
     }
 
     if (!rows?.length) {
-      const dbg = getNewsApiDebugLast?.();
-      const d = dbg?.data;
-      const dbgText =
-        dbg && d
-          ? ` (debug:${dbg.message}; fnUrl=${d.fnUrlPresent ? 'yes' : 'no'}; directLen=${d.directLen ?? 'null'}; proxiedLen=${d.proxiedLen ?? 'null'}; base0=${d.base0 ?? 'null'})`
-          : '';
+      const snap = getNewsApiDebugSnapshot?.();
+      const last = snap?.last;
+      const d = last?.data;
+      const px = snap?.proxy;
+      const pxd = px?.data;
+      const fx = snap?.fn;
+      const fxd = fx?.data;
+      const dbgText = ` (debug:last=${String(last?.message || 'none')}; fnUrl=${d?.fnUrlPresent ? 'yes' : 'no'}; base0=${String(d?.base0 ?? 'null')}; proxyStatus=${String(pxd?.httpStatus ?? 'null')}; proxyType=${String(pxd?.contentType ?? 'null')}; fnStatus=${String(fxd?.httpStatus ?? 'null')})`;
       return {
         items: buildFallbackRows(title, googleQ),
         error:

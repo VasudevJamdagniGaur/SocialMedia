@@ -768,6 +768,16 @@ function __agentDebugLog({ hypothesisId, location, message, data }) {
       if (typeof window !== 'undefined') {
         window.__NEWSAPI_DEBUG_LAST__ = payload;
         window.localStorage?.setItem?.('__NEWSAPI_DEBUG_LAST__', JSON.stringify(payload));
+        // Keep the most relevant network snapshots separately so they don't get overwritten
+        // by later summary logs (like everything_result_empty).
+        if (payload.message === 'proxy_response') {
+          window.__NEWSAPI_DEBUG_PROXY__ = payload;
+          window.localStorage?.setItem?.('__NEWSAPI_DEBUG_PROXY__', JSON.stringify(payload));
+        }
+        if (payload.message === 'fn_response' || payload.message === 'fn_url_present') {
+          window.__NEWSAPI_DEBUG_FN__ = payload;
+          window.localStorage?.setItem?.('__NEWSAPI_DEBUG_FN__', JSON.stringify(payload));
+        }
       }
     } catch {
       /* ignore */
@@ -787,12 +797,22 @@ function __agentDebugLog({ hypothesisId, location, message, data }) {
 }
 // #endregion
 
-export function getNewsApiDebugLast() {
+export function getNewsApiDebugSnapshot() {
   try {
     if (typeof window === 'undefined') return null;
-    if (window.__NEWSAPI_DEBUG_LAST__) return window.__NEWSAPI_DEBUG_LAST__;
-    const raw = window.localStorage?.getItem?.('__NEWSAPI_DEBUG_LAST__');
-    return raw ? JSON.parse(raw) : null;
+    const read = (k, wk) => {
+      try {
+        if (wk && window[wk]) return window[wk];
+        const raw = window.localStorage?.getItem?.(k);
+        return raw ? JSON.parse(raw) : null;
+      } catch {
+        return null;
+      }
+    };
+    const last = read('__NEWSAPI_DEBUG_LAST__', '__NEWSAPI_DEBUG_LAST__');
+    const proxy = read('__NEWSAPI_DEBUG_PROXY__', '__NEWSAPI_DEBUG_PROXY__');
+    const fn = read('__NEWSAPI_DEBUG_FN__', '__NEWSAPI_DEBUG_FN__');
+    return { last, proxy, fn };
   } catch {
     return null;
   }
