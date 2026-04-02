@@ -54,9 +54,10 @@ export async function fetchExploreTopicFeed({ section, topicId, startupRegion })
 
     if (!rows?.length) {
       const dbg = getNewsApiDebugLast?.();
+      const d = dbg?.data;
       const dbgText =
-        dbg && dbg.data
-          ? ` (debug: ${String(dbg.message || '')} ${String(dbg.data.httpStatus || dbg.data.status || '')} ${String(dbg.data.url || dbg.data.base || '')})`
+        dbg && d
+          ? ` (debug:${dbg.message}; fnUrl=${d.fnUrlPresent ? 'yes' : 'no'}; directLen=${d.directLen ?? 'null'}; proxiedLen=${d.proxiedLen ?? 'null'}; base0=${d.base0 ?? 'null'})`
           : '';
       return {
         items: buildFallbackRows(title, googleQ),

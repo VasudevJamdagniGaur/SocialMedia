@@ -1090,6 +1090,14 @@ export async function fetchNewsApiEverythingRaw(opts = {}) {
   const proxied = await fetchNewsApiThroughProxy('everything', baseParams);
   if (Array.isArray(proxied) && proxied.length > 0) return proxied;
   // #region agent log H1_all_paths_empty
+  const fnUrl = getNewsApiFunctionUrl();
+  const bases = (() => {
+    try {
+      return getFirebaseHostingApiBases();
+    } catch {
+      return [];
+    }
+  })();
   __agentDebugLog({
     hypothesisId: 'H1',
     location: 'src/lib/podTopicNewsShared.js:fetchNewsApiEverythingRaw',
@@ -1099,6 +1107,10 @@ export async function fetchNewsApiEverythingRaw(opts = {}) {
       directLen: Array.isArray(direct) ? direct.length : null,
       proxiedIsArray: Array.isArray(proxied),
       proxiedLen: Array.isArray(proxied) ? proxied.length : null,
+      fnUrlPresent: !!fnUrl,
+      fnUrl,
+      basesCount: Array.isArray(bases) ? bases.length : null,
+      base0: Array.isArray(bases) ? bases[0] : null,
     },
   });
   // #endregion
@@ -1149,6 +1161,14 @@ export async function fetchNewsApiTopHeadlinesRaw(opts = {}) {
   const proxied = await fetchNewsApiThroughProxy('top-headlines', baseParams);
   if (Array.isArray(proxied) && proxied.length > 0) return proxied;
   // #region agent log H1_all_paths_empty_top
+  const fnUrl = getNewsApiFunctionUrl();
+  const bases = (() => {
+    try {
+      return getFirebaseHostingApiBases();
+    } catch {
+      return [];
+    }
+  })();
   __agentDebugLog({
     hypothesisId: 'H1',
     location: 'src/lib/podTopicNewsShared.js:fetchNewsApiTopHeadlinesRaw',
@@ -1158,6 +1178,10 @@ export async function fetchNewsApiTopHeadlinesRaw(opts = {}) {
       directLen: Array.isArray(direct) ? direct.length : null,
       proxiedIsArray: Array.isArray(proxied),
       proxiedLen: Array.isArray(proxied) ? proxied.length : null,
+      fnUrlPresent: !!fnUrl,
+      fnUrl,
+      basesCount: Array.isArray(bases) ? bases.length : null,
+      base0: Array.isArray(bases) ? bases[0] : null,
     },
   });
   // #endregion
