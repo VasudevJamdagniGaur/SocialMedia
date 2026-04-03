@@ -66,7 +66,7 @@ export async function fetchExploreTopicFeed({ section, topicId, startupRegion })
       return {
         items: buildFallbackRows(title, googleQ),
         error:
-          `Backend NewsAPI returned no articles. Make sure your backend endpoint is reachable (Firebase Hosting rewrites OR direct function URL) and that NEWSAPI_KEY is set on Firebase Functions (newsApi). Also verify NewsAPI query/plan limits.${dbgText}`,
+          `News returned no articles. Web: ensure REACT_APP_NEWSAPI is in .env and restart dev server. APK: rebuild after setting REACT_APP_NEWSAPI (baked in at build time), then npx cap sync android. Or deploy Firebase (NEWSAPI_KEY on function newsApi + hosting). Also check NewsAPI plan limits.${dbgText}`,
       };
     }
 

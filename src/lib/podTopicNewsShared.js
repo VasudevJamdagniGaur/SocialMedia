@@ -869,8 +869,22 @@ async function fetchJsonMaybeNative(url, { timeoutMs }) {
       connectTimeout: timeoutMs,
       readTimeout: timeoutMs,
     });
+    // CapacitorHttp often returns JSON as a string; normalize so callers see an object.
+    let data = res?.data;
+    if (typeof data === 'string') {
+      try {
+        data = JSON.parse(data);
+      } catch {
+        data = null;
+      }
+    }
     // CapacitorHttp returns {status, data, headers}
-    return { status: res?.status, ok: res?.status >= 200 && res?.status < 300, data: res?.data, headers: res?.headers };
+    return {
+      status: res?.status,
+      ok: res?.status >= 200 && res?.status < 300,
+      data,
+      headers: res?.headers,
+    };
   }
 
   const ctrl = new AbortController();
@@ -891,7 +905,17 @@ async function fetchJsonMaybeNative(url, { timeoutMs }) {
 
 async function fetchNewsApiDirectFromEnv(endpoint, baseParams) {
   const apiKey = getNewsApiKey();
-  if (!apiKey) return null;
+  if (!apiKey) {
+    // #region agent log H7 direct_env_no_key
+    __agentDebugLog({
+      hypothesisId: 'H7',
+      location: 'src/lib/podTopicNewsShared.js:fetchNewsApiDirectFromEnv',
+      message: 'direct_env_no_key',
+      data: { endpoint, isNative: isNativeCapacitor() },
+    });
+    // #endregion
+    return null;
+  }
 
   const params = new URLSearchParams(baseParams);
   params.set('apiKey', apiKey);
@@ -925,6 +949,7 @@ async function fetchNewsApiDirectFromEnv(endpoint, baseParams) {
         endpoint,
         httpStatus: jr?.status,
         ok: !!jr?.ok,
+        rawDataType: typeof jr?.data,
         contentType: jr?.headers?.['content-type'] || jr?.headers?.['Content-Type'] || null,
         apiStatus: data?.status || null,
         apiCode: data?.code || null,
