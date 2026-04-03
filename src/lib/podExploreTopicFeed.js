@@ -3,7 +3,6 @@ import {
   fetchNewsApiEverythingNormalized,
   filterNewsRowsIndiaLocal,
   enrichNewsItemsWithOgImages,
-  getNewsApiDebugSnapshot,
 } from './podTopicNewsShared';
 import {
   EXPLORE_TOPICS,
@@ -53,24 +52,10 @@ export async function fetchExploreTopicFeed({ section, topicId, startupRegion })
     }
 
     if (!rows?.length) {
-      const snap = getNewsApiDebugSnapshot?.();
-      const last = snap?.last;
-      const d = last?.data;
-      const px = snap?.proxy;
-      const pxd = px?.data;
-      const pe = snap?.err;
-      const ped = pe?.data;
-      const fx = snap?.fn;
-      const fxd = fx?.data;
-      const dd = snap?.direct;
-      const directDbg = dd
-        ? `direct=${String(dd.message || '')};native=${dd.isNative};hasKey=${dd.hasKey};http=${dd.httpStatus ?? 'na'};api=${dd.apiStatus ?? 'na'};code=${dd.apiCode ?? dd.error ?? 'na'};articles=${dd.articleCount ?? 'na'}`
-        : 'direct=none';
-      const dbgText = ` (debug:last=${String(last?.message || 'none')}; fnUrl=${d?.fnUrlPresent ? 'yes' : 'no'}; base0=${String(d?.base0 ?? 'null')}; proxyStatus=${String(pxd?.httpStatus ?? 'null')}; proxyType=${String(pxd?.contentType ?? 'null')}; err=${String(ped?.error ?? 'null')}; fnStatus=${String(fxd?.httpStatus ?? 'null')}; ${directDbg})`;
       return {
         items: buildFallbackRows(title, googleQ),
         error:
-          `News returned no articles. Web: ensure REACT_APP_NEWSAPI is in .env and restart dev server. APK: rebuild after setting REACT_APP_NEWSAPI (baked in at build time), then npx cap sync android. Or deploy Firebase (NEWSAPI_KEY on function newsApi + hosting). Also check NewsAPI plan limits.${dbgText}`,
+          'News returned no articles. Web: set REACT_APP_NEWSAPI in .env and restart the dev server. APK: run npm run build with that variable set, then npx cap sync android and reinstall. Or deploy Firebase (NEWSAPI_KEY on function newsApi and hosting). Check NewsAPI plan limits.',
       };
     }
 
