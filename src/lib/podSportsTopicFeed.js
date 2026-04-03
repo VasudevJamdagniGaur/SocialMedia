@@ -6,6 +6,7 @@ import {
   fetchNewsApiTopHeadlinesNormalized,
   fetchLiveFromGoogleRssByQuery,
   enrichNewsItemsWithOgImages,
+  isNewsApiRateLimitedCooldown,
   logNewsApiAgentDebug,
 } from './podTopicNewsShared';
 
@@ -208,7 +209,117 @@ function dedupeByTitleJaccard(enriched) {
 }
 
 /**
- * NewsAPI + OG images + title de-dupe. No headline rewrite (cheap to prefetch).
+ * NewsAPI-only path (skipped when rate-limit cooldown — see `isNewsApiRateLimitedCooldown`).
+ * @returns {Promise<object[]>}
+ */
+async function loadNewsApiSportsRows(topicId, config) {
+  if (topicId === 'others') {
+    const normalized = await fetchNewsApiTopHeadlinesNormalized({
+      category: 'sports',
+      language: 'en',
+      pageSize: 100,
+    });
+    const filtered = (normalized || []).filter((a) => {
+      const blob = `${a.title} ${a.description || ''}`;
+      return !matchesMainTopic(blob);
+    });
+    return filtered.slice(0, 30);
+  }
+  if (!config.q) return [];
+
+  let fetched = await fetchNewsApiEverythingNormalized({ q: config.q, pageSize: 100 });
+  let onTopic = (fetched || []).filter((a) => sportArticleMatchesTopic(topicId, a));
+
+  if (!onTopic.length) {
+    const narrowQ =
+      topicId === 'cricket'
+        ? 'cricket OR IPL'
+        : topicId === 'football'
+          ? 'soccer OR MLS'
+          : topicId === 'f1'
+            ? 'Formula 1'
+            : topicId === 'chess'
+              ? 'chess OR FIDE'
+              : null;
+    if (narrowQ) {
+      fetched = await fetchNewsApiEverythingNormalized({ q: narrowQ, pageSize: 60 });
+      onTopic = (fetched || []).filter((a) => sportArticleMatchesTopic(topicId, a));
+    }
+  }
+  let topHeadlinesLen = 0;
+  if (!onTopic.length) {
+    const qHead =
+      topicId === 'cricket'
+        ? 'cricket'
+        : topicId === 'football'
+          ? 'soccer'
+          : topicId === 'f1'
+            ? 'F1'
+            : topicId === 'chess'
+              ? 'chess'
+              : '';
+    const thSports = await fetchNewsApiTopHeadlinesNormalized({
+      category: 'sports',
+      language: 'en',
+      pageSize: 100,
+      ...(qHead ? { q: qHead } : {}),
+    });
+    topHeadlinesLen = (thSports || []).length;
+    onTopic = (thSports || []).filter((a) => sportArticleMatchesTopic(topicId, a));
+    if (!onTopic.length && topicId === 'cricket') {
+      const thIn = await fetchNewsApiTopHeadlinesNormalized({
+        country: 'in',
+        language: 'en',
+        pageSize: 50,
+        q: 'cricket',
+      });
+      topHeadlinesLen += (thIn || []).length;
+      onTopic = (thIn || []).filter((a) => sportArticleMatchesTopic(topicId, a));
+      if (!onTopic.length && (thIn || []).length) onTopic = thIn.slice(0, 30);
+    }
+    if (!onTopic.length && (thSports || []).length) {
+      onTopic = thSports.slice(0, 30);
+    }
+  }
+
+  // #region agent log
+  logNewsApiAgentDebug({
+    location: 'podSportsTopicFeed:loadNewsApiSportsRows',
+    message: 'after_everything_and_filter',
+    runId: 'post-fix',
+    hypothesisId: 'F',
+    data: {
+      topicId,
+      fetchedLen: (fetched || []).length,
+      topHeadlinesLen,
+      onTopicLen: onTopic.length,
+    },
+  });
+  // #endregion
+  return onTopic.slice(0, 30);
+}
+
+function mergeSportsApiAndRss(apiRows, rssRows, maxKeep = 36) {
+  const seen = new Set();
+  const out = [];
+  for (const r of apiRows || []) {
+    const u = (r?.url || '').trim();
+    if (!u || seen.has(u)) continue;
+    seen.add(u);
+    out.push(r);
+  }
+  for (const r of rssRows || []) {
+    const u = (r?.url || '').trim();
+    if (!u || seen.has(u)) continue;
+    seen.add(u);
+    out.push(r);
+    if (out.length >= maxKeep) break;
+  }
+  return out;
+}
+
+/**
+ * NewsAPI + RSS merge + OG images + title de-dupe. No headline rewrite (cheap to prefetch).
  * @returns {{ items: object[], error: string }}
  */
 export async function fetchSportsTopicRawItems(topicId) {
@@ -225,109 +336,26 @@ export async function fetchSportsTopicRawItems(topicId) {
     };
   }
 
-  let rows = null;
-  let filledFromRssFirst = false;
+  const cooldown = isNewsApiRateLimitedCooldown();
+  const rssPromise = trySportsRowsFromGoogleRss(topicId);
+  const apiPromise = cooldown ? Promise.resolve([]) : loadNewsApiSportsRows(topicId, config);
+  const [rssRows, apiRows] = await Promise.all([rssPromise, apiPromise]);
 
-  const rssFirst = await trySportsRowsFromGoogleRss(topicId);
-  if (rssFirst.length > 0) {
-    rows = rssFirst;
-    filledFromRssFirst = true;
-    logNewsApiAgentDebug({
-      location: 'podSportsTopicFeed:fetchSportsTopicRawItems',
-      message: 'google_rss_primary',
-      runId: 'post-fix',
-      hypothesisId: 'R',
-      data: { topicId, rowsLen: rssFirst.length },
-    });
-  }
+  let rows = mergeSportsApiAndRss(apiRows, rssRows, 40);
+  const apiLen = (apiRows || []).length;
+  const rssLen = (rssRows || []).length;
 
-  if (!rows?.length && topicId === 'others') {
-    const normalized = await fetchNewsApiTopHeadlinesNormalized({
-      category: 'sports',
-      language: 'en',
-      pageSize: 100,
-    });
-    const filtered = normalized.filter((a) => {
-      const blob = `${a.title} ${a.description || ''}`;
-      return !matchesMainTopic(blob);
-    });
-    if (filtered.length) rows = filtered.slice(0, 30);
-  }
+  // #region agent log
+  logNewsApiAgentDebug({
+    location: 'podSportsTopicFeed:fetchSportsTopicRawItems',
+    message: 'sports_merge_feed',
+    runId: 'post-fix',
+    hypothesisId: 'T',
+    data: { topicId, cooldown, apiLen, rssLen, mergedLen: rows.length },
+  });
+  // #endregion
 
-  if (!rows?.length && config.q) {
-    let fetched = await fetchNewsApiEverythingNormalized({ q: config.q, pageSize: 100 });
-    let onTopic = (fetched || []).filter((a) => sportArticleMatchesTopic(topicId, a));
-
-    if (!onTopic.length) {
-      const narrowQ =
-        topicId === 'cricket'
-          ? 'cricket OR IPL'
-          : topicId === 'football'
-            ? 'soccer OR MLS'
-            : topicId === 'f1'
-              ? 'Formula 1'
-              : topicId === 'chess'
-                ? 'chess OR FIDE'
-                : null;
-      if (narrowQ) {
-        fetched = await fetchNewsApiEverythingNormalized({ q: narrowQ, pageSize: 60 });
-        onTopic = (fetched || []).filter((a) => sportArticleMatchesTopic(topicId, a));
-      }
-    }
-    let topHeadlinesLen = 0;
-    if (!onTopic.length) {
-      const qHead =
-        topicId === 'cricket'
-          ? 'cricket'
-          : topicId === 'football'
-            ? 'soccer'
-            : topicId === 'f1'
-              ? 'F1'
-              : topicId === 'chess'
-                ? 'chess'
-                : '';
-      const thSports = await fetchNewsApiTopHeadlinesNormalized({
-        category: 'sports',
-        language: 'en',
-        pageSize: 100,
-        ...(qHead ? { q: qHead } : {}),
-      });
-      topHeadlinesLen = (thSports || []).length;
-      onTopic = (thSports || []).filter((a) => sportArticleMatchesTopic(topicId, a));
-      if (!onTopic.length && topicId === 'cricket') {
-        const thIn = await fetchNewsApiTopHeadlinesNormalized({
-          country: 'in',
-          language: 'en',
-          pageSize: 50,
-          q: 'cricket',
-        });
-        topHeadlinesLen += (thIn || []).length;
-        onTopic = (thIn || []).filter((a) => sportArticleMatchesTopic(topicId, a));
-        if (!onTopic.length && (thIn || []).length) onTopic = thIn.slice(0, 30);
-      }
-      if (!onTopic.length && (thSports || []).length) {
-        onTopic = thSports.slice(0, 30);
-      }
-    }
-
-    // #region agent log
-    logNewsApiAgentDebug({
-      location: 'podSportsTopicFeed:fetchSportsTopicRawItems',
-      message: 'after_everything_and_filter',
-      runId: 'post-fix',
-      hypothesisId: 'F',
-      data: {
-        topicId,
-        fetchedLen: (fetched || []).length,
-        topHeadlinesLen,
-        onTopicLen: onTopic.length,
-      },
-    });
-    // #endregion
-    rows = onTopic.slice(0, 30);
-  }
-
-  if (!rows?.length) {
+  if (!rows.length) {
     const picked = await trySportsRowsFromGoogleRss(topicId);
     if (picked.length) {
       rows = picked;
@@ -341,7 +369,7 @@ export async function fetchSportsTopicRawItems(topicId) {
     }
   }
 
-  if (!rows?.length) {
+  if (!rows.length) {
     return {
       items: buildFallbackRows(topicId, title),
       error:
@@ -350,14 +378,20 @@ export async function fetchSportsTopicRawItems(topicId) {
     };
   }
 
-  // OG fallback hits Microlink + HTML proxies per row and can hang the UI with no hard cap; RSS rows already carry thumbnails.
-  const enriched = await enrichNewsItemsWithOgImages(rows, { enableOgFallback: false });
+  rows = rows.slice(0, 30);
+
+  // Bounded OG resolve: RSS often has no enclosure image; cap work so the screen does not hang.
+  const enriched = await enrichNewsItemsWithOgImages(rows, {
+    enableOgFallback: true,
+    maxResolve: 10,
+    concurrency: 2,
+  });
   const deduped = dedupeByTitleJaccard(enriched);
+  const rssOnlyMerged = apiLen === 0 && rssLen > 0;
   return {
     items: deduped.length ? deduped : enriched,
     error: '',
-    // Skip OpenAI rewrite for RSS-first loads so the list appears immediately (rewrite can take up to ~30s).
-    allowRewrite: !filledFromRssFirst,
+    allowRewrite: !rssOnlyMerged,
   };
 }
 

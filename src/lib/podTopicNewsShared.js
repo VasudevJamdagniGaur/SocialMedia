@@ -380,13 +380,27 @@ function escapeRegExp(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/** Decode common XML/HTML entities in titles (Google RSS often leaves `&amp;` etc.). */
+export function decodeBasicHtmlEntities(str) {
+  if (typeof str !== 'string' || !str) return str || '';
+  return str
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&nbsp;/g, ' ');
+}
+
 function cleanPublisherSuffixFromTitle(rawTitle, sourceName) {
   const t = (rawTitle || '').replace(/\s+/g, ' ').trim();
   const s = (sourceName || '').replace(/\s+/g, ' ').trim();
-  if (!t || !s) return t;
+  if (!t || !s) return decodeBasicHtmlEntities(t);
   const re = new RegExp(`\\s*[-–—|]\\s*${escapeRegExp(s)}\\s*$`, 'i');
   const cut = t.replace(re, '').trim();
-  return cut.length >= 12 ? cut : t;
+  const out = cut.length >= 12 ? cut : t;
+  return decodeBasicHtmlEntities(out);
 }
 
 function normalizeSourceLabel(rawSource) {
@@ -946,7 +960,31 @@ export function canFetchLiveNews() {
   return typeof window !== 'undefined';
 }
 
-function getFirebaseHostingApiBases() {
+/**
+ * Hosting domains where `/api/news/*` is same-site and may include fallbacks. Everywhere else (localhost,
+ * LAN IP, Vercel preview, etc.) the browser must call only the current origin so CRA `setupProxy` handles
+ * the request — never `fetch()` Firebase Hosting cross-origin (CORS + 404 on missing rewrites).
+ */
+function isFirebaseNewsHostingHostname(hostname) {
+  const h = String(hostname || '').toLowerCase();
+  if (!h) return false;
+  if (h === 'deitedatabase.web.app' || h === 'deitedatabase.firebaseapp.com') return true;
+  const trimOrigin = (u) => (typeof u === 'string' ? u.trim().replace(/\/$/, '') : '');
+  const envOrigin = trimOrigin(process.env.REACT_APP_NEWS_PROXY_ORIGIN || '');
+  if (!envOrigin) return false;
+  try {
+    return new URL(envOrigin).hostname.toLowerCase() === h;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * @param {{ forBrowserNewsProxy?: boolean }} [options]
+ * When `forBrowserNewsProxy` is true, omit cross-origin Firebase URLs unless the page is already on that hosting.
+ */
+function getFirebaseHostingApiBases(options = {}) {
+  const forBrowserNewsProxy = options.forBrowserNewsProxy === true;
   const trimOrigin = (u) => (typeof u === 'string' ? u.trim().replace(/\/$/, '') : '');
   const envOrigin = trimOrigin(process.env.REACT_APP_NEWS_PROXY_ORIGIN || '');
   const defaultBases = ['https://deitedatabase.web.app', 'https://deitedatabase.firebaseapp.com'];
@@ -966,32 +1004,43 @@ function getFirebaseHostingApiBases() {
     /* no native bridge */
   }
 
-  const originLooksLocal =
-    !origin ||
-    origin.includes('localhost') ||
-    origin.startsWith('capacitor://') ||
-    origin.startsWith('ionic://') ||
-    origin.startsWith('file://');
-
   // APK/WebView: never hit https://localhost/api/news first — it has no proxy and can hang or 404.
   if (isNative) {
     return basesFromEnv;
   }
 
-  if (originLooksLocal) {
-    const list = [];
-    if (origin && origin.startsWith('http')) list.push(origin);
-    for (const b of basesFromEnv) {
-      if (!list.includes(b)) list.push(b);
+  const list = [];
+  const trimmedOrigin =
+    origin && /^https?:\/\//i.test(origin) ? trimOrigin(origin) : '';
+  if (trimmedOrigin) list.push(trimmedOrigin);
+
+  if (forBrowserNewsProxy && list.length > 0) {
+    try {
+      const host = new URL(trimmedOrigin).hostname;
+      if (!isFirebaseNewsHostingHostname(host)) {
+        // #region agent log
+        logNewsApiAgentDebug({
+          message: 'news_proxy_same_origin_only',
+          runId: 'cors-fix',
+          hypothesisId: 'C',
+          data: { host },
+        });
+        // #endregion
+        return list;
+      }
+    } catch {
+      return list;
     }
-    return list;
   }
 
-  const out = [origin];
-  for (const b of basesFromEnv) {
-    if (b !== origin) out.push(b);
+  if (!list.length) {
+    return basesFromEnv.length ? basesFromEnv : [];
   }
-  return out;
+
+  for (const b of basesFromEnv) {
+    if (!list.includes(b)) list.push(b);
+  }
+  return list;
 }
 
 /**
@@ -1007,7 +1056,7 @@ async function fetchNewsApiThroughProxy(endpoint, baseParams) {
 
   const timeoutMs = 12000;
   let loggedFirst = false;
-  for (const base of getFirebaseHostingApiBases()) {
+  for (const base of getFirebaseHostingApiBases({ forBrowserNewsProxy: true })) {
     try {
       const url = `${base}/api/news/${endpoint}?${p.toString()}`;
       let jr = await fetchJsonMaybeNative(url, { timeoutMs });
@@ -1026,6 +1075,34 @@ async function fetchNewsApiThroughProxy(endpoint, baseParams) {
         data = jr?.data ?? null;
       }
       applyNewsApiRateLimitSignal(jr);
+      // #region agent log
+      try {
+        const baseHost = new URL(base).hostname;
+        logNewsApiAgentDebug({
+          location: 'podTopicNewsShared:fetchNewsApiThroughProxy',
+          message: 'proxy_response',
+          runId: 'post-fix',
+          hypothesisId: 'H1',
+          data: {
+            baseHost,
+            endpoint,
+            http: jr?.status,
+            ok: jr?.ok,
+            apiStatus: data?.status,
+            apiCode: data?.code,
+            articleCount: Array.isArray(data?.articles) ? data.articles.length : null,
+          },
+        });
+      } catch {
+        logNewsApiAgentDebug({
+          location: 'podTopicNewsShared:fetchNewsApiThroughProxy',
+          message: 'proxy_response',
+          runId: 'post-fix',
+          hypothesisId: 'H1',
+          data: { baseHost: 'unparsed', endpoint, http: jr?.status, ok: jr?.ok },
+        });
+      }
+      // #endregion
       if (!loggedFirst) {
         loggedFirst = true;
         logNewsApiAgentDebug({
