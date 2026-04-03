@@ -889,6 +889,65 @@ async function fetchJsonMaybeNative(url, { timeoutMs }) {
   }
 }
 
+async function fetchNewsApiDirectFromEnv(endpoint, baseParams) {
+  const apiKey = getNewsApiKey();
+  if (!apiKey) return null;
+
+  const params = new URLSearchParams(baseParams);
+  params.set('apiKey', apiKey);
+  const url = `${NEWSAPI_V2}/${endpoint}?${params.toString()}`;
+  const timeoutMs = 12000;
+
+  // #region agent log H7 direct_env_attempt
+  __agentDebugLog({
+    hypothesisId: 'H7',
+    location: 'src/lib/podTopicNewsShared.js:fetchNewsApiDirectFromEnv',
+    message: 'direct_env_attempt',
+    data: {
+      endpoint,
+      hasKey: true,
+      keyLen: apiKey.length,
+      isNative: isNativeCapacitor(),
+    },
+  });
+  // #endregion
+
+  try {
+    const jr = await fetchJsonMaybeNative(url, { timeoutMs });
+    const data = jr?.data ?? null;
+
+    // #region agent log H7 direct_env_response
+    __agentDebugLog({
+      hypothesisId: 'H7',
+      location: 'src/lib/podTopicNewsShared.js:fetchNewsApiDirectFromEnv',
+      message: 'direct_env_response',
+      data: {
+        endpoint,
+        httpStatus: jr?.status,
+        ok: !!jr?.ok,
+        contentType: jr?.headers?.['content-type'] || jr?.headers?.['Content-Type'] || null,
+        apiStatus: data?.status || null,
+        apiCode: data?.code || null,
+        articleCount: Array.isArray(data?.articles) ? data.articles.length : null,
+      },
+    });
+    // #endregion
+
+    if (jr?.ok && data && data.status === 'ok' && Array.isArray(data.articles)) return data.articles;
+    return null;
+  } catch (e) {
+    // #region agent log H7 direct_env_error
+    __agentDebugLog({
+      hypothesisId: 'H7',
+      location: 'src/lib/podTopicNewsShared.js:fetchNewsApiDirectFromEnv',
+      message: 'direct_env_error',
+      data: { endpoint, error: e instanceof Error ? e.message : String(e) },
+    });
+    // #endregion
+    return null;
+  }
+}
+
 /**
  * Local CRA dev: no /api/news rewrite unless setupProxy is added, and Functions may be undeployed.
  * When REACT_APP_NEWSAPI is set, call NewsAPI directly (browser CORS allows newsapi.org). Never on native builds.
@@ -900,58 +959,6 @@ function allowDirectNewsApiInDev() {
     !isNativeCapacitor() &&
     !!getNewsApiKey()
   );
-}
-
-async function fetchNewsApiDirectRaw(endpoint, baseParams) {
-  const apiKey = getNewsApiKey();
-  if (!apiKey) return null;
-  const params = new URLSearchParams(baseParams);
-  params.set('apiKey', apiKey);
-  const url = `${NEWSAPI_V2}/${endpoint}?${params.toString()}`;
-  const timeoutMs = 12000;
-  const ctrl = new AbortController();
-  const tid = setTimeout(() => ctrl.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, { method: 'GET', signal: ctrl.signal });
-    const data = await res.json().catch(() => null);
-    if (res.ok && data?.status === 'ok' && Array.isArray(data.articles)) {
-      // #region agent log H-dev direct_ok
-      __agentDebugLog({
-        hypothesisId: 'H-dev',
-        location: 'src/lib/podTopicNewsShared.js:fetchNewsApiDirectRaw',
-        message: 'dev_direct_newsapi_ok',
-        data: { endpoint, articleCount: data.articles.length },
-      });
-      // #endregion
-      return data.articles;
-    }
-    // #region agent log H-dev direct_fail
-    __agentDebugLog({
-      hypothesisId: 'H-dev',
-      location: 'src/lib/podTopicNewsShared.js:fetchNewsApiDirectRaw',
-      message: 'dev_direct_newsapi_fail',
-      data: {
-        endpoint,
-        httpStatus: res?.status,
-        apiStatus: data?.status,
-        code: data?.code,
-      },
-    });
-    // #endregion
-    return null;
-  } catch (e) {
-    // #region agent log H-dev direct_err
-    __agentDebugLog({
-      hypothesisId: 'H-dev',
-      location: 'src/lib/podTopicNewsShared.js:fetchNewsApiDirectRaw',
-      message: 'dev_direct_newsapi_error',
-      data: { endpoint, error: e instanceof Error ? e.message : String(e) },
-    });
-    // #endregion
-    return null;
-  } finally {
-    clearTimeout(tid);
-  }
 }
 
 /**
@@ -1262,16 +1269,14 @@ export async function fetchNewsApiEverythingRaw(opts = {}) {
   });
   baseParams.set('from', opts.from || newsApiDefaultFromISO(7));
 
+  const directEnv = await fetchNewsApiDirectFromEnv('everything', baseParams);
+  if (Array.isArray(directEnv)) return directEnv;
+
   const direct = await fetchNewsApiThroughCloudFunction('everything', baseParams);
   if (Array.isArray(direct)) return direct;
 
   const proxied = await fetchNewsApiThroughProxy('everything', baseParams);
   if (Array.isArray(proxied) && proxied.length > 0) return proxied;
-
-  if (allowDirectNewsApiInDev()) {
-    const devArticles = await fetchNewsApiDirectRaw('everything', baseParams);
-    if (Array.isArray(devArticles) && devArticles.length > 0) return devArticles;
-  }
 
   // #region agent log H1_all_paths_empty
   const fnUrl = getNewsApiFunctionUrl();
@@ -1339,16 +1344,14 @@ export async function fetchNewsApiTopHeadlinesRaw(opts = {}) {
     baseParams.set('country', String(opts.country));
   }
 
+  const directEnv = await fetchNewsApiDirectFromEnv('top-headlines', baseParams);
+  if (Array.isArray(directEnv)) return directEnv;
+
   const direct = await fetchNewsApiThroughCloudFunction('top-headlines', baseParams);
   if (Array.isArray(direct)) return direct;
 
   const proxied = await fetchNewsApiThroughProxy('top-headlines', baseParams);
   if (Array.isArray(proxied) && proxied.length > 0) return proxied;
-
-  if (allowDirectNewsApiInDev()) {
-    const devArticles = await fetchNewsApiDirectRaw('top-headlines', baseParams);
-    if (Array.isArray(devArticles) && devArticles.length > 0) return devArticles;
-  }
 
   // #region agent log H1_all_paths_empty_top
   const fnUrl = getNewsApiFunctionUrl();
