@@ -38,7 +38,7 @@ export function invalidateAllSportsTopicExploreCaches() {
 }
 
 /**
- * Prefetch every explore topic in parallel (Sports hub — open topic screens already warm).
+ * Prefetch every explore topic (RSS-only for NewsAPI — avoids 5× parallel `everything` on one navigation).
  * @returns {Promise<void>}
  */
 export function prefetchAllSportsExploreTopicsNow() {
@@ -70,7 +70,7 @@ export function prefetchSportsTopicRaw(topicId) {
   if (getSportsTopicFeedCache(topicId)) return Promise.resolve();
   if (inflight.has(topicId)) return inflight.get(topicId);
 
-  const p = fetchSportsTopicRawItems(topicId)
+  const p = fetchSportsTopicRawItems(topicId, { rssOnlyPrefetch: true })
     .then((res) => {
       inflight.delete(topicId);
       if (res.items?.length) {

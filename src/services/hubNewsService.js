@@ -545,13 +545,15 @@ export async function fetchHubPersonalizedFeed(uid, options = {}) {
   const cats = profile.interests.slice(0, 10);
   if (!cats.length) return { success: true, items: [], profile };
 
-  // Do not block the carousel on hydration (many NewsAPI calls — slow / 429 under rate limits).
-  void hydrateHubNewsFromApi(profile.country, profile.city, cats).catch(() => {});
-
   // Prefer fresh NewsAPI + RSS over stale Firestore `news` rows (cached articles ranked by old engagement).
   let liveItems = [];
   if (canFetchLiveNews()) {
     liveItems = await buildNewsApiFallbackFeed(profile, targetSize);
+  }
+
+  // Firestore backfill only when live path is empty — avoids 5 extra `everything` calls racing the hub fetch when RSS already filled the carousel.
+  if (liveItems.length === 0 && canFetchLiveNews()) {
+    void hydrateHubNewsFromApi(profile.country, profile.city, cats).catch(() => {});
   }
 
   // #region agent log

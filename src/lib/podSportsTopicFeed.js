@@ -319,10 +319,13 @@ function mergeSportsApiAndRss(apiRows, rssRows, maxKeep = 36) {
 }
 
 /**
- * NewsAPI + RSS merge + OG images + title de-dupe. No headline rewrite (cheap to prefetch).
- * @returns {{ items: object[], error: string }}
+ * NewsAPI + RSS merge + OG images + title de-dupe.
+ * @param {string} topicId
+ * @param {{ rssOnlyPrefetch?: boolean }} [options] — If true, skip NewsAPI (RSS + light enrich only). Use for background prefetch so one screen load does not fire 5× `everything` calls.
+ * @returns {{ items: object[], error: string, allowRewrite: boolean }}
  */
-export async function fetchSportsTopicRawItems(topicId) {
+export async function fetchSportsTopicRawItems(topicId, options = {}) {
+  const rssOnlyPrefetch = options.rssOnlyPrefetch === true;
   const config = TOPIC_META[topicId];
   if (!config) return { items: [], error: '', allowRewrite: false };
 
@@ -338,7 +341,8 @@ export async function fetchSportsTopicRawItems(topicId) {
 
   const cooldown = isNewsApiRateLimitedCooldown();
   const rssPromise = trySportsRowsFromGoogleRss(topicId);
-  const apiPromise = cooldown ? Promise.resolve([]) : loadNewsApiSportsRows(topicId, config);
+  const apiPromise =
+    rssOnlyPrefetch || cooldown ? Promise.resolve([]) : loadNewsApiSportsRows(topicId, config);
   const [rssRows, apiRows] = await Promise.all([rssPromise, apiPromise]);
 
   let rows = mergeSportsApiAndRss(apiRows, rssRows, 40);
@@ -380,11 +384,11 @@ export async function fetchSportsTopicRawItems(topicId) {
 
   rows = rows.slice(0, 30);
 
-  // Bounded OG resolve: RSS often has no enclosure image; cap work so the screen does not hang.
+  // Prefetch: skip OG network work — opening the topic page does full enrich.
   const enriched = await enrichNewsItemsWithOgImages(rows, {
-    enableOgFallback: true,
-    maxResolve: 10,
-    concurrency: 2,
+    enableOgFallback: !rssOnlyPrefetch,
+    maxResolve: rssOnlyPrefetch ? 0 : 10,
+    concurrency: rssOnlyPrefetch ? 1 : 2,
   });
   const deduped = dedupeByTitleJaccard(enriched);
   const rssOnlyMerged = apiLen === 0 && rssLen > 0;

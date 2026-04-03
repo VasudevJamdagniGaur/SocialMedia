@@ -619,9 +619,11 @@ export function logNewsApiAgentDebug(payload) {
 // #endregion
 
 const NEWSAPI_COOLDOWN_LS = 'deite_newsapi_cooldown_until';
-/** Short in-memory backoff only (no localStorage) so a single 429 does not block NewsAPI for 15 minutes. */
+/** Generic HTTP 429 without explicit NewsAPI quota flag. */
 const NEWSAPI_RATE_LIMIT_COOLDOWN_MS = 90 * 1000;
-/** One retry after transient 429 before applying cooldown (shared-key burst). */
+/** NewsAPI `code: rateLimited` — daily/plan quota; long backoff avoids burning the key with prefetch + retries. */
+const NEWSAPI_QUOTA_COOLDOWN_MS = 30 * 60 * 1000;
+/** One retry only for non-quota 429s (transient). Never retry `rateLimited` — doubles wasted calls. */
 const NEWSAPI_429_RETRY_MS = 1600;
 let newsApiRateLimitCooldownUntil = 0;
 
@@ -642,18 +644,19 @@ function isNewsApiRateLimitedJsonResponse(jr) {
 }
 
 function applyNewsApiRateLimitSignal(jr) {
-  if (isNewsApiRateLimitedJsonResponse(jr)) {
-    setNewsApiCooldownUntil(Date.now() + NEWSAPI_RATE_LIMIT_COOLDOWN_MS);
-    logNewsApiAgentDebug({
-      message: 'newsapi_cooldown_set',
-      runId: 'post-fix',
-      hypothesisId: 'Q',
-      data: { http: jr?.status, apiCode: jr?.data?.code },
-    });
-  }
+  if (!isNewsApiRateLimitedJsonResponse(jr)) return;
+  const code = typeof jr?.data?.code === 'string' ? jr.data.code : '';
+  const ms = code === 'rateLimited' ? NEWSAPI_QUOTA_COOLDOWN_MS : NEWSAPI_RATE_LIMIT_COOLDOWN_MS;
+  setNewsApiCooldownUntil(Date.now() + ms);
+  logNewsApiAgentDebug({
+    message: 'newsapi_cooldown_set',
+    runId: 'post-fix',
+    hypothesisId: 'Q',
+    data: { http: jr?.status, apiCode: code, cooldownMs: ms },
+  });
 }
 
-/** True while NewsAPI is treated as quota-exhausted (in-memory only, ~90s after last 429/rateLimited). */
+/** True while NewsAPI is skipped after 429 / rateLimited (in-memory; longer when `rateLimited`). */
 export function isNewsApiRateLimitedCooldown() {
   return Date.now() < newsApiRateLimitCooldownUntil;
 }
@@ -1061,7 +1064,8 @@ async function fetchNewsApiThroughProxy(endpoint, baseParams) {
       const url = `${base}/api/news/${endpoint}?${p.toString()}`;
       let jr = await fetchJsonMaybeNative(url, { timeoutMs });
       let data = jr?.data ?? null;
-      if (isNewsApiRateLimitedJsonResponse(jr)) {
+      const quotaLimited = data?.code === 'rateLimited';
+      if (isNewsApiRateLimitedJsonResponse(jr) && !quotaLimited) {
         // #region agent log
         logNewsApiAgentDebug({
           message: 'proxy_429_retry_wait',
@@ -1147,7 +1151,8 @@ async function fetchNewsApiThroughCloudFunction(endpoint, baseParams) {
       const url = `${fnUrl}?${p.toString()}`;
       let jr = await fetchJsonMaybeNative(url, { timeoutMs });
       let data = jr?.data ?? null;
-      if (isNewsApiRateLimitedJsonResponse(jr)) {
+      const quotaLimitedCf = data?.code === 'rateLimited';
+      if (isNewsApiRateLimitedJsonResponse(jr) && !quotaLimitedCf) {
         await new Promise((r) => setTimeout(r, NEWSAPI_429_RETRY_MS));
         jr = await fetchJsonMaybeNative(url, { timeoutMs });
         data = jr?.data ?? null;
