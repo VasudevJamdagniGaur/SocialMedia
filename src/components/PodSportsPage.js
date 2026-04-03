@@ -379,8 +379,7 @@ export default function PodSportsPage() {
         if (token !== loadTokenRef.current) return;
         const baseRows = merged.length ? merged.slice(0, 10) : fallbackTrending;
         const rows = await enrichNewsItemsWithOgImages(baseRows, {
-          enableOgFallback: true,
-          maxResolve: 10,
+          enableOgFallback: false,
         });
         if (token !== loadTokenRef.current) return;
         setSportsTrending(rows);
@@ -388,8 +387,7 @@ export default function PodSportsPage() {
         if (token !== loadTokenRef.current) return;
         setTrendingRegionLabel('');
         const rows = await enrichNewsItemsWithOgImages(fallbackTrending, {
-          enableOgFallback: true,
-          maxResolve: 4,
+          enableOgFallback: false,
         });
         if (token !== loadTokenRef.current) return;
         setSportsTrending(rows);

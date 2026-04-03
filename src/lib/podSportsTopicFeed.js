@@ -216,10 +216,12 @@ export async function fetchSportsTopicRawItems(topicId) {
   }
 
   let rows = null;
+  let filledFromRssFirst = false;
 
   const rssFirst = await trySportsRowsFromGoogleRss(topicId);
   if (rssFirst.length > 0) {
     rows = rssFirst;
+    filledFromRssFirst = true;
     logNewsApiAgentDebug({
       location: 'podSportsTopicFeed:fetchSportsTopicRawItems',
       message: 'google_rss_primary',
@@ -338,12 +340,14 @@ export async function fetchSportsTopicRawItems(topicId) {
     };
   }
 
-  const enriched = await enrichNewsItemsWithOgImages(rows, { enableOgFallback: true });
+  // OG fallback hits Microlink + HTML proxies per row and can hang the UI with no hard cap; RSS rows already carry thumbnails.
+  const enriched = await enrichNewsItemsWithOgImages(rows, { enableOgFallback: false });
   const deduped = dedupeByTitleJaccard(enriched);
   return {
     items: deduped.length ? deduped : enriched,
     error: '',
-    allowRewrite: true,
+    // Skip OpenAI rewrite for RSS-first loads so the list appears immediately (rewrite can take up to ~30s).
+    allowRewrite: !filledFromRssFirst,
   };
 }
 
