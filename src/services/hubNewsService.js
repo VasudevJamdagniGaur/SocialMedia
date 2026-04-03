@@ -24,9 +24,25 @@ import {
   fetchNewsApiEverythingNormalized,
   fetchNewsApiTopHeadlinesNormalized,
   fetchLiveFromGoogleRssByQuery,
+  isNewsApiRateLimitedCooldown,
+  logNewsApiAgentDebug,
 } from '../lib/podTopicNewsShared';
 
 const COLLECTION = 'news';
+
+const FIRESTORE_QUERY_TIMEOUT_MS = 12000;
+
+function getDocsWithTimeout(qRef, label) {
+  return Promise.race([
+    getDocs(qRef),
+    new Promise((_, reject) =>
+      setTimeout(
+        () => reject(new Error(`firestore_timeout:${label}`)),
+        FIRESTORE_QUERY_TIMEOUT_MS
+      )
+    ),
+  ]);
+}
 
 export function hubNewsDocIdFromUrl(url) {
   const s = String(url || '');
@@ -191,10 +207,14 @@ async function queryNewsTrending(country, categories, maxDocs) {
       orderBy('trendingScore', 'desc'),
       limit(Math.min(maxDocs, 40))
     );
-    const snap = await getDocs(q);
+    const snap = await getDocsWithTimeout(q, 'trending');
     return snap.docs.map((d) => mapNewsDoc(d.id, d.data()));
   } catch (e) {
     if (e?.code === 'permission-denied') throw e;
+    if (String(e?.message || '').startsWith('firestore_timeout:')) {
+      console.warn('queryNewsTrending: timeout');
+      return [];
+    }
     console.warn('queryNewsTrending', e?.message || e);
     return [];
   }
@@ -213,10 +233,14 @@ async function queryNewsLatest(country, categories, maxDocs) {
       orderBy('createdAt', 'desc'),
       limit(Math.min(maxDocs, 40))
     );
-    const snap = await getDocs(q);
+    const snap = await getDocsWithTimeout(q, 'latest');
     return snap.docs.map((d) => mapNewsDoc(d.id, d.data()));
   } catch (e) {
     if (e?.code === 'permission-denied') throw e;
+    if (String(e?.message || '').startsWith('firestore_timeout:')) {
+      console.warn('queryNewsLatest: timeout');
+      return [];
+    }
     console.warn('queryNewsLatest', e?.message || e);
     return [];
   }
@@ -248,21 +272,73 @@ const INTEREST_QUERIES = {
   others: '(sports OR athletics OR Olympics)',
 };
 
+async function appendHubGoogleNewsRss(profile, seen, unique) {
+  const ctry = normalizeCountry(profile?.country || '');
+  const rssQ =
+    String(ctry || '').toUpperCase() === 'IN'
+      ? 'India news OR cricket OR technology when:7d'
+      : 'world news headlines when:7d';
+  const rssItems = await fetchLiveFromGoogleRssByQuery(rssQ);
+  for (const row of rssItems || []) {
+    if (!row.url || !row.title || seen.has(row.url)) continue;
+    seen.add(row.url);
+    unique.push({
+      id: hubNewsDocIdFromUrl(row.url),
+      title: row.title,
+      image: row.image || null,
+      source: row.source || 'News',
+      url: row.url,
+      category: 'others',
+      country: ctry || '',
+      city: profile.city || '',
+      likes: 0,
+      shares: 0,
+      views: 0,
+      trendingScore: 0,
+      createdAt: null,
+      fromNewsApiFallback: true,
+      feedTag: { label: 'Headlines', emoji: '📰' },
+      mixBucket: 'trending',
+    });
+  }
+}
+
 /**
  * When Firestore `news` is blocked or empty: same interest mix from NewsAPI only (no writes).
  */
 async function buildNewsApiFallbackFeed(profile, targetSize = 20) {
   const cats = (profile?.interests?.length ? profile.interests : HUB_DEFAULT_INTERESTS).slice(0, 5);
   if (!canFetchLiveNews()) return [];
-  const collected = [];
-  for (const cat of cats) {
-    const qExtra = INTEREST_QUERIES[cat] || cat;
-    const rows = await fetchNewsApiEverythingNormalized({
-      q: qExtra,
-      pageSize: 6,
-      language: 'en',
+
+  if (isNewsApiRateLimitedCooldown()) {
+    const seen = new Set();
+    const unique = [];
+    await appendHubGoogleNewsRss(profile, seen, unique);
+    shuffleInPlace(unique);
+    logNewsApiAgentDebug({
+      location: 'hubNewsService:buildNewsApiFallbackFeed',
+      message: 'rss_only_cooldown',
+      runId: 'post-fix',
+      hypothesisId: 'Q',
+      data: { itemCount: unique.length },
     });
-    for (const row of rows || []) {
+    return unique.slice(0, targetSize);
+  }
+
+  const collected = [];
+  const rowsByCat = await Promise.all(
+    cats.map(async (cat) => {
+      const qExtra = INTEREST_QUERIES[cat] || cat;
+      const rows = await fetchNewsApiEverythingNormalized({
+        q: qExtra,
+        pageSize: 6,
+        language: 'en',
+      });
+      return { cat, rows: rows || [] };
+    })
+  );
+  for (const { cat, rows } of rowsByCat) {
+    for (const row of rows) {
       if (!row.url || !row.title) continue;
       collected.push({
         id: hubNewsDocIdFromUrl(row.url),
@@ -325,33 +401,7 @@ async function buildNewsApiFallbackFeed(profile, targetSize = 20) {
   }
 
   if (!unique.length) {
-    const rssQ =
-      String(ctry || '').toUpperCase() === 'IN'
-        ? 'India news OR cricket OR technology when:7d'
-        : 'world news headlines when:7d';
-    const rssItems = await fetchLiveFromGoogleRssByQuery(rssQ);
-    for (const row of rssItems || []) {
-      if (!row.url || !row.title || seen.has(row.url)) continue;
-      seen.add(row.url);
-      unique.push({
-        id: hubNewsDocIdFromUrl(row.url),
-        title: row.title,
-        image: row.image || null,
-        source: row.source || 'News',
-        url: row.url,
-        category: 'others',
-        country: ctry || '',
-        city: profile.city || '',
-        likes: 0,
-        shares: 0,
-        views: 0,
-        trendingScore: 0,
-        createdAt: null,
-        fromNewsApiFallback: true,
-        feedTag: { label: 'Headlines', emoji: '📰' },
-        mixBucket: 'trending',
-      });
-    }
+    await appendHubGoogleNewsRss(profile, seen, unique);
   }
 
   shuffleInPlace(unique);
@@ -366,6 +416,7 @@ export async function hydrateHubNewsFromApi(country, city, interests) {
   const cit = normalizeCity(city);
   const cats = (interests.length ? interests : HUB_DEFAULT_INTERESTS).slice(0, 5);
   if (!canFetchLiveNews() || ctry.length !== 2) return { success: false, count: 0 };
+  if (isNewsApiRateLimitedCooldown()) return { success: true, count: 0 };
 
   let total = 0;
   for (const cat of cats) {
@@ -441,8 +492,10 @@ export async function fetchHubPersonalizedFeed(uid, options = {}) {
   let latest = [];
   let firestoreNewsOk = true;
 
+  // Do not block the carousel on hydration (many NewsAPI calls — slow / 429 under rate limits).
+  void hydrateHubNewsFromApi(profile.country, profile.city, cats).catch(() => {});
+
   try {
-    await hydrateHubNewsFromApi(profile.country, profile.city, cats);
     trending = await queryNewsTrending(profile.country, cats, 40);
     latest = await queryNewsLatest(profile.country, cats, 40);
   } catch (e) {
@@ -454,6 +507,20 @@ export async function fetchHubPersonalizedFeed(uid, options = {}) {
     latest = [];
   }
 
+  // #region agent log
+  logNewsApiAgentDebug({
+    location: 'hubNewsService:fetchHubPersonalizedFeed',
+    message: 'after_firestore_queries',
+    runId: 'post-fix',
+    hypothesisId: 'H',
+    data: {
+      trendingLen: trending.length,
+      latestLen: latest.length,
+      firestoreNewsOk,
+    },
+  });
+  // #endregion
+
   trending = [...trending].sort(
     (a, b) =>
       effectiveHubRankScore(b, profile.city, interestsLower) -
@@ -464,6 +531,15 @@ export async function fetchHubPersonalizedFeed(uid, options = {}) {
 
   if (items.length === 0) {
     items = await buildNewsApiFallbackFeed(profile, targetSize);
+    // #region agent log
+    logNewsApiAgentDebug({
+      location: 'hubNewsService:fetchHubPersonalizedFeed',
+      message: 'after_fallback_feed',
+      runId: 'post-fix',
+      hypothesisId: 'H',
+      data: { fallbackItemCount: items.length },
+    });
+    // #endregion
     if (!firestoreNewsOk && items.length > 0) {
       console.info(
         '[HubTrending] Using live headlines (NewsAPI). To persist rankings/likes in Firestore, deploy rules + indexes for the `news` collection — see firestore.rules and firestore.indexes.json.'

@@ -604,6 +604,48 @@ export function logNewsApiAgentDebug(payload) {
 }
 // #endregion
 
+const NEWSAPI_COOLDOWN_LS = 'deite_newsapi_cooldown_until';
+const NEWSAPI_RATE_LIMIT_COOLDOWN_MS = 15 * 60 * 1000;
+let newsApiRateLimitCooldownUntil = 0;
+
+function readStoredNewsApiCooldownUntil() {
+  try {
+    const v = parseInt(localStorage.getItem(NEWSAPI_COOLDOWN_LS) || '0', 10);
+    return Number.isFinite(v) && v > 0 ? v : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function setNewsApiCooldownUntil(ts) {
+  newsApiRateLimitCooldownUntil = ts;
+  try {
+    localStorage.setItem(NEWSAPI_COOLDOWN_LS, String(ts));
+  } catch {
+    /* private mode */
+  }
+}
+
+function applyNewsApiRateLimitSignal(jr) {
+  const data = jr?.data;
+  const code = typeof data?.code === 'string' ? data.code : '';
+  if (jr?.status === 429 || code === 'rateLimited') {
+    setNewsApiCooldownUntil(Date.now() + NEWSAPI_RATE_LIMIT_COOLDOWN_MS);
+    logNewsApiAgentDebug({
+      message: 'newsapi_cooldown_set',
+      runId: 'post-fix',
+      hypothesisId: 'Q',
+      data: { http: jr?.status, apiCode: code },
+    });
+  }
+}
+
+/** True while NewsAPI is treated as quota-exhausted (memory + localStorage, ~15m after last 429/rateLimited). */
+export function isNewsApiRateLimitedCooldown() {
+  const until = Math.max(newsApiRateLimitCooldownUntil, readStoredNewsApiCooldownUntil());
+  return Date.now() < until;
+}
+
 /** Lowercase ISO codes accepted by NewsAPI top-headlines `country` (see newsapi.org docs). */
 export const NEWSAPI_TOP_HEADLINES_COUNTRIES = new Set([
   'ae',
@@ -865,6 +907,7 @@ async function fetchNewsApiDirectFromEnv(endpoint, baseParams) {
   try {
     const jr = await fetchJsonMaybeNative(url, { timeoutMs });
     const data = jr?.data ?? null;
+    applyNewsApiRateLimitSignal(jr);
 
     if (jr?.ok && data && data.status === 'ok' && Array.isArray(data.articles) && data.articles.length > 0) {
       return data.articles;
@@ -971,6 +1014,7 @@ async function fetchNewsApiThroughProxy(endpoint, baseParams) {
       const url = `${base}/api/news/${endpoint}?${p.toString()}`;
       const jr = await fetchJsonMaybeNative(url, { timeoutMs });
       const data = jr?.data ?? null;
+      applyNewsApiRateLimitSignal(jr);
       if (!loggedFirst) {
         loggedFirst = true;
         logNewsApiAgentDebug({
@@ -1015,6 +1059,7 @@ async function fetchNewsApiThroughCloudFunction(endpoint, baseParams) {
       const url = `${fnUrl}?${p.toString()}`;
       const jr = await fetchJsonMaybeNative(url, { timeoutMs });
       const data = jr?.data ?? null;
+      applyNewsApiRateLimitSignal(jr);
       if (
         jr?.ok &&
         data &&
@@ -1155,6 +1200,16 @@ export async function fetchNewsApiEverythingRaw(opts = {}) {
   const runId = 'post-fix';
 
   const attemptOnce = async (baseParams, fromWindowLabel) => {
+    if (isNewsApiRateLimitedCooldown()) {
+      logNewsApiAgentDebug({
+        location: 'podTopicNewsShared:fetchNewsApiEverythingRaw',
+        message: 'skip_attempt_cooldown',
+        runId,
+        hypothesisId: 'Q',
+        data: { fromWindow: fromWindowLabel, qLen: q.length },
+      });
+      return [];
+    }
     const dbg = {
       hypothesisId: 'A',
       runId,
@@ -1280,6 +1335,17 @@ export async function fetchNewsApiTopHeadlinesRaw(opts = {}) {
     baseParams.set('country', 'us');
   } else if (country) {
     baseParams.set('country', country);
+  }
+
+  if (isNewsApiRateLimitedCooldown()) {
+    logNewsApiAgentDebug({
+      location: 'podTopicNewsShared:fetchNewsApiTopHeadlinesRaw',
+      message: 'skip_top_headlines_cooldown',
+      runId: 'post-fix',
+      hypothesisId: 'Q',
+      data: { category, country, qLen: q.length },
+    });
+    return [];
   }
 
   const directEnv = await fetchNewsApiDirectFromEnv('top-headlines', baseParams);
