@@ -494,12 +494,46 @@ export async function fetchHubPersonalizedFeed(uid, options = {}) {
   const cats = profile.interests.slice(0, 10);
   if (!cats.length) return { success: true, items: [], profile };
 
+  // Do not block the carousel on hydration (many NewsAPI calls — slow / 429 under rate limits).
+  void hydrateHubNewsFromApi(profile.country, profile.city, cats).catch(() => {});
+
+  // Prefer fresh NewsAPI + RSS over stale Firestore `news` rows (cached articles ranked by old engagement).
+  let liveItems = [];
+  if (canFetchLiveNews()) {
+    liveItems = await buildNewsApiFallbackFeed(profile, targetSize);
+  }
+
+  // #region agent log
+  logNewsApiAgentDebug({
+    location: 'hubNewsService:fetchHubPersonalizedFeed',
+    message: 'after_live_fetch',
+    runId: 'post-fix',
+    hypothesisId: 'H',
+    data: { liveLen: liveItems.length },
+  });
+  // #endregion
+
+  if (liveItems.length > 0) {
+    // #region agent log
+    logNewsApiAgentDebug({
+      location: 'hubNewsService:fetchHubPersonalizedFeed',
+      message: 'hub_using_live_not_firestore',
+      runId: 'post-fix',
+      hypothesisId: 'H',
+      data: { count: liveItems.length },
+    });
+    // #endregion
+    return {
+      success: true,
+      items: liveItems,
+      profile,
+      usedFirestore: false,
+    };
+  }
+
   let trending = [];
   let latest = [];
   let firestoreNewsOk = true;
-
-  // Do not block the carousel on hydration (many NewsAPI calls — slow / 429 under rate limits).
-  void hydrateHubNewsFromApi(profile.country, profile.city, cats).catch(() => {});
 
   try {
     trending = await queryNewsTrending(profile.country, cats, 40);
@@ -533,37 +567,13 @@ export async function fetchHubPersonalizedFeed(uid, options = {}) {
       effectiveHubRankScore(a, profile.city, interestsLower)
   );
 
-  let items = mixHubFeedSegments(trending, latest, targetSize);
-
-  if (items.length === 0) {
-    items = await buildNewsApiFallbackFeed(profile, targetSize);
-    // #region agent log
-    logNewsApiAgentDebug({
-      location: 'hubNewsService:fetchHubPersonalizedFeed',
-      message: 'after_fallback_feed',
-      runId: 'post-fix',
-      hypothesisId: 'H',
-      data: { fallbackItemCount: items.length },
-    });
-    // #endregion
-    if (!firestoreNewsOk && items.length > 0) {
-      console.info(
-        '[HubTrending] Using live headlines (NewsAPI). To persist rankings/likes in Firestore, deploy rules + indexes for the `news` collection — see firestore.rules and firestore.indexes.json.'
-      );
-    }
-    return {
-      success: true,
-      items,
-      profile,
-      usedFirestore: false,
-    };
-  }
+  const items = mixHubFeedSegments(trending, latest, targetSize);
 
   return {
     success: true,
     items,
     profile,
-    usedFirestore: true,
+    usedFirestore: items.length > 0,
   };
 }
 
