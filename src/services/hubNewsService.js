@@ -304,17 +304,28 @@ async function appendHubGoogleNewsRss(profile, seen, unique) {
 }
 
 /**
- * When Firestore `news` is blocked or empty: same interest mix from NewsAPI only (no writes).
+ * When Firestore `news` is blocked or empty: Google News RSS first (no quota), then NewsAPI to top up when allowed.
  */
 async function buildNewsApiFallbackFeed(profile, targetSize = 20) {
   const cats = (profile?.interests?.length ? profile.interests : HUB_DEFAULT_INTERESTS).slice(0, 5);
   if (!canFetchLiveNews()) return [];
 
-  if (isNewsApiRateLimitedCooldown()) {
-    const seen = new Set();
-    const unique = [];
-    await appendHubGoogleNewsRss(profile, seen, unique);
-    shuffleInPlace(unique);
+  const seen = new Set();
+  const unique = [];
+  await appendHubGoogleNewsRss(profile, seen, unique);
+
+  logNewsApiAgentDebug({
+    location: 'hubNewsService:buildNewsApiFallbackFeed',
+    message: 'rss_seeded',
+    runId: 'post-fix',
+    hypothesisId: 'S',
+    data: { itemCountAfterRss: unique.length },
+  });
+
+  const ctry = normalizeCountry(profile?.country || '');
+  const skipNewsApi = isNewsApiRateLimitedCooldown();
+
+  if (skipNewsApi) {
     logNewsApiAgentDebug({
       location: 'hubNewsService:buildNewsApiFallbackFeed',
       message: 'rss_only_cooldown',
@@ -322,54 +333,52 @@ async function buildNewsApiFallbackFeed(profile, targetSize = 20) {
       hypothesisId: 'Q',
       data: { itemCount: unique.length },
     });
+    shuffleInPlace(unique);
     return unique.slice(0, targetSize);
   }
 
-  const collected = [];
-  const rowsByCat = await Promise.all(
-    cats.map(async (cat) => {
-      const qExtra = INTEREST_QUERIES[cat] || cat;
-      const rows = await fetchNewsApiEverythingNormalized({
-        q: qExtra,
-        pageSize: 6,
-        language: 'en',
-      });
-      return { cat, rows: rows || [] };
-    })
-  );
-  for (const { cat, rows } of rowsByCat) {
-    for (const row of rows) {
-      if (!row.url || !row.title) continue;
-      collected.push({
-        id: hubNewsDocIdFromUrl(row.url),
-        title: row.title,
-        image: row.image || null,
-        source: row.source || 'News',
-        url: row.url,
-        category: cat,
-        country: profile.country || '',
-        city: profile.city || '',
-        likes: 0,
-        shares: 0,
-        views: 0,
-        trendingScore: 0,
-        createdAt: null,
-        fromNewsApiFallback: true,
-        feedTag: { label: 'For you', emoji: '📰' },
-        mixBucket: 'trending',
-      });
+  if (unique.length < targetSize) {
+    const collected = [];
+    const rowsByCat = await Promise.all(
+      cats.map(async (cat) => {
+        const qExtra = INTEREST_QUERIES[cat] || cat;
+        const rows = await fetchNewsApiEverythingNormalized({
+          q: qExtra,
+          pageSize: 6,
+          language: 'en',
+        });
+        return { cat, rows: rows || [] };
+      })
+    );
+    for (const { cat, rows } of rowsByCat) {
+      for (const row of rows) {
+        if (!row.url || !row.title || seen.has(row.url)) continue;
+        seen.add(row.url);
+        unique.push({
+          id: hubNewsDocIdFromUrl(row.url),
+          title: row.title,
+          image: row.image || null,
+          source: row.source || 'News',
+          url: row.url,
+          category: cat,
+          country: profile.country || '',
+          city: profile.city || '',
+          likes: 0,
+          shares: 0,
+          views: 0,
+          trendingScore: 0,
+          createdAt: null,
+          fromNewsApiFallback: true,
+          feedTag: { label: 'For you', emoji: '📰' },
+          mixBucket: 'trending',
+        });
+        if (unique.length >= targetSize * 2) break;
+      }
+      if (unique.length >= targetSize * 2) break;
     }
   }
-  const seen = new Set();
-  const unique = [];
-  for (const r of collected) {
-    if (seen.has(r.url)) continue;
-    seen.add(r.url);
-    unique.push(r);
-  }
 
-  const ctry = normalizeCountry(profile?.country || '');
-  if (!unique.length) {
+  if (unique.length < targetSize) {
     const code = ctry.length === 2 ? ctry.toLowerCase() : 'us';
     const th = await fetchNewsApiTopHeadlinesNormalized({
       country: code,
@@ -397,11 +406,8 @@ async function buildNewsApiFallbackFeed(profile, targetSize = 20) {
         feedTag: { label: 'Trending', emoji: '🔥' },
         mixBucket: 'trending',
       });
+      if (unique.length >= targetSize * 2) break;
     }
-  }
-
-  if (!unique.length) {
-    await appendHubGoogleNewsRss(profile, seen, unique);
   }
 
   shuffleInPlace(unique);
