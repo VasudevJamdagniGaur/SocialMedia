@@ -22,6 +22,7 @@ import {
 import {
   canFetchLiveNews,
   fetchNewsApiEverythingNormalized,
+  fetchNewsApiTopHeadlinesNormalized,
 } from '../lib/podTopicNewsShared';
 
 const COLLECTION = 'news';
@@ -289,6 +290,39 @@ async function buildNewsApiFallbackFeed(profile, targetSize = 20) {
     seen.add(r.url);
     unique.push(r);
   }
+
+  if (!unique.length) {
+    const ctry = normalizeCountry(profile?.country || '');
+    const code = ctry.length === 2 ? ctry.toLowerCase() : 'us';
+    const th = await fetchNewsApiTopHeadlinesNormalized({
+      country: code,
+      pageSize: Math.min(40, targetSize + 10),
+      language: 'en',
+    });
+    for (const row of th || []) {
+      if (!row.url || !row.title || seen.has(row.url)) continue;
+      seen.add(row.url);
+      unique.push({
+        id: hubNewsDocIdFromUrl(row.url),
+        title: row.title,
+        image: row.image || null,
+        source: row.source || 'News',
+        url: row.url,
+        category: 'others',
+        country: ctry || '',
+        city: profile.city || '',
+        likes: 0,
+        shares: 0,
+        views: 0,
+        trendingScore: 0,
+        createdAt: null,
+        fromNewsApiFallback: true,
+        feedTag: { label: 'Trending', emoji: '🔥' },
+        mixBucket: 'trending',
+      });
+    }
+  }
+
   shuffleInPlace(unique);
   return unique.slice(0, targetSize);
 }

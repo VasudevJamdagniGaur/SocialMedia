@@ -1,5 +1,36 @@
 const { createProxyMiddleware } = require('http-proxy-middleware');
 const https = require('https');
+const fs = require('fs');
+const path = require('path');
+
+/**
+ * CRA does not always populate process.env from .env before setupProxy runs.
+ * Read project root .env so REACT_APP_NEWSAPI* is available for the local proxy.
+ */
+function loadRootEnvFile() {
+  try {
+    const envPath = path.join(__dirname, '..', '.env');
+    if (!fs.existsSync(envPath)) return;
+    const text = fs.readFileSync(envPath, 'utf8');
+    for (const line of text.split(/\r?\n/)) {
+      let s = line.trim();
+      if (!s || s.startsWith('#')) continue;
+      const eq = s.indexOf('=');
+      if (eq < 1) continue;
+      const key = s.slice(0, eq).trim();
+      let val = s.slice(eq + 1).trim();
+      if (
+        (val.startsWith('"') && val.endsWith('"')) ||
+        (val.startsWith("'") && val.endsWith("'"))
+      ) {
+        val = val.slice(1, -1);
+      }
+      if (key.startsWith('REACT_APP_')) process.env[key] = val;
+    }
+  } catch {
+    /* ignore */
+  }
+}
 
 /**
  * Server-side GET for NewsAPI (same idea as Cloud Function `newsApi`).
@@ -79,6 +110,7 @@ function mountLocalNewsApiProxy(app) {
 // CRA dev-server proxy so the browser can call `/api/news/*` on localhost
 // while the dev server fetches the Firebase Hosting-backed endpoint server-side.
 module.exports = function setupProxy(app) {
+  loadRootEnvFile();
   mountLocalNewsApiProxy(app);
 
   const targetOrigin = (

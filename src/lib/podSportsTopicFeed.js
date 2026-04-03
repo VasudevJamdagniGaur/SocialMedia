@@ -203,8 +203,34 @@ export async function fetchSportsTopicRawItems(topicId) {
     });
     if (filtered.length) rows = filtered.slice(0, 30);
   } else if (config.q) {
-    const fetched = await fetchNewsApiEverythingNormalized({ q: config.q, pageSize: 100 });
-    const onTopic = (fetched || []).filter((a) => sportArticleMatchesTopic(topicId, a));
+    let fetched = await fetchNewsApiEverythingNormalized({ q: config.q, pageSize: 100 });
+    let onTopic = (fetched || []).filter((a) => sportArticleMatchesTopic(topicId, a));
+
+    if (!onTopic.length) {
+      const narrowQ =
+        topicId === 'cricket'
+          ? 'cricket OR IPL'
+          : topicId === 'football'
+            ? 'soccer OR MLS'
+            : topicId === 'f1'
+              ? 'Formula 1'
+              : topicId === 'chess'
+                ? 'chess OR FIDE'
+                : null;
+      if (narrowQ) {
+        fetched = await fetchNewsApiEverythingNormalized({ q: narrowQ, pageSize: 60 });
+        onTopic = (fetched || []).filter((a) => sportArticleMatchesTopic(topicId, a));
+      }
+    }
+    if (!onTopic.length) {
+      const th = await fetchNewsApiTopHeadlinesNormalized({
+        category: 'sports',
+        language: 'en',
+        pageSize: 100,
+      });
+      onTopic = (th || []).filter((a) => sportArticleMatchesTopic(topicId, a));
+    }
+
     // #region agent log
     logNewsApiAgentDebug({
       location: 'podSportsTopicFeed:fetchSportsTopicRawItems',

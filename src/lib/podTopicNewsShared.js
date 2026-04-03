@@ -782,7 +782,20 @@ function getCandidateNewsApiFunctionUrls() {
 
 function isNativeCapacitor() {
   try {
-    return Capacitor?.isNativePlatform?.() === true;
+    if (Capacitor?.isNativePlatform?.() === true) return true;
+    const p = Capacitor?.getPlatform?.();
+    return p === 'android' || p === 'ios';
+  } catch {
+    return false;
+  }
+}
+
+/** Last-resort public CORS mirrors (sends key through a third party). Opt-in on HTTPS production. */
+function allowNewsCorsProxyFallback() {
+  if (isNativeCapacitor()) return true;
+  if (shouldProxyNewsApi()) return true;
+  try {
+    return String(process.env.REACT_APP_NEWSAPI_FORCE_CORS_PROXY || '').trim() === '1';
   } catch {
     return false;
   }
@@ -862,7 +875,9 @@ async function fetchNewsApiDirectFromEnv(endpoint, baseParams) {
 function shouldProxyNewsApi() {
   if (typeof window === 'undefined') return false;
   try {
-    if (Capacitor?.isNativePlatform?.()) return true;
+    if (Capacitor?.isNativePlatform?.() === true) return true;
+    const p = Capacitor?.getPlatform?.();
+    if (p === 'android' || p === 'ios') return true;
   } catch {
     /* no native bridge */
   }
@@ -1168,8 +1183,8 @@ export async function fetchNewsApiEverythingRaw(opts = {}) {
     }
 
     const envKey = getNewsApiKey();
-    dbg.corsAttempted = !!(envKey && (isNativeCapacitor() || shouldProxyNewsApi()));
-    if (envKey && (isNativeCapacitor() || shouldProxyNewsApi())) {
+    dbg.corsAttempted = !!(envKey && allowNewsCorsProxyFallback());
+    if (envKey && allowNewsCorsProxyFallback()) {
       const viaCors = await fetchNewsApiThroughCorsProxies('everything', baseParams, envKey);
       dbg.corsLen = Array.isArray(viaCors) ? viaCors.length : null;
       if (Array.isArray(viaCors) && viaCors.length > 0) {
@@ -1255,7 +1270,7 @@ export async function fetchNewsApiTopHeadlinesRaw(opts = {}) {
   if (Array.isArray(proxied) && proxied.length > 0) return proxied;
 
   const envKeyTh = getNewsApiKey();
-  if (envKeyTh && (isNativeCapacitor() || shouldProxyNewsApi())) {
+  if (envKeyTh && allowNewsCorsProxyFallback()) {
     const viaCorsTh = await fetchNewsApiThroughCorsProxies('top-headlines', baseParams, envKeyTh);
     if (Array.isArray(viaCorsTh) && viaCorsTh.length > 0) {
       return viaCorsTh;
