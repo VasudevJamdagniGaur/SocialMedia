@@ -1090,10 +1090,10 @@ export async function fetchNewsApiEverythingRaw(opts = {}) {
   const proxied = await fetchNewsApiThroughProxy('everything', baseParams);
   if (Array.isArray(proxied) && proxied.length > 0) return proxied;
 
-  // APK: direct CapacitorHttp to newsapi.org often fails (no key in bundle, TLS, or NewsAPI dev-tier limits).
-  // Public CORS proxies call NewsAPI from their servers — often works when Firebase / Hosting returns 404.
+  // Native + localhost: when Hosting/Functions proxy fails, third-party CORS proxies can reach NewsAPI with the client key.
+  // (Production https origins rely on /api/news; do not send the key through public proxies there.)
   const envKey = getNewsApiKey();
-  if (envKey && isNativeCapacitor()) {
+  if (envKey && (isNativeCapacitor() || shouldProxyNewsApi())) {
     const viaCors = await fetchNewsApiThroughCorsProxies('everything', baseParams, envKey);
     if (Array.isArray(viaCors) && viaCors.length > 0) {
       return viaCors;
@@ -1117,7 +1117,11 @@ export async function fetchNewsApiTopHeadlinesRaw(opts = {}) {
   const category = String(opts.category || '').trim();
   const q = String(opts.q || '').trim();
   const sources = String(opts.sources || '').trim();
-  if (!category && !q && !sources) return [];
+  const countryOpt = opts.country != null ? String(opts.country).trim().toLowerCase() : '';
+  const country = /^[a-z]{2}$/.test(countryOpt) ? countryOpt : '';
+
+  // NewsAPI allows top-headlines with country alone (no category/q/sources) — e.g. Crew personalized feed.
+  if (!category && !q && !sources && !country) return [];
 
   // Always fetch via backend proxy: /api/news/* -> Cloud Function `newsApi`.
   // This keeps the NewsAPI key on the server.
@@ -1135,10 +1139,10 @@ export async function fetchNewsApiTopHeadlinesRaw(opts = {}) {
   if (category) baseParams.set('category', category);
   if (q) baseParams.set('q', q);
   if (sources) baseParams.set('sources', sources);
-  if (category && !sources && !q && !opts.country) {
+  if (category && !sources && !q && !country) {
     baseParams.set('country', 'us');
-  } else if (opts.country) {
-    baseParams.set('country', String(opts.country));
+  } else if (country) {
+    baseParams.set('country', country);
   }
 
   const directEnv = await fetchNewsApiDirectFromEnv('top-headlines', baseParams);
@@ -1151,7 +1155,7 @@ export async function fetchNewsApiTopHeadlinesRaw(opts = {}) {
   if (Array.isArray(proxied) && proxied.length > 0) return proxied;
 
   const envKeyTh = getNewsApiKey();
-  if (envKeyTh && isNativeCapacitor()) {
+  if (envKeyTh && (isNativeCapacitor() || shouldProxyNewsApi())) {
     const viaCorsTh = await fetchNewsApiThroughCorsProxies('top-headlines', baseParams, envKeyTh);
     if (Array.isArray(viaCorsTh) && viaCorsTh.length > 0) {
       return viaCorsTh;
