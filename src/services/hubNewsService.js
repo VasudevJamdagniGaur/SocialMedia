@@ -23,6 +23,7 @@ import {
   canFetchLiveNews,
   fetchNewsApiEverythingNormalized,
   fetchNewsApiTopHeadlinesNormalized,
+  fetchLiveFromGoogleRssByQuery,
 } from '../lib/podTopicNewsShared';
 
 const COLLECTION = 'news';
@@ -291,8 +292,8 @@ async function buildNewsApiFallbackFeed(profile, targetSize = 20) {
     unique.push(r);
   }
 
+  const ctry = normalizeCountry(profile?.country || '');
   if (!unique.length) {
-    const ctry = normalizeCountry(profile?.country || '');
     const code = ctry.length === 2 ? ctry.toLowerCase() : 'us';
     const th = await fetchNewsApiTopHeadlinesNormalized({
       country: code,
@@ -318,6 +319,36 @@ async function buildNewsApiFallbackFeed(profile, targetSize = 20) {
         createdAt: null,
         fromNewsApiFallback: true,
         feedTag: { label: 'Trending', emoji: '🔥' },
+        mixBucket: 'trending',
+      });
+    }
+  }
+
+  if (!unique.length) {
+    const rssQ =
+      String(ctry || '').toUpperCase() === 'IN'
+        ? 'India news OR cricket OR technology when:7d'
+        : 'world news headlines when:7d';
+    const rssItems = await fetchLiveFromGoogleRssByQuery(rssQ);
+    for (const row of rssItems || []) {
+      if (!row.url || !row.title || seen.has(row.url)) continue;
+      seen.add(row.url);
+      unique.push({
+        id: hubNewsDocIdFromUrl(row.url),
+        title: row.title,
+        image: row.image || null,
+        source: row.source || 'News',
+        url: row.url,
+        category: 'others',
+        country: ctry || '',
+        city: profile.city || '',
+        likes: 0,
+        shares: 0,
+        views: 0,
+        trendingScore: 0,
+        createdAt: null,
+        fromNewsApiFallback: true,
+        feedTag: { label: 'Headlines', emoji: '📰' },
         mixBucket: 'trending',
       });
     }

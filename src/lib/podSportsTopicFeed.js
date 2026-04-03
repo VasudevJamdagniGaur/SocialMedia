@@ -4,6 +4,7 @@ import {
   canFetchLiveNews,
   fetchNewsApiEverythingNormalized,
   fetchNewsApiTopHeadlinesNormalized,
+  fetchLiveFromGoogleRssByQuery,
   enrichNewsItemsWithOgImages,
   logNewsApiAgentDebug,
 } from './podTopicNewsShared';
@@ -273,6 +274,32 @@ export async function fetchSportsTopicRawItems(topicId) {
     });
     // #endregion
     rows = onTopic.slice(0, 30);
+  }
+
+  if (!rows?.length) {
+    const rssQ =
+      topicId === 'cricket'
+        ? 'cricket OR IPL OR T20 when:7d'
+        : topicId === 'football'
+          ? 'soccer OR MLS OR Premier League when:7d'
+          : topicId === 'f1'
+            ? 'Formula 1 OR F1 when:7d'
+            : topicId === 'chess'
+              ? 'chess OR FIDE when:7d'
+              : 'sports when:7d';
+    const rssItems = await fetchLiveFromGoogleRssByQuery(rssQ);
+    let picked = (rssItems || []).filter((a) => sportArticleMatchesTopic(topicId, a)).slice(0, 30);
+    if (!picked.length) picked = (rssItems || []).slice(0, 30);
+    if (picked.length) {
+      rows = picked;
+      logNewsApiAgentDebug({
+        location: 'podSportsTopicFeed:fetchSportsTopicRawItems',
+        message: 'google_rss_fallback',
+        runId: 'post-fix',
+        hypothesisId: 'R',
+        data: { topicId, rssLen: (rssItems || []).length, rowsLen: picked.length },
+      });
+    }
   }
 
   if (!rows?.length) {

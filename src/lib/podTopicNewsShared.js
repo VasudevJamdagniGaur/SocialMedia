@@ -965,11 +965,26 @@ async function fetchNewsApiThroughProxy(endpoint, baseParams) {
   p.set('endpoint', endpoint);
 
   const timeoutMs = 12000;
+  let loggedFirst = false;
   for (const base of getFirebaseHostingApiBases()) {
     try {
       const url = `${base}/api/news/${endpoint}?${p.toString()}`;
       const jr = await fetchJsonMaybeNative(url, { timeoutMs });
       const data = jr?.data ?? null;
+      if (!loggedFirst) {
+        loggedFirst = true;
+        logNewsApiAgentDebug({
+          message: 'proxy_first_base',
+          runId: 'diag',
+          hypothesisId: 'P',
+          data: {
+            http: jr?.status,
+            ok: jr?.ok,
+            apiStatus: data?.status,
+            apiCode: data?.code,
+          },
+        });
+      }
       if (
         jr?.ok &&
         data &&
