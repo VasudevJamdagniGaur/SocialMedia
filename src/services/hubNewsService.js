@@ -272,6 +272,53 @@ const INTEREST_QUERIES = {
   others: '(sports OR athletics OR Olympics)',
 };
 
+/** Google News RSS per interest (no NewsAPI quota) — fills the hub when API is rate-limited. */
+const HUB_RSS_BY_INTEREST = {
+  cricket: 'cricket OR IPL OR T20 when:7d',
+  football: 'soccer OR MLS OR Premier League when:7d',
+  f1: 'Formula 1 OR F1 when:7d',
+  chess: 'chess OR FIDE when:7d',
+  others: 'sports headlines when:7d',
+};
+
+async function appendInterestGoogleNewsRssParallel(profile, cats, seen, unique, capUrls) {
+  const ctry = normalizeCountry(profile?.country || '');
+  const sub = (cats || []).slice(0, 5).filter(Boolean);
+  if (!sub.length) return;
+  const pairs = sub.map((cat) => ({
+    cat,
+    q: HUB_RSS_BY_INTEREST[cat] || `${cat} news when:7d`,
+  }));
+  const batches = await Promise.all(pairs.map((p) => fetchLiveFromGoogleRssByQuery(p.q)));
+  for (let i = 0; i < batches.length; i++) {
+    if (unique.length >= capUrls) break;
+    const cat = pairs[i].cat;
+    for (const row of batches[i] || []) {
+      if (unique.length >= capUrls) break;
+      if (!row.url || !row.title || seen.has(row.url)) continue;
+      seen.add(row.url);
+      unique.push({
+        id: hubNewsDocIdFromUrl(row.url),
+        title: row.title,
+        image: row.image || null,
+        source: row.source || 'News',
+        url: row.url,
+        category: cat,
+        country: ctry || '',
+        city: profile.city || '',
+        likes: 0,
+        shares: 0,
+        views: 0,
+        trendingScore: 0,
+        createdAt: null,
+        fromNewsApiFallback: true,
+        feedTag: { label: 'For you', emoji: '📰' },
+        mixBucket: 'trending',
+      });
+    }
+  }
+}
+
 async function appendHubGoogleNewsRss(profile, seen, unique) {
   const ctry = normalizeCountry(profile?.country || '');
   const rssQ =
@@ -313,6 +360,7 @@ async function buildNewsApiFallbackFeed(profile, targetSize = 20) {
   const seen = new Set();
   const unique = [];
   await appendHubGoogleNewsRss(profile, seen, unique);
+  await appendInterestGoogleNewsRssParallel(profile, cats, seen, unique, 80);
 
   logNewsApiAgentDebug({
     location: 'hubNewsService:buildNewsApiFallbackFeed',

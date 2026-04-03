@@ -167,6 +167,16 @@ async function trySportsRowsFromGoogleRss(topicId) {
   }
   let picked = (rssItems || []).filter((a) => sportArticleMatchesTopic(topicId, a)).slice(0, 30);
   if (!picked.length) picked = (rssItems || []).slice(0, 30);
+  else if (topicId === 'football' && picked.length < 6) {
+    const urls = new Set(picked.map((p) => p.url).filter(Boolean));
+    for (const a of rssItems || []) {
+      if (picked.length >= 18) break;
+      if (a?.url && !urls.has(a.url)) {
+        urls.add(a.url);
+        picked.push(a);
+      }
+    }
+  }
   return picked;
 }
 

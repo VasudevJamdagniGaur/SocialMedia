@@ -136,6 +136,7 @@ export default function HubTrendingFeed({ isDarkMode }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const loadGenRef = useRef(0);
 
   useEffect(() => {
     const unsub = onAuthStateChange((u) => setUserId(u?.uid || null));
@@ -150,10 +151,12 @@ export default function HubTrendingFeed({ isDarkMode }) {
       setError('');
       return;
     }
+    const gen = ++loadGenRef.current;
     setLoading(true);
     setError('');
     try {
       const res = await fetchHubPersonalizedFeed(uid, { targetSize: 20 });
+      if (gen !== loadGenRef.current) return;
       if (!res.success) {
         setItems([]);
         setError(res.error || 'Could not load feed');
@@ -161,9 +164,11 @@ export default function HubTrendingFeed({ isDarkMode }) {
       }
       setItems(res.items || []);
     } catch (e) {
+      if (gen !== loadGenRef.current) return;
       setItems([]);
       setError(e?.message || 'Could not load feed');
     } finally {
+      if (gen !== loadGenRef.current) return;
       setLoading(false);
     }
   }, []);
@@ -220,7 +225,7 @@ export default function HubTrendingFeed({ isDarkMode }) {
           >
             {carouselItems.map((item, idx) => (
               <HubTrendingCard
-                key={item.id}
+                key={item.id ? String(item.id) : `trend-${idx}-${item.url || ''}`}
                 item={item}
                 idx={idx}
                 HUB={HUB}
