@@ -11,7 +11,6 @@ import imageCompression from 'browser-image-compression';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useTheme } from '../contexts/ThemeContext';
 import { getCurrentUser } from '../services/authService';
-import { useLogHubNewsActivityOnUnmount } from '../hooks/useUserBehavior';
 import firestoreService from '../services/firestoreService';
 import chatService from '../services/chatService';
 import { getDateId } from '../utils/dateUtils';
@@ -453,14 +452,6 @@ export default function ShareSuggestionsPage() {
   const reflectionFromState = (state.reflection ?? '').trim();
   const newsArticleFromState = normalizeNewsArticle(state.newsArticle);
   const isNewsShareMode = !!newsArticleFromState;
-  const hubTrendTracking =
-    isNewsShareMode &&
-    state.hubTrendTracking &&
-    typeof state.hubTrendTracking === 'object' &&
-    typeof state.hubTrendTracking.openedAt === 'number'
-      ? state.hubTrendTracking
-      : null;
-  useLogHubNewsActivityOnUnmount(getCurrentUser()?.uid || null, hubTrendTracking);
   const [newsArticleDetails, setNewsArticleDetails] = useState(null);
   const [isLoadingNewsDetails, setIsLoadingNewsDetails] = useState(isNewsShareMode);
   const [newsCardSummary, setNewsCardSummary] = useState('');
