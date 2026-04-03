@@ -863,7 +863,8 @@ export function getNewsApiDebugSnapshot() {
     const proxy = read('__NEWSAPI_DEBUG_PROXY__', '__NEWSAPI_DEBUG_PROXY__');
     const err = read('__NEWSAPI_DEBUG_ERR__', '__NEWSAPI_DEBUG_ERR__');
     const fn = read('__NEWSAPI_DEBUG_FN__', '__NEWSAPI_DEBUG_FN__');
-    return { last, proxy, err, fn };
+    const direct = read('__NEWSAPI_DEBUG_DIRECT__', '__NEWSAPI_DEBUG_DIRECT__');
+    return { last, proxy, err, fn, direct };
   } catch {
     return null;
   }
@@ -928,6 +929,16 @@ async function fetchJsonMaybeNative(url, { timeoutMs }) {
   }
 }
 
+function persistNewsApiDirectDebug(data) {
+  try {
+    if (typeof window === 'undefined') return;
+    window.__NEWSAPI_DEBUG_DIRECT__ = data;
+    window.localStorage?.setItem?.('__NEWSAPI_DEBUG_DIRECT__', JSON.stringify(data));
+  } catch {
+    /* ignore */
+  }
+}
+
 async function fetchNewsApiDirectFromEnv(endpoint, baseParams) {
   const apiKey = getNewsApiKey();
   if (!apiKey) {
@@ -939,6 +950,12 @@ async function fetchNewsApiDirectFromEnv(endpoint, baseParams) {
       data: { endpoint, isNative: isNativeCapacitor() },
     });
     // #endregion
+    persistNewsApiDirectDebug({
+      message: 'direct_env_no_key',
+      endpoint,
+      isNative: isNativeCapacitor(),
+      hasKey: false,
+    });
     return null;
   }
 
@@ -983,6 +1000,18 @@ async function fetchNewsApiDirectFromEnv(endpoint, baseParams) {
     });
     // #endregion
 
+    persistNewsApiDirectDebug({
+      message: 'direct_env_response',
+      endpoint,
+      isNative: isNativeCapacitor(),
+      hasKey: true,
+      httpStatus: jr?.status,
+      ok: !!jr?.ok,
+      apiStatus: data?.status || null,
+      apiCode: data?.code || null,
+      articleCount: Array.isArray(data?.articles) ? data.articles.length : null,
+    });
+
     if (jr?.ok && data && data.status === 'ok' && Array.isArray(data.articles)) return data.articles;
     return null;
   } catch (e) {
@@ -994,6 +1023,13 @@ async function fetchNewsApiDirectFromEnv(endpoint, baseParams) {
       data: { endpoint, error: e instanceof Error ? e.message : String(e) },
     });
     // #endregion
+    persistNewsApiDirectDebug({
+      message: 'direct_env_error',
+      endpoint,
+      isNative: isNativeCapacitor(),
+      hasKey: true,
+      error: e instanceof Error ? e.message : String(e),
+    });
     return null;
   }
 }
@@ -1211,6 +1247,15 @@ async function fetchNewsApiThroughCloudFunction(endpoint, baseParams) {
   return null;
 }
 
+function tryParseNewsApiJson(raw) {
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
 async function fetchNewsApiThroughCorsProxies(endpoint, baseParams, apiKey) {
   const params = new URLSearchParams(baseParams);
   params.set('apiKey', apiKey);
@@ -1233,7 +1278,7 @@ async function fetchNewsApiThroughCorsProxies(endpoint, baseParams, apiKey) {
         const contents =
           typeof json?.contents === 'string' ? json.contents : typeof json === 'string' ? json : null;
         if (typeof contents === 'string') {
-          const parsed = JSON.parse(contents).catch(() => null);
+          const parsed = tryParseNewsApiJson(contents);
           if (parsed?.status && Array.isArray(parsed?.articles)) return parsed;
         }
         return null;
@@ -1272,7 +1317,7 @@ async function fetchNewsApiThroughCorsProxies(endpoint, baseParams, apiKey) {
         const data = await res.json().catch(() => null);
         const contents = typeof data?.contents === 'string' ? data.contents : '';
         if (contents) {
-          const parsed = JSON.parse(contents).catch(() => null);
+          const parsed = tryParseNewsApiJson(contents);
           if (parsed?.status && Array.isArray(parsed?.articles)) return parsed;
         }
         return null;
@@ -1327,6 +1372,32 @@ export async function fetchNewsApiEverythingRaw(opts = {}) {
 
   const proxied = await fetchNewsApiThroughProxy('everything', baseParams);
   if (Array.isArray(proxied) && proxied.length > 0) return proxied;
+
+  // APK: direct CapacitorHttp to newsapi.org often fails (no key in bundle, TLS, or NewsAPI dev-tier limits).
+  // Public CORS proxies call NewsAPI from their servers — often works when Firebase / Hosting returns 404.
+  const envKey = getNewsApiKey();
+  if (envKey && isNativeCapacitor()) {
+    // #region agent log H8 cors_fallback_attempt
+    __agentDebugLog({
+      hypothesisId: 'H8',
+      location: 'src/lib/podTopicNewsShared.js:fetchNewsApiEverythingRaw',
+      message: 'cors_proxy_fallback_attempt',
+      data: { endpoint: 'everything' },
+    });
+    // #endregion
+    const viaCors = await fetchNewsApiThroughCorsProxies('everything', baseParams, envKey);
+    if (Array.isArray(viaCors) && viaCors.length > 0) {
+      // #region agent log H8 cors_fallback_ok
+      __agentDebugLog({
+        hypothesisId: 'H8',
+        location: 'src/lib/podTopicNewsShared.js:fetchNewsApiEverythingRaw',
+        message: 'cors_proxy_fallback_ok',
+        data: { endpoint: 'everything', articleCount: viaCors.length },
+      });
+      // #endregion
+      return viaCors;
+    }
+  }
 
   // #region agent log H1_all_paths_empty
   const fnUrl = getNewsApiFunctionUrl();
@@ -1402,6 +1473,30 @@ export async function fetchNewsApiTopHeadlinesRaw(opts = {}) {
 
   const proxied = await fetchNewsApiThroughProxy('top-headlines', baseParams);
   if (Array.isArray(proxied) && proxied.length > 0) return proxied;
+
+  const envKeyTh = getNewsApiKey();
+  if (envKeyTh && isNativeCapacitor()) {
+    // #region agent log H8 cors_fallback_attempt_top
+    __agentDebugLog({
+      hypothesisId: 'H8',
+      location: 'src/lib/podTopicNewsShared.js:fetchNewsApiTopHeadlinesRaw',
+      message: 'cors_proxy_fallback_attempt',
+      data: { endpoint: 'top-headlines' },
+    });
+    // #endregion
+    const viaCorsTh = await fetchNewsApiThroughCorsProxies('top-headlines', baseParams, envKeyTh);
+    if (Array.isArray(viaCorsTh) && viaCorsTh.length > 0) {
+      // #region agent log H8 cors_fallback_ok_top
+      __agentDebugLog({
+        hypothesisId: 'H8',
+        location: 'src/lib/podTopicNewsShared.js:fetchNewsApiTopHeadlinesRaw',
+        message: 'cors_proxy_fallback_ok',
+        data: { endpoint: 'top-headlines', articleCount: viaCorsTh.length },
+      });
+      // #endregion
+      return viaCorsTh;
+    }
+  }
 
   // #region agent log H1_all_paths_empty_top
   const fnUrl = getNewsApiFunctionUrl();

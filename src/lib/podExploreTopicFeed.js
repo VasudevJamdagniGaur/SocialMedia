@@ -62,7 +62,11 @@ export async function fetchExploreTopicFeed({ section, topicId, startupRegion })
       const ped = pe?.data;
       const fx = snap?.fn;
       const fxd = fx?.data;
-      const dbgText = ` (debug:last=${String(last?.message || 'none')}; fnUrl=${d?.fnUrlPresent ? 'yes' : 'no'}; base0=${String(d?.base0 ?? 'null')}; proxyStatus=${String(pxd?.httpStatus ?? 'null')}; proxyType=${String(pxd?.contentType ?? 'null')}; err=${String(ped?.error ?? 'null')}; fnStatus=${String(fxd?.httpStatus ?? 'null')})`;
+      const dd = snap?.direct;
+      const directDbg = dd
+        ? `direct=${String(dd.message || '')};native=${dd.isNative};hasKey=${dd.hasKey};http=${dd.httpStatus ?? 'na'};api=${dd.apiStatus ?? 'na'};code=${dd.apiCode ?? dd.error ?? 'na'};articles=${dd.articleCount ?? 'na'}`
+        : 'direct=none';
+      const dbgText = ` (debug:last=${String(last?.message || 'none')}; fnUrl=${d?.fnUrlPresent ? 'yes' : 'no'}; base0=${String(d?.base0 ?? 'null')}; proxyStatus=${String(pxd?.httpStatus ?? 'null')}; proxyType=${String(pxd?.contentType ?? 'null')}; err=${String(ped?.error ?? 'null')}; fnStatus=${String(fxd?.httpStatus ?? 'null')}; ${directDbg})`;
       return {
         items: buildFallbackRows(title, googleQ),
         error:
