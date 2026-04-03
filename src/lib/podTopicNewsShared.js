@@ -605,45 +605,43 @@ export function logNewsApiAgentDebug(payload) {
 // #endregion
 
 const NEWSAPI_COOLDOWN_LS = 'deite_newsapi_cooldown_until';
-const NEWSAPI_RATE_LIMIT_COOLDOWN_MS = 15 * 60 * 1000;
+/** Short in-memory backoff only (no localStorage) so a single 429 does not block NewsAPI for 15 minutes. */
+const NEWSAPI_RATE_LIMIT_COOLDOWN_MS = 90 * 1000;
+/** One retry after transient 429 before applying cooldown (shared-key burst). */
+const NEWSAPI_429_RETRY_MS = 1600;
 let newsApiRateLimitCooldownUntil = 0;
 
-function readStoredNewsApiCooldownUntil() {
-  try {
-    const v = parseInt(localStorage.getItem(NEWSAPI_COOLDOWN_LS) || '0', 10);
-    return Number.isFinite(v) && v > 0 ? v : 0;
-  } catch {
-    return 0;
-  }
+try {
+  localStorage.removeItem(NEWSAPI_COOLDOWN_LS);
+} catch {
+  /* private mode / SSR */
 }
 
 function setNewsApiCooldownUntil(ts) {
   newsApiRateLimitCooldownUntil = ts;
-  try {
-    localStorage.setItem(NEWSAPI_COOLDOWN_LS, String(ts));
-  } catch {
-    /* private mode */
-  }
+}
+
+function isNewsApiRateLimitedJsonResponse(jr) {
+  const data = jr?.data;
+  const code = typeof data?.code === 'string' ? data.code : '';
+  return jr?.status === 429 || code === 'rateLimited';
 }
 
 function applyNewsApiRateLimitSignal(jr) {
-  const data = jr?.data;
-  const code = typeof data?.code === 'string' ? data.code : '';
-  if (jr?.status === 429 || code === 'rateLimited') {
+  if (isNewsApiRateLimitedJsonResponse(jr)) {
     setNewsApiCooldownUntil(Date.now() + NEWSAPI_RATE_LIMIT_COOLDOWN_MS);
     logNewsApiAgentDebug({
       message: 'newsapi_cooldown_set',
       runId: 'post-fix',
       hypothesisId: 'Q',
-      data: { http: jr?.status, apiCode: code },
+      data: { http: jr?.status, apiCode: jr?.data?.code },
     });
   }
 }
 
-/** True while NewsAPI is treated as quota-exhausted (memory + localStorage, ~15m after last 429/rateLimited). */
+/** True while NewsAPI is treated as quota-exhausted (in-memory only, ~90s after last 429/rateLimited). */
 export function isNewsApiRateLimitedCooldown() {
-  const until = Math.max(newsApiRateLimitCooldownUntil, readStoredNewsApiCooldownUntil());
-  return Date.now() < until;
+  return Date.now() < newsApiRateLimitCooldownUntil;
 }
 
 /** Lowercase ISO codes accepted by NewsAPI top-headlines `country` (see newsapi.org docs). */
@@ -1012,8 +1010,21 @@ async function fetchNewsApiThroughProxy(endpoint, baseParams) {
   for (const base of getFirebaseHostingApiBases()) {
     try {
       const url = `${base}/api/news/${endpoint}?${p.toString()}`;
-      const jr = await fetchJsonMaybeNative(url, { timeoutMs });
-      const data = jr?.data ?? null;
+      let jr = await fetchJsonMaybeNative(url, { timeoutMs });
+      let data = jr?.data ?? null;
+      if (isNewsApiRateLimitedJsonResponse(jr)) {
+        // #region agent log
+        logNewsApiAgentDebug({
+          message: 'proxy_429_retry_wait',
+          runId: 'post-fix',
+          hypothesisId: 'R',
+          data: { endpoint },
+        });
+        // #endregion
+        await new Promise((r) => setTimeout(r, NEWSAPI_429_RETRY_MS));
+        jr = await fetchJsonMaybeNative(url, { timeoutMs });
+        data = jr?.data ?? null;
+      }
       applyNewsApiRateLimitSignal(jr);
       if (!loggedFirst) {
         loggedFirst = true;
@@ -1057,8 +1068,13 @@ async function fetchNewsApiThroughCloudFunction(endpoint, baseParams) {
   for (const fnUrl of urls) {
     try {
       const url = `${fnUrl}?${p.toString()}`;
-      const jr = await fetchJsonMaybeNative(url, { timeoutMs });
-      const data = jr?.data ?? null;
+      let jr = await fetchJsonMaybeNative(url, { timeoutMs });
+      let data = jr?.data ?? null;
+      if (isNewsApiRateLimitedJsonResponse(jr)) {
+        await new Promise((r) => setTimeout(r, NEWSAPI_429_RETRY_MS));
+        jr = await fetchJsonMaybeNative(url, { timeoutMs });
+        data = jr?.data ?? null;
+      }
       applyNewsApiRateLimitSignal(jr);
       if (
         jr?.ok &&

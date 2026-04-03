@@ -386,20 +386,16 @@ async function buildNewsApiFallbackFeed(profile, targetSize = 20) {
   }
 
   if (unique.length < targetSize) {
-    const collected = [];
-    const rowsByCat = await Promise.all(
-      cats.map(async (cat) => {
-        const qExtra = INTEREST_QUERIES[cat] || cat;
-        const rows = await fetchNewsApiEverythingNormalized({
-          q: qExtra,
-          pageSize: 6,
-          language: 'en',
-        });
-        return { cat, rows: rows || [] };
-      })
-    );
-    for (const { cat, rows } of rowsByCat) {
-      for (const row of rows) {
+    let catFetchRounds = 0;
+    for (const cat of cats) {
+      const qExtra = INTEREST_QUERIES[cat] || cat;
+      const rows = await fetchNewsApiEverythingNormalized({
+        q: qExtra,
+        pageSize: 6,
+        language: 'en',
+      });
+      catFetchRounds += 1;
+      for (const row of rows || []) {
         if (!row.url || !row.title || seen.has(row.url)) continue;
         seen.add(row.url);
         unique.push({
@@ -424,6 +420,13 @@ async function buildNewsApiFallbackFeed(profile, targetSize = 20) {
       }
       if (unique.length >= targetSize * 2) break;
     }
+    logNewsApiAgentDebug({
+      location: 'hubNewsService:buildNewsApiFallbackFeed',
+      message: 'sequential_newsapi_cats_done',
+      runId: 'post-fix',
+      hypothesisId: 'R',
+      data: { catFetchRounds },
+    });
   }
 
   if (unique.length < targetSize) {
