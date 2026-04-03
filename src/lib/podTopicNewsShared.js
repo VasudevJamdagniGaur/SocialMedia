@@ -808,6 +808,31 @@ function __agentDebugLog({ hypothesisId, location, message, data }) {
       /* ignore */
     }
 
+    // Ring buffer for APK / WebView: 127.0.0.1:7490 is the device, not your PC — no file there.
+    try {
+      if (typeof window !== 'undefined') {
+        const ring = Array.isArray(window.__NEWSAPI_DEBUG_RING__) ? window.__NEWSAPI_DEBUG_RING__ : [];
+        ring.push(payload);
+        if (ring.length > 200) ring.splice(0, ring.length - 200);
+        window.__NEWSAPI_DEBUG_RING__ = ring;
+      }
+    } catch {
+      /* ignore */
+    }
+
+    const host = typeof window !== 'undefined' ? window.location?.hostname || '' : '';
+    const isLocalDev =
+      typeof window !== 'undefined' &&
+      host &&
+      (host === 'localhost' || host === '127.0.0.1');
+    if (isLocalDev && window.location?.origin) {
+      fetch(`${window.location.origin}/__debug/ingest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).catch(() => {});
+    }
+
     fetch('http://127.0.0.1:7490/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', {
       method: 'POST',
       headers: {
