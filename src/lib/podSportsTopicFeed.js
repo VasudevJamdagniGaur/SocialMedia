@@ -5,6 +5,7 @@ import {
   fetchNewsApiEverythingNormalized,
   fetchNewsApiTopHeadlinesNormalized,
   enrichNewsItemsWithOgImages,
+  logNewsApiAgentDebug,
 } from './podTopicNewsShared';
 
 /** Google News browse queries (for “Open on Google News” links only). */
@@ -204,6 +205,18 @@ export async function fetchSportsTopicRawItems(topicId) {
   } else if (config.q) {
     const fetched = await fetchNewsApiEverythingNormalized({ q: config.q, pageSize: 100 });
     const onTopic = (fetched || []).filter((a) => sportArticleMatchesTopic(topicId, a));
+    // #region agent log
+    logNewsApiAgentDebug({
+      location: 'podSportsTopicFeed:fetchSportsTopicRawItems',
+      message: 'after_everything_and_filter',
+      hypothesisId: 'F',
+      data: {
+        topicId,
+        fetchedLen: (fetched || []).length,
+        onTopicLen: onTopic.length,
+      },
+    });
+    // #endregion
     rows = onTopic.slice(0, 30);
   }
 

@@ -586,6 +586,21 @@ export function filterNewsRowsIndiaLocal(rows) {
 
 const NEWSAPI_V2 = 'https://newsapi.org/v2';
 
+// #region agent log
+/** Debug NDJSON ingest + logcat (session db6096). No secrets. */
+export function logNewsApiAgentDebug(payload) {
+  const o = { sessionId: 'db6096', timestamp: Date.now(), runId: 'pre-fix', ...payload };
+  fetch('http://127.0.0.1:7588/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'db6096' },
+    body: JSON.stringify(o),
+  }).catch(() => {});
+  try {
+    console.log('[NewsApiAgent]', JSON.stringify(o));
+  } catch (_) {}
+}
+// #endregion
+
 /** Lowercase ISO codes accepted by NewsAPI top-headlines `country` (see newsapi.org docs). */
 export const NEWSAPI_TOP_HEADLINES_COUNTRIES = new Set([
   'ae',
@@ -1081,25 +1096,74 @@ export async function fetchNewsApiEverythingRaw(opts = {}) {
   });
   baseParams.set('from', opts.from || newsApiDefaultFromISO(7));
 
+  const dbg = {
+    hypothesisId: 'A',
+    qLen: q.length,
+    pageSize,
+    hasKey: !!getNewsApiKey(),
+    isNative: isNativeCapacitor(),
+  };
+
   const directEnv = await fetchNewsApiDirectFromEnv('everything', baseParams);
-  if (Array.isArray(directEnv)) return directEnv;
+  dbg.directEnvLen = Array.isArray(directEnv) ? directEnv.length : null;
+  if (Array.isArray(directEnv)) {
+    logNewsApiAgentDebug({
+      location: 'podTopicNewsShared:fetchNewsApiEverythingRaw',
+      message: 'return_branch',
+      hypothesisId: 'G',
+      data: { ...dbg, path: 'directEnv', count: directEnv.length },
+    });
+    return directEnv;
+  }
 
   const direct = await fetchNewsApiThroughCloudFunction('everything', baseParams);
-  if (Array.isArray(direct)) return direct;
+  dbg.fnLen = Array.isArray(direct) ? direct.length : null;
+  if (Array.isArray(direct)) {
+    logNewsApiAgentDebug({
+      location: 'podTopicNewsShared:fetchNewsApiEverythingRaw',
+      message: 'return_branch',
+      hypothesisId: 'G',
+      data: { ...dbg, path: 'cloudFunction', count: direct.length },
+    });
+    return direct;
+  }
 
   const proxied = await fetchNewsApiThroughProxy('everything', baseParams);
-  if (Array.isArray(proxied) && proxied.length > 0) return proxied;
+  dbg.proxyLen = Array.isArray(proxied) ? proxied.length : null;
+  if (Array.isArray(proxied) && proxied.length > 0) {
+    logNewsApiAgentDebug({
+      location: 'podTopicNewsShared:fetchNewsApiEverythingRaw',
+      message: 'return_branch',
+      hypothesisId: 'A',
+      data: { ...dbg, path: 'hostingProxy', count: proxied.length },
+    });
+    return proxied;
+  }
 
   // Native + localhost: when Hosting/Functions proxy fails, third-party CORS proxies can reach NewsAPI with the client key.
   // (Production https origins rely on /api/news; do not send the key through public proxies there.)
   const envKey = getNewsApiKey();
+  dbg.corsAttempted = !!(envKey && (isNativeCapacitor() || shouldProxyNewsApi()));
   if (envKey && (isNativeCapacitor() || shouldProxyNewsApi())) {
     const viaCors = await fetchNewsApiThroughCorsProxies('everything', baseParams, envKey);
+    dbg.corsLen = Array.isArray(viaCors) ? viaCors.length : null;
     if (Array.isArray(viaCors) && viaCors.length > 0) {
+      logNewsApiAgentDebug({
+        location: 'podTopicNewsShared:fetchNewsApiEverythingRaw',
+        message: 'return_branch',
+        hypothesisId: 'B',
+        data: { ...dbg, path: 'corsProxy', count: viaCors.length },
+      });
       return viaCors;
     }
   }
 
+  logNewsApiAgentDebug({
+    location: 'podTopicNewsShared:fetchNewsApiEverythingRaw',
+    message: 'return_empty',
+    hypothesisId: 'A',
+    data: { ...dbg, path: 'none' },
+  });
   return [];
 }
 
