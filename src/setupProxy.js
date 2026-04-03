@@ -40,7 +40,12 @@ function httpsGetJson(urlString) {
   return new Promise((resolve, reject) => {
     const req = https.get(
       urlString,
-      { headers: { Accept: 'application/json' } },
+      {
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'DeiteNews/1.0 (+https://deitedatabase.web.app)',
+        },
+      },
       (incoming) => {
         let buf = '';
         incoming.on('data', (c) => {

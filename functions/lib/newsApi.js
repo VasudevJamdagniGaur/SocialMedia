@@ -61,7 +61,10 @@ exports.newsApi = (0, https_1.onRequest)({ cors: true }, async (req, res) => {
     try {
         const newsRes = await fetch(upstream.toString(), {
             method: 'GET',
-            headers: { Accept: 'application/json' },
+            headers: {
+                Accept: 'application/json',
+                'User-Agent': 'DeiteNews/1.0 (+https://deitedatabase.web.app)',
+            },
         });
         const data = (await newsRes.json().catch(() => null));
         if (!data || typeof data !== 'object') {

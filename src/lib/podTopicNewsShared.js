@@ -586,6 +586,9 @@ export function filterNewsRowsIndiaLocal(rows) {
 
 const NEWSAPI_V2 = 'https://newsapi.org/v2';
 
+/** NewsAPI returns { code: 'userAgentMissing' } if this header is absent (Node/Capacitor often omit it). */
+const NEWSAPI_USER_AGENT = 'DeiteNews/1.0 (+https://deitedatabase.web.app)';
+
 // #region agent log
 /** Debug NDJSON ingest + logcat (session db6096). No secrets. */
 export function logNewsApiAgentDebug(payload) {
@@ -806,7 +809,7 @@ async function fetchJsonMaybeNative(url, { timeoutMs }) {
     const res = await CapacitorHttp.request({
       method: 'GET',
       url,
-      headers: { Accept: 'application/json' },
+      headers: { Accept: 'application/json', 'User-Agent': NEWSAPI_USER_AGENT },
       connectTimeout: timeoutMs,
       readTimeout: timeoutMs,
     });
@@ -831,7 +834,11 @@ async function fetchJsonMaybeNative(url, { timeoutMs }) {
   const ctrl = new AbortController();
   const tid = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const res = await fetch(url, { method: 'GET', signal: ctrl.signal });
+    const res = await fetch(url, {
+      method: 'GET',
+      signal: ctrl.signal,
+      headers: { Accept: 'application/json', 'User-Agent': NEWSAPI_USER_AGENT },
+    });
     const data = await res.json().catch(() => null);
     return {
       status: res?.status,

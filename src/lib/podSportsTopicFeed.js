@@ -222,13 +222,40 @@ export async function fetchSportsTopicRawItems(topicId) {
         onTopic = (fetched || []).filter((a) => sportArticleMatchesTopic(topicId, a));
       }
     }
+    let topHeadlinesLen = 0;
     if (!onTopic.length) {
-      const th = await fetchNewsApiTopHeadlinesNormalized({
+      const qHead =
+        topicId === 'cricket'
+          ? 'cricket'
+          : topicId === 'football'
+            ? 'soccer'
+            : topicId === 'f1'
+              ? 'F1'
+              : topicId === 'chess'
+                ? 'chess'
+                : '';
+      const thSports = await fetchNewsApiTopHeadlinesNormalized({
         category: 'sports',
         language: 'en',
         pageSize: 100,
+        ...(qHead ? { q: qHead } : {}),
       });
-      onTopic = (th || []).filter((a) => sportArticleMatchesTopic(topicId, a));
+      topHeadlinesLen = (thSports || []).length;
+      onTopic = (thSports || []).filter((a) => sportArticleMatchesTopic(topicId, a));
+      if (!onTopic.length && topicId === 'cricket') {
+        const thIn = await fetchNewsApiTopHeadlinesNormalized({
+          country: 'in',
+          language: 'en',
+          pageSize: 50,
+          q: 'cricket',
+        });
+        topHeadlinesLen += (thIn || []).length;
+        onTopic = (thIn || []).filter((a) => sportArticleMatchesTopic(topicId, a));
+        if (!onTopic.length && (thIn || []).length) onTopic = thIn.slice(0, 30);
+      }
+      if (!onTopic.length && (thSports || []).length) {
+        onTopic = thSports.slice(0, 30);
+      }
     }
 
     // #region agent log
@@ -240,6 +267,7 @@ export async function fetchSportsTopicRawItems(topicId) {
       data: {
         topicId,
         fetchedLen: (fetched || []).length,
+        topHeadlinesLen,
         onTopicLen: onTopic.length,
       },
     });
