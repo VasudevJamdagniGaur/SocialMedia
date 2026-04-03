@@ -220,6 +220,19 @@ service cloud.firestore {
         resource.data.userId == request.auth.uid;
     }
 
+    // Hub trending — per-user read/dwell logs (Crew personalization)
+    match /userActivity/{userId}/logs/{logId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId
+        && request.resource.data.category is string
+        && request.resource.data.timeSpent is number
+        && request.resource.data.timeSpent >= 0
+        && request.resource.data.timeSpent <= 86400
+        && (request.resource.data.url == null || request.resource.data.url is string)
+        && (request.resource.data.timestamp == null || request.resource.data.timestamp is number);
+      allow update, delete: if false;
+    }
+
     // Hub → Trending news (engagement + time-decayed trendingScore, country + category)
     match /news/{newsId} {
       allow read: if request.auth != null;

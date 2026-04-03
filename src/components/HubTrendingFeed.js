@@ -54,6 +54,7 @@ function HubTrendingCard({ item, idx, HUB, userId, engagementEnabled, navigate, 
   const openShareSuggestions = useCallback(() => {
     if (!item.url) return;
     if (userId && item.category) recordHubNewsClick(userId, item.category);
+    const openedAt = Date.now();
     navigate('/share-suggestions', {
       state: {
         newsArticle: {
@@ -64,6 +65,10 @@ function HubTrendingCard({ item, idx, HUB, userId, engagementEnabled, navigate, 
           source: item.source || '',
         },
         returnTo,
+        hubTrendTracking:
+          userId && item.category
+            ? { category: item.category, url: item.url, openedAt }
+            : undefined,
       },
     });
   }, [item, userId, navigate, returnTo]);
@@ -134,6 +139,7 @@ export default function HubTrendingFeed({ isDarkMode }) {
   const returnTo = `${location.pathname}${location.search || ''}`;
   const [userId, setUserId] = useState(() => getCurrentUser()?.uid || null);
   const [items, setItems] = useState([]);
+  const [feedProfile, setFeedProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -156,10 +162,12 @@ export default function HubTrendingFeed({ isDarkMode }) {
       const res = await fetchHubPersonalizedFeed(uid, { targetSize: 20 });
       if (!res.success) {
         setItems([]);
+        setFeedProfile(null);
         setError(res.error || 'Could not load feed');
         return;
       }
       setItems(res.items || []);
+      setFeedProfile(res.profile || null);
     } catch (e) {
       setItems([]);
       setError(e?.message || 'Could not load feed');
@@ -186,7 +194,7 @@ export default function HubTrendingFeed({ isDarkMode }) {
   };
   const headerBorder = { borderBottom: `1px solid ${isDarkMode ? HUB.divider : '#E5E7EB'}` };
 
-  const carouselItems = items.slice(0, 15);
+  const carouselItems = items.slice(0, 20);
 
   return (
     <div className="rounded-2xl overflow-hidden mb-4" style={cardStyle}>
@@ -196,6 +204,17 @@ export default function HubTrendingFeed({ isDarkMode }) {
         </div>
         <div className="flex-1 min-w-0">
           <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Trending</h2>
+          {feedProfile &&
+          (feedProfile.city || feedProfile.location || (feedProfile.interests && feedProfile.interests.length)) ? (
+            <p className={`text-xs mt-0.5 truncate ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+              {[
+                feedProfile.city || feedProfile.location || '',
+                feedProfile.interests?.length ? feedProfile.interests.slice(0, 4).join(', ') : '',
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </p>
+          ) : null}
         </div>
       </div>
       <div className="py-3 pl-4">
