@@ -846,7 +846,9 @@ async function fetchNewsApiDirectFromEnv(endpoint, baseParams) {
     const jr = await fetchJsonMaybeNative(url, { timeoutMs });
     const data = jr?.data ?? null;
 
-    if (jr?.ok && data && data.status === 'ok' && Array.isArray(data.articles)) return data.articles;
+    if (jr?.ok && data && data.status === 'ok' && Array.isArray(data.articles) && data.articles.length > 0) {
+      return data.articles;
+    }
     return null;
   } catch {
     return null;
@@ -946,7 +948,13 @@ async function fetchNewsApiThroughProxy(endpoint, baseParams) {
       const url = `${base}/api/news/${endpoint}?${p.toString()}`;
       const jr = await fetchJsonMaybeNative(url, { timeoutMs });
       const data = jr?.data ?? null;
-      if (jr?.ok && data && data.status === 'ok' && Array.isArray(data.articles)) {
+      if (
+        jr?.ok &&
+        data &&
+        data.status === 'ok' &&
+        Array.isArray(data.articles) &&
+        data.articles.length > 0
+      ) {
         return data.articles;
       }
     } catch {
@@ -970,7 +978,15 @@ async function fetchNewsApiThroughCloudFunction(endpoint, baseParams) {
       const url = `${fnUrl}?${p.toString()}`;
       const jr = await fetchJsonMaybeNative(url, { timeoutMs });
       const data = jr?.data ?? null;
-      if (jr?.ok && data && data.status === 'ok' && Array.isArray(data.articles)) return data.articles;
+      if (
+        jr?.ok &&
+        data &&
+        data.status === 'ok' &&
+        Array.isArray(data.articles) &&
+        data.articles.length > 0
+      ) {
+        return data.articles;
+      }
     } catch {
       /* next candidate */
     }
@@ -1088,83 +1104,103 @@ export async function fetchNewsApiEverythingRaw(opts = {}) {
   // This keeps the NewsAPI key on the server.
 
   const pageSize = Math.min(Math.max(1, opts.pageSize ?? 30), 100);
-  const baseParams = new URLSearchParams({
-    q,
-    language: opts.language || 'en',
-    sortBy: opts.sortBy || 'publishedAt',
-    pageSize: String(pageSize),
-  });
-  baseParams.set('from', opts.from || newsApiDefaultFromISO(7));
-
-  const dbg = {
-    hypothesisId: 'A',
-    qLen: q.length,
-    pageSize,
-    hasKey: !!getNewsApiKey(),
-    isNative: isNativeCapacitor(),
+  const buildParams = (fromIso) => {
+    const p = new URLSearchParams({
+      q,
+      language: opts.language || 'en',
+      sortBy: opts.sortBy || 'publishedAt',
+      pageSize: String(pageSize),
+    });
+    p.set('from', fromIso);
+    return p;
   };
 
-  const directEnv = await fetchNewsApiDirectFromEnv('everything', baseParams);
-  dbg.directEnvLen = Array.isArray(directEnv) ? directEnv.length : null;
-  if (Array.isArray(directEnv)) {
-    logNewsApiAgentDebug({
-      location: 'podTopicNewsShared:fetchNewsApiEverythingRaw',
-      message: 'return_branch',
-      hypothesisId: 'G',
-      data: { ...dbg, path: 'directEnv', count: directEnv.length },
-    });
-    return directEnv;
-  }
+  const runId = 'post-fix';
 
-  const direct = await fetchNewsApiThroughCloudFunction('everything', baseParams);
-  dbg.fnLen = Array.isArray(direct) ? direct.length : null;
-  if (Array.isArray(direct)) {
-    logNewsApiAgentDebug({
-      location: 'podTopicNewsShared:fetchNewsApiEverythingRaw',
-      message: 'return_branch',
-      hypothesisId: 'G',
-      data: { ...dbg, path: 'cloudFunction', count: direct.length },
-    });
-    return direct;
-  }
-
-  const proxied = await fetchNewsApiThroughProxy('everything', baseParams);
-  dbg.proxyLen = Array.isArray(proxied) ? proxied.length : null;
-  if (Array.isArray(proxied) && proxied.length > 0) {
-    logNewsApiAgentDebug({
-      location: 'podTopicNewsShared:fetchNewsApiEverythingRaw',
-      message: 'return_branch',
+  const attemptOnce = async (baseParams, fromWindowLabel) => {
+    const dbg = {
       hypothesisId: 'A',
-      data: { ...dbg, path: 'hostingProxy', count: proxied.length },
-    });
-    return proxied;
-  }
+      runId,
+      fromWindow: fromWindowLabel,
+      qLen: q.length,
+      pageSize,
+      hasKey: !!getNewsApiKey(),
+      isNative: isNativeCapacitor(),
+    };
 
-  // Native + localhost: when Hosting/Functions proxy fails, third-party CORS proxies can reach NewsAPI with the client key.
-  // (Production https origins rely on /api/news; do not send the key through public proxies there.)
-  const envKey = getNewsApiKey();
-  dbg.corsAttempted = !!(envKey && (isNativeCapacitor() || shouldProxyNewsApi()));
-  if (envKey && (isNativeCapacitor() || shouldProxyNewsApi())) {
-    const viaCors = await fetchNewsApiThroughCorsProxies('everything', baseParams, envKey);
-    dbg.corsLen = Array.isArray(viaCors) ? viaCors.length : null;
-    if (Array.isArray(viaCors) && viaCors.length > 0) {
+    const directEnv = await fetchNewsApiDirectFromEnv('everything', baseParams);
+    dbg.directEnvLen = Array.isArray(directEnv) ? directEnv.length : null;
+    if (Array.isArray(directEnv) && directEnv.length > 0) {
       logNewsApiAgentDebug({
         location: 'podTopicNewsShared:fetchNewsApiEverythingRaw',
         message: 'return_branch',
-        hypothesisId: 'B',
-        data: { ...dbg, path: 'corsProxy', count: viaCors.length },
+        runId,
+        hypothesisId: 'G',
+        data: { ...dbg, path: 'directEnv', count: directEnv.length },
       });
-      return viaCors;
+      return directEnv;
     }
-  }
 
-  logNewsApiAgentDebug({
-    location: 'podTopicNewsShared:fetchNewsApiEverythingRaw',
-    message: 'return_empty',
-    hypothesisId: 'A',
-    data: { ...dbg, path: 'none' },
-  });
-  return [];
+    const direct = await fetchNewsApiThroughCloudFunction('everything', baseParams);
+    dbg.fnLen = Array.isArray(direct) ? direct.length : null;
+    if (Array.isArray(direct) && direct.length > 0) {
+      logNewsApiAgentDebug({
+        location: 'podTopicNewsShared:fetchNewsApiEverythingRaw',
+        message: 'return_branch',
+        runId,
+        hypothesisId: 'G',
+        data: { ...dbg, path: 'cloudFunction', count: direct.length },
+      });
+      return direct;
+    }
+
+    const proxied = await fetchNewsApiThroughProxy('everything', baseParams);
+    dbg.proxyLen = Array.isArray(proxied) ? proxied.length : null;
+    if (Array.isArray(proxied) && proxied.length > 0) {
+      logNewsApiAgentDebug({
+        location: 'podTopicNewsShared:fetchNewsApiEverythingRaw',
+        message: 'return_branch',
+        runId,
+        hypothesisId: 'A',
+        data: { ...dbg, path: 'hostingProxy', count: proxied.length },
+      });
+      return proxied;
+    }
+
+    const envKey = getNewsApiKey();
+    dbg.corsAttempted = !!(envKey && (isNativeCapacitor() || shouldProxyNewsApi()));
+    if (envKey && (isNativeCapacitor() || shouldProxyNewsApi())) {
+      const viaCors = await fetchNewsApiThroughCorsProxies('everything', baseParams, envKey);
+      dbg.corsLen = Array.isArray(viaCors) ? viaCors.length : null;
+      if (Array.isArray(viaCors) && viaCors.length > 0) {
+        logNewsApiAgentDebug({
+          location: 'podTopicNewsShared:fetchNewsApiEverythingRaw',
+          message: 'return_branch',
+          runId,
+          hypothesisId: 'B',
+          data: { ...dbg, path: 'corsProxy', count: viaCors.length },
+        });
+        return viaCors;
+      }
+    }
+
+    logNewsApiAgentDebug({
+      location: 'podTopicNewsShared:fetchNewsApiEverythingRaw',
+      message: 'return_empty',
+      runId,
+      hypothesisId: 'A',
+      data: { ...dbg, path: 'none' },
+    });
+    return [];
+  };
+
+  const pinnedFrom = opts.from != null && String(opts.from).trim() !== '';
+  const firstFrom = pinnedFrom ? String(opts.from).trim() : newsApiDefaultFromISO(7);
+  let out = await attemptOnce(buildParams(firstFrom), pinnedFrom ? 'pinned' : '7d');
+  if (!out.length && !pinnedFrom) {
+    out = await attemptOnce(buildParams(newsApiDefaultFromISO(30)), '30d_retry');
+  }
+  return out;
 }
 
 export async function fetchNewsApiEverythingNormalized(opts = {}) {
@@ -1210,10 +1246,10 @@ export async function fetchNewsApiTopHeadlinesRaw(opts = {}) {
   }
 
   const directEnv = await fetchNewsApiDirectFromEnv('top-headlines', baseParams);
-  if (Array.isArray(directEnv)) return directEnv;
+  if (Array.isArray(directEnv) && directEnv.length > 0) return directEnv;
 
   const direct = await fetchNewsApiThroughCloudFunction('top-headlines', baseParams);
-  if (Array.isArray(direct)) return direct;
+  if (Array.isArray(direct) && direct.length > 0) return direct;
 
   const proxied = await fetchNewsApiThroughProxy('top-headlines', baseParams);
   if (Array.isArray(proxied) && proxied.length > 0) return proxied;
