@@ -28,9 +28,13 @@ import {
 } from '../lib/sportsTrendingPersonalization';
 import { TOPIC_META, sportArticleMatchesTopic } from '../lib/podSportsTopicFeed';
 import {
+  buildSportsTrendingInsightLines,
+  getMergedExploreStats,
   getSportsPersonalizationWeights,
   recordSportsSurfaceSeconds,
 } from '../services/sportsPersonalizationService';
+import { recordHubVerticalDwell } from '../services/hubVerticalPersonalizationService';
+import { recordHubNewsClick } from '../services/hubNewsService';
 
 /** Engagement rank plus same-city boost (Firestore `trendingScore` is likes×3 + shares×5 + views). */
 function effectiveSportsTrendRank(item, userCityNorm) {
@@ -71,6 +75,11 @@ function SportsTrendingCard({ item, idx, HUB, isSignedIn, navigate, returnTo }) 
 
   const openShareSuggestions = useCallback(() => {
     if (!item.url) return;
+    const u = getCurrentUser();
+    if (u?.uid) {
+      const cat = classifyExploreSlugForTrending(item);
+      void recordHubNewsClick(u.uid, cat);
+    }
     navigate('/share-suggestions', {
       state: {
         newsArticle: {
@@ -201,6 +210,7 @@ export default function PodSportsPage() {
   const [isLoadingSportsNews, setIsLoadingSportsNews] = useState(false);
   const [sportsNewsError, setSportsNewsError] = useState('');
   const [trendingRegionLabel, setTrendingRegionLabel] = useState('');
+  const [sportsTrendingInsightLines, setSportsTrendingInsightLines] = useState([]);
   const [userId, setUserId] = useState(() => getCurrentUser()?.uid || null);
   const [refreshing, setRefreshing] = useState(false);
   const [pullProgress, setPullProgress] = useState(0);
@@ -225,6 +235,10 @@ export default function PodSportsPage() {
   /** Eager-load all Explore feeds in parallel when Sports hub opens. */
   useEffect(() => {
     void prefetchAllSportsExploreTopicsNow();
+  }, []);
+
+  useEffect(() => {
+    recordHubVerticalDwell('sports', 0, 1);
   }, []);
 
   const loadSportsNews = useCallback(
@@ -280,6 +294,12 @@ export default function PodSportsPage() {
         const user = getCurrentUser();
 
         if (!canFetchLiveNews()) {
+          const exploreStats = await getMergedExploreStats(user?.uid || null);
+          if (token === loadTokenRef.current) {
+            setSportsTrendingInsightLines(
+              buildSportsTrendingInsightLines(exploreStats, regionLabel, userCityRaw)
+            );
+          }
           const rows = await enrichNewsItemsWithOgImages(fallbackTrending, {
             enableOgFallback: true,
             maxResolve: 4,
@@ -332,22 +352,35 @@ export default function PodSportsPage() {
         let merged = [];
 
         if (user) {
-          await Promise.all(
-            newsNormalized.map((n) =>
-              firestoreService.ensureSportsTrendingNewsItem({
-                title: n.title,
-                source: n.source,
-                url: n.url,
-                image: n.image,
-                category: 'sports',
-                country: countryUpper,
-                city: userCityRaw || undefined,
-              })
-            )
-          );
-          const fb = await firestoreService.getSportsTrendingByCountry(countryUpper, 25);
-          if (fb.success && fb.items.length) {
-            merged = fb.items;
+          const hydrateSportsTrending = async () => {
+            const batch = newsNormalized.slice(0, 7);
+            await Promise.all(
+              batch.map((n) =>
+                firestoreService.ensureSportsTrendingNewsItem({
+                  title: n.title,
+                  source: n.source,
+                  url: n.url,
+                  image: n.image,
+                  category: 'sports',
+                  country: countryUpper,
+                  city: userCityRaw || undefined,
+                })
+              )
+            );
+            return firestoreService.getSportsTrendingByCountry(countryUpper, 25);
+          };
+          try {
+            const fb = await Promise.race([
+              hydrateSportsTrending(),
+              new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('sports_trending_hydrate_timeout')), 12000)
+              ),
+            ]);
+            if (fb?.success && fb.items?.length) {
+              merged = fb.items;
+            }
+          } catch {
+            merged = [];
           }
         }
 
@@ -444,6 +477,15 @@ export default function PodSportsPage() {
         }
 
         const weights = await getSportsPersonalizationWeights(user?.uid || null);
+        const exploreStats = await getMergedExploreStats(user?.uid || null);
+        const insightLines = buildSportsTrendingInsightLines(
+          exploreStats,
+          regionLabel,
+          userCityRaw
+        );
+        if (token === loadTokenRef.current) {
+          setSportsTrendingInsightLines(insightLines);
+        }
 
         merged.sort((a, b) => {
           const clsA = classifyExploreSlugForTrending(a);
@@ -467,6 +509,7 @@ export default function PodSportsPage() {
       } catch {
         if (token !== loadTokenRef.current) return;
         setTrendingRegionLabel('');
+        setSportsTrendingInsightLines([]);
         const rows = await enrichNewsItemsWithOgImages(fallbackTrending, {
           enableOgFallback: false,
         });
@@ -494,7 +537,10 @@ export default function PodSportsPage() {
     const flush = () => {
       const sec = Math.min(900, Math.round((Date.now() - start) / 1000));
       start = Date.now();
-      if (sec >= 4) recordSportsSurfaceSeconds(sec);
+      if (sec >= 4) {
+        recordSportsSurfaceSeconds(sec);
+        recordHubVerticalDwell('sports', sec, 0);
+      }
     };
     const onVis = () => {
       if (document.hidden) flush();
@@ -624,6 +670,15 @@ export default function PodSportsPage() {
                   <p className="text-xs mt-0.5 truncate" style={{ color: HUB.textSecondary }}>
                     {trendingRegionLabel}
                   </p>
+                ) : null}
+                {sportsTrendingInsightLines.length > 0 ? (
+                  <ul className="mt-2 space-y-1 list-none p-0 m-0">
+                    {sportsTrendingInsightLines.map((line, i) => (
+                      <li key={i} className="text-[11px] leading-snug" style={{ color: HUB.textSecondary }}>
+                        {line}
+                      </li>
+                    ))}
+                  </ul>
                 ) : null}
               </div>
             </div>

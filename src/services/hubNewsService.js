@@ -19,6 +19,12 @@ import {
   HUB_DEFAULT_INTERESTS,
 } from '../lib/hubTrendingAlgorithms';
 import {
+  buildHubTrendingInsightLines,
+  getHubVerticalWeights,
+  inferHubVerticalForNewsItem,
+  rankHubLiveItemsByPersonalization,
+} from './hubVerticalPersonalizationService';
+import {
   canFetchLiveNews,
   enrichNewsItemsWithOgImages,
   fetchNewsApiEverythingNormalized,
@@ -343,6 +349,7 @@ async function appendInterestGoogleNewsRssParallel(profile, cats, seenUrl, seenT
         city: profile.city || '',
         feedTag: { label: 'For you', emoji: '📰' },
         mixBucket: 'trending',
+        hubVertical: 'sports',
       });
     }
   }
@@ -363,19 +370,9 @@ async function appendHubGoogleNewsRss(profile, seenUrl, seenTitleKey, unique) {
       city: profile.city || '',
       feedTag: { label: 'Headlines', emoji: '📰' },
       mixBucket: 'trending',
+      hubVertical: 'current-affairs',
     });
   }
-}
-
-function hubItemPublishedTs(item) {
-  const t = item?.publishedAt;
-  if (!t || typeof t !== 'string') return 0;
-  const n = Date.parse(t);
-  return Number.isFinite(n) ? n : 0;
-}
-
-function sortHubTrendingByRecency(items) {
-  items.sort((a, b) => hubItemPublishedTs(b) - hubItemPublishedTs(a));
 }
 
 /** Same notion as NewsAPI `urlToImage` — remote photo URL (not our SVG placeholder). */
@@ -391,7 +388,7 @@ function hubItemHasRemotePhoto(it) {
  * Sports page images come from NewsAPI `urlToImage`, not OG — we merge sports top-headlines here
  * and rank rows with remote photos first so the carousel matches Sports.
  */
-async function buildNewsApiFallbackFeed(profile, targetSize = 20) {
+async function buildNewsApiFallbackFeed(profile, targetSize = 20, options = {}) {
   const cats = (profile?.interests?.length ? profile.interests : HUB_DEFAULT_INTERESTS).slice(0, 5);
   if (!canFetchLiveNews()) return [];
 
@@ -447,6 +444,7 @@ async function buildNewsApiFallbackFeed(profile, targetSize = 20) {
         city: profile.city || '',
         feedTag: { label: 'Trending', emoji: '🔥' },
         mixBucket: 'trending',
+        hubVertical: 'current-affairs',
       });
     }
 
@@ -457,6 +455,7 @@ async function buildNewsApiFallbackFeed(profile, targetSize = 20) {
         city: profile.city || '',
         feedTag: { label: 'Sports', emoji: '⚽' },
         mixBucket: 'trending',
+        hubVertical: 'sports',
       });
     }
 
@@ -469,6 +468,49 @@ async function buildNewsApiFallbackFeed(profile, targetSize = 20) {
           city: profile.city || '',
           feedTag: { label: 'For you', emoji: '📰' },
           mixBucket: 'trending',
+          hubVertical: 'sports',
+        });
+      }
+    }
+
+    const vwOpt = options?.verticalWeights;
+    if (vwOpt && !skipNewsApi) {
+      const pullTech = Number(vwOpt['ai-tech']) >= 6;
+      const pullBiz = Number(vwOpt.entrepreneurship) >= 6;
+      const extra = await Promise.all([
+        pullTech
+          ? fetchNewsApiTopHeadlinesNormalized({
+              category: 'technology',
+              language: 'en',
+              pageSize: 14,
+            })
+          : Promise.resolve([]),
+        pullBiz
+          ? fetchNewsApiTopHeadlinesNormalized({
+              category: 'business',
+              language: 'en',
+              pageSize: 14,
+            })
+          : Promise.resolve([]),
+      ]);
+      for (const row of extra[0] || []) {
+        tryAddHubFeedItem(seenUrl, seenTitleKey, unique, row, {
+          category: 'technology',
+          country: ctry || '',
+          city: profile.city || '',
+          feedTag: { label: 'AI & Tech', emoji: '🤖' },
+          mixBucket: 'trending',
+          hubVertical: 'ai-tech',
+        });
+      }
+      for (const row of extra[1] || []) {
+        tryAddHubFeedItem(seenUrl, seenTitleKey, unique, row, {
+          category: 'business',
+          country: ctry || '',
+          city: profile.city || '',
+          feedTag: { label: 'Business', emoji: '📈' },
+          mixBucket: 'trending',
+          hubVertical: 'entrepreneurship',
         });
       }
     }
@@ -477,9 +519,10 @@ async function buildNewsApiFallbackFeed(profile, targetSize = 20) {
   await appendHubGoogleNewsRss(profile, seenUrl, seenTitleKey, unique);
   await appendInterestGoogleNewsRssParallel(profile, cats, seenUrl, seenTitleKey, unique, 48);
 
-  sortHubTrendingByRecency(unique);
-  const withPhoto = unique.filter(hubItemHasRemotePhoto);
-  const rest = unique.filter((it) => !hubItemHasRemotePhoto(it));
+  const vwRank = options?.verticalWeights || getHubVerticalWeights();
+  const personalized = rankHubLiveItemsByPersonalization(unique, vwRank);
+  const withPhoto = personalized.filter(hubItemHasRemotePhoto);
+  const rest = personalized.filter((it) => !hubItemHasRemotePhoto(it));
   const ranked = [...withPhoto, ...rest];
   const top = ranked.slice(0, targetSize);
 
@@ -556,6 +599,8 @@ export async function fetchHubPersonalizedFeed(uid, options = {}) {
   const targetSize = options.targetSize || 20;
   if (!uid) return { success: false, items: [], error: 'not_signed_in' };
 
+  const verticalWeights = getHubVerticalWeights();
+
   let profile = await getUserHubFeedProfile(uid);
   try {
     if (!profile.country || profile.country.length !== 2) {
@@ -581,7 +626,7 @@ export async function fetchHubPersonalizedFeed(uid, options = {}) {
   // Prefer fresh NewsAPI + RSS over stale Firestore `news` rows (cached articles ranked by old engagement).
   let liveItems = [];
   if (canFetchLiveNews()) {
-    liveItems = await buildNewsApiFallbackFeed(profile, targetSize);
+    liveItems = await buildNewsApiFallbackFeed(profile, targetSize, { verticalWeights });
   }
 
   // Firestore backfill only when live path is empty — avoids 5 extra `everything` calls racing the hub fetch when RSS already filled the carousel.
@@ -595,6 +640,7 @@ export async function fetchHubPersonalizedFeed(uid, options = {}) {
       items: liveItems,
       profile,
       usedFirestore: false,
+      insights: buildHubTrendingInsightLines(profile),
     };
   }
 
@@ -612,11 +658,17 @@ export async function fetchHubPersonalizedFeed(uid, options = {}) {
     latest = [];
   }
 
-  trending = [...trending].sort(
-    (a, b) =>
-      effectiveHubRankScore(b, profile.city, interestsLower) -
-      effectiveHubRankScore(a, profile.city, interestsLower)
-  );
+  trending = [...trending].sort((a, b) => {
+    const va = inferHubVerticalForNewsItem(a);
+    const vb = inferHubVerticalForNewsItem(b);
+    const sa =
+      effectiveHubRankScore(a, profile.city, interestsLower) +
+      (Number(verticalWeights[va]) || 0) * 5;
+    const sb =
+      effectiveHubRankScore(b, profile.city, interestsLower) +
+      (Number(verticalWeights[vb]) || 0) * 5;
+    return sb - sa;
+  });
 
   const items = mixHubFeedSegments(trending, latest, targetSize);
 
@@ -625,6 +677,7 @@ export async function fetchHubPersonalizedFeed(uid, options = {}) {
     items,
     profile,
     usedFirestore: items.length > 0,
+    insights: buildHubTrendingInsightLines(profile),
   };
 }
 

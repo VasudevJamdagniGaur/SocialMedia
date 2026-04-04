@@ -9,6 +9,7 @@ import CalendarPopup from './CalendarPopup';
 import HubTrendingFeed from './HubTrendingFeed';
 import { prefetchSportsExploreTopics } from '../lib/podSportsTopicPrefetchCache';
 import { getDateId, formatDateForDisplay } from '../utils/dateUtils';
+import { recordHubVerticalClick } from '../services/hubVerticalPersonalizationService';
 
 export default function PodPage() {
   const navigate = useNavigate();
@@ -575,12 +576,16 @@ export default function PodPage() {
                   key={category}
                   onClick={() => {
                     if (category === 'Sports') {
+                      recordHubVerticalClick('sports');
                       navigate('/pod/sports');
                     } else if (category === 'AI & Tech') {
+                      recordHubVerticalClick('ai-tech');
                       navigate('/pod/ai-tech');
                     } else if (category === 'Entrepreneurship') {
+                      recordHubVerticalClick('entrepreneurship');
                       navigate('/pod/entrepreneurship');
                     } else if (category === 'Current Affairs') {
+                      recordHubVerticalClick('current-affairs');
                       navigate('/pod/current-affairs');
                     }
                   }}

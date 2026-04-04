@@ -239,6 +239,7 @@ export default function HubTrendingFeed({ isDarkMode }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [insightLines, setInsightLines] = useState([]);
   const loadGenRef = useRef(0);
 
   useEffect(() => {
@@ -250,6 +251,7 @@ export default function HubTrendingFeed({ isDarkMode }) {
     const uid = getCurrentUser()?.uid;
     if (!uid) {
       setItems([]);
+      setInsightLines([]);
       setLoading(false);
       setError('');
       return;
@@ -262,13 +264,16 @@ export default function HubTrendingFeed({ isDarkMode }) {
       if (gen !== loadGenRef.current) return;
       if (!res.success) {
         setItems([]);
+        setInsightLines([]);
         setError(res.error || 'Could not load feed');
         return;
       }
       setItems(res.items || []);
+      setInsightLines(Array.isArray(res.insights?.lines) ? res.insights.lines : []);
     } catch (e) {
       if (gen !== loadGenRef.current) return;
       setItems([]);
+      setInsightLines([]);
       setError(e?.message || 'Could not load feed');
     } finally {
       if (gen !== loadGenRef.current) return;
@@ -305,6 +310,18 @@ export default function HubTrendingFeed({ isDarkMode }) {
         </div>
         <div className="flex-1 min-w-0">
           <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Trending</h2>
+          {userId && insightLines.length > 0 ? (
+            <ul className="mt-2 space-y-1 list-none p-0 m-0">
+              {insightLines.map((line, i) => (
+                <li
+                  key={i}
+                  className={`text-[11px] leading-snug ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}
+                >
+                  {line}
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
       </div>
       <div className="py-3 pl-4">

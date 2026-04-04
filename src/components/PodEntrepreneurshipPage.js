@@ -4,6 +4,7 @@ import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { canFetchLiveNews, fetchNewsApiTopHeadlinesRaw, normalizeArticles } from '../lib/podTopicNewsShared';
 import { prefetchExploreTopicRaw } from '../lib/podExploreTopicPrefetchCache';
+import { recordHubVerticalDwell } from '../services/hubVerticalPersonalizationService';
 
 const GEMINI_MODEL = 'gemini-3-flash-preview';
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
@@ -31,6 +32,24 @@ export default function PodEntrepreneurshipPage() {
     'Runway is a strategy: shorten decision cycles, cut meetings that do not ship, and keep one “boring” revenue line healthy while you experiment on the side.',
     'Hiring before product–market clarity often compounds chaos. Stay small until repeatability shows up in metrics, then scale the playbook—not the headcount guess.',
   ];
+
+  useEffect(() => {
+    recordHubVerticalDwell('entrepreneurship', 0, 1);
+    let start = Date.now();
+    const flush = () => {
+      const sec = Math.min(900, Math.round((Date.now() - start) / 1000));
+      start = Date.now();
+      if (sec >= 3) recordHubVerticalDwell('entrepreneurship', sec, 0);
+    };
+    const onVis = () => {
+      if (document.hidden) flush();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      flush();
+    };
+  }, []);
 
   // Trending: business / startup headlines
   useEffect(() => {

@@ -4,6 +4,7 @@ import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { canFetchLiveNews, fetchNewsApiTopHeadlinesRaw, normalizeArticles } from '../lib/podTopicNewsShared';
 import { prefetchExploreTopicRaw } from '../lib/podExploreTopicPrefetchCache';
+import { recordHubVerticalDwell } from '../services/hubVerticalPersonalizationService';
 
 export default function PodAiTechPage() {
   const navigate = useNavigate();
@@ -19,6 +20,24 @@ export default function PodAiTechPage() {
     { label: 'Insights', slug: 'insights' },
     { label: 'Big Tech', slug: 'big-tech' },
   ];
+
+  useEffect(() => {
+    recordHubVerticalDwell('ai-tech', 0, 1);
+    let start = Date.now();
+    const flush = () => {
+      const sec = Math.min(900, Math.round((Date.now() - start) / 1000));
+      start = Date.now();
+      if (sec >= 3) recordHubVerticalDwell('ai-tech', sec, 0);
+    };
+    const onVis = () => {
+      if (document.hidden) flush();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      flush();
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;

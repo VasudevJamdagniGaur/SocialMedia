@@ -4,6 +4,7 @@ import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { canFetchLiveNews, fetchNewsApiTopHeadlinesRaw, normalizeArticles } from '../lib/podTopicNewsShared';
 import { prefetchExploreTopicRaw } from '../lib/podExploreTopicPrefetchCache';
+import { recordHubVerticalDwell } from '../services/hubVerticalPersonalizationService';
 
 export default function PodCurrentAffairsPage() {
   const navigate = useNavigate();
@@ -18,6 +19,24 @@ export default function PodCurrentAffairsPage() {
     { label: 'Climate', slug: 'climate' },
     { label: 'Conflicts', slug: 'conflicts' },
   ];
+
+  useEffect(() => {
+    recordHubVerticalDwell('current-affairs', 0, 1);
+    let start = Date.now();
+    const flush = () => {
+      const sec = Math.min(900, Math.round((Date.now() - start) / 1000));
+      start = Date.now();
+      if (sec >= 3) recordHubVerticalDwell('current-affairs', sec, 0);
+    };
+    const onVis = () => {
+      if (document.hidden) flush();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      flush();
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;

@@ -1,6 +1,7 @@
 import { getCurrentUser } from './authService';
 import firestoreService from './firestoreService';
 import { POD_SPORTS_EXPLORE_SLUGS, LS_EXPLORE_STATS, LS_SPORTS_SURFACE_SEC } from '../lib/sportsTrendingPersonalization';
+import { TOPIC_META } from '../lib/podSportsTopicFeed';
 
 function safeParseJson(raw, fallback) {
   try {
@@ -110,4 +111,48 @@ export function recordSportsSurfaceSeconds(deltaSec) {
   if (u?.uid) {
     void firestoreService.mergeSportsSurfaceSeconds(u.uid, d);
   }
+}
+
+/**
+ * Explanatory lines under Sports trending (region, explore dwell, behavior, social rank).
+ * @param {Record<string, { seconds?: number, visits?: number }>} exploreStats
+ */
+export function buildSportsTrendingInsightLines(exploreStats, regionLabel, userCityRaw) {
+  const lines = [];
+  const reg = String(regionLabel || '').trim();
+  if (reg) lines.push(`Location: headlines scoped to ${reg}.`);
+
+  const city = String(userCityRaw || '').trim();
+  if (city) lines.push(`Local signal: same-city stories rank higher (${city}).`);
+
+  let bestSlug = null;
+  let bestScore = -1;
+  for (const slug of POD_SPORTS_EXPLORE_SLUGS) {
+    const sec = Number(exploreStats?.[slug]?.seconds) || 0;
+    const vis = Number(exploreStats?.[slug]?.visits) || 0;
+    const sc = sec + vis * 42;
+    if (sc > bestScore) {
+      bestScore = sc;
+      bestSlug = slug;
+    }
+  }
+  if (bestSlug && bestScore >= 35) {
+    lines.push(`Interest: most Explore time on ${TOPIC_META[bestSlug]?.label || bestSlug}.`);
+  }
+
+  const beh = POD_SPORTS_EXPLORE_SLUGS.map((slug) => {
+    const sec = Number(exploreStats?.[slug]?.seconds) || 0;
+    const vis = Number(exploreStats?.[slug]?.visits) || 0;
+    if (sec < 25 && vis < 1) return null;
+    const lb = TOPIC_META[slug]?.label || slug;
+    const parts = [];
+    if (sec >= 25) parts.push(`${Math.max(1, Math.round(sec / 60))}m`);
+    if (vis) parts.push(`${vis} visit${vis === 1 ? '' : 's'}`);
+    return parts.length ? `${lb}: ${parts.join(', ')}` : null;
+  }).filter(Boolean);
+
+  if (beh.length) lines.push(`Behavior: ${beh.slice(0, 4).join(' · ')}`);
+
+  lines.push('Social: ranked by likes, shares, and reads—still sports-only headlines.');
+  return lines;
 }
