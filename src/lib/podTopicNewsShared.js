@@ -380,13 +380,27 @@ function escapeRegExp(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/** Decode common XML/HTML entities in titles (Google RSS often leaves `&amp;` etc.). */
+export function decodeBasicHtmlEntities(str) {
+  if (typeof str !== 'string' || !str) return str || '';
+  return str
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&nbsp;/g, ' ');
+}
+
 function cleanPublisherSuffixFromTitle(rawTitle, sourceName) {
   const t = (rawTitle || '').replace(/\s+/g, ' ').trim();
   const s = (sourceName || '').replace(/\s+/g, ' ').trim();
-  if (!t || !s) return t;
+  if (!t || !s) return decodeBasicHtmlEntities(t);
   const re = new RegExp(`\\s*[-–—|]\\s*${escapeRegExp(s)}\\s*$`, 'i');
   const cut = t.replace(re, '').trim();
-  return cut.length >= 12 ? cut : t;
+  const out = cut.length >= 12 ? cut : t;
+  return decodeBasicHtmlEntities(out);
 }
 
 function normalizeSourceLabel(rawSource) {
@@ -586,6 +600,67 @@ export function filterNewsRowsIndiaLocal(rows) {
 
 const NEWSAPI_V2 = 'https://newsapi.org/v2';
 
+/** NewsAPI returns { code: 'userAgentMissing' } if this header is absent (Node/Capacitor often omit it). */
+const NEWSAPI_USER_AGENT = 'DeiteNews/1.0 (+https://deitedatabase.web.app)';
+
+// #region agent log
+/** Debug NDJSON ingest + logcat (session db6096). No secrets. */
+export function logNewsApiAgentDebug(payload) {
+  const o = { sessionId: 'db6096', timestamp: Date.now(), runId: 'pre-fix', ...payload };
+  fetch('http://127.0.0.1:7588/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'db6096' },
+    body: JSON.stringify(o),
+  }).catch(() => {});
+  try {
+    console.log('[NewsApiAgent]', JSON.stringify(o));
+  } catch (_) {}
+}
+// #endregion
+
+const NEWSAPI_COOLDOWN_LS = 'deite_newsapi_cooldown_until';
+/** Generic HTTP 429 without explicit NewsAPI quota flag. */
+const NEWSAPI_RATE_LIMIT_COOLDOWN_MS = 90 * 1000;
+/** NewsAPI `code: rateLimited` — daily/plan quota; long backoff avoids burning the key with prefetch + retries. */
+const NEWSAPI_QUOTA_COOLDOWN_MS = 30 * 60 * 1000;
+/** One retry only for non-quota 429s (transient). Never retry `rateLimited` — doubles wasted calls. */
+const NEWSAPI_429_RETRY_MS = 1600;
+let newsApiRateLimitCooldownUntil = 0;
+
+try {
+  localStorage.removeItem(NEWSAPI_COOLDOWN_LS);
+} catch {
+  /* private mode / SSR */
+}
+
+function setNewsApiCooldownUntil(ts) {
+  newsApiRateLimitCooldownUntil = ts;
+}
+
+function isNewsApiRateLimitedJsonResponse(jr) {
+  const data = jr?.data;
+  const code = typeof data?.code === 'string' ? data.code : '';
+  return jr?.status === 429 || code === 'rateLimited';
+}
+
+function applyNewsApiRateLimitSignal(jr) {
+  if (!isNewsApiRateLimitedJsonResponse(jr)) return;
+  const code = typeof jr?.data?.code === 'string' ? jr.data.code : '';
+  const ms = code === 'rateLimited' ? NEWSAPI_QUOTA_COOLDOWN_MS : NEWSAPI_RATE_LIMIT_COOLDOWN_MS;
+  setNewsApiCooldownUntil(Date.now() + ms);
+  logNewsApiAgentDebug({
+    message: 'newsapi_cooldown_set',
+    runId: 'post-fix',
+    hypothesisId: 'Q',
+    data: { http: jr?.status, apiCode: code, cooldownMs: ms },
+  });
+}
+
+/** True while NewsAPI is skipped after 429 / rateLimited (in-memory; longer when `rateLimited`). */
+export function isNewsApiRateLimitedCooldown() {
+  return Date.now() < newsApiRateLimitCooldownUntil;
+}
+
 /** Lowercase ISO codes accepted by NewsAPI top-headlines `country` (see newsapi.org docs). */
 export const NEWSAPI_TOP_HEADLINES_COUNTRIES = new Set([
   'ae',
@@ -767,7 +842,20 @@ function getCandidateNewsApiFunctionUrls() {
 
 function isNativeCapacitor() {
   try {
-    return Capacitor?.isNativePlatform?.() === true;
+    if (Capacitor?.isNativePlatform?.() === true) return true;
+    const p = Capacitor?.getPlatform?.();
+    return p === 'android' || p === 'ios';
+  } catch {
+    return false;
+  }
+}
+
+/** Last-resort public CORS mirrors (sends key through a third party). Opt-in on HTTPS production. */
+function allowNewsCorsProxyFallback() {
+  if (isNativeCapacitor()) return true;
+  if (shouldProxyNewsApi()) return true;
+  try {
+    return String(process.env.REACT_APP_NEWSAPI_FORCE_CORS_PROXY || '').trim() === '1';
   } catch {
     return false;
   }
@@ -778,7 +866,7 @@ async function fetchJsonMaybeNative(url, { timeoutMs }) {
     const res = await CapacitorHttp.request({
       method: 'GET',
       url,
-      headers: { Accept: 'application/json' },
+      headers: { Accept: 'application/json', 'User-Agent': NEWSAPI_USER_AGENT },
       connectTimeout: timeoutMs,
       readTimeout: timeoutMs,
     });
@@ -803,7 +891,11 @@ async function fetchJsonMaybeNative(url, { timeoutMs }) {
   const ctrl = new AbortController();
   const tid = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const res = await fetch(url, { method: 'GET', signal: ctrl.signal });
+    const res = await fetch(url, {
+      method: 'GET',
+      signal: ctrl.signal,
+      headers: { Accept: 'application/json', 'User-Agent': NEWSAPI_USER_AGENT },
+    });
     const data = await res.json().catch(() => null);
     return {
       status: res?.status,
@@ -830,8 +922,11 @@ async function fetchNewsApiDirectFromEnv(endpoint, baseParams) {
   try {
     const jr = await fetchJsonMaybeNative(url, { timeoutMs });
     const data = jr?.data ?? null;
+    applyNewsApiRateLimitSignal(jr);
 
-    if (jr?.ok && data && data.status === 'ok' && Array.isArray(data.articles)) return data.articles;
+    if (jr?.ok && data && data.status === 'ok' && Array.isArray(data.articles) && data.articles.length > 0) {
+      return data.articles;
+    }
     return null;
   } catch {
     return null;
@@ -845,7 +940,9 @@ async function fetchNewsApiDirectFromEnv(endpoint, baseParams) {
 function shouldProxyNewsApi() {
   if (typeof window === 'undefined') return false;
   try {
-    if (Capacitor?.isNativePlatform?.()) return true;
+    if (Capacitor?.isNativePlatform?.() === true) return true;
+    const p = Capacitor?.getPlatform?.();
+    if (p === 'android' || p === 'ios') return true;
   } catch {
     /* no native bridge */
   }
@@ -866,7 +963,31 @@ export function canFetchLiveNews() {
   return typeof window !== 'undefined';
 }
 
-function getFirebaseHostingApiBases() {
+/**
+ * Hosting domains where `/api/news/*` is same-site and may include fallbacks. Everywhere else (localhost,
+ * LAN IP, Vercel preview, etc.) the browser must call only the current origin so CRA `setupProxy` handles
+ * the request — never `fetch()` Firebase Hosting cross-origin (CORS + 404 on missing rewrites).
+ */
+function isFirebaseNewsHostingHostname(hostname) {
+  const h = String(hostname || '').toLowerCase();
+  if (!h) return false;
+  if (h === 'deitedatabase.web.app' || h === 'deitedatabase.firebaseapp.com') return true;
+  const trimOrigin = (u) => (typeof u === 'string' ? u.trim().replace(/\/$/, '') : '');
+  const envOrigin = trimOrigin(process.env.REACT_APP_NEWS_PROXY_ORIGIN || '');
+  if (!envOrigin) return false;
+  try {
+    return new URL(envOrigin).hostname.toLowerCase() === h;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * @param {{ forBrowserNewsProxy?: boolean }} [options]
+ * When `forBrowserNewsProxy` is true, omit cross-origin Firebase URLs unless the page is already on that hosting.
+ */
+function getFirebaseHostingApiBases(options = {}) {
+  const forBrowserNewsProxy = options.forBrowserNewsProxy === true;
   const trimOrigin = (u) => (typeof u === 'string' ? u.trim().replace(/\/$/, '') : '');
   const envOrigin = trimOrigin(process.env.REACT_APP_NEWS_PROXY_ORIGIN || '');
   const defaultBases = ['https://deitedatabase.web.app', 'https://deitedatabase.firebaseapp.com'];
@@ -886,32 +1007,43 @@ function getFirebaseHostingApiBases() {
     /* no native bridge */
   }
 
-  const originLooksLocal =
-    !origin ||
-    origin.includes('localhost') ||
-    origin.startsWith('capacitor://') ||
-    origin.startsWith('ionic://') ||
-    origin.startsWith('file://');
-
   // APK/WebView: never hit https://localhost/api/news first — it has no proxy and can hang or 404.
   if (isNative) {
     return basesFromEnv;
   }
 
-  if (originLooksLocal) {
-    const list = [];
-    if (origin && origin.startsWith('http')) list.push(origin);
-    for (const b of basesFromEnv) {
-      if (!list.includes(b)) list.push(b);
+  const list = [];
+  const trimmedOrigin =
+    origin && /^https?:\/\//i.test(origin) ? trimOrigin(origin) : '';
+  if (trimmedOrigin) list.push(trimmedOrigin);
+
+  if (forBrowserNewsProxy && list.length > 0) {
+    try {
+      const host = new URL(trimmedOrigin).hostname;
+      if (!isFirebaseNewsHostingHostname(host)) {
+        // #region agent log
+        logNewsApiAgentDebug({
+          message: 'news_proxy_same_origin_only',
+          runId: 'cors-fix',
+          hypothesisId: 'C',
+          data: { host },
+        });
+        // #endregion
+        return list;
+      }
+    } catch {
+      return list;
     }
-    return list;
   }
 
-  const out = [origin];
-  for (const b of basesFromEnv) {
-    if (b !== origin) out.push(b);
+  if (!list.length) {
+    return basesFromEnv.length ? basesFromEnv : [];
   }
-  return out;
+
+  for (const b of basesFromEnv) {
+    if (!list.includes(b)) list.push(b);
+  }
+  return list;
 }
 
 /**
@@ -926,12 +1058,76 @@ async function fetchNewsApiThroughProxy(endpoint, baseParams) {
   p.set('endpoint', endpoint);
 
   const timeoutMs = 12000;
-  for (const base of getFirebaseHostingApiBases()) {
+  let loggedFirst = false;
+  for (const base of getFirebaseHostingApiBases({ forBrowserNewsProxy: true })) {
     try {
       const url = `${base}/api/news/${endpoint}?${p.toString()}`;
-      const jr = await fetchJsonMaybeNative(url, { timeoutMs });
-      const data = jr?.data ?? null;
-      if (jr?.ok && data && data.status === 'ok' && Array.isArray(data.articles)) {
+      let jr = await fetchJsonMaybeNative(url, { timeoutMs });
+      let data = jr?.data ?? null;
+      const quotaLimited = data?.code === 'rateLimited';
+      if (isNewsApiRateLimitedJsonResponse(jr) && !quotaLimited) {
+        // #region agent log
+        logNewsApiAgentDebug({
+          message: 'proxy_429_retry_wait',
+          runId: 'post-fix',
+          hypothesisId: 'R',
+          data: { endpoint },
+        });
+        // #endregion
+        await new Promise((r) => setTimeout(r, NEWSAPI_429_RETRY_MS));
+        jr = await fetchJsonMaybeNative(url, { timeoutMs });
+        data = jr?.data ?? null;
+      }
+      applyNewsApiRateLimitSignal(jr);
+      // #region agent log
+      try {
+        const baseHost = new URL(base).hostname;
+        logNewsApiAgentDebug({
+          location: 'podTopicNewsShared:fetchNewsApiThroughProxy',
+          message: 'proxy_response',
+          runId: 'post-fix',
+          hypothesisId: 'H1',
+          data: {
+            baseHost,
+            endpoint,
+            http: jr?.status,
+            ok: jr?.ok,
+            apiStatus: data?.status,
+            apiCode: data?.code,
+            articleCount: Array.isArray(data?.articles) ? data.articles.length : null,
+          },
+        });
+      } catch {
+        logNewsApiAgentDebug({
+          location: 'podTopicNewsShared:fetchNewsApiThroughProxy',
+          message: 'proxy_response',
+          runId: 'post-fix',
+          hypothesisId: 'H1',
+          data: { baseHost: 'unparsed', endpoint, http: jr?.status, ok: jr?.ok },
+        });
+      }
+      // #endregion
+      if (!loggedFirst) {
+        loggedFirst = true;
+        logNewsApiAgentDebug({
+          message: 'proxy_first_base',
+          runId: 'diag',
+          hypothesisId: 'P',
+          data: {
+            http: jr?.status,
+            ok: jr?.ok,
+            apiStatus: data?.status,
+            apiCode: data?.code,
+          },
+        });
+      }
+      if (
+        jr?.ok &&
+        data &&
+        data.status === 'ok' &&
+        Array.isArray(data.articles) &&
+        data.articles.length > 0
+      ) {
         return data.articles;
       }
     } catch {
@@ -953,9 +1149,24 @@ async function fetchNewsApiThroughCloudFunction(endpoint, baseParams) {
   for (const fnUrl of urls) {
     try {
       const url = `${fnUrl}?${p.toString()}`;
-      const jr = await fetchJsonMaybeNative(url, { timeoutMs });
-      const data = jr?.data ?? null;
-      if (jr?.ok && data && data.status === 'ok' && Array.isArray(data.articles)) return data.articles;
+      let jr = await fetchJsonMaybeNative(url, { timeoutMs });
+      let data = jr?.data ?? null;
+      const quotaLimitedCf = data?.code === 'rateLimited';
+      if (isNewsApiRateLimitedJsonResponse(jr) && !quotaLimitedCf) {
+        await new Promise((r) => setTimeout(r, NEWSAPI_429_RETRY_MS));
+        jr = await fetchJsonMaybeNative(url, { timeoutMs });
+        data = jr?.data ?? null;
+      }
+      applyNewsApiRateLimitSignal(jr);
+      if (
+        jr?.ok &&
+        data &&
+        data.status === 'ok' &&
+        Array.isArray(data.articles) &&
+        data.articles.length > 0
+      ) {
+        return data.articles;
+      }
     } catch {
       /* next candidate */
     }
@@ -1073,34 +1284,113 @@ export async function fetchNewsApiEverythingRaw(opts = {}) {
   // This keeps the NewsAPI key on the server.
 
   const pageSize = Math.min(Math.max(1, opts.pageSize ?? 30), 100);
-  const baseParams = new URLSearchParams({
-    q,
-    language: opts.language || 'en',
-    sortBy: opts.sortBy || 'publishedAt',
-    pageSize: String(pageSize),
-  });
-  baseParams.set('from', opts.from || newsApiDefaultFromISO(7));
+  const buildParams = (fromIso) => {
+    const p = new URLSearchParams({
+      q,
+      language: opts.language || 'en',
+      sortBy: opts.sortBy || 'publishedAt',
+      pageSize: String(pageSize),
+    });
+    p.set('from', fromIso);
+    return p;
+  };
 
-  const directEnv = await fetchNewsApiDirectFromEnv('everything', baseParams);
-  if (Array.isArray(directEnv)) return directEnv;
+  const runId = 'post-fix';
 
-  const direct = await fetchNewsApiThroughCloudFunction('everything', baseParams);
-  if (Array.isArray(direct)) return direct;
-
-  const proxied = await fetchNewsApiThroughProxy('everything', baseParams);
-  if (Array.isArray(proxied) && proxied.length > 0) return proxied;
-
-  // APK: direct CapacitorHttp to newsapi.org often fails (no key in bundle, TLS, or NewsAPI dev-tier limits).
-  // Public CORS proxies call NewsAPI from their servers — often works when Firebase / Hosting returns 404.
-  const envKey = getNewsApiKey();
-  if (envKey && isNativeCapacitor()) {
-    const viaCors = await fetchNewsApiThroughCorsProxies('everything', baseParams, envKey);
-    if (Array.isArray(viaCors) && viaCors.length > 0) {
-      return viaCors;
+  const attemptOnce = async (baseParams, fromWindowLabel) => {
+    if (isNewsApiRateLimitedCooldown()) {
+      logNewsApiAgentDebug({
+        location: 'podTopicNewsShared:fetchNewsApiEverythingRaw',
+        message: 'skip_attempt_cooldown',
+        runId,
+        hypothesisId: 'Q',
+        data: { fromWindow: fromWindowLabel, qLen: q.length },
+      });
+      return [];
     }
-  }
+    const dbg = {
+      hypothesisId: 'A',
+      runId,
+      fromWindow: fromWindowLabel,
+      qLen: q.length,
+      pageSize,
+      hasKey: !!getNewsApiKey(),
+      isNative: isNativeCapacitor(),
+    };
 
-  return [];
+    const directEnv = await fetchNewsApiDirectFromEnv('everything', baseParams);
+    dbg.directEnvLen = Array.isArray(directEnv) ? directEnv.length : null;
+    if (Array.isArray(directEnv) && directEnv.length > 0) {
+      logNewsApiAgentDebug({
+        location: 'podTopicNewsShared:fetchNewsApiEverythingRaw',
+        message: 'return_branch',
+        runId,
+        hypothesisId: 'G',
+        data: { ...dbg, path: 'directEnv', count: directEnv.length },
+      });
+      return directEnv;
+    }
+
+    const direct = await fetchNewsApiThroughCloudFunction('everything', baseParams);
+    dbg.fnLen = Array.isArray(direct) ? direct.length : null;
+    if (Array.isArray(direct) && direct.length > 0) {
+      logNewsApiAgentDebug({
+        location: 'podTopicNewsShared:fetchNewsApiEverythingRaw',
+        message: 'return_branch',
+        runId,
+        hypothesisId: 'G',
+        data: { ...dbg, path: 'cloudFunction', count: direct.length },
+      });
+      return direct;
+    }
+
+    const proxied = await fetchNewsApiThroughProxy('everything', baseParams);
+    dbg.proxyLen = Array.isArray(proxied) ? proxied.length : null;
+    if (Array.isArray(proxied) && proxied.length > 0) {
+      logNewsApiAgentDebug({
+        location: 'podTopicNewsShared:fetchNewsApiEverythingRaw',
+        message: 'return_branch',
+        runId,
+        hypothesisId: 'A',
+        data: { ...dbg, path: 'hostingProxy', count: proxied.length },
+      });
+      return proxied;
+    }
+
+    const envKey = getNewsApiKey();
+    dbg.corsAttempted = !!(envKey && allowNewsCorsProxyFallback());
+    if (envKey && allowNewsCorsProxyFallback()) {
+      const viaCors = await fetchNewsApiThroughCorsProxies('everything', baseParams, envKey);
+      dbg.corsLen = Array.isArray(viaCors) ? viaCors.length : null;
+      if (Array.isArray(viaCors) && viaCors.length > 0) {
+        logNewsApiAgentDebug({
+          location: 'podTopicNewsShared:fetchNewsApiEverythingRaw',
+          message: 'return_branch',
+          runId,
+          hypothesisId: 'B',
+          data: { ...dbg, path: 'corsProxy', count: viaCors.length },
+        });
+        return viaCors;
+      }
+    }
+
+    logNewsApiAgentDebug({
+      location: 'podTopicNewsShared:fetchNewsApiEverythingRaw',
+      message: 'return_empty',
+      runId,
+      hypothesisId: 'A',
+      data: { ...dbg, path: 'none' },
+    });
+    return [];
+  };
+
+  const pinnedFrom = opts.from != null && String(opts.from).trim() !== '';
+  const firstFrom = pinnedFrom ? String(opts.from).trim() : newsApiDefaultFromISO(7);
+  let out = await attemptOnce(buildParams(firstFrom), pinnedFrom ? 'pinned' : '7d');
+  if (!out.length && !pinnedFrom) {
+    out = await attemptOnce(buildParams(newsApiDefaultFromISO(30)), '30d_retry');
+  }
+  return out;
 }
 
 export async function fetchNewsApiEverythingNormalized(opts = {}) {
@@ -1117,7 +1407,11 @@ export async function fetchNewsApiTopHeadlinesRaw(opts = {}) {
   const category = String(opts.category || '').trim();
   const q = String(opts.q || '').trim();
   const sources = String(opts.sources || '').trim();
-  if (!category && !q && !sources) return [];
+  const countryOpt = opts.country != null ? String(opts.country).trim().toLowerCase() : '';
+  const country = /^[a-z]{2}$/.test(countryOpt) ? countryOpt : '';
+
+  // NewsAPI allows top-headlines with country alone (no category/q/sources) — e.g. Crew personalized feed.
+  if (!category && !q && !sources && !country) return [];
 
   // Always fetch via backend proxy: /api/news/* -> Cloud Function `newsApi`.
   // This keeps the NewsAPI key on the server.
@@ -1135,23 +1429,34 @@ export async function fetchNewsApiTopHeadlinesRaw(opts = {}) {
   if (category) baseParams.set('category', category);
   if (q) baseParams.set('q', q);
   if (sources) baseParams.set('sources', sources);
-  if (category && !sources && !q && !opts.country) {
+  if (category && !sources && !q && !country) {
     baseParams.set('country', 'us');
-  } else if (opts.country) {
-    baseParams.set('country', String(opts.country));
+  } else if (country) {
+    baseParams.set('country', country);
+  }
+
+  if (isNewsApiRateLimitedCooldown()) {
+    logNewsApiAgentDebug({
+      location: 'podTopicNewsShared:fetchNewsApiTopHeadlinesRaw',
+      message: 'skip_top_headlines_cooldown',
+      runId: 'post-fix',
+      hypothesisId: 'Q',
+      data: { category, country, qLen: q.length },
+    });
+    return [];
   }
 
   const directEnv = await fetchNewsApiDirectFromEnv('top-headlines', baseParams);
-  if (Array.isArray(directEnv)) return directEnv;
+  if (Array.isArray(directEnv) && directEnv.length > 0) return directEnv;
 
   const direct = await fetchNewsApiThroughCloudFunction('top-headlines', baseParams);
-  if (Array.isArray(direct)) return direct;
+  if (Array.isArray(direct) && direct.length > 0) return direct;
 
   const proxied = await fetchNewsApiThroughProxy('top-headlines', baseParams);
   if (Array.isArray(proxied) && proxied.length > 0) return proxied;
 
   const envKeyTh = getNewsApiKey();
-  if (envKeyTh && isNativeCapacitor()) {
+  if (envKeyTh && allowNewsCorsProxyFallback()) {
     const viaCorsTh = await fetchNewsApiThroughCorsProxies('top-headlines', baseParams, envKeyTh);
     if (Array.isArray(viaCorsTh) && viaCorsTh.length > 0) {
       return viaCorsTh;

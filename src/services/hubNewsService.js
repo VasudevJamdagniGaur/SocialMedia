@@ -22,9 +22,27 @@ import {
 import {
   canFetchLiveNews,
   fetchNewsApiEverythingNormalized,
+  fetchNewsApiTopHeadlinesNormalized,
+  fetchLiveFromGoogleRssByQuery,
+  isNewsApiRateLimitedCooldown,
+  logNewsApiAgentDebug,
 } from '../lib/podTopicNewsShared';
 
 const COLLECTION = 'news';
+
+const FIRESTORE_QUERY_TIMEOUT_MS = 12000;
+
+function getDocsWithTimeout(qRef, label) {
+  return Promise.race([
+    getDocs(qRef),
+    new Promise((_, reject) =>
+      setTimeout(
+        () => reject(new Error(`firestore_timeout:${label}`)),
+        FIRESTORE_QUERY_TIMEOUT_MS
+      )
+    ),
+  ]);
+}
 
 export function hubNewsDocIdFromUrl(url) {
   const s = String(url || '');
@@ -189,10 +207,14 @@ async function queryNewsTrending(country, categories, maxDocs) {
       orderBy('trendingScore', 'desc'),
       limit(Math.min(maxDocs, 40))
     );
-    const snap = await getDocs(q);
+    const snap = await getDocsWithTimeout(q, 'trending');
     return snap.docs.map((d) => mapNewsDoc(d.id, d.data()));
   } catch (e) {
     if (e?.code === 'permission-denied') throw e;
+    if (String(e?.message || '').startsWith('firestore_timeout:')) {
+      console.warn('queryNewsTrending: timeout');
+      return [];
+    }
     console.warn('queryNewsTrending', e?.message || e);
     return [];
   }
@@ -211,10 +233,14 @@ async function queryNewsLatest(country, categories, maxDocs) {
       orderBy('createdAt', 'desc'),
       limit(Math.min(maxDocs, 40))
     );
-    const snap = await getDocs(q);
+    const snap = await getDocsWithTimeout(q, 'latest');
     return snap.docs.map((d) => mapNewsDoc(d.id, d.data()));
   } catch (e) {
     if (e?.code === 'permission-denied') throw e;
+    if (String(e?.message || '').startsWith('firestore_timeout:')) {
+      console.warn('queryNewsLatest: timeout');
+      return [];
+    }
     console.warn('queryNewsLatest', e?.message || e);
     return [];
   }
@@ -246,30 +272,39 @@ const INTEREST_QUERIES = {
   others: '(sports OR athletics OR Olympics)',
 };
 
-/**
- * When Firestore `news` is blocked or empty: same interest mix from NewsAPI only (no writes).
- */
-async function buildNewsApiFallbackFeed(profile, targetSize = 20) {
-  const cats = (profile?.interests?.length ? profile.interests : HUB_DEFAULT_INTERESTS).slice(0, 5);
-  if (!canFetchLiveNews()) return [];
-  const collected = [];
-  for (const cat of cats) {
-    const qExtra = INTEREST_QUERIES[cat] || cat;
-    const rows = await fetchNewsApiEverythingNormalized({
-      q: qExtra,
-      pageSize: 6,
-      language: 'en',
-    });
-    for (const row of rows || []) {
-      if (!row.url || !row.title) continue;
-      collected.push({
+/** Google News RSS per interest (no NewsAPI quota) — fills the hub when API is rate-limited. */
+const HUB_RSS_BY_INTEREST = {
+  cricket: 'cricket OR IPL OR T20 when:7d',
+  football: 'soccer OR MLS OR Premier League when:7d',
+  f1: 'Formula 1 OR F1 when:7d',
+  chess: 'chess OR FIDE when:7d',
+  others: 'sports headlines when:7d',
+};
+
+async function appendInterestGoogleNewsRssParallel(profile, cats, seen, unique, capUrls) {
+  const ctry = normalizeCountry(profile?.country || '');
+  const sub = (cats || []).slice(0, 5).filter(Boolean);
+  if (!sub.length) return;
+  const pairs = sub.map((cat) => ({
+    cat,
+    q: HUB_RSS_BY_INTEREST[cat] || `${cat} news when:7d`,
+  }));
+  const batches = await Promise.all(pairs.map((p) => fetchLiveFromGoogleRssByQuery(p.q)));
+  for (let i = 0; i < batches.length; i++) {
+    if (unique.length >= capUrls) break;
+    const cat = pairs[i].cat;
+    for (const row of batches[i] || []) {
+      if (unique.length >= capUrls) break;
+      if (!row.url || !row.title || seen.has(row.url)) continue;
+      seen.add(row.url);
+      unique.push({
         id: hubNewsDocIdFromUrl(row.url),
         title: row.title,
         image: row.image || null,
         source: row.source || 'News',
         url: row.url,
         category: cat,
-        country: profile.country || '',
+        country: ctry || '',
         city: profile.city || '',
         likes: 0,
         shares: 0,
@@ -282,13 +317,150 @@ async function buildNewsApiFallbackFeed(profile, targetSize = 20) {
       });
     }
   }
+}
+
+async function appendHubGoogleNewsRss(profile, seen, unique) {
+  const ctry = normalizeCountry(profile?.country || '');
+  const rssQ =
+    String(ctry || '').toUpperCase() === 'IN'
+      ? 'India news OR cricket OR technology when:7d'
+      : 'world news headlines when:7d';
+  const rssItems = await fetchLiveFromGoogleRssByQuery(rssQ);
+  for (const row of rssItems || []) {
+    if (!row.url || !row.title || seen.has(row.url)) continue;
+    seen.add(row.url);
+    unique.push({
+      id: hubNewsDocIdFromUrl(row.url),
+      title: row.title,
+      image: row.image || null,
+      source: row.source || 'News',
+      url: row.url,
+      category: 'others',
+      country: ctry || '',
+      city: profile.city || '',
+      likes: 0,
+      shares: 0,
+      views: 0,
+      trendingScore: 0,
+      createdAt: null,
+      fromNewsApiFallback: true,
+      feedTag: { label: 'Headlines', emoji: '📰' },
+      mixBucket: 'trending',
+    });
+  }
+}
+
+/**
+ * When Firestore `news` is blocked or empty: Google News RSS first (no quota), then NewsAPI to top up when allowed.
+ */
+async function buildNewsApiFallbackFeed(profile, targetSize = 20) {
+  const cats = (profile?.interests?.length ? profile.interests : HUB_DEFAULT_INTERESTS).slice(0, 5);
+  if (!canFetchLiveNews()) return [];
+
   const seen = new Set();
   const unique = [];
-  for (const r of collected) {
-    if (seen.has(r.url)) continue;
-    seen.add(r.url);
-    unique.push(r);
+  await appendHubGoogleNewsRss(profile, seen, unique);
+  await appendInterestGoogleNewsRssParallel(profile, cats, seen, unique, 80);
+
+  logNewsApiAgentDebug({
+    location: 'hubNewsService:buildNewsApiFallbackFeed',
+    message: 'rss_seeded',
+    runId: 'post-fix',
+    hypothesisId: 'S',
+    data: { itemCountAfterRss: unique.length },
+  });
+
+  const ctry = normalizeCountry(profile?.country || '');
+  const skipNewsApi = isNewsApiRateLimitedCooldown();
+
+  if (skipNewsApi) {
+    logNewsApiAgentDebug({
+      location: 'hubNewsService:buildNewsApiFallbackFeed',
+      message: 'rss_only_cooldown',
+      runId: 'post-fix',
+      hypothesisId: 'Q',
+      data: { itemCount: unique.length },
+    });
+    shuffleInPlace(unique);
+    return unique.slice(0, targetSize);
   }
+
+  if (unique.length < targetSize) {
+    let catFetchRounds = 0;
+    for (const cat of cats) {
+      const qExtra = INTEREST_QUERIES[cat] || cat;
+      const rows = await fetchNewsApiEverythingNormalized({
+        q: qExtra,
+        pageSize: 6,
+        language: 'en',
+      });
+      catFetchRounds += 1;
+      for (const row of rows || []) {
+        if (!row.url || !row.title || seen.has(row.url)) continue;
+        seen.add(row.url);
+        unique.push({
+          id: hubNewsDocIdFromUrl(row.url),
+          title: row.title,
+          image: row.image || null,
+          source: row.source || 'News',
+          url: row.url,
+          category: cat,
+          country: profile.country || '',
+          city: profile.city || '',
+          likes: 0,
+          shares: 0,
+          views: 0,
+          trendingScore: 0,
+          createdAt: null,
+          fromNewsApiFallback: true,
+          feedTag: { label: 'For you', emoji: '📰' },
+          mixBucket: 'trending',
+        });
+        if (unique.length >= targetSize * 2) break;
+      }
+      if (unique.length >= targetSize * 2) break;
+    }
+    logNewsApiAgentDebug({
+      location: 'hubNewsService:buildNewsApiFallbackFeed',
+      message: 'sequential_newsapi_cats_done',
+      runId: 'post-fix',
+      hypothesisId: 'R',
+      data: { catFetchRounds },
+    });
+  }
+
+  if (unique.length < targetSize) {
+    const code = ctry.length === 2 ? ctry.toLowerCase() : 'us';
+    const th = await fetchNewsApiTopHeadlinesNormalized({
+      country: code,
+      pageSize: Math.min(40, targetSize + 10),
+      language: 'en',
+    });
+    for (const row of th || []) {
+      if (!row.url || !row.title || seen.has(row.url)) continue;
+      seen.add(row.url);
+      unique.push({
+        id: hubNewsDocIdFromUrl(row.url),
+        title: row.title,
+        image: row.image || null,
+        source: row.source || 'News',
+        url: row.url,
+        category: 'others',
+        country: ctry || '',
+        city: profile.city || '',
+        likes: 0,
+        shares: 0,
+        views: 0,
+        trendingScore: 0,
+        createdAt: null,
+        fromNewsApiFallback: true,
+        feedTag: { label: 'Trending', emoji: '🔥' },
+        mixBucket: 'trending',
+      });
+      if (unique.length >= targetSize * 2) break;
+    }
+  }
+
   shuffleInPlace(unique);
   return unique.slice(0, targetSize);
 }
@@ -301,6 +473,7 @@ export async function hydrateHubNewsFromApi(country, city, interests) {
   const cit = normalizeCity(city);
   const cats = (interests.length ? interests : HUB_DEFAULT_INTERESTS).slice(0, 5);
   if (!canFetchLiveNews() || ctry.length !== 2) return { success: false, count: 0 };
+  if (isNewsApiRateLimitedCooldown()) return { success: true, count: 0 };
 
   let total = 0;
   for (const cat of cats) {
@@ -372,12 +545,50 @@ export async function fetchHubPersonalizedFeed(uid, options = {}) {
   const cats = profile.interests.slice(0, 10);
   if (!cats.length) return { success: true, items: [], profile };
 
+  // Prefer fresh NewsAPI + RSS over stale Firestore `news` rows (cached articles ranked by old engagement).
+  let liveItems = [];
+  if (canFetchLiveNews()) {
+    liveItems = await buildNewsApiFallbackFeed(profile, targetSize);
+  }
+
+  // Firestore backfill only when live path is empty — avoids 5 extra `everything` calls racing the hub fetch when RSS already filled the carousel.
+  if (liveItems.length === 0 && canFetchLiveNews()) {
+    void hydrateHubNewsFromApi(profile.country, profile.city, cats).catch(() => {});
+  }
+
+  // #region agent log
+  logNewsApiAgentDebug({
+    location: 'hubNewsService:fetchHubPersonalizedFeed',
+    message: 'after_live_fetch',
+    runId: 'post-fix',
+    hypothesisId: 'H',
+    data: { liveLen: liveItems.length },
+  });
+  // #endregion
+
+  if (liveItems.length > 0) {
+    // #region agent log
+    logNewsApiAgentDebug({
+      location: 'hubNewsService:fetchHubPersonalizedFeed',
+      message: 'hub_using_live_not_firestore',
+      runId: 'post-fix',
+      hypothesisId: 'H',
+      data: { count: liveItems.length },
+    });
+    // #endregion
+    return {
+      success: true,
+      items: liveItems,
+      profile,
+      usedFirestore: false,
+    };
+  }
+
   let trending = [];
   let latest = [];
   let firestoreNewsOk = true;
 
   try {
-    await hydrateHubNewsFromApi(profile.country, profile.city, cats);
     trending = await queryNewsTrending(profile.country, cats, 40);
     latest = await queryNewsLatest(profile.country, cats, 40);
   } catch (e) {
@@ -389,34 +600,33 @@ export async function fetchHubPersonalizedFeed(uid, options = {}) {
     latest = [];
   }
 
+  // #region agent log
+  logNewsApiAgentDebug({
+    location: 'hubNewsService:fetchHubPersonalizedFeed',
+    message: 'after_firestore_queries',
+    runId: 'post-fix',
+    hypothesisId: 'H',
+    data: {
+      trendingLen: trending.length,
+      latestLen: latest.length,
+      firestoreNewsOk,
+    },
+  });
+  // #endregion
+
   trending = [...trending].sort(
     (a, b) =>
       effectiveHubRankScore(b, profile.city, interestsLower) -
       effectiveHubRankScore(a, profile.city, interestsLower)
   );
 
-  let items = mixHubFeedSegments(trending, latest, targetSize);
-
-  if (items.length === 0) {
-    items = await buildNewsApiFallbackFeed(profile, targetSize);
-    if (!firestoreNewsOk && items.length > 0) {
-      console.info(
-        '[HubTrending] Using live headlines (NewsAPI). To persist rankings/likes in Firestore, deploy rules + indexes for the `news` collection — see firestore.rules and firestore.indexes.json.'
-      );
-    }
-    return {
-      success: true,
-      items,
-      profile,
-      usedFirestore: false,
-    };
-  }
+  const items = mixHubFeedSegments(trending, latest, targetSize);
 
   return {
     success: true,
     items,
     profile,
-    usedFirestore: true,
+    usedFirestore: items.length > 0,
   };
 }
 

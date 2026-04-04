@@ -221,8 +221,9 @@ service cloud.firestore {
     }
 
     // Hub → Trending news (engagement + time-decayed trendingScore, country + category)
+    // Public read: Hub/Trending must work before auth finishes hydrating; URLs are already public.
     match /news/{newsId} {
-      allow read: if request.auth != null;
+      allow read: if true;
 
       allow create: if request.auth != null
         && request.resource.data.title is string
@@ -263,7 +264,7 @@ service cloud.firestore {
 
     // Sports pod — engagement-ranked trending (likes/shares/views → trendingScore), country + optional city
     match /podSportsTrending/{newsId} {
-      allow read: if request.auth != null;
+      allow read: if true;
 
       allow create: if request.auth != null
         && request.resource.data.title is string
