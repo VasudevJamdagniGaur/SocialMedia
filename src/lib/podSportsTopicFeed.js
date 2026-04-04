@@ -7,7 +7,6 @@ import {
   fetchLiveFromGoogleRssByQuery,
   enrichNewsItemsWithOgImages,
   isNewsApiRateLimitedCooldown,
-  logNewsApiAgentDebug,
 } from './podTopicNewsShared';
 
 /** Google News browse queries (for “Open on Google News” links only). */
@@ -282,20 +281,6 @@ async function loadNewsApiSportsRows(topicId, config) {
     }
   }
 
-  // #region agent log
-  logNewsApiAgentDebug({
-    location: 'podSportsTopicFeed:loadNewsApiSportsRows',
-    message: 'after_everything_and_filter',
-    runId: 'post-fix',
-    hypothesisId: 'F',
-    data: {
-      topicId,
-      fetchedLen: (fetched || []).length,
-      topHeadlinesLen,
-      onTopicLen: onTopic.length,
-    },
-  });
-  // #endregion
   return onTopic.slice(0, 30);
 }
 
@@ -349,27 +334,10 @@ export async function fetchSportsTopicRawItems(topicId, options = {}) {
   const apiLen = (apiRows || []).length;
   const rssLen = (rssRows || []).length;
 
-  // #region agent log
-  logNewsApiAgentDebug({
-    location: 'podSportsTopicFeed:fetchSportsTopicRawItems',
-    message: 'sports_merge_feed',
-    runId: 'post-fix',
-    hypothesisId: 'T',
-    data: { topicId, cooldown, apiLen, rssLen, mergedLen: rows.length },
-  });
-  // #endregion
-
   if (!rows.length) {
     const picked = await trySportsRowsFromGoogleRss(topicId);
     if (picked.length) {
       rows = picked;
-      logNewsApiAgentDebug({
-        location: 'podSportsTopicFeed:fetchSportsTopicRawItems',
-        message: 'google_rss_fallback',
-        runId: 'post-fix',
-        hypothesisId: 'R',
-        data: { topicId, rowsLen: picked.length },
-      });
     }
   }
 

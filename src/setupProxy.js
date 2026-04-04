@@ -97,26 +97,6 @@ function readLocalNewsApiKey() {
   ).trim();
 }
 
-const DEBUG_LOG = path.join(__dirname, '..', '.cursor', 'debug-db6096.log');
-
-function appendProxyDebug(payload) {
-  try {
-    fs.appendFileSync(
-      DEBUG_LOG,
-      `${JSON.stringify({
-        sessionId: 'db6096',
-        timestamp: Date.now(),
-        location: 'setupProxy.js',
-        runId: 'localhost-proxy',
-        ...payload,
-      })}\n`,
-      'utf8'
-    );
-  } catch {
-    /* no .cursor dir or permissions */
-  }
-}
-
 /**
  * If .env has REACT_APP_NEWSAPI*, answer /api/news/* locally so Trending/Sports work
  * without relying on Firebase Hosting + Functions (often unset in dev).
@@ -124,19 +104,8 @@ function appendProxyDebug(payload) {
 function mountLocalNewsApiProxy(app) {
   const localKey = readLocalNewsApiKey();
   if (!localKey) {
-    appendProxyDebug({
-      message: 'local_news_proxy_skipped',
-      hypothesisId: 'H1',
-      data: { reason: 'no_api_key_in_env' },
-    });
     return;
   }
-
-  appendProxyDebug({
-    message: 'local_news_proxy_active',
-    hypothesisId: 'H1',
-    data: { hasKey: true },
-  });
 
   const handler = (endpoint) => async (req, res, next) => {
     try {
@@ -149,32 +118,10 @@ function mountLocalNewsApiProxy(app) {
       upstream.searchParams.set('apiKey', localKey);
       const { status, json } = await httpsGetJson(upstream.toString());
       if (!json || typeof json !== 'object') {
-        appendProxyDebug({
-          message: 'local_news_upstream_bad_json',
-          hypothesisId: 'H1',
-          data: { endpoint, status },
-        });
         return next();
       }
-      appendProxyDebug({
-        message: 'proxy_response',
-        hypothesisId: 'H1',
-        data: {
-          baseHost: 'localhost-dev-server',
-          endpoint,
-          http: status,
-          apiStatus: json.status,
-          apiCode: json.code,
-          articleCount: Array.isArray(json.articles) ? json.articles.length : null,
-        },
-      });
       res.status(status || 502).json(json);
     } catch (e) {
-      appendProxyDebug({
-        message: 'local_news_proxy_error',
-        hypothesisId: 'H1',
-        data: { endpoint, err: String(e && e.message ? e.message : e) },
-      });
       next();
     }
   };
@@ -204,11 +151,6 @@ module.exports = function setupProxy(app) {
         proxyReq.setHeader('Accept', 'application/json');
       },
       onError(err, req, res) {
-        appendProxyDebug({
-          message: 'hosting_proxy_error',
-          hypothesisId: 'H1',
-          data: { targetOrigin, err: err && err.message ? err.message : String(err) },
-        });
         if (!res.headersSent) {
           res.writeHead(502, { 'Content-Type': 'application/json' });
           res.end(

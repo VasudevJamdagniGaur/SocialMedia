@@ -25,7 +25,6 @@ import {
   fetchNewsApiTopHeadlinesNormalized,
   fetchLiveFromGoogleRssByQuery,
   isNewsApiRateLimitedCooldown,
-  logNewsApiAgentDebug,
 } from '../lib/podTopicNewsShared';
 
 const COLLECTION = 'news';
@@ -362,31 +361,15 @@ async function buildNewsApiFallbackFeed(profile, targetSize = 20) {
   await appendHubGoogleNewsRss(profile, seen, unique);
   await appendInterestGoogleNewsRssParallel(profile, cats, seen, unique, 80);
 
-  logNewsApiAgentDebug({
-    location: 'hubNewsService:buildNewsApiFallbackFeed',
-    message: 'rss_seeded',
-    runId: 'post-fix',
-    hypothesisId: 'S',
-    data: { itemCountAfterRss: unique.length },
-  });
-
   const ctry = normalizeCountry(profile?.country || '');
   const skipNewsApi = isNewsApiRateLimitedCooldown();
 
   if (skipNewsApi) {
-    logNewsApiAgentDebug({
-      location: 'hubNewsService:buildNewsApiFallbackFeed',
-      message: 'rss_only_cooldown',
-      runId: 'post-fix',
-      hypothesisId: 'Q',
-      data: { itemCount: unique.length },
-    });
     shuffleInPlace(unique);
     return unique.slice(0, targetSize);
   }
 
   if (unique.length < targetSize) {
-    let catFetchRounds = 0;
     for (const cat of cats) {
       const qExtra = INTEREST_QUERIES[cat] || cat;
       const rows = await fetchNewsApiEverythingNormalized({
@@ -394,7 +377,6 @@ async function buildNewsApiFallbackFeed(profile, targetSize = 20) {
         pageSize: 6,
         language: 'en',
       });
-      catFetchRounds += 1;
       for (const row of rows || []) {
         if (!row.url || !row.title || seen.has(row.url)) continue;
         seen.add(row.url);
@@ -420,13 +402,6 @@ async function buildNewsApiFallbackFeed(profile, targetSize = 20) {
       }
       if (unique.length >= targetSize * 2) break;
     }
-    logNewsApiAgentDebug({
-      location: 'hubNewsService:buildNewsApiFallbackFeed',
-      message: 'sequential_newsapi_cats_done',
-      runId: 'post-fix',
-      hypothesisId: 'R',
-      data: { catFetchRounds },
-    });
   }
 
   if (unique.length < targetSize) {
@@ -556,26 +531,7 @@ export async function fetchHubPersonalizedFeed(uid, options = {}) {
     void hydrateHubNewsFromApi(profile.country, profile.city, cats).catch(() => {});
   }
 
-  // #region agent log
-  logNewsApiAgentDebug({
-    location: 'hubNewsService:fetchHubPersonalizedFeed',
-    message: 'after_live_fetch',
-    runId: 'post-fix',
-    hypothesisId: 'H',
-    data: { liveLen: liveItems.length },
-  });
-  // #endregion
-
   if (liveItems.length > 0) {
-    // #region agent log
-    logNewsApiAgentDebug({
-      location: 'hubNewsService:fetchHubPersonalizedFeed',
-      message: 'hub_using_live_not_firestore',
-      runId: 'post-fix',
-      hypothesisId: 'H',
-      data: { count: liveItems.length },
-    });
-    // #endregion
     return {
       success: true,
       items: liveItems,
@@ -586,33 +542,17 @@ export async function fetchHubPersonalizedFeed(uid, options = {}) {
 
   let trending = [];
   let latest = [];
-  let firestoreNewsOk = true;
 
   try {
     trending = await queryNewsTrending(profile.country, cats, 40);
     latest = await queryNewsLatest(profile.country, cats, 40);
   } catch (e) {
-    firestoreNewsOk = false;
     const code = e?.code || '';
     const msg = e?.message || String(e);
     console.warn('[HubTrending] Firestore `news` unavailable:', code || msg);
     trending = [];
     latest = [];
   }
-
-  // #region agent log
-  logNewsApiAgentDebug({
-    location: 'hubNewsService:fetchHubPersonalizedFeed',
-    message: 'after_firestore_queries',
-    runId: 'post-fix',
-    hypothesisId: 'H',
-    data: {
-      trendingLen: trending.length,
-      latestLen: latest.length,
-      firestoreNewsOk,
-    },
-  });
-  // #endregion
 
   trending = [...trending].sort(
     (a, b) =>

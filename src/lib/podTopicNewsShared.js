@@ -603,21 +603,6 @@ const NEWSAPI_V2 = 'https://newsapi.org/v2';
 /** NewsAPI returns { code: 'userAgentMissing' } if this header is absent (Node/Capacitor often omit it). */
 const NEWSAPI_USER_AGENT = 'DeiteNews/1.0 (+https://deitedatabase.web.app)';
 
-// #region agent log
-/** Debug NDJSON ingest + logcat (session db6096). No secrets. */
-export function logNewsApiAgentDebug(payload) {
-  const o = { sessionId: 'db6096', timestamp: Date.now(), runId: 'pre-fix', ...payload };
-  fetch('http://127.0.0.1:7588/ingest/9e596726-bf1d-4d61-bcc3-effd1cc37ec7', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'db6096' },
-    body: JSON.stringify(o),
-  }).catch(() => {});
-  try {
-    console.log('[NewsApiAgent]', JSON.stringify(o));
-  } catch (_) {}
-}
-// #endregion
-
 const NEWSAPI_COOLDOWN_LS = 'deite_newsapi_cooldown_until';
 /** Generic HTTP 429 without explicit NewsAPI quota flag. */
 const NEWSAPI_RATE_LIMIT_COOLDOWN_MS = 90 * 1000;
@@ -648,12 +633,6 @@ function applyNewsApiRateLimitSignal(jr) {
   const code = typeof jr?.data?.code === 'string' ? jr.data.code : '';
   const ms = code === 'rateLimited' ? NEWSAPI_QUOTA_COOLDOWN_MS : NEWSAPI_RATE_LIMIT_COOLDOWN_MS;
   setNewsApiCooldownUntil(Date.now() + ms);
-  logNewsApiAgentDebug({
-    message: 'newsapi_cooldown_set',
-    runId: 'post-fix',
-    hypothesisId: 'Q',
-    data: { http: jr?.status, apiCode: code, cooldownMs: ms },
-  });
 }
 
 /** True while NewsAPI is skipped after 429 / rateLimited (in-memory; longer when `rateLimited`). */
@@ -1021,14 +1000,6 @@ function getFirebaseHostingApiBases(options = {}) {
     try {
       const host = new URL(trimmedOrigin).hostname;
       if (!isFirebaseNewsHostingHostname(host)) {
-        // #region agent log
-        logNewsApiAgentDebug({
-          message: 'news_proxy_same_origin_only',
-          runId: 'cors-fix',
-          hypothesisId: 'C',
-          data: { host },
-        });
-        // #endregion
         return list;
       }
     } catch {
@@ -1058,7 +1029,6 @@ async function fetchNewsApiThroughProxy(endpoint, baseParams) {
   p.set('endpoint', endpoint);
 
   const timeoutMs = 12000;
-  let loggedFirst = false;
   for (const base of getFirebaseHostingApiBases({ forBrowserNewsProxy: true })) {
     try {
       const url = `${base}/api/news/${endpoint}?${p.toString()}`;
@@ -1066,61 +1036,11 @@ async function fetchNewsApiThroughProxy(endpoint, baseParams) {
       let data = jr?.data ?? null;
       const quotaLimited = data?.code === 'rateLimited';
       if (isNewsApiRateLimitedJsonResponse(jr) && !quotaLimited) {
-        // #region agent log
-        logNewsApiAgentDebug({
-          message: 'proxy_429_retry_wait',
-          runId: 'post-fix',
-          hypothesisId: 'R',
-          data: { endpoint },
-        });
-        // #endregion
         await new Promise((r) => setTimeout(r, NEWSAPI_429_RETRY_MS));
         jr = await fetchJsonMaybeNative(url, { timeoutMs });
         data = jr?.data ?? null;
       }
       applyNewsApiRateLimitSignal(jr);
-      // #region agent log
-      try {
-        const baseHost = new URL(base).hostname;
-        logNewsApiAgentDebug({
-          location: 'podTopicNewsShared:fetchNewsApiThroughProxy',
-          message: 'proxy_response',
-          runId: 'post-fix',
-          hypothesisId: 'H1',
-          data: {
-            baseHost,
-            endpoint,
-            http: jr?.status,
-            ok: jr?.ok,
-            apiStatus: data?.status,
-            apiCode: data?.code,
-            articleCount: Array.isArray(data?.articles) ? data.articles.length : null,
-          },
-        });
-      } catch {
-        logNewsApiAgentDebug({
-          location: 'podTopicNewsShared:fetchNewsApiThroughProxy',
-          message: 'proxy_response',
-          runId: 'post-fix',
-          hypothesisId: 'H1',
-          data: { baseHost: 'unparsed', endpoint, http: jr?.status, ok: jr?.ok },
-        });
-      }
-      // #endregion
-      if (!loggedFirst) {
-        loggedFirst = true;
-        logNewsApiAgentDebug({
-          message: 'proxy_first_base',
-          runId: 'diag',
-          hypothesisId: 'P',
-          data: {
-            http: jr?.status,
-            ok: jr?.ok,
-            apiStatus: data?.status,
-            apiCode: data?.code,
-          },
-        });
-      }
       if (
         jr?.ok &&
         data &&
@@ -1295,100 +1215,42 @@ export async function fetchNewsApiEverythingRaw(opts = {}) {
     return p;
   };
 
-  const runId = 'post-fix';
-
-  const attemptOnce = async (baseParams, fromWindowLabel) => {
+  const attemptOnce = async (baseParams) => {
     if (isNewsApiRateLimitedCooldown()) {
-      logNewsApiAgentDebug({
-        location: 'podTopicNewsShared:fetchNewsApiEverythingRaw',
-        message: 'skip_attempt_cooldown',
-        runId,
-        hypothesisId: 'Q',
-        data: { fromWindow: fromWindowLabel, qLen: q.length },
-      });
       return [];
     }
-    const dbg = {
-      hypothesisId: 'A',
-      runId,
-      fromWindow: fromWindowLabel,
-      qLen: q.length,
-      pageSize,
-      hasKey: !!getNewsApiKey(),
-      isNative: isNativeCapacitor(),
-    };
 
     const directEnv = await fetchNewsApiDirectFromEnv('everything', baseParams);
-    dbg.directEnvLen = Array.isArray(directEnv) ? directEnv.length : null;
     if (Array.isArray(directEnv) && directEnv.length > 0) {
-      logNewsApiAgentDebug({
-        location: 'podTopicNewsShared:fetchNewsApiEverythingRaw',
-        message: 'return_branch',
-        runId,
-        hypothesisId: 'G',
-        data: { ...dbg, path: 'directEnv', count: directEnv.length },
-      });
       return directEnv;
     }
 
     const direct = await fetchNewsApiThroughCloudFunction('everything', baseParams);
-    dbg.fnLen = Array.isArray(direct) ? direct.length : null;
     if (Array.isArray(direct) && direct.length > 0) {
-      logNewsApiAgentDebug({
-        location: 'podTopicNewsShared:fetchNewsApiEverythingRaw',
-        message: 'return_branch',
-        runId,
-        hypothesisId: 'G',
-        data: { ...dbg, path: 'cloudFunction', count: direct.length },
-      });
       return direct;
     }
 
     const proxied = await fetchNewsApiThroughProxy('everything', baseParams);
-    dbg.proxyLen = Array.isArray(proxied) ? proxied.length : null;
     if (Array.isArray(proxied) && proxied.length > 0) {
-      logNewsApiAgentDebug({
-        location: 'podTopicNewsShared:fetchNewsApiEverythingRaw',
-        message: 'return_branch',
-        runId,
-        hypothesisId: 'A',
-        data: { ...dbg, path: 'hostingProxy', count: proxied.length },
-      });
       return proxied;
     }
 
     const envKey = getNewsApiKey();
-    dbg.corsAttempted = !!(envKey && allowNewsCorsProxyFallback());
     if (envKey && allowNewsCorsProxyFallback()) {
       const viaCors = await fetchNewsApiThroughCorsProxies('everything', baseParams, envKey);
-      dbg.corsLen = Array.isArray(viaCors) ? viaCors.length : null;
       if (Array.isArray(viaCors) && viaCors.length > 0) {
-        logNewsApiAgentDebug({
-          location: 'podTopicNewsShared:fetchNewsApiEverythingRaw',
-          message: 'return_branch',
-          runId,
-          hypothesisId: 'B',
-          data: { ...dbg, path: 'corsProxy', count: viaCors.length },
-        });
         return viaCors;
       }
     }
 
-    logNewsApiAgentDebug({
-      location: 'podTopicNewsShared:fetchNewsApiEverythingRaw',
-      message: 'return_empty',
-      runId,
-      hypothesisId: 'A',
-      data: { ...dbg, path: 'none' },
-    });
     return [];
   };
 
   const pinnedFrom = opts.from != null && String(opts.from).trim() !== '';
   const firstFrom = pinnedFrom ? String(opts.from).trim() : newsApiDefaultFromISO(7);
-  let out = await attemptOnce(buildParams(firstFrom), pinnedFrom ? 'pinned' : '7d');
+  let out = await attemptOnce(buildParams(firstFrom));
   if (!out.length && !pinnedFrom) {
-    out = await attemptOnce(buildParams(newsApiDefaultFromISO(30)), '30d_retry');
+    out = await attemptOnce(buildParams(newsApiDefaultFromISO(30)));
   }
   return out;
 }
@@ -1436,13 +1298,6 @@ export async function fetchNewsApiTopHeadlinesRaw(opts = {}) {
   }
 
   if (isNewsApiRateLimitedCooldown()) {
-    logNewsApiAgentDebug({
-      location: 'podTopicNewsShared:fetchNewsApiTopHeadlinesRaw',
-      message: 'skip_top_headlines_cooldown',
-      runId: 'post-fix',
-      hypothesisId: 'Q',
-      data: { category, country, qLen: q.length },
-    });
     return [];
   }
 
