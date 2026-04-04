@@ -7,15 +7,94 @@ import {
   incrementHubNewsEngagement,
   recordHubNewsClick,
 } from '../services/hubNewsService';
+import { resolveArticleHeroImage } from '../lib/podTopicNewsShared';
+
+function isDisplayableImageSrc(u) {
+  const s = typeof u === 'string' ? u.trim() : '';
+  return Boolean(s && (/^https?:\/\//i.test(s) || s.startsWith('data:')));
+}
 
 /**
- * Horizontal swipe card — tap opens share suggestions; optional like when signed in.
+ * Horizontal swipe card — same image rules as Sports `SportsTrendingCard` (NewsAPI urlToImage + data URLs).
  */
-function HubTrendingCard({ item, idx, HUB, userId, engagementEnabled, navigate, returnTo }) {
+function HubTrendingCard({ item, idx, HUB, userId, engagementEnabled, navigate, returnTo, scrollRootRef }) {
   const rootRef = useRef(null);
+  const src = typeof item.image === 'string' ? item.image.trim() : '';
+  const showApiImg = Boolean(src && (/^https?:\/\//i.test(src) || src.startsWith('data:')));
+  const [heroFailed, setHeroFailed] = useState(false);
+  const [resolvedUrl, setResolvedUrl] = useState(null);
   const [liked, setLiked] = useState(() =>
     item.id ? sessionStorage.getItem(`hn_like_${item.id}`) === '1' : false
   );
+
+  useEffect(() => {
+    setHeroFailed(false);
+    setResolvedUrl(null);
+  }, [item.id, item.url, item.image]);
+
+  useEffect(() => {
+    if (!item.url) return;
+    if (showApiImg && !heroFailed) return;
+    if (resolvedUrl) return;
+
+    const el = rootRef.current;
+    let cancelled = false;
+
+    const applyResolved = (u) => {
+      const s = typeof u === 'string' ? u.trim() : '';
+      if (cancelled) return;
+      if (/^https?:\/\//i.test(s) && !/^data:/i.test(s)) {
+        setResolvedUrl(s);
+        setHeroFailed(false);
+      } else if (isDisplayableImageSrc(s)) {
+        setResolvedUrl(s);
+      }
+    };
+
+    const runResolve = () => {
+      resolveArticleHeroImage(String(item.url).trim(), {
+        publisherUrl: String(item.publisherUrl || '').trim(),
+      }).then(applyResolved);
+    };
+
+    if (idx < 8) {
+      runResolve();
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    if (!el || typeof IntersectionObserver === 'undefined') {
+      runResolve();
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const root = scrollRootRef?.current || null;
+    const io = new IntersectionObserver(
+      (entries) => {
+        const e = entries[0];
+        if (!e?.isIntersecting || cancelled) return;
+        io.disconnect();
+        runResolve();
+      },
+      {
+        root: root && root instanceof Element ? root : null,
+        rootMargin: '80px 200px 80px 200px',
+        threshold: 0.01,
+      }
+    );
+    io.observe(el);
+    return () => {
+      cancelled = true;
+      io.disconnect();
+    };
+  }, [item.url, item.publisherUrl, showApiImg, heroFailed, resolvedUrl, idx, scrollRootRef]);
+
+  const displaySrc =
+    showApiImg && !heroFailed ? src : resolvedUrl && isDisplayableImageSrc(resolvedUrl) ? resolvedUrl : '';
+  const showImg = Boolean(displaySrc);
 
   useEffect(() => {
     if (!engagementEnabled || !userId || !item.id) return;
@@ -54,19 +133,25 @@ function HubTrendingCard({ item, idx, HUB, userId, engagementEnabled, navigate, 
   const openShareSuggestions = useCallback(() => {
     if (!item.url) return;
     if (userId && item.category) recordHubNewsClick(userId, item.category);
+    const shareImage =
+      showImg && /^https?:\/\//i.test(displaySrc)
+        ? displaySrc
+        : /^https?:\/\//i.test(String(item.image || '').trim())
+          ? String(item.image).trim()
+          : null;
     navigate('/share-suggestions', {
       state: {
         newsArticle: {
           title: item.title,
           url: item.url,
           description: item.description || '',
-          image: item.image || null,
+          image: shareImage,
           source: item.source || '',
         },
         returnTo,
       },
     });
-  }, [item, userId, navigate, returnTo]);
+  }, [item, userId, navigate, returnTo, showImg, displaySrc]);
 
   const gradients = [
     'linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%)',
@@ -75,10 +160,6 @@ function HubTrendingCard({ item, idx, HUB, userId, engagementEnabled, navigate, 
     'linear-gradient(135deg,#1e3c72 0%,#2a5298 50%,#7e8ba3 100%)',
     'linear-gradient(135deg,#232526 0%,#414345 100%)',
   ];
-  const bg = item.image
-    ? `linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.15) 40%, transparent 60%), url(${item.image}) center/cover no-repeat`
-    : gradients[idx % gradients.length];
-
   return (
     <div
       ref={rootRef}
@@ -95,16 +176,38 @@ function HubTrendingCard({ item, idx, HUB, userId, engagementEnabled, navigate, 
         className="absolute inset-0 z-0 cursor-pointer border-0 bg-transparent p-0 text-left disabled:cursor-not-allowed disabled:opacity-60"
         aria-label={item.title}
       />
-      <div
-        className="absolute inset-0 z-[1] pointer-events-none"
-        style={{
-          background: bg,
-          backgroundSize: item.image ? 'cover' : 'auto',
-          backgroundPosition: item.image ? 'center' : undefined,
-        }}
-      />
+      {showImg ? (
+        <img
+          src={displaySrc}
+          alt=""
+          className="absolute inset-0 z-[1] h-full w-full object-cover pointer-events-none"
+          loading="lazy"
+          decoding="async"
+          referrerPolicy="no-referrer"
+          onError={() => {
+            setHeroFailed(true);
+            setResolvedUrl(null);
+          }}
+        />
+      ) : (
+        <div
+          className="absolute inset-0 z-[1] pointer-events-none"
+          style={{ background: gradients[idx % gradients.length] }}
+        />
+      )}
+      {showImg ? (
+        <div
+          className="absolute inset-0 z-[2] pointer-events-none"
+          style={{
+            background:
+              'linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.15) 40%, transparent 60%)',
+          }}
+        />
+      ) : (
+        <div className="absolute inset-0 z-[2] pointer-events-none bg-gradient-to-t from-black/88 via-black/25 to-transparent" />
+      )}
       {engagementEnabled && userId ? (
-        <div className="absolute top-2 right-2 z-[3] flex gap-1 pointer-events-auto">
+        <div className="absolute top-2 right-2 z-[4] flex gap-1 pointer-events-auto">
           <button
             type="button"
             onClick={onLike}
@@ -116,7 +219,7 @@ function HubTrendingCard({ item, idx, HUB, userId, engagementEnabled, navigate, 
           </button>
         </div>
       ) : null}
-      <div className="absolute inset-x-0 bottom-0 z-[2] p-3 pt-8 bg-gradient-to-t from-black via-black/80 to-transparent pointer-events-none">
+      <div className="absolute inset-x-0 bottom-0 z-[3] p-3 pt-8 bg-gradient-to-t from-black via-black/80 to-transparent pointer-events-none">
         <p className="text-sm font-semibold leading-snug line-clamp-4" style={{ color: '#fff' }}>
           {item.title}
         </p>
@@ -192,6 +295,7 @@ export default function HubTrendingFeed({ isDarkMode }) {
   const headerBorder = { borderBottom: `1px solid ${isDarkMode ? HUB.divider : '#E5E7EB'}` };
 
   const carouselItems = items.slice(0, 15);
+  const carouselScrollRef = useRef(null);
 
   return (
     <div className="rounded-2xl overflow-hidden mb-4" style={cardStyle}>
@@ -218,6 +322,7 @@ export default function HubTrendingFeed({ isDarkMode }) {
           </p>
         ) : (
           <div
+            ref={carouselScrollRef}
             className="flex gap-3 overflow-x-auto overflow-y-hidden pb-2 pr-4 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             style={{ WebkitOverflowScrolling: 'touch' }}
             role="region"
@@ -233,6 +338,7 @@ export default function HubTrendingFeed({ isDarkMode }) {
                 engagementEnabled={userId && !item.fromNewsApiFallback}
                 navigate={navigate}
                 returnTo={returnTo}
+                scrollRootRef={carouselScrollRef}
               />
             ))}
           </div>

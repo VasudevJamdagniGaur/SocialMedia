@@ -16,11 +16,11 @@ import {
   computeHubTrendingScore,
   effectiveHubRankScore,
   mixHubFeedSegments,
-  shuffleInPlace,
   HUB_DEFAULT_INTERESTS,
 } from '../lib/hubTrendingAlgorithms';
 import {
   canFetchLiveNews,
+  enrichNewsItemsWithOgImages,
   fetchNewsApiEverythingNormalized,
   fetchNewsApiTopHeadlinesNormalized,
   fetchLiveFromGoogleRssByQuery,
@@ -273,20 +273,63 @@ const INTEREST_QUERIES = {
 
 /** Google News RSS per interest (no NewsAPI quota) — fills the hub when API is rate-limited. */
 const HUB_RSS_BY_INTEREST = {
-  cricket: 'cricket OR IPL OR T20 when:7d',
-  football: 'soccer OR MLS OR Premier League when:7d',
-  f1: 'Formula 1 OR F1 when:7d',
-  chess: 'chess OR FIDE when:7d',
-  others: 'sports headlines when:7d',
+  cricket: 'cricket OR IPL OR T20 when:2d',
+  football: 'soccer OR MLS OR Premier League when:2d',
+  f1: 'Formula 1 OR F1 when:2d',
+  chess: 'chess OR FIDE when:2d',
+  others: 'sports headlines when:2d',
 };
 
-async function appendInterestGoogleNewsRssParallel(profile, cats, seen, unique, capUrls) {
+/**
+ * Syndicated Google News items often share the same story title with different URLs
+ * ("India IPL Cricket - smalltownpaper.com"). Dedupe on story key, not just URL.
+ */
+function hubFeedTitleDedupeKey(raw) {
+  let t = String(raw || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+  if (!t) return '';
+  t = t.replace(/\s*[-–—]\s*[^-–—]{1,120}$/, '').trim();
+  return t.slice(0, 140);
+}
+
+function tryAddHubFeedItem(seenUrl, seenTitleKey, list, row, partial) {
+  const url = String(row?.url || '').trim();
+  const title = String(row?.title || '').trim();
+  if (!url || !title) return false;
+  if (seenUrl.has(url)) return false;
+  const tk = hubFeedTitleDedupeKey(title);
+  if (tk && seenTitleKey.has(tk)) return false;
+  seenUrl.add(url);
+  if (tk) seenTitleKey.add(tk);
+  list.push({
+    id: hubNewsDocIdFromUrl(url),
+    title: row.title,
+    image: row.image || null,
+    description: row.description || '',
+    publisherUrl: row.publisherUrl || '',
+    publishedAt: row.publishedAt || null,
+    source: row.source || 'News',
+    url,
+    likes: 0,
+    shares: 0,
+    views: 0,
+    trendingScore: 0,
+    createdAt: null,
+    fromNewsApiFallback: true,
+    ...partial,
+  });
+  return true;
+}
+
+async function appendInterestGoogleNewsRssParallel(profile, cats, seenUrl, seenTitleKey, unique, capUrls) {
   const ctry = normalizeCountry(profile?.country || '');
   const sub = (cats || []).slice(0, 5).filter(Boolean);
   if (!sub.length) return;
   const pairs = sub.map((cat) => ({
     cat,
-    q: HUB_RSS_BY_INTEREST[cat] || `${cat} news when:7d`,
+    q: HUB_RSS_BY_INTEREST[cat] || `${cat} news when:2d`,
   }));
   const batches = await Promise.all(pairs.map((p) => fetchLiveFromGoogleRssByQuery(p.q)));
   for (let i = 0; i < batches.length; i++) {
@@ -294,23 +337,10 @@ async function appendInterestGoogleNewsRssParallel(profile, cats, seen, unique, 
     const cat = pairs[i].cat;
     for (const row of batches[i] || []) {
       if (unique.length >= capUrls) break;
-      if (!row.url || !row.title || seen.has(row.url)) continue;
-      seen.add(row.url);
-      unique.push({
-        id: hubNewsDocIdFromUrl(row.url),
-        title: row.title,
-        image: row.image || null,
-        source: row.source || 'News',
-        url: row.url,
+      tryAddHubFeedItem(seenUrl, seenTitleKey, unique, row, {
         category: cat,
         country: ctry || '',
         city: profile.city || '',
-        likes: 0,
-        shares: 0,
-        views: 0,
-        trendingScore: 0,
-        createdAt: null,
-        fromNewsApiFallback: true,
         feedTag: { label: 'For you', emoji: '📰' },
         mixBucket: 'trending',
       });
@@ -318,126 +348,154 @@ async function appendInterestGoogleNewsRssParallel(profile, cats, seen, unique, 
   }
 }
 
-async function appendHubGoogleNewsRss(profile, seen, unique) {
+async function appendHubGoogleNewsRss(profile, seenUrl, seenTitleKey, unique) {
   const ctry = normalizeCountry(profile?.country || '');
+  // Avoid "cricket" here for IN — interest RSS already covers cricket; was flooding duplicate syndicated IPL rows.
   const rssQ =
     String(ctry || '').toUpperCase() === 'IN'
-      ? 'India news OR cricket OR technology when:7d'
-      : 'world news headlines when:7d';
+      ? 'India news OR technology OR business when:2d'
+      : 'world news headlines when:2d';
   const rssItems = await fetchLiveFromGoogleRssByQuery(rssQ);
   for (const row of rssItems || []) {
-    if (!row.url || !row.title || seen.has(row.url)) continue;
-    seen.add(row.url);
-    unique.push({
-      id: hubNewsDocIdFromUrl(row.url),
-      title: row.title,
-      image: row.image || null,
-      source: row.source || 'News',
-      url: row.url,
+    tryAddHubFeedItem(seenUrl, seenTitleKey, unique, row, {
       category: 'others',
       country: ctry || '',
       city: profile.city || '',
-      likes: 0,
-      shares: 0,
-      views: 0,
-      trendingScore: 0,
-      createdAt: null,
-      fromNewsApiFallback: true,
       feedTag: { label: 'Headlines', emoji: '📰' },
       mixBucket: 'trending',
     });
   }
 }
 
+function hubItemPublishedTs(item) {
+  const t = item?.publishedAt;
+  if (!t || typeof t !== 'string') return 0;
+  const n = Date.parse(t);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function sortHubTrendingByRecency(items) {
+  items.sort((a, b) => hubItemPublishedTs(b) - hubItemPublishedTs(a));
+}
+
+/** Same notion as NewsAPI `urlToImage` — remote photo URL (not our SVG placeholder). */
+function hubItemHasRemotePhoto(it) {
+  const im = it?.image;
+  if (typeof im !== 'string') return false;
+  const s = im.trim();
+  return /^https?:\/\//i.test(s) && !/^data:/i.test(s);
+}
+
 /**
- * When Firestore `news` is blocked or empty: Google News RSS first (no quota), then NewsAPI to top up when allowed.
+ * Prefer NewsAPI first (same sources as Sports trending for photos), then RSS.
+ * Sports page images come from NewsAPI `urlToImage`, not OG — we merge sports top-headlines here
+ * and rank rows with remote photos first so the carousel matches Sports.
  */
 async function buildNewsApiFallbackFeed(profile, targetSize = 20) {
   const cats = (profile?.interests?.length ? profile.interests : HUB_DEFAULT_INTERESTS).slice(0, 5);
   if (!canFetchLiveNews()) return [];
 
-  const seen = new Set();
+  const seenUrl = new Set();
+  const seenTitleKey = new Set();
   const unique = [];
-  await appendHubGoogleNewsRss(profile, seen, unique);
-  await appendInterestGoogleNewsRssParallel(profile, cats, seen, unique, 80);
-
   const ctry = normalizeCountry(profile?.country || '');
   const skipNewsApi = isNewsApiRateLimitedCooldown();
 
-  if (skipNewsApi) {
-    shuffleInPlace(unique);
-    return unique.slice(0, targetSize);
-  }
-
-  if (unique.length < targetSize) {
-    for (const cat of cats) {
-      const qExtra = INTEREST_QUERIES[cat] || cat;
-      const rows = await fetchNewsApiEverythingNormalized({
-        q: qExtra,
-        pageSize: 6,
-        language: 'en',
-      });
-      for (const row of rows || []) {
-        if (!row.url || !row.title || seen.has(row.url)) continue;
-        seen.add(row.url);
-        unique.push({
-          id: hubNewsDocIdFromUrl(row.url),
-          title: row.title,
-          image: row.image || null,
-          source: row.source || 'News',
-          url: row.url,
-          category: cat,
-          country: profile.country || '',
-          city: profile.city || '',
-          likes: 0,
-          shares: 0,
-          views: 0,
-          trendingScore: 0,
-          createdAt: null,
-          fromNewsApiFallback: true,
-          feedTag: { label: 'For you', emoji: '📰' },
-          mixBucket: 'trending',
-        });
-        if (unique.length >= targetSize * 2) break;
-      }
-      if (unique.length >= targetSize * 2) break;
-    }
-  }
-
-  if (unique.length < targetSize) {
+  if (!skipNewsApi) {
     const code = ctry.length === 2 ? ctry.toLowerCase() : 'us';
-    const th = await fetchNewsApiTopHeadlinesNormalized({
-      country: code,
-      pageSize: Math.min(40, targetSize + 10),
-      language: 'en',
-    });
+
+    const sportsHeadlinesForHub = async () => {
+      let s = await fetchNewsApiTopHeadlinesNormalized({
+        category: 'sports',
+        country: code,
+        language: 'en',
+        pageSize: 22,
+      });
+      if (!s?.length) {
+        s = await fetchNewsApiTopHeadlinesNormalized({
+          category: 'sports',
+          country: code,
+          language: false,
+          pageSize: 22,
+        });
+      }
+      return s || [];
+    };
+
+    const [th, sportsTh, perCatRows] = await Promise.all([
+      fetchNewsApiTopHeadlinesNormalized({
+        country: code,
+        pageSize: Math.min(32, targetSize + 12),
+        language: 'en',
+      }),
+      sportsHeadlinesForHub(),
+      Promise.all(
+        cats.map((cat) =>
+          fetchNewsApiEverythingNormalized({
+            q: INTEREST_QUERIES[cat] || cat,
+            pageSize: 10,
+            language: 'en',
+          })
+        )
+      ),
+    ]);
+
     for (const row of th || []) {
-      if (!row.url || !row.title || seen.has(row.url)) continue;
-      seen.add(row.url);
-      unique.push({
-        id: hubNewsDocIdFromUrl(row.url),
-        title: row.title,
-        image: row.image || null,
-        source: row.source || 'News',
-        url: row.url,
+      tryAddHubFeedItem(seenUrl, seenTitleKey, unique, row, {
         category: 'others',
         country: ctry || '',
         city: profile.city || '',
-        likes: 0,
-        shares: 0,
-        views: 0,
-        trendingScore: 0,
-        createdAt: null,
-        fromNewsApiFallback: true,
         feedTag: { label: 'Trending', emoji: '🔥' },
         mixBucket: 'trending',
       });
-      if (unique.length >= targetSize * 2) break;
+    }
+
+    for (const row of sportsTh) {
+      tryAddHubFeedItem(seenUrl, seenTitleKey, unique, row, {
+        category: 'others',
+        country: ctry || '',
+        city: profile.city || '',
+        feedTag: { label: 'Sports', emoji: '⚽' },
+        mixBucket: 'trending',
+      });
+    }
+
+    for (let i = 0; i < cats.length; i++) {
+      const cat = cats[i];
+      for (const row of perCatRows[i] || []) {
+        tryAddHubFeedItem(seenUrl, seenTitleKey, unique, row, {
+          category: cat,
+          country: profile.country || '',
+          city: profile.city || '',
+          feedTag: { label: 'For you', emoji: '📰' },
+          mixBucket: 'trending',
+        });
+      }
     }
   }
 
-  shuffleInPlace(unique);
-  return unique.slice(0, targetSize);
+  await appendHubGoogleNewsRss(profile, seenUrl, seenTitleKey, unique);
+  await appendInterestGoogleNewsRssParallel(profile, cats, seenUrl, seenTitleKey, unique, 48);
+
+  sortHubTrendingByRecency(unique);
+  const withPhoto = unique.filter(hubItemHasRemotePhoto);
+  const rest = unique.filter((it) => !hubItemHasRemotePhoto(it));
+  const ranked = [...withPhoto, ...rest];
+  const top = ranked.slice(0, targetSize);
+
+  // Match Sports trending: prefer API thumbnails; OG only for rows still missing an image.
+  const enriched = await enrichNewsItemsWithOgImages(top, {
+    enableOgFallback: true,
+    maxResolve: targetSize,
+    concurrency: 4,
+  });
+
+  return enriched.map((it) => {
+    if (hubItemHasRemotePhoto(it)) return it;
+    const im = typeof it.image === 'string' ? it.image.trim() : '';
+    if (/^https?:\/\//i.test(im) && !/^data:/i.test(im)) return it;
+    return { ...it, image: null };
+  });
 }
 
 /**

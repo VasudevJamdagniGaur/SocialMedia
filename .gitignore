@@ -13,5 +13,6 @@ functions/.env
 # misc
 .DS_Store
 .vscode/
+.cursor/debug*.log
 node_modules
 node_modules
