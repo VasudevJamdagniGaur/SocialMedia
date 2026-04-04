@@ -7,6 +7,16 @@ const path = require('path');
  * CRA does not always populate process.env from .env before setupProxy runs.
  * Read project root .env so REACT_APP_NEWSAPI* is available for the local proxy.
  */
+/** Keys needed before CRA injects env into the client bundle (setupProxy runs in Node only). */
+const ENV_KEYS_FOR_PROXY = new Set([
+  'NEWSAPI_KEY',
+  'NEWSAPI_API_KEY',
+  'REACT_APP_NEWSAPI',
+  'REACT_APP_NEWS_API_KEY',
+  'REACT_APP_NEWSAPI_KEY',
+  'REACT_APP_NEWS_PROXY_ORIGIN',
+]);
+
 function loadRootEnvFile() {
   try {
     const envPath = path.join(__dirname, '..', '.env');
@@ -25,7 +35,9 @@ function loadRootEnvFile() {
       ) {
         val = val.slice(1, -1);
       }
-      if (key.startsWith('REACT_APP_')) process.env[key] = val;
+      if (ENV_KEYS_FOR_PROXY.has(key) || key.startsWith('REACT_APP_')) {
+        process.env[key] = val;
+      }
     }
   } catch {
     /* ignore */
@@ -76,11 +88,33 @@ function httpsGetJson(urlString) {
 
 function readLocalNewsApiKey() {
   return (
+    process.env.NEWSAPI_KEY ||
+    process.env.NEWSAPI_API_KEY ||
     process.env.REACT_APP_NEWSAPI ||
     process.env.REACT_APP_NEWS_API_KEY ||
     process.env.REACT_APP_NEWSAPI_KEY ||
     ''
   ).trim();
+}
+
+const DEBUG_LOG = path.join(__dirname, '..', '.cursor', 'debug-db6096.log');
+
+function appendProxyDebug(payload) {
+  try {
+    fs.appendFileSync(
+      DEBUG_LOG,
+      `${JSON.stringify({
+        sessionId: 'db6096',
+        timestamp: Date.now(),
+        location: 'setupProxy.js',
+        runId: 'localhost-proxy',
+        ...payload,
+      })}\n`,
+      'utf8'
+    );
+  } catch {
+    /* no .cursor dir or permissions */
+  }
 }
 
 /**
@@ -89,7 +123,20 @@ function readLocalNewsApiKey() {
  */
 function mountLocalNewsApiProxy(app) {
   const localKey = readLocalNewsApiKey();
-  if (!localKey) return;
+  if (!localKey) {
+    appendProxyDebug({
+      message: 'local_news_proxy_skipped',
+      hypothesisId: 'H1',
+      data: { reason: 'no_api_key_in_env' },
+    });
+    return;
+  }
+
+  appendProxyDebug({
+    message: 'local_news_proxy_active',
+    hypothesisId: 'H1',
+    data: { hasKey: true },
+  });
 
   const handler = (endpoint) => async (req, res, next) => {
     try {
@@ -101,9 +148,33 @@ function mountLocalNewsApiProxy(app) {
       }
       upstream.searchParams.set('apiKey', localKey);
       const { status, json } = await httpsGetJson(upstream.toString());
-      if (!json || typeof json !== 'object') return next();
+      if (!json || typeof json !== 'object') {
+        appendProxyDebug({
+          message: 'local_news_upstream_bad_json',
+          hypothesisId: 'H1',
+          data: { endpoint, status },
+        });
+        return next();
+      }
+      appendProxyDebug({
+        message: 'proxy_response',
+        hypothesisId: 'H1',
+        data: {
+          baseHost: 'localhost-dev-server',
+          endpoint,
+          http: status,
+          apiStatus: json.status,
+          apiCode: json.code,
+          articleCount: Array.isArray(json.articles) ? json.articles.length : null,
+        },
+      });
       res.status(status || 502).json(json);
-    } catch {
+    } catch (e) {
+      appendProxyDebug({
+        message: 'local_news_proxy_error',
+        hypothesisId: 'H1',
+        data: { endpoint, err: String(e && e.message ? e.message : e) },
+      });
       next();
     }
   };
@@ -129,6 +200,27 @@ module.exports = function setupProxy(app) {
       changeOrigin: true,
       secure: true,
       logLevel: 'silent',
+      onProxyReq(proxyReq) {
+        proxyReq.setHeader('Accept', 'application/json');
+      },
+      onError(err, req, res) {
+        appendProxyDebug({
+          message: 'hosting_proxy_error',
+          hypothesisId: 'H1',
+          data: { targetOrigin, err: err && err.message ? err.message : String(err) },
+        });
+        if (!res.headersSent) {
+          res.writeHead(502, { 'Content-Type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              status: 'error',
+              code: 'proxy_error',
+              message:
+                'Dev server could not reach hosting NewsAPI proxy. Set NEWSAPI_KEY or REACT_APP_NEWSAPI in .env for direct NewsAPI from localhost.',
+            })
+          );
+        }
+      },
     })
   );
 };
