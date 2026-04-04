@@ -19,6 +19,18 @@ import {
   prefetchSportsTopicRaw,
   refreshAllSportsExploreTopicCaches,
 } from '../lib/podSportsTopicPrefetchCache';
+import {
+  isLikelySportsTrendingItem,
+  classifyExploreSlugForTrending,
+  isIndiaNewsRegion,
+  isLikelyIndiaMetroCity,
+  LS_INDIA_CRICKET_BOOT,
+} from '../lib/sportsTrendingPersonalization';
+import { TOPIC_META, sportArticleMatchesTopic } from '../lib/podSportsTopicFeed';
+import {
+  getSportsPersonalizationWeights,
+  recordSportsSurfaceSeconds,
+} from '../services/sportsPersonalizationService';
 
 /** Engagement rank plus same-city boost (Firestore `trendingScore` is likes×3 + shares×5 + views). */
 function effectiveSportsTrendRank(item, userCityNorm) {
@@ -366,9 +378,78 @@ export default function PodSportsPage() {
           };
         });
 
+        merged = merged.filter(isLikelySportsTrendingItem);
+
+        if (merged.length < 6 && newsNormalized.length) {
+          const seen = new Set(merged.map((m) => m.url));
+          for (const n of newsNormalized) {
+            if (!isLikelySportsTrendingItem(n)) continue;
+            if (merged.length >= 12) break;
+            if (!n.url || seen.has(n.url)) continue;
+            seen.add(n.url);
+            merged.push({ ...n });
+          }
+        }
+
+        const eligibleIndiaCricket =
+          isIndiaNewsRegion(countryUpper) || isLikelyIndiaMetroCity(userCityNorm);
+        const indiaCricketBoot =
+          eligibleIndiaCricket &&
+          typeof localStorage !== 'undefined' &&
+          !localStorage.getItem(LS_INDIA_CRICKET_BOOT);
+
+        if (indiaCricketBoot) {
+          try {
+            const cricketRaw = await fetchNewsApiEverythingRaw({
+              q: TOPIC_META.cricket.q,
+              pageSize: 14,
+              language: 'en',
+            });
+            if (token === loadTokenRef.current && cricketRaw.length) {
+              const cricketNorm = normalizeArticles(cricketRaw)
+                .filter(
+                  (a) =>
+                    sportArticleMatchesTopic('cricket', a) && isLikelySportsTrendingItem(a)
+                )
+                .map((a) => ({
+                  title: a.title,
+                  source: a.source,
+                  url: a.url,
+                  image: a.image,
+                  publishedAt: a.publishedAt,
+                  description: a.description || '',
+                  city: null,
+                  firestoreId: docIdForTrendingUrl(a.url),
+                  trendingScore: 0,
+                  likes: 0,
+                  shares: 0,
+                  views: 0,
+                }));
+              const seen = new Set(merged.map((m) => m.url));
+              for (const c of cricketNorm) {
+                if (merged.length >= 14) break;
+                if (!c.url || seen.has(c.url)) continue;
+                seen.add(c.url);
+                merged.push(c);
+              }
+            }
+            try {
+              localStorage.setItem(LS_INDIA_CRICKET_BOOT, '1');
+            } catch {
+              /* ignore */
+            }
+          } catch {
+            /* ignore cricket merge */
+          }
+        }
+
+        const weights = await getSportsPersonalizationWeights(user?.uid || null);
+
         merged.sort((a, b) => {
-          const ra = effectiveSportsTrendRank(a, userCityNorm);
-          const rb = effectiveSportsTrendRank(b, userCityNorm);
+          const clsA = classifyExploreSlugForTrending(a);
+          const clsB = classifyExploreSlugForTrending(b);
+          const ra = effectiveSportsTrendRank(a, userCityNorm) + (weights[clsA] || 0);
+          const rb = effectiveSportsTrendRank(b, userCityNorm) + (weights[clsB] || 0);
           if (rb !== ra) return rb - ra;
           const ta = a.publishedAt ? Date.parse(a.publishedAt) : 0;
           const tb = b.publishedAt ? Date.parse(b.publishedAt) : 0;
@@ -407,6 +488,23 @@ export default function PodSportsPage() {
       loadTokenRef.current += 1;
     };
   }, [loadSportsNews]);
+
+  useEffect(() => {
+    let start = Date.now();
+    const flush = () => {
+      const sec = Math.min(900, Math.round((Date.now() - start) / 1000));
+      start = Date.now();
+      if (sec >= 4) recordSportsSurfaceSeconds(sec);
+    };
+    const onVis = () => {
+      if (document.hidden) flush();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      flush();
+    };
+  }, []);
 
   const HUB = {
     bg: HUB_COLORS.bg,

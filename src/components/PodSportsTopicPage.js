@@ -16,6 +16,7 @@ import {
   setSportsTopicFeedCache,
   invalidateSportsTopicFeedCache,
 } from '../lib/podSportsTopicPrefetchCache';
+import { recordSportsExploreDwell } from '../services/sportsPersonalizationService';
 
 export default function PodSportsTopicPage() {
   const { topicId } = useParams();
@@ -155,6 +156,32 @@ export default function PodSportsTopicPage() {
 
   useEffect(() => {
     loadNews({ initialLoad: true, forceRefresh: false });
+  }, [topicId]);
+
+  useEffect(() => {
+    if (!topicId || !TOPIC_META[topicId]) return;
+    const key = `pod_sports_explore_visit_${topicId}`;
+    if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(key)) return;
+    if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(key, '1');
+    void recordSportsExploreDwell(topicId, 0, 1);
+  }, [topicId]);
+
+  useEffect(() => {
+    if (!topicId || !TOPIC_META[topicId]) return;
+    let start = Date.now();
+    const flush = () => {
+      const sec = Math.min(900, Math.round((Date.now() - start) / 1000));
+      start = Date.now();
+      if (sec >= 3) void recordSportsExploreDwell(topicId, sec, 0);
+    };
+    const onVis = () => {
+      if (document.hidden) flush();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      flush();
+    };
   }, [topicId]);
 
   const HUB = {

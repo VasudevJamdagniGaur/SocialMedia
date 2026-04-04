@@ -2595,6 +2595,73 @@ class FirestoreService {
       return { success: false, error: error?.message || String(error) };
     }
   }
+
+  async getSportsExploreStats(uid) {
+    const id = String(uid || '').trim();
+    if (!id) return {};
+    try {
+      const ref = doc(this.db, 'users', id);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) return {};
+      const raw = snap.data()?.sportsExploreStats;
+      return raw && typeof raw === 'object' ? raw : {};
+    } catch (error) {
+      console.warn('getSportsExploreStats:', error?.message || error);
+      return {};
+    }
+  }
+
+  /**
+   * Merge per-topic dwell (seconds) and visit counts for Sports Explore personalization.
+   */
+  async mergeSportsExploreStats(uid, slug, { secondsDelta = 0, visitInc = 0 } = {}) {
+    const id = String(uid || '').trim();
+    const key = String(slug || '').trim();
+    if (!id || !key) return { success: false };
+    const sd = Math.min(86400, Math.max(0, Math.round(Number(secondsDelta) || 0)));
+    const vi = Math.min(200, Math.max(0, Math.round(Number(visitInc) || 0)));
+    if (sd === 0 && vi === 0) return { success: true };
+    try {
+      const ref = doc(this.db, 'users', id);
+      await runTransaction(this.db, async (tx) => {
+        const snap = await tx.get(ref);
+        const prev = snap.exists() ? snap.data() : {};
+        const stats = { ...(prev.sportsExploreStats && typeof prev.sportsExploreStats === 'object' ? prev.sportsExploreStats : {}) };
+        const cur = stats[key] || { seconds: 0, visits: 0 };
+        const nextSec = Math.min(7 * 86400, (Number(cur.seconds) || 0) + sd);
+        const nextVis = (Number(cur.visits) || 0) + vi;
+        stats[key] = {
+          seconds: nextSec,
+          visits: nextVis,
+          updatedAt: serverTimestamp(),
+        };
+        tx.set(ref, { sportsExploreStats: stats }, { merge: true });
+      });
+      return { success: true };
+    } catch (error) {
+      console.warn('mergeSportsExploreStats:', error?.message || error);
+      return { success: false, error: error?.message || String(error) };
+    }
+  }
+
+  async mergeSportsSurfaceSeconds(uid, deltaSec) {
+    const id = String(uid || '').trim();
+    const d = Math.min(7200, Math.max(0, Math.round(Number(deltaSec) || 0)));
+    if (!id || d < 1) return { success: false };
+    try {
+      const ref = doc(this.db, 'users', id);
+      await runTransaction(this.db, async (tx) => {
+        const snap = await tx.get(ref);
+        const prev = snap.exists() ? snap.data() : {};
+        const cur = Number(prev.sportsSurfaceSeconds) || 0;
+        tx.set(ref, { sportsSurfaceSeconds: cur + d }, { merge: true });
+      });
+      return { success: true };
+    } catch (error) {
+      console.warn('mergeSportsSurfaceSeconds:', error?.message || error);
+      return { success: false, error: error?.message || String(error) };
+    }
+  }
 }
 
 export default new FirestoreService();
