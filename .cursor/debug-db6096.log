@@ -24,3 +24,6 @@
 {"sessionId":"db6096","timestamp":1775261887634,"runId":"post-fix","location":"podTopicNewsShared:fetchNewsApiTopHeadlinesRaw","message":"skip_top_headlines_cooldown","hypothesisId":"Q","data":{"category":"","country":"in","qLen":7}}
 {"sessionId":"db6096","timestamp":1775261887636,"runId":"post-fix","location":"podSportsTopicFeed:loadNewsApiSportsRows","message":"after_everything_and_filter","hypothesisId":"F","data":{"topicId":"cricket","fetchedLen":0,"topHeadlinesLen":0,"onTopicLen":0}}
 {"sessionId":"db6096","timestamp":1775261887638,"runId":"post-fix","location":"podSportsTopicFeed:fetchSportsTopicRawItems","message":"sports_merge_feed","hypothesisId":"T","data":{"topicId":"cricket","cooldown":false,"apiLen":0,"rssLen":10,"mergedLen":10}}
+{"sessionId":"db6096","timestamp":1775303459539,"runId":"post-fix","location":"hubNewsService:buildNewsApiFallbackFeed","message":"rss_seeded","hypothesisId":"S","data":{"itemCountAfterRss":20}}
+{"sessionId":"db6096","timestamp":1775303459540,"runId":"post-fix","location":"hubNewsService:fetchHubPersonalizedFeed","message":"after_live_fetch","hypothesisId":"H","data":{"liveLen":20}}
+{"sessionId":"db6096","timestamp":1775303459540,"runId":"post-fix","location":"hubNewsService:fetchHubPersonalizedFeed","message":"hub_using_live_not_firestore","hypothesisId":"H","data":{"count":20}}
