@@ -4,35 +4,22 @@ import { ArrowLeft, Sparkles, ChevronRight, Heart, Flame } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { onAuthStateChange, getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
-import {
-  canFetchLiveNews,
-  fetchNewsApiTopHeadlinesRaw,
-  fetchNewsApiEverythingRaw,
-  normalizeArticles,
-  resolveUserNewsRegionForNewsApi,
-  resolveUserCityFromIp,
-  enrichNewsItemsWithOgImages,
-  googleNewsSearchUrl,
-} from '../lib/podTopicNewsShared';
+import { googleNewsSearchUrl } from '../lib/podTopicNewsShared';
 import {
   prefetchAllSportsExploreTopicsNow,
   prefetchSportsTopicRaw,
-  refreshAllSportsExploreTopicCaches,
 } from '../lib/podSportsTopicPrefetchCache';
 import {
   isLikelySportsTrendingItem,
   classifyExploreSlugForTrending,
-  isIndiaNewsRegion,
-  isLikelyIndiaMetroCity,
-  LS_INDIA_CRICKET_BOOT,
 } from '../lib/sportsTrendingPersonalization';
-import { TOPIC_META, sportArticleMatchesTopic } from '../lib/podSportsTopicFeed';
 import {
   getSportsPersonalizationWeights,
   recordSportsSurfaceSeconds,
 } from '../services/sportsPersonalizationService';
 import { recordHubVerticalDwell } from '../services/hubVerticalPersonalizationService';
 import { recordHubNewsClick } from '../services/hubNewsService';
+import { getNews } from '../services/cachedNewsService';
 
 /** Engagement rank plus same-city boost (Firestore `trendingScore` is likes×3 + shares×5 + views). */
 function effectiveSportsTrendRank(item, userCityNorm) {
@@ -40,10 +27,6 @@ function effectiveSportsTrendRank(item, userCityNorm) {
   const ic = String(item.city || '').trim().toLowerCase();
   const boost = userCityNorm && ic && ic === userCityNorm ? 50 : 0;
   return base + boost;
-}
-
-function docIdForTrendingUrl(url) {
-  return firestoreService.sportsTrendingDocIdFromUrl(url);
 }
 
 /**
@@ -238,17 +221,18 @@ export default function PodSportsPage() {
     recordHubVerticalDwell('sports', 0, 1);
   }, []);
 
-  const loadSportsNews = useCallback(
-    async (opts = {}) => {
-      const skipLoadingBar = !!opts.skipLoadingBar;
-      const token = ++loadTokenRef.current;
+  const loadSportsNews = useCallback(async (opts = {}) => {
+    const skipLoadingBar = !!opts.skipLoadingBar;
+    const token = ++loadTokenRef.current;
 
-      if (!skipLoadingBar) {
-        setIsLoadingSportsNews(true);
-        setSportsNewsError('');
-      }
+    if (!skipLoadingBar) {
+      setIsLoadingSportsNews(true);
+      setSportsNewsError('');
+    }
 
-      const fallbackTrending = [
+    setTrendingRegionLabel('Server-cached feed');
+
+    const fallbackTrending = [
       {
         title: 'Global football season enters decisive phase',
         source: 'Sports Desk',
@@ -275,236 +259,65 @@ export default function PodSportsPage() {
       },
     ];
 
-      try {
-        const { code: country, label: regionLabel, city: cityFromRegion } =
-          await resolveUserNewsRegionForNewsApi();
-        if (token !== loadTokenRef.current) return;
-        let userCityRaw = typeof cityFromRegion === 'string' ? cityFromRegion.trim() : '';
-        if (!userCityRaw) {
-          userCityRaw = await resolveUserCityFromIp();
-        }
-        if (token !== loadTokenRef.current) return;
-        const userCityNorm = userCityRaw.trim().toLowerCase();
-        const countryUpper = String(country || 'us').toUpperCase().slice(0, 2);
-        setTrendingRegionLabel(regionLabel);
-
-        const user = getCurrentUser();
-
-        if (!canFetchLiveNews()) {
-          const rows = await enrichNewsItemsWithOgImages(fallbackTrending, {
-            enableOgFallback: true,
-            maxResolve: 4,
-          });
-          if (token !== loadTokenRef.current) return;
-          setSportsTrending(rows);
-          setSportsNewsError(
-            'Backend NewsAPI is unavailable. Set NEWSAPI_KEY on Firebase Functions (`newsApi`) and deploy.'
-          );
-          return;
-        }
-
-        let articles = await fetchNewsApiTopHeadlinesRaw({
-          category: 'sports',
-          country,
-          language: 'en',
-          pageSize: 20,
-        });
-        if (!articles.length) {
-          articles = await fetchNewsApiTopHeadlinesRaw({
-            category: 'sports',
-            country,
-            language: false,
-            pageSize: 20,
-          });
-        }
-        if (!articles.length) {
-          articles = await fetchNewsApiEverythingRaw({
-            q: 'sports',
-            pageSize: 20,
-            language: 'en',
-          });
-        }
-        if (token !== loadTokenRef.current) return;
-
-        const newsNormalized = normalizeArticles(articles).map((a) => ({
-          title: a.title,
-          source: a.source,
-          url: a.url,
-          image: a.image,
-          publishedAt: a.publishedAt,
-          city: null,
-          firestoreId: docIdForTrendingUrl(a.url),
-          trendingScore: 0,
-          likes: 0,
-          shares: 0,
-          views: 0,
-        }));
-
-        let merged = [];
-
-        if (user) {
-          const hydrateSportsTrending = async () => {
-            const batch = newsNormalized.slice(0, 7);
-            await Promise.all(
-              batch.map((n) =>
-                firestoreService.ensureSportsTrendingNewsItem({
-                  title: n.title,
-                  source: n.source,
-                  url: n.url,
-                  image: n.image,
-                  category: 'sports',
-                  country: countryUpper,
-                  city: userCityRaw || undefined,
-                })
-              )
-            );
-            return firestoreService.getSportsTrendingByCountry(countryUpper, 25);
-          };
-          try {
-            const fb = await Promise.race([
-              hydrateSportsTrending(),
-              new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('sports_trending_hydrate_timeout')), 12000)
-              ),
-            ]);
-            if (fb?.success && fb.items?.length) {
-              merged = fb.items;
-            }
-          } catch {
-            merged = [];
-          }
-        }
-
-        if (merged.length < 4 && newsNormalized.length) {
-          const seen = new Set(merged.map((m) => m.url));
-          for (const n of newsNormalized) {
-            if (merged.length >= 10) break;
-            if (seen.has(n.url)) continue;
-            seen.add(n.url);
-            merged.push({ ...n });
-          }
-        }
-
-        if (!merged.length && newsNormalized.length) {
-          merged = [...newsNormalized];
-        }
-
-        const newsByUrl = new Map(newsNormalized.map((n) => [n.url, n]));
-        merged = merged.map((row) => {
-          const api = newsByUrl.get(row.url);
-          if (!api) return row;
-          const image = row.image || api.image || null;
-          return {
-            ...row,
-            image,
-            publishedAt: row.publishedAt || api.publishedAt,
-            description: row.description || api.description || '',
-          };
-        });
-
-        merged = merged.filter(isLikelySportsTrendingItem);
-
-        if (merged.length < 6 && newsNormalized.length) {
-          const seen = new Set(merged.map((m) => m.url));
-          for (const n of newsNormalized) {
-            if (!isLikelySportsTrendingItem(n)) continue;
-            if (merged.length >= 12) break;
-            if (!n.url || seen.has(n.url)) continue;
-            seen.add(n.url);
-            merged.push({ ...n });
-          }
-        }
-
-        const eligibleIndiaCricket =
-          isIndiaNewsRegion(countryUpper) || isLikelyIndiaMetroCity(userCityNorm);
-        const indiaCricketBoot =
-          eligibleIndiaCricket &&
-          typeof localStorage !== 'undefined' &&
-          !localStorage.getItem(LS_INDIA_CRICKET_BOOT);
-
-        if (indiaCricketBoot) {
-          try {
-            const cricketRaw = await fetchNewsApiEverythingRaw({
-              q: TOPIC_META.cricket.q,
-              pageSize: 14,
-              language: 'en',
-            });
-            if (token === loadTokenRef.current && cricketRaw.length) {
-              const cricketNorm = normalizeArticles(cricketRaw)
-                .filter(
-                  (a) =>
-                    sportArticleMatchesTopic('cricket', a) && isLikelySportsTrendingItem(a)
-                )
-                .map((a) => ({
-                  title: a.title,
-                  source: a.source,
-                  url: a.url,
-                  image: a.image,
-                  publishedAt: a.publishedAt,
-                  description: a.description || '',
-                  city: null,
-                  firestoreId: docIdForTrendingUrl(a.url),
-                  trendingScore: 0,
-                  likes: 0,
-                  shares: 0,
-                  views: 0,
-                }));
-              const seen = new Set(merged.map((m) => m.url));
-              for (const c of cricketNorm) {
-                if (merged.length >= 14) break;
-                if (!c.url || seen.has(c.url)) continue;
-                seen.add(c.url);
-                merged.push(c);
-              }
-            }
-            try {
-              localStorage.setItem(LS_INDIA_CRICKET_BOOT, '1');
-            } catch {
-              /* ignore */
-            }
-          } catch {
-            /* ignore cricket merge */
-          }
-        }
-
-        const weights = await getSportsPersonalizationWeights(user?.uid || null);
-
-        merged.sort((a, b) => {
-          const clsA = classifyExploreSlugForTrending(a);
-          const clsB = classifyExploreSlugForTrending(b);
-          const ra = effectiveSportsTrendRank(a, userCityNorm) + (weights[clsA] || 0);
-          const rb = effectiveSportsTrendRank(b, userCityNorm) + (weights[clsB] || 0);
-          if (rb !== ra) return rb - ra;
-          const ta = a.publishedAt ? Date.parse(a.publishedAt) : 0;
-          const tb = b.publishedAt ? Date.parse(b.publishedAt) : 0;
-          if (tb !== ta) return tb - ta;
-          return (b.createdAtMs || 0) - (a.createdAtMs || 0);
-        });
-
-        if (token !== loadTokenRef.current) return;
-        const baseRows = merged.length ? merged.slice(0, 10) : fallbackTrending;
-        const rows = await enrichNewsItemsWithOgImages(baseRows, {
-          enableOgFallback: false,
-        });
-        if (token !== loadTokenRef.current) return;
-        setSportsTrending(rows);
-      } catch {
-        if (token !== loadTokenRef.current) return;
-        setTrendingRegionLabel('');
-        const rows = await enrichNewsItemsWithOgImages(fallbackTrending, {
-          enableOgFallback: false,
-        });
-        if (token !== loadTokenRef.current) return;
-        setSportsTrending(rows);
-        setSportsNewsError('Could not load live headlines, showing top picks.');
-      } finally {
-        if (token === loadTokenRef.current && !skipLoadingBar) {
-          setIsLoadingSportsNews(false);
-        }
+    try {
+      const { success, articles, error } = await getNews('sports');
+      if (token !== loadTokenRef.current) return;
+      if (!success) {
+        setSportsTrending(fallbackTrending);
+        setSportsNewsError(error || 'Could not read cached sports headlines from Firestore.');
+        return;
       }
-    },
-    [userId]
-  );
+
+      const user = getCurrentUser();
+      const userCityNorm = '';
+
+      let merged = articles.map((a) => ({
+        title: a.title,
+        source: a.source,
+        url: a.url,
+        image: a.image,
+        publishedAt: a.publishedAt,
+        description: a.description || '',
+        city: null,
+        firestoreId: null,
+        trendingScore: 0,
+        likes: 0,
+        shares: 0,
+        views: 0,
+      }));
+
+      const filtered = merged.filter(isLikelySportsTrendingItem);
+      if (filtered.length >= 4) merged = filtered;
+
+      const weights = await getSportsPersonalizationWeights(user?.uid || null);
+      merged.sort((a, b) => {
+        const clsA = classifyExploreSlugForTrending(a);
+        const clsB = classifyExploreSlugForTrending(b);
+        const ra = effectiveSportsTrendRank(a, userCityNorm) + (weights[clsA] || 0);
+        const rb = effectiveSportsTrendRank(b, userCityNorm) + (weights[clsB] || 0);
+        if (rb !== ra) return rb - ra;
+        const ta = a.publishedAt ? Date.parse(a.publishedAt) : 0;
+        const tb = b.publishedAt ? Date.parse(b.publishedAt) : 0;
+        if (tb !== ta) return tb - ta;
+        return (b.createdAtMs || 0) - (a.createdAtMs || 0);
+      });
+
+      if (token !== loadTokenRef.current) return;
+      const baseRows = merged.length ? merged.slice(0, 10) : fallbackTrending;
+      setSportsTrending(baseRows);
+      setSportsNewsError(
+        merged.length ? '' : 'No cached sports headlines yet. Deploy newsIngestScheduler and set API keys on Functions.'
+      );
+    } catch (e) {
+      if (token !== loadTokenRef.current) return;
+      setSportsTrending(fallbackTrending);
+      setSportsNewsError(e?.message || 'Could not load cached headlines.');
+    } finally {
+      if (token === loadTokenRef.current && !skipLoadingBar) {
+        setIsLoadingSportsNews(false);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     loadSportsNews();
@@ -554,7 +367,6 @@ export default function PodSportsPage() {
     setRefreshing(true);
     setPullProgress(0);
     try {
-      await refreshAllSportsExploreTopicCaches();
       await loadSportsNews({ skipLoadingBar: true });
     } finally {
       setRefreshing(false);
@@ -657,9 +469,7 @@ export default function PodSportsPage() {
             <div className="py-3 pl-4">
               {isLoadingSportsNews ? (
                 <p className="text-sm pr-4" style={{ color: HUB.textSecondary }}>
-                  {trendingRegionLabel
-                    ? `Loading what's trending in ${trendingRegionLabel}...`
-                    : 'Loading trending sports news…'}
+                  Loading cached sports headlines…
                 </p>
               ) : (
                 <>

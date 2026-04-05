@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
-import { canFetchLiveNews, fetchNewsApiTopHeadlinesRaw, normalizeArticles } from '../lib/podTopicNewsShared';
 import { prefetchExploreTopicRaw } from '../lib/podExploreTopicPrefetchCache';
+import { getNews } from '../services/cachedNewsService';
 import { recordHubVerticalDwell } from '../services/hubVerticalPersonalizationService';
 
 export default function PodAiTechPage() {
@@ -53,29 +53,27 @@ export default function PodAiTechPage() {
       setIsLoading(true);
       setNewsError('');
       try {
-        if (!canFetchLiveNews()) {
+        const { success, articles, error } = await getNews('ai_tech');
+        if (cancelled) return;
+        if (!success) {
           setTrending(fallbackTrending);
-          setNewsError(
-            'Backend NewsAPI is unavailable. Set NEWSAPI_KEY on Firebase Functions (`newsApi`) to load live headlines.'
-          );
+          setNewsError(error || 'Could not read cached headlines from Firestore.');
           return;
         }
-        const articles = await fetchNewsApiTopHeadlinesRaw({
-          category: 'technology',
-          language: 'en',
-          pageSize: 10,
-        });
-        const normalized = normalizeArticles(articles).map((a) => ({
+        const normalized = articles.map((a) => ({
           title: a.title,
           source: a.source,
           url: a.url,
           image: a.image,
         }));
-        if (!cancelled) setTrending(normalized.length ? normalized : fallbackTrending);
+        setTrending(normalized.length ? normalized : fallbackTrending);
+        if (!normalized.length) {
+          setNewsError('No cached AI & tech headlines yet. Deploy newsIngestScheduler on Functions.');
+        }
       } catch {
         if (!cancelled) {
           setTrending(fallbackTrending);
-          setNewsError('Could not load live headlines, showing top picks.');
+          setNewsError('Could not load cached headlines, showing top picks.');
         }
       } finally {
         if (!cancelled) setIsLoading(false);

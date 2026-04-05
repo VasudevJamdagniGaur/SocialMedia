@@ -2,11 +2,8 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Flame, Heart } from 'lucide-react';
 import { getCurrentUser, onAuthStateChange } from '../services/authService';
-import {
-  fetchHubPersonalizedFeed,
-  incrementHubNewsEngagement,
-  recordHubNewsClick,
-} from '../services/hubNewsService';
+import { incrementHubNewsEngagement, recordHubNewsClick } from '../services/hubNewsService';
+import { getHubTrendingMergedFromFirestore } from '../services/cachedNewsService';
 import { resolveArticleHeroImage } from '../lib/podTopicNewsShared';
 
 function isDisplayableImageSrc(u) {
@@ -34,6 +31,7 @@ function HubTrendingCard({ item, idx, HUB, userId, engagementEnabled, navigate, 
 
   useEffect(() => {
     if (!item.url) return;
+    if (item.fromNewsApiFallback) return;
     if (showApiImg && !heroFailed) return;
     if (resolvedUrl) return;
 
@@ -239,7 +237,6 @@ export default function HubTrendingFeed({ isDarkMode }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [insightLines, setInsightLines] = useState([]);
   const loadGenRef = useRef(0);
 
   useEffect(() => {
@@ -248,32 +245,22 @@ export default function HubTrendingFeed({ isDarkMode }) {
   }, []);
 
   const load = useCallback(async () => {
-    const uid = getCurrentUser()?.uid;
-    if (!uid) {
-      setItems([]);
-      setInsightLines([]);
-      setLoading(false);
-      setError('');
-      return;
-    }
     const gen = ++loadGenRef.current;
     setLoading(true);
     setError('');
+    setInsightLines([]);
     try {
-      const res = await fetchHubPersonalizedFeed(uid, { targetSize: 20 });
+      const res = await getHubTrendingMergedFromFirestore();
       if (gen !== loadGenRef.current) return;
       if (!res.success) {
         setItems([]);
-        setInsightLines([]);
         setError(res.error || 'Could not load feed');
         return;
       }
       setItems(res.items || []);
-      setInsightLines(Array.isArray(res.insights?.lines) ? res.insights.lines : []);
     } catch (e) {
       if (gen !== loadGenRef.current) return;
       setItems([]);
-      setInsightLines([]);
       setError(e?.message || 'Could not load feed');
     } finally {
       if (gen !== loadGenRef.current) return;
@@ -283,7 +270,7 @@ export default function HubTrendingFeed({ isDarkMode }) {
 
   useEffect(() => {
     load();
-  }, [userId, load]);
+  }, [load]);
 
   const HUB = {
     bg: '#0F0F0F',
@@ -310,32 +297,16 @@ export default function HubTrendingFeed({ isDarkMode }) {
         </div>
         <div className="flex-1 min-w-0">
           <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Trending</h2>
-          {userId && insightLines.length > 0 ? (
-            <ul className="mt-2 space-y-1 list-none p-0 m-0">
-              {insightLines.map((line, i) => (
-                <li
-                  key={i}
-                  className={`text-[11px] leading-snug ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}
-                >
-                  {line}
-                </li>
-              ))}
-            </ul>
-          ) : null}
         </div>
       </div>
       <div className="py-3 pl-4">
-        {!userId ? (
-          <p className={`text-sm pr-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-            Trending mixes what people engage with near you—not just what&apos;s newest. Sign in to see your feed.
-          </p>
-        ) : loading ? (
+        {loading ? (
           <p className={`text-sm pr-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Loading your feed…</p>
         ) : error ? (
           <p className={`text-sm pr-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{error}</p>
         ) : items.length === 0 ? (
           <p className={`text-sm pr-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-            No stories yet. Open Sports or add a News API key—new articles will appear here for your region.
+            No headlines yet. The server refreshes categories on a schedule—deploy the `newsIngestScheduler` function and set API keys on Firebase Functions.
           </p>
         ) : (
           <div

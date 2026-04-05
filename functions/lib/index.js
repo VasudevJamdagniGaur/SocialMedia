@@ -23,7 +23,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.linkedInApi = exports.newsApi = exports.generatePostEmbedding = void 0;
+exports.linkedInApi = exports.newsIngestScheduler = exports.newsApi = exports.generatePostEmbedding = void 0;
 const path = __importStar(require("path"));
 const dotenv_1 = require("dotenv");
 // Load functions/.env so LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET are available (local emulator).
@@ -788,6 +788,8 @@ async function handleArticleExtract(req, res) {
 }
 var newsApi_1 = require("./newsApi");
 Object.defineProperty(exports, "newsApi", { enumerable: true, get: function () { return newsApi_1.newsApi; } });
+var newsIngest_1 = require("./newsIngest");
+Object.defineProperty(exports, "newsIngestScheduler", { enumerable: true, get: function () { return newsIngest_1.newsIngestScheduler; } });
 exports.linkedInApi = (0, https_1.onRequest)({ cors: true }, async (req, res) => {
     const path = (req.url || '').split('?')[0];
     if (path.endsWith('/exchange')) {

@@ -873,6 +873,7 @@ async function handleArticleExtract(
 }
 
 export { newsApi } from './newsApi';
+export { newsIngestScheduler } from './newsIngest';
 
 export const linkedInApi = onRequest(
   { cors: true },
