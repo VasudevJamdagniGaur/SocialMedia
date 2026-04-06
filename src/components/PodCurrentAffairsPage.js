@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { prefetchExploreTopicRaw } from '../lib/podExploreTopicPrefetchCache';
-import { getNews } from '../services/cachedNewsService';
+import { getNewsWithLiveFallback } from '../services/cachedNewsService';
 import { recordHubVerticalDwell } from '../services/hubVerticalPersonalizationService';
 
 export default function PodCurrentAffairsPage() {
@@ -52,11 +52,11 @@ export default function PodCurrentAffairsPage() {
       setIsLoadingNews(true);
       setNewsError('');
       try {
-        const { success, articles, error } = await getNews('current_affairs');
+        const { success, articles, error, fallbackError } = await getNewsWithLiveFallback('current_affairs');
         if (cancelled) return;
         if (!success) {
           setTrending(fallbackTrending);
-          setNewsError(error || 'Could not read cached headlines from Firestore.');
+          setNewsError(fallbackError || error || 'Could not load headlines.');
           return;
         }
         const normalized = articles.map((a) => ({
@@ -67,7 +67,10 @@ export default function PodCurrentAffairsPage() {
         }));
         setTrending(normalized.length ? normalized : fallbackTrending);
         if (!normalized.length) {
-          setNewsError('No cached current affairs headlines yet. Deploy newsIngestScheduler on Functions.');
+          setNewsError(
+            fallbackError ||
+              'No current affairs headlines. Set REACT_APP_NEWSAPI in .env or deploy newsIngestScheduler.'
+          );
         }
       } catch {
         if (!cancelled) {

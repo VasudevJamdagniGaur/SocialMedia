@@ -248,7 +248,6 @@ export default function HubTrendingFeed({ isDarkMode }) {
     const gen = ++loadGenRef.current;
     setLoading(true);
     setError('');
-    setInsightLines([]);
     try {
       const res = await getHubTrendingMergedFromFirestore();
       if (gen !== loadGenRef.current) return;

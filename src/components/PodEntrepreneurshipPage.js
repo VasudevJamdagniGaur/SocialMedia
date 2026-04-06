@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { prefetchExploreTopicRaw } from '../lib/podExploreTopicPrefetchCache';
-import { getNews } from '../services/cachedNewsService';
+import { getNewsWithLiveFallback } from '../services/cachedNewsService';
 import { recordHubVerticalDwell } from '../services/hubVerticalPersonalizationService';
 
 const GEMINI_MODEL = 'gemini-3-flash-preview';
@@ -66,11 +66,11 @@ export default function PodEntrepreneurshipPage() {
       setIsLoadingNews(true);
       setNewsError('');
       try {
-        const { success, articles, error } = await getNews('entrepreneurship');
+        const { success, articles, error, fallbackError } = await getNewsWithLiveFallback('entrepreneurship');
         if (cancelled) return;
         if (!success) {
           setTrending(fallbackTrending);
-          setNewsError(error || 'Could not read cached headlines from Firestore.');
+          setNewsError(fallbackError || error || 'Could not load headlines.');
           return;
         }
         const normalized = articles.map((a) => ({
@@ -81,7 +81,10 @@ export default function PodEntrepreneurshipPage() {
         }));
         setTrending(normalized.length ? normalized : fallbackTrending);
         if (!normalized.length) {
-          setNewsError('No cached entrepreneurship headlines yet. Deploy newsIngestScheduler on Functions.');
+          setNewsError(
+            fallbackError ||
+              'No entrepreneurship headlines. Set REACT_APP_NEWSAPI in .env or deploy newsIngestScheduler.'
+          );
         }
       } catch {
         if (!cancelled) {

@@ -19,7 +19,7 @@ import {
 } from '../services/sportsPersonalizationService';
 import { recordHubVerticalDwell } from '../services/hubVerticalPersonalizationService';
 import { recordHubNewsClick } from '../services/hubNewsService';
-import { getNews } from '../services/cachedNewsService';
+import { getNewsWithLiveFallback } from '../services/cachedNewsService';
 
 /** Engagement rank plus same-city boost (Firestore `trendingScore` is likes×3 + shares×5 + views). */
 function effectiveSportsTrendRank(item, userCityNorm) {
@@ -260,11 +260,13 @@ export default function PodSportsPage() {
     ];
 
     try {
-      const { success, articles, error } = await getNews('sports');
+      const { success, articles, error, fallbackError } = await getNewsWithLiveFallback('sports');
       if (token !== loadTokenRef.current) return;
       if (!success) {
         setSportsTrending(fallbackTrending);
-        setSportsNewsError(error || 'Could not read cached sports headlines from Firestore.');
+        setSportsNewsError(
+          fallbackError || error || 'Could not load sports headlines (Firestore or NewsAPI).'
+        );
         return;
       }
 
@@ -306,7 +308,10 @@ export default function PodSportsPage() {
       const baseRows = merged.length ? merged.slice(0, 10) : fallbackTrending;
       setSportsTrending(baseRows);
       setSportsNewsError(
-        merged.length ? '' : 'No cached sports headlines yet. Deploy newsIngestScheduler and set API keys on Functions.'
+        merged.length
+          ? ''
+          : fallbackError ||
+              'No sports headlines. Set REACT_APP_NEWSAPI in .env for local dev, or deploy newsIngestScheduler with keys on Functions.'
       );
     } catch (e) {
       if (token !== loadTokenRef.current) return;

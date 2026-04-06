@@ -44,6 +44,13 @@ const CATEGORY_QUERIES = {
     ai_tech: 'AI OR artificial intelligence OR technology',
     entrepreneurship: 'startup OR business OR entrepreneurship',
 };
+/** NewsAPI top-headlines `category` param (free tier friendly; `everything` often restricted). */
+const NEWSAPI_TOP_HEADLINES_CATEGORY = {
+    current_affairs: 'general',
+    sports: 'sports',
+    ai_tech: 'technology',
+    entrepreneurship: 'business',
+};
 /** ms */
 const CATEGORY_INTERVALS = {
     current_affairs: 10 * 60 * 1000,
@@ -127,20 +134,65 @@ function normalizeNewsApiArticles(raw) {
     }
     return out;
 }
-async function tryNewsApi(key, q) {
-    const url = new URL('https://newsapi.org/v2/everything');
-    url.searchParams.set('apiKey', key);
-    url.searchParams.set('q', q);
-    url.searchParams.set('pageSize', String(PAGE_SIZE));
-    url.searchParams.set('language', 'en');
-    url.searchParams.set('sortBy', 'publishedAt');
+async function tryNewsApi(key, category) {
+    const q = CATEGORY_QUERIES[category];
+    const topCat = NEWSAPI_TOP_HEADLINES_CATEGORY[category];
+    for (const country of ['us', 'gb']) {
+        const thUrl = new URL('https://newsapi.org/v2/top-headlines');
+        thUrl.searchParams.set('apiKey', key);
+        thUrl.searchParams.set('country', country);
+        thUrl.searchParams.set('category', topCat);
+        thUrl.searchParams.set('pageSize', String(PAGE_SIZE));
+        try {
+            const data = await fetchJson(thUrl.toString());
+            const articles = normalizeNewsApiArticles(data);
+            if (articles.length > 0) {
+                firebase_functions_1.logger.info('[newsIngest] NewsAPI top-headlines ok', { category, country, count: articles.length });
+                return articles;
+            }
+            const errBody = data;
+            if (errBody?.status && errBody.status !== 'ok') {
+                firebase_functions_1.logger.warn('[newsIngest] NewsAPI top-headlines response', {
+                    category,
+                    country,
+                    status: errBody.status,
+                    code: errBody.code,
+                    message: errBody.message,
+                });
+            }
+        }
+        catch (e) {
+            firebase_functions_1.logger.warn('[newsIngest] NewsAPI top-headlines fetch failed', {
+                category,
+                country,
+                message: e instanceof Error ? e.message : String(e),
+            });
+        }
+    }
+    const evUrl = new URL('https://newsapi.org/v2/everything');
+    evUrl.searchParams.set('apiKey', key);
+    evUrl.searchParams.set('q', q);
+    evUrl.searchParams.set('pageSize', String(PAGE_SIZE));
+    evUrl.searchParams.set('language', 'en');
+    evUrl.searchParams.set('sortBy', 'publishedAt');
     try {
-        const data = await fetchJson(url.toString());
+        const data = await fetchJson(evUrl.toString());
         const articles = normalizeNewsApiArticles(data);
-        return articles.length > 0 ? articles : null;
+        if (articles.length > 0)
+            return articles;
+        const errBody = data;
+        if (errBody?.status && errBody.status !== 'ok') {
+            firebase_functions_1.logger.warn('[newsIngest] NewsAPI everything response', {
+                category,
+                status: errBody.status,
+                code: errBody.code,
+                message: errBody.message,
+            });
+        }
+        return null;
     }
     catch (e) {
-        firebase_functions_1.logger.warn('[newsIngest] NewsAPI failed', { message: e instanceof Error ? e.message : String(e) });
+        firebase_functions_1.logger.warn('[newsIngest] NewsAPI everything failed', { message: e instanceof Error ? e.message : String(e) });
         return null;
     }
 }
@@ -282,8 +334,8 @@ async function tryThenews(key, q) {
     }
 }
 async function fetchWithFallback(category) {
-    const q = CATEGORY_QUERIES[category];
     const chain = buildFallbackChain();
+    const q = CATEGORY_QUERIES[category];
     if (chain.length === 0) {
         firebase_functions_1.logger.warn('[newsIngest] No API keys configured for fallback chain');
         return [];
@@ -292,7 +344,7 @@ async function fetchWithFallback(category) {
         let articles = null;
         try {
             if (slot.kind === 'newsapi') {
-                articles = await tryNewsApi(slot.key, q);
+                articles = await tryNewsApi(slot.key, category);
             }
             else if (slot.kind === 'worldnews') {
                 articles = await tryWorldNews(slot.key, q);

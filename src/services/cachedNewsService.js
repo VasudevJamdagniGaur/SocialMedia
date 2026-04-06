@@ -1,11 +1,31 @@
 /**
- * Cached hub news: read-only from Firestore `news/{category}` (populated by Cloud Function `newsIngestScheduler`).
- * No external news API calls from the client.
+ * Hub news: prefer Firestore `news/{category}` (from `newsIngestScheduler`).
+ * If empty (local dev / first run), falls back to NewsAPI via existing proxy (REACT_APP_NEWSAPI / setupProxy).
  */
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
+import {
+  fetchNewsApiEverythingRaw,
+  fetchNewsApiTopHeadlinesRaw,
+  normalizeArticles,
+  resolveUserNewsRegionForNewsApi,
+} from '../lib/podTopicNewsShared';
 
 const COLLECTION = 'news';
+
+const LIVE_QUERIES = {
+  current_affairs: 'world OR politics OR global',
+  sports: 'cricket OR football OR sports',
+  ai_tech: 'AI OR artificial intelligence OR technology',
+  entrepreneurship: 'startup OR business OR entrepreneurship',
+};
+
+const HEADLINE_CATEGORY = {
+  current_affairs: 'general',
+  sports: 'sports',
+  ai_tech: 'technology',
+  entrepreneurship: 'business',
+};
 
 /** @typedef {{ title: string, source: string, url: string, image: string|null, description?: string, publishedAt?: string|null }} CachedArticle */
 
@@ -61,6 +81,81 @@ export async function getNews(category) {
   }
 }
 
+/**
+ * Firestore first; if no articles, load live via NewsAPI (same stack as before server-only ingest).
+ * @param {'current_affairs'|'sports'|'ai_tech'|'entrepreneurship'} category
+ * @returns {Promise<{ success: boolean, articles: CachedArticle[], lastUpdated: number, fromLiveFallback: boolean, error?: string, fallbackError?: string }>}
+ */
+export async function getNewsWithLiveFallback(category) {
+  const id = String(category || '').trim();
+  const base = await getNews(id);
+  if (base.success && base.articles.length > 0) {
+    return { ...base, fromLiveFallback: false };
+  }
+
+  const q = LIVE_QUERIES[id];
+  const headCat = HEADLINE_CATEGORY[id];
+  if (!q || !headCat) {
+    return { ...base, fromLiveFallback: false };
+  }
+
+  try {
+    const { code } = await resolveUserNewsRegionForNewsApi();
+    let raw = await fetchNewsApiTopHeadlinesRaw({
+      category: headCat,
+      country: code,
+      language: 'en',
+      pageSize: 10,
+    });
+    if (!raw || raw.length === 0) {
+      raw = await fetchNewsApiTopHeadlinesRaw({
+        category: headCat,
+        country: code,
+        language: false,
+        pageSize: 10,
+      });
+    }
+    if (!raw || raw.length === 0) {
+      raw = await fetchNewsApiEverythingRaw({
+        q,
+        language: 'en',
+        pageSize: 10,
+        sortBy: 'publishedAt',
+      });
+    }
+
+    const articles = normalizeArticles(raw || []).map((a) => ({
+      title: a.title,
+      source: a.source,
+      url: a.url,
+      image: a.image && String(a.image).trim().startsWith('http') ? String(a.image).trim() : null,
+      description: String(a.description || ''),
+      publishedAt: a.publishedAt != null ? String(a.publishedAt) : null,
+    }));
+
+    if (articles.length === 0) {
+      return {
+        ...base,
+        fromLiveFallback: false,
+        fallbackError: 'NewsAPI returned no articles. Check REACT_APP_NEWSAPI and dev proxy.',
+      };
+    }
+
+    return {
+      success: true,
+      articles,
+      lastUpdated: base.lastUpdated || 0,
+      fromLiveFallback: true,
+    };
+  } catch (e) {
+    return {
+      ...base,
+      fromLiveFallback: false,
+      fallbackError: e?.message || String(e),
+    };
+  }
+}
+
 const HUB_CATEGORIES = ['current_affairs', 'sports', 'ai_tech', 'entrepreneurship'];
 
 /**
@@ -69,7 +164,7 @@ const HUB_CATEGORIES = ['current_affairs', 'sports', 'ai_tech', 'entrepreneurshi
  */
 export async function getHubTrendingMergedFromFirestore() {
   try {
-    const results = await Promise.all(HUB_CATEGORIES.map((c) => getNews(c)));
+    const results = await Promise.all(HUB_CATEGORIES.map((c) => getNewsWithLiveFallback(c)));
     const failed = results.find((r) => !r.success);
     if (failed && failed.error) {
       return { success: false, items: [], error: failed.error };
@@ -107,4 +202,4 @@ export async function getHubTrendingMergedFromFirestore() {
   }
 }
 
-export default { getNews, getHubTrendingMergedFromFirestore };
+export default { getNews, getNewsWithLiveFallback, getHubTrendingMergedFromFirestore };
