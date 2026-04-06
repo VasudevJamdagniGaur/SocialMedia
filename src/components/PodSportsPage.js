@@ -21,6 +21,20 @@ import { recordHubVerticalDwell } from '../services/hubVerticalPersonalizationSe
 import { recordHubNewsClick } from '../services/hubNewsService';
 import { getNewsWithLiveFallback } from '../services/cachedNewsService';
 
+/**
+ * Survives route changes (e.g. Sports → topic → back) so trending does not flash loading.
+ */
+let podSportsTrendingUiCache = {
+  /** @type {Array<object>|null} */
+  items: null,
+  regionLabel: '',
+};
+
+function getCachedSportsHubTrendingRows() {
+  const arr = podSportsTrendingUiCache.items;
+  return Array.isArray(arr) && arr.length > 0 ? arr : null;
+}
+
 /** Engagement rank plus same-city boost (Firestore `trendingScore` is likes×3 + shares×5 + views). */
 function effectiveSportsTrendRank(item, userCityNorm) {
   const base = Number(item.trendingScore) || 0;
@@ -187,10 +201,12 @@ export default function PodSportsPage() {
   const location = useLocation();
   const returnTo = `${location.pathname}${location.search || ''}`;
   const { isDarkMode } = useTheme();
-  const [sportsTrending, setSportsTrending] = useState([]);
-  const [isLoadingSportsNews, setIsLoadingSportsNews] = useState(false);
+  const [sportsTrending, setSportsTrending] = useState(() => getCachedSportsHubTrendingRows() || []);
+  const [isLoadingSportsNews, setIsLoadingSportsNews] = useState(() => !getCachedSportsHubTrendingRows());
   const [sportsNewsError, setSportsNewsError] = useState('');
-  const [trendingRegionLabel, setTrendingRegionLabel] = useState('');
+  const [trendingRegionLabel, setTrendingRegionLabel] = useState(
+    () => podSportsTrendingUiCache.regionLabel || ''
+  );
   const [userId, setUserId] = useState(() => getCurrentUser()?.uid || null);
   const [refreshing, setRefreshing] = useState(false);
   const [pullProgress, setPullProgress] = useState(0);
@@ -224,8 +240,9 @@ export default function PodSportsPage() {
   const loadSportsNews = useCallback(async (opts = {}) => {
     const skipLoadingBar = !!opts.skipLoadingBar;
     const token = ++loadTokenRef.current;
+    const hadCached = Boolean(getCachedSportsHubTrendingRows()?.length);
 
-    if (!skipLoadingBar) {
+    if (!skipLoadingBar && !hadCached) {
       setIsLoadingSportsNews(true);
       setSportsNewsError('');
     }
@@ -263,6 +280,8 @@ export default function PodSportsPage() {
       const { success, articles, error, fallbackError } = await getNewsWithLiveFallback('sports');
       if (token !== loadTokenRef.current) return;
       if (!success) {
+        podSportsTrendingUiCache.items = fallbackTrending;
+        podSportsTrendingUiCache.regionLabel = 'Server-cached feed';
         setSportsTrending(fallbackTrending);
         setSportsNewsError(
           fallbackError || error || 'Could not load sports headlines (Firestore or NewsAPI).'
@@ -306,6 +325,8 @@ export default function PodSportsPage() {
 
       if (token !== loadTokenRef.current) return;
       const baseRows = merged.length ? merged.slice(0, 10) : fallbackTrending;
+      podSportsTrendingUiCache.items = baseRows;
+      podSportsTrendingUiCache.regionLabel = 'Server-cached feed';
       setSportsTrending(baseRows);
       setSportsNewsError(
         merged.length
@@ -315,6 +336,8 @@ export default function PodSportsPage() {
       );
     } catch (e) {
       if (token !== loadTokenRef.current) return;
+      podSportsTrendingUiCache.items = fallbackTrending;
+      podSportsTrendingUiCache.regionLabel = 'Server-cached feed';
       setSportsTrending(fallbackTrending);
       setSportsNewsError(e?.message || 'Could not load cached headlines.');
     } finally {
@@ -472,7 +495,7 @@ export default function PodSportsPage() {
               </div>
             </div>
             <div className="py-3 pl-4">
-              {isLoadingSportsNews ? (
+              {isLoadingSportsNews && sportsTrending.length === 0 ? (
                 <p className="text-sm pr-4" style={{ color: HUB.textSecondary }}>
                   Loading cached sports headlines…
                 </p>

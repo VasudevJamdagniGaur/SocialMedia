@@ -6,6 +6,20 @@ import { incrementHubNewsEngagement, recordHubNewsClick } from '../services/hubN
 import { getHubTrendingMergedFromFirestore } from '../services/cachedNewsService';
 import { resolveArticleHeroImage } from '../lib/podTopicNewsShared';
 
+/**
+ * Keeps the last successful hub merge in memory so navigating away (e.g. Sports) and back
+ * does not reset to “Loading…” or block on another Firestore/NewsAPI round-trip.
+ */
+let hubTrendingFeedCache = {
+  /** @type {Array<object>|null} */
+  items: null,
+};
+
+function getCachedHubTrendingItems() {
+  const arr = hubTrendingFeedCache.items;
+  return Array.isArray(arr) && arr.length > 0 ? arr : null;
+}
+
 function isDisplayableImageSrc(u) {
   const s = typeof u === 'string' ? u.trim() : '';
   return Boolean(s && (/^https?:\/\//i.test(s) || s.startsWith('data:')));
@@ -234,10 +248,11 @@ export default function HubTrendingFeed({ isDarkMode }) {
   const location = useLocation();
   const returnTo = `${location.pathname}${location.search || ''}`;
   const [userId, setUserId] = useState(() => getCurrentUser()?.uid || null);
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [items, setItems] = useState(() => getCachedHubTrendingItems() || []);
+  const [loading, setLoading] = useState(() => !getCachedHubTrendingItems());
   const [error, setError] = useState('');
   const loadGenRef = useRef(0);
+  const carouselScrollRef = useRef(null);
 
   useEffect(() => {
     const unsub = onAuthStateChange((u) => setUserId(u?.uid || null));
@@ -246,21 +261,31 @@ export default function HubTrendingFeed({ isDarkMode }) {
 
   const load = useCallback(async () => {
     const gen = ++loadGenRef.current;
-    setLoading(true);
+    const hadCached = Boolean(getCachedHubTrendingItems()?.length);
+    if (!hadCached) {
+      setLoading(true);
+    }
     setError('');
     try {
       const res = await getHubTrendingMergedFromFirestore();
       if (gen !== loadGenRef.current) return;
       if (!res.success) {
-        setItems([]);
-        setError(res.error || 'Could not load feed');
+        if (!hadCached) {
+          setItems([]);
+          setError(res.error || 'Could not load feed');
+        }
         return;
       }
-      setItems(res.items || []);
+      const next = res.items || [];
+      hubTrendingFeedCache.items = next;
+      setItems(next);
+      setError('');
     } catch (e) {
       if (gen !== loadGenRef.current) return;
-      setItems([]);
-      setError(e?.message || 'Could not load feed');
+      if (!hadCached) {
+        setItems([]);
+        setError(e?.message || 'Could not load feed');
+      }
     } finally {
       if (gen !== loadGenRef.current) return;
       setLoading(false);
@@ -286,7 +311,6 @@ export default function HubTrendingFeed({ isDarkMode }) {
   const headerBorder = { borderBottom: `1px solid ${isDarkMode ? HUB.divider : '#E5E7EB'}` };
 
   const carouselItems = items.slice(0, 15);
-  const carouselScrollRef = useRef(null);
 
   return (
     <div className="rounded-2xl overflow-hidden mb-4" style={cardStyle}>
@@ -299,9 +323,9 @@ export default function HubTrendingFeed({ isDarkMode }) {
         </div>
       </div>
       <div className="py-3 pl-4">
-        {loading ? (
+        {loading && items.length === 0 ? (
           <p className={`text-sm pr-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Loading your feed…</p>
-        ) : error ? (
+        ) : error && items.length === 0 ? (
           <p className={`text-sm pr-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{error}</p>
         ) : items.length === 0 ? (
           <p className={`text-sm pr-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
