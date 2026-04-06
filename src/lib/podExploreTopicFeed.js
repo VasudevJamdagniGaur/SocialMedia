@@ -13,6 +13,48 @@ import {
 } from './podExploreTopicConfig';
 
 /**
+ * NewsAPI `everything` on AI/ML queries often returns PyPI/npm index rows: package name + semver
+ * (e.g. "litellm 1.83.3", "foo added to PyPI") — not news headlines. Strip those.
+ * @param {object[]} rows
+ * @returns {object[]}
+ */
+export function filterDeveloperRegistrySpamFromNewsRows(rows) {
+  if (!Array.isArray(rows) || !rows.length) return rows;
+
+  const isSpam = (item) => {
+    const t = String(item?.title || '').trim();
+    const d = String(item?.description || '').trim();
+    const combined = `${t} ${d}`;
+
+    if (/\b(added to|published on|released on)\s+(PyPI|npm)\b/i.test(combined)) return true;
+    if (/\bPyPI\s+(package|project|release)\b/i.test(combined)) return true;
+    if (/^\s*npm\s+package\b/i.test(t)) return true;
+
+    const newsLike =
+      /\b(announc|launch|say|said|says|report|warn|study|deal|acquire|raises|raising|funding|billion|million|court|law|\bCEO\b|interview|breaking|according|warns|unveil|introduc|explains|reveals|confirms|denies|investigat|editorial|opinion|podcast|vs\.|versus)\b/i.test(
+        t
+      );
+    const majorBrand =
+      /\b(OpenAI|Google|Microsoft|Meta|Apple|Amazon|Nvidia|Anthropic|DeepMind|IBM|Intel|AMD|Tesla|BBC|Reuters|CNN|FT\b|The Guardian|Washington Post|TechCrunch|Ars Technica|The Verge|Wired)\b/i.test(
+        t
+      );
+
+    if (newsLike || majorBrand || t.length >= 80) return false;
+
+    // Short vendor model lines are news; PyPI spam rarely starts like this.
+    if (/^(Llama|GPT|Claude|Gemini|Mistral|Gemma|Phi-|Qwen|DeepSeek|Grok)\b/i.test(t)) return false;
+
+    const onlyPkgVersion =
+      /^(@[\w.-]+\/)?[\w][\w.-]{0,52}\s+v?\d+\.\d+[\w.-]*\s*$/i.test(t) ||
+      /^[\w][\w.-]{0,52}\s+v?\d+\.\d+\.\d+[a-z0-9.-]*\s*$/i.test(t);
+
+    return onlyPkgVersion;
+  };
+
+  return rows.filter((item) => !isSpam(item));
+}
+
+/**
  * Fetch + enrich one explore topic feed (shared by PodExploreTopicPage and prefetch cache).
  * @param {{ section: string, topicId: string, startupRegion: string }} opts
  * @returns {Promise<{ items: object[], error: string }>}
@@ -41,11 +83,18 @@ export async function fetchExploreTopicFeed({ section, topicId, startupRegion })
     let rows = null;
     if (newsQ) {
       const pageSize =
-        isStartupsRegionTopic(section, topicId) && startupRegion === 'local' ? 50 : 30;
+        isStartupsRegionTopic(section, topicId) && startupRegion === 'local'
+          ? 50
+          : section === 'ai-tech'
+            ? 50
+            : 30;
       rows = await fetchNewsApiEverythingNormalized({ q: newsQ, pageSize });
       if (rows?.length) {
         if (isStartupsRegionTopic(section, topicId) && startupRegion === 'local') {
           rows = filterNewsRowsIndiaLocal(rows);
+        }
+        if (section === 'ai-tech') {
+          rows = filterDeveloperRegistrySpamFromNewsRows(rows);
         }
         rows = rows.slice(0, 30);
       }
