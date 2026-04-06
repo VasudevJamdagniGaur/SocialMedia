@@ -1,13 +1,104 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState, useCallback } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
+import { getCurrentUser } from '../services/authService';
+import { recordHubNewsClick } from '../services/hubNewsService';
 import { prefetchExploreTopicRaw } from '../lib/podExploreTopicPrefetchCache';
 import { getNewsWithLiveFallback } from '../services/cachedNewsService';
 import { recordHubVerticalDwell } from '../services/hubVerticalPersonalizationService';
 
+/**
+ * Carousel card — tap opens share suggestions (LinkedIn / X / Reddit), same as Sports hub trending.
+ */
+function AiTechTrendingCard({ item, idx, HUB, techGradients, navigate, returnTo }) {
+  const [heroFailed, setHeroFailed] = useState(false);
+  const src = typeof item.image === 'string' ? item.image.trim() : '';
+  const showImg = Boolean(src && (/^https?:\/\//i.test(src) || src.startsWith('data:')));
+
+  useEffect(() => {
+    setHeroFailed(false);
+  }, [src]);
+
+  const openShareSuggestions = useCallback(() => {
+    if (!item.url) return;
+    const u = getCurrentUser();
+    if (u?.uid) void recordHubNewsClick(u.uid, 'ai-tech');
+    navigate('/share-suggestions', {
+      state: {
+        newsArticle: {
+          title: item.title,
+          url: item.url,
+          description: item.description || '',
+          image: item.image || null,
+          source: item.source || '',
+        },
+        returnTo,
+      },
+    });
+  }, [item, navigate, returnTo]);
+
+  return (
+    <div
+      className="relative flex-shrink-0 w-[min(260px,78vw)] snap-start snap-always rounded-xl overflow-hidden border transition-transform active:scale-[0.98] hover:opacity-95"
+      style={{
+        borderColor: HUB.divider,
+        minHeight: 200,
+      }}
+    >
+      <button
+        type="button"
+        onClick={openShareSuggestions}
+        disabled={!item.url}
+        className="absolute inset-0 z-0 cursor-pointer border-0 bg-transparent p-0 text-left disabled:cursor-not-allowed disabled:opacity-60"
+        aria-label={item.title}
+      />
+      {showImg && !heroFailed ? (
+        <img
+          src={src}
+          alt=""
+          className="absolute inset-0 z-[1] h-full w-full object-cover pointer-events-none"
+          loading="lazy"
+          decoding="async"
+          referrerPolicy="no-referrer"
+          onError={() => setHeroFailed(true)}
+        />
+      ) : (
+        <div
+          className="absolute inset-0 z-[1] pointer-events-none"
+          style={{ background: techGradients[idx % techGradients.length] }}
+        />
+      )}
+      {showImg && !heroFailed ? (
+        <div
+          className="absolute inset-0 z-[2] pointer-events-none"
+          style={{
+            background:
+              'linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.15) 40%, transparent 60%)',
+          }}
+        />
+      ) : (
+        <div className="absolute inset-0 z-[2] pointer-events-none bg-gradient-to-t from-black/88 via-black/25 to-transparent" />
+      )}
+      <div className="absolute inset-x-0 bottom-0 z-[3] p-3 pt-10 bg-gradient-to-t from-black via-black/80 to-transparent pointer-events-none">
+        <p className="text-sm font-semibold leading-snug line-clamp-3" style={{ color: '#fff' }}>
+          {item.title}
+        </p>
+        <p
+          className="text-[11px] mt-1.5 font-medium uppercase tracking-wide"
+          style={{ color: 'rgba(255,255,255,0.65)' }}
+        >
+          {item.source}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function PodAiTechPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnTo = `${location.pathname}${location.search || ''}`;
   const { isDarkMode } = useTheme();
   const [trending, setTrending] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -43,10 +134,34 @@ export default function PodAiTechPage() {
     let cancelled = false;
 
     const fallbackTrending = [
-      { title: 'Major cloud providers expand AI chip and region capacity', source: 'Tech Wire', image: null },
-      { title: 'Developers adopt smaller open models for edge deployment', source: 'Dev Digest', image: null },
-      { title: 'Startups race to ship copilots for vertical workflows', source: 'Startup Brief', image: null },
-      { title: 'Big Tech earnings highlight AI revenue mix shifts', source: 'Markets Desk', image: null },
+      {
+        title: 'Major cloud providers expand AI chip and region capacity',
+        source: 'Tech Wire',
+        image: null,
+        url: '',
+        description: '',
+      },
+      {
+        title: 'Developers adopt smaller open models for edge deployment',
+        source: 'Dev Digest',
+        image: null,
+        url: '',
+        description: '',
+      },
+      {
+        title: 'Startups race to ship copilots for vertical workflows',
+        source: 'Startup Brief',
+        image: null,
+        url: '',
+        description: '',
+      },
+      {
+        title: 'Big Tech earnings highlight AI revenue mix shifts',
+        source: 'Markets Desk',
+        image: null,
+        url: '',
+        description: '',
+      },
     ];
 
     const load = async () => {
@@ -65,6 +180,7 @@ export default function PodAiTechPage() {
           source: a.source,
           url: a.url,
           image: a.image,
+          description: a.description || '',
         }));
         setTrending(normalized.length ? normalized : fallbackTrending);
         if (!normalized.length) {
@@ -149,36 +265,17 @@ export default function PodAiTechPage() {
                     role="region"
                     aria-label="Trending technology headlines"
                   >
-                    {trending.slice(0, 10).map((item, idx) => {
-                      const bg = item.image
-                        ? `linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.15) 40%, transparent 60%), url(${item.image}) center/cover no-repeat`
-                        : techGradients[idx % techGradients.length];
-                      return (
-                        <a
-                          key={`${item.title}-${idx}`}
-                          href={item.url || undefined}
-                          target={item.url ? '_blank' : undefined}
-                          rel={item.url ? 'noopener noreferrer' : undefined}
-                          className="relative flex-shrink-0 w-[min(260px,78vw)] snap-start snap-always rounded-xl overflow-hidden border transition-transform active:scale-[0.98] hover:opacity-95"
-                          style={{
-                            borderColor: HUB.divider,
-                            minHeight: 200,
-                            background: bg,
-                            backgroundSize: item.image ? 'cover' : 'auto',
-                            backgroundPosition: item.image ? 'center' : undefined,
-                          }}
-                        >
-                          <div className="absolute inset-x-0 bottom-0 p-3 pt-10 bg-gradient-to-t from-black via-black/80 to-transparent">
-                            <p className="text-sm font-semibold leading-snug line-clamp-3" style={{ color: '#fff' }}>
-                              {item.title}
-                            </p>
-                            <p className="text-[11px] mt-1.5 font-medium uppercase tracking-wide" style={{ color: 'rgba(255,255,255,0.65)' }}>
-                              {item.source}
-                            </p>
-                          </div>
-                        </a>
-                      );
-                    })}
+                    {trending.slice(0, 10).map((item, idx) => (
+                      <AiTechTrendingCard
+                        key={`${item.url || item.title}-${idx}`}
+                        item={item}
+                        idx={idx}
+                        HUB={HUB}
+                        techGradients={techGradients}
+                        navigate={navigate}
+                        returnTo={returnTo}
+                      />
+                    ))}
                   </div>
                   {!!newsError && (
                     <p className="text-xs mt-2 pr-4" style={{ color: HUB.textSecondary }}>{newsError}</p>
