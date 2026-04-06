@@ -83,9 +83,47 @@ export default function PodSportsTopicPage() {
                   items: rewritten,
                   error: '',
                   rewritten: true,
+                  fromRssPrefetch: false,
                 });
               })
               .catch(() => {});
+          }
+          // Hub prefetch only uses Google RSS (skips NewsAPI). Upgrade in background so Latest matches API.
+          if (cached.fromRssPrefetch) {
+            const upgradeToken = token;
+            void (async () => {
+              try {
+                const raw = await fetchSportsTopicRawItems(topicId);
+                if (!isMountedRef.current || upgradeToken !== loadTokenRef.current) return;
+                if (!raw.items?.length) return;
+
+                setSportsTopicFeedCache(topicId, {
+                  items: raw.items,
+                  error: raw.error || '',
+                  rewritten: raw.allowRewrite === false,
+                  fromRssPrefetch: false,
+                });
+                if (isMountedRef.current && upgradeToken === loadTokenRef.current) {
+                  setItems(raw.items);
+                  setError(raw.error || '');
+                }
+
+                if (raw.allowRewrite === false) return;
+
+                const rewritten = await applyHeadlineRewritesToSportsItems(topicId, raw.items);
+                if (!isMountedRef.current || upgradeToken !== loadTokenRef.current) return;
+                setItems(rewritten);
+                setError('');
+                setSportsTopicFeedCache(topicId, {
+                  items: rewritten,
+                  error: '',
+                  rewritten: true,
+                  fromRssPrefetch: false,
+                });
+              } catch {
+                /* keep prefetched RSS list */
+              }
+            })();
           }
           return;
         }
@@ -103,6 +141,7 @@ export default function PodSportsTopicPage() {
             items: fallbackRows,
             error: raw.error || '',
             rewritten: true,
+            fromRssPrefetch: false,
           });
         }
         return;
@@ -112,6 +151,7 @@ export default function PodSportsTopicPage() {
         items: raw.items,
         error: raw.error || '',
         rewritten: raw.allowRewrite === false,
+        fromRssPrefetch: false,
       });
       if (isMountedRef.current && token === loadTokenRef.current) {
         setItems(raw.items);
@@ -131,6 +171,7 @@ export default function PodSportsTopicPage() {
         items: rewritten,
         error: '',
         rewritten: true,
+        fromRssPrefetch: false,
       });
     } catch {
       const msg = 'Live sources unavailable. Showing quick fallback headlines.';
@@ -142,6 +183,7 @@ export default function PodSportsTopicPage() {
           items: fallbackRows,
           error: msg,
           rewritten: true,
+          fromRssPrefetch: false,
         });
       }
     } finally {

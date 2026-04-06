@@ -20,6 +20,8 @@ export function setSportsTopicFeedCache(topicId, entry) {
     items: entry.items,
     error: entry.error || '',
     rewritten: !!entry.rewritten,
+    /** True when filled by hub prefetch (RSS-only); topic screen should upgrade with NewsAPI. */
+    fromRssPrefetch: entry.fromRssPrefetch === true,
     ts: Date.now(),
   });
 }
@@ -78,6 +80,7 @@ export function prefetchSportsTopicRaw(topicId) {
           items: res.items,
           error: res.error || '',
           rewritten: res.allowRewrite === false,
+          fromRssPrefetch: true,
         });
       }
       return res;
