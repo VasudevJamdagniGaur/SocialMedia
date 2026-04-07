@@ -27,7 +27,6 @@ import { getNewsWithLiveFallback } from '../services/cachedNewsService';
 let podSportsTrendingUiCache = {
   /** @type {Array<object>|null} */
   items: null,
-  regionLabel: '',
 };
 
 function getCachedSportsHubTrendingRows() {
@@ -204,9 +203,6 @@ export default function PodSportsPage() {
   const [sportsTrending, setSportsTrending] = useState(() => getCachedSportsHubTrendingRows() || []);
   const [isLoadingSportsNews, setIsLoadingSportsNews] = useState(() => !getCachedSportsHubTrendingRows());
   const [sportsNewsError, setSportsNewsError] = useState('');
-  const [trendingRegionLabel, setTrendingRegionLabel] = useState(
-    () => podSportsTrendingUiCache.regionLabel || ''
-  );
   const [userId, setUserId] = useState(() => getCurrentUser()?.uid || null);
   const [refreshing, setRefreshing] = useState(false);
   const [pullProgress, setPullProgress] = useState(0);
@@ -247,8 +243,6 @@ export default function PodSportsPage() {
       setSportsNewsError('');
     }
 
-    setTrendingRegionLabel('Server-cached feed');
-
     const fallbackTrending = [
       {
         title: 'Global football season enters decisive phase',
@@ -281,7 +275,6 @@ export default function PodSportsPage() {
       if (token !== loadTokenRef.current) return;
       if (!success) {
         podSportsTrendingUiCache.items = fallbackTrending;
-        podSportsTrendingUiCache.regionLabel = 'Server-cached feed';
         setSportsTrending(fallbackTrending);
         setSportsNewsError(
           fallbackError || error || 'Could not load sports headlines (Firestore or NewsAPI).'
@@ -326,7 +319,6 @@ export default function PodSportsPage() {
       if (token !== loadTokenRef.current) return;
       const baseRows = merged.length ? merged.slice(0, 10) : fallbackTrending;
       podSportsTrendingUiCache.items = baseRows;
-      podSportsTrendingUiCache.regionLabel = 'Server-cached feed';
       setSportsTrending(baseRows);
       setSportsNewsError(
         merged.length
@@ -337,7 +329,6 @@ export default function PodSportsPage() {
     } catch (e) {
       if (token !== loadTokenRef.current) return;
       podSportsTrendingUiCache.items = fallbackTrending;
-      podSportsTrendingUiCache.regionLabel = 'Server-cached feed';
       setSportsTrending(fallbackTrending);
       setSportsNewsError(e?.message || 'Could not load cached headlines.');
     } finally {
@@ -487,11 +478,6 @@ export default function PodSportsPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <h2 className="text-lg font-semibold" style={{ color: HUB.text }}>Trending</h2>
-                {trendingRegionLabel ? (
-                  <p className="text-xs mt-0.5 truncate" style={{ color: HUB.textSecondary }}>
-                    {trendingRegionLabel}
-                  </p>
-                ) : null}
               </div>
             </div>
             <div className="py-3 pl-4">
@@ -505,11 +491,7 @@ export default function PodSportsPage() {
                     className="flex gap-3 overflow-x-auto overflow-y-hidden pb-2 pr-4 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                     style={{ WebkitOverflowScrolling: 'touch' }}
                     role="region"
-                    aria-label={
-                      trendingRegionLabel
-                        ? `Trending sports headlines in ${trendingRegionLabel}`
-                        : 'Trending sports headlines'
-                    }
+                    aria-label="Trending sports headlines"
                   >
                     {sportsTrending.slice(0, 10).map((item, idx) => (
                       <SportsTrendingCard
