@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Delete Your Detea Account</title>
+  <style>
+    :root {
+      --bg: #0f0f0f;
+      --card: #161616;
+      --border: #2a2a2a;
+      --text: #f5f5f5;
+      --muted: #a3a3a3;
+      --accent: #a855f7;
+      --accent-hover: #9333ea;
+      --error: #f87171;
+      --ok: #4ade80;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrap {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+      padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
+      padding-top: max(1.5rem, env(safe-area-inset-top));
+    }
+    .card {
+      width: 100%;
+      max-width: 28rem;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 1.75rem 1.5rem;
+    }
+    h1 {
+      margin: 0 0 0.5rem;
+      font-size: 1.375rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .sub {
+      margin: 0 0 1.25rem;
+      font-size: 0.9375rem;
+      color: var(--muted);
+    }
+    label {
+      display: block;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      margin-bottom: 0.35rem;
+      color: var(--muted);
+    }
+    input[type="email"] {
+      width: 100%;
+      padding: 0.75rem 0.875rem;
+      font-size: 1rem;
+      border-radius: 0.625rem;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      outline: none;
+    }
+    input[type="email"]:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.2);
+    }
+    button[type="submit"] {
+      width: 100%;
+      margin-top: 1.25rem;
+      padding: 0.875rem 1rem;
+      font-size: 1rem;
+      font-weight: 600;
+      color: #fff;
+      background: var(--accent);
+      border: none;
+      border-radius: 0.625rem;
+      cursor: pointer;
+      transition: background 0.15s ease, opacity 0.15s ease;
+    }
+    button[type="submit"]:hover:not(:disabled) {
+      background: var(--accent-hover);
+    }
+    button[type="submit"]:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+    .msg {
+      margin-top: 1rem;
+      font-size: 0.875rem;
+      padding: 0.75rem 0.875rem;
+      border-radius: 0.5rem;
+      display: none;
+    }
+    .msg.show { display: block; }
+    .msg.ok {
+      background: rgba(74, 222, 128, 0.12);
+      color: var(--ok);
+      border: 1px solid rgba(74, 222, 128, 0.25);
+    }
+    .msg.err {
+      background: rgba(248, 113, 113, 0.1);
+      color: var(--error);
+      border: 1px solid rgba(248, 113, 113, 0.25);
+    }
+    footer {
+      margin-top: 1.5rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Delete Your Detea Account</h1>
+      <p class="sub">
+        Submit the email address associated with your Detea account. Jamdagni Corporation will process your deletion request in line with applicable policies. You will receive no marketing after deletion is completed.
+      </p>
+      <form id="form" novalidate>
+        <label for="email">Email address</label>
+        <input
+          id="email"
+          name="email"
+          type="email"
+          autocomplete="email"
+          inputmode="email"
+          placeholder="you@example.com"
+          required
+        />
+        <button type="submit" id="submit">Delete My Account</button>
+      </form>
+      <div id="msgOk" class="msg ok" role="status"></div>
+      <div id="msgErr" class="msg err" role="alert"></div>
+      <footer>
+        Detea · Developed by Jamdagni Corporation
+      </footer>
+    </div>
+  </div>
+  <script>
+    (function () {
+      var form = document.getElementById('form');
+      var emailInput = document.getElementById('email');
+      var submitBtn = document.getElementById('submit');
+      var msgOk = document.getElementById('msgOk');
+      var msgErr = document.getElementById('msgErr');
+
+      function showOk(text) {
+        msgErr.classList.remove('show');
+        msgErr.textContent = '';
+        msgOk.textContent = text;
+        msgOk.classList.add('show');
+      }
+      function showErr(text) {
+        msgOk.classList.remove('show');
+        msgOk.textContent = '';
+        msgErr.textContent = text;
+        msgErr.classList.add('show');
+      }
+      function hideMsgs() {
+        msgOk.classList.remove('show');
+        msgErr.classList.remove('show');
+      }
+
+      /** Same-origin when this page is served from Firebase Hosting (rewrite to function). */
+      var ENDPOINT = '/deleteAccountRequest';
+
+      form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        hideMsgs();
+
+        var raw = (emailInput.value || '').trim();
+        if (!raw) {
+          showErr('Please enter your email address.');
+          return;
+        }
+        var basic = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!basic.test(raw)) {
+          showErr('Please enter a valid email address.');
+          return;
+        }
+
+        submitBtn.disabled = true;
+        try {
+          var res = await fetch(ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: raw }),
+          });
+          var data = null;
+          try {
+            data = await res.json();
+          } catch (_) {}
+
+          if (res.ok && data && data.success) {
+            showOk(data.message || 'Deletion request submitted.');
+            emailInput.value = '';
+          } else {
+            var errText =
+              (data && (data.error || data.message)) ||
+              ('Request failed (' + res.status + '). Please try again.');
+            showErr(errText);
+          }
+        } catch (err) {
+          showErr('Network error. Check your connection and try again.');
+        } finally {
+          submitBtn.disabled = false;
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

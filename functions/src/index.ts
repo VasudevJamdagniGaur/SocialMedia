@@ -874,6 +874,7 @@ async function handleArticleExtract(
 
 export { newsApi } from './newsApi';
 export { newsIngestScheduler } from './newsIngest';
+export { deleteAccountRequest } from './deleteAccountRequest';
 
 export const linkedInApi = onRequest(
   { cors: true },
