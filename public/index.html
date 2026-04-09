@@ -1,41 +1,303 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Detea - Account Deletion</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Request deletion of your Detea account. Developed by Jamdagni Corporation." />
+  <title>Detea — Account Deletion</title>
+  <style>
+    :root {
+      --bg: #0c0c0d;
+      --surface: #141416;
+      --border: #2a2a2e;
+      --text: #fafafa;
+      --muted: #a1a1aa;
+      --accent: #c084fc;
+      --accent-hover: #d8b4fe;
+      --accent-pressed: #a855f7;
+      --error: #f87171;
+      --success: #86efac;
+      --radius: 12px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .shell {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+      padding-top: max(1.5rem, env(safe-area-inset-top));
+      padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
+    }
+
+    .card {
+      width: 100%;
+      max-width: 26.5rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: calc(var(--radius) + 4px);
+      padding: 2rem 1.75rem;
+      box-shadow: 0 24px 48px rgba(0, 0, 0, 0.35);
+      transition: box-shadow 0.25s ease;
+    }
+
+    .eyebrow {
+      font-size: 0.6875rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin: 0 0 0.5rem;
+    }
+
+    h1 {
+      margin: 0 0 1rem;
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.25;
+    }
+
+    .intro {
+      margin: 0 0 1.75rem;
+      font-size: 0.9375rem;
+      color: var(--muted);
+    }
+
+    .intro strong {
+      color: #e4e4e7;
+      font-weight: 600;
+    }
+
+    label {
+      display: block;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 0.5rem;
+    }
+
+    .field-wrap {
+      margin-bottom: 1.25rem;
+    }
+
+    input[type="email"] {
+      width: 100%;
+      padding: 0.8125rem 1rem;
+      font-size: 1rem;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    input[type="email"]::placeholder {
+      color: #71717a;
+    }
+
+    input[type="email"]:hover {
+      border-color: #3f3f46;
+    }
+
+    input[type="email"]:focus {
+      border-color: var(--accent-pressed);
+      box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.22);
+    }
+
+    button[type="submit"] {
+      width: 100%;
+      padding: 0.875rem 1.25rem;
+      font-size: 1rem;
+      font-weight: 600;
+      color: #0c0c0d;
+      background: linear-gradient(180deg, var(--accent-hover) 0%, var(--accent) 100%);
+      border: none;
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.2s ease, opacity 0.2s ease, filter 0.2s ease;
+      box-shadow: 0 4px 14px rgba(168, 85, 247, 0.35);
+    }
+
+    button[type="submit"]:hover:not(:disabled) {
+      filter: brightness(1.05);
+      box-shadow: 0 6px 20px rgba(168, 85, 247, 0.45);
+      transform: translateY(-1px);
+    }
+
+    button[type="submit"]:active:not(:disabled) {
+      transform: translateY(0);
+      box-shadow: 0 2px 10px rgba(168, 85, 247, 0.3);
+    }
+
+    button[type="submit"]:disabled {
+      cursor: not-allowed;
+      opacity: 0.65;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .status {
+      margin-top: 1.25rem;
+      min-height: 1.5rem;
+      font-size: 0.875rem;
+      line-height: 1.5;
+      border-radius: var(--radius);
+      padding: 0.75rem 1rem;
+      opacity: 0;
+      max-height: 0;
+      overflow: hidden;
+      transition: opacity 0.25s ease, max-height 0.35s ease, margin 0.25s ease, padding 0.25s ease;
+    }
+
+    .status.visible {
+      opacity: 1;
+      max-height: 12rem;
+      margin-top: 1.25rem;
+      padding: 0.75rem 1rem;
+    }
+
+    .status.error {
+      color: var(--error);
+      background: rgba(248, 113, 113, 0.08);
+      border: 1px solid rgba(248, 113, 113, 0.25);
+    }
+
+    .status.submitting {
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border);
+    }
+
+    .status.success {
+      color: var(--success);
+      background: rgba(134, 239, 172, 0.08);
+      border: 1px solid rgba(134, 239, 172, 0.28);
+    }
+
+    footer {
+      margin-top: 2rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.5;
+    }
+  </style>
 </head>
+<body>
+  <div class="shell">
+    <main class="card" role="main">
+      <p class="eyebrow">Detea</p>
+      <h1>Account deletion request</h1>
+      <p class="intro">
+        Use this page to start the process of deleting your Detea account and associated data.
+        <strong>Jamdagni Corporation</strong> will handle your request in line with applicable policies.
+      </p>
 
-<body style="font-family: Arial; text-align:center; padding:40px; background:#121212; color:white;">
+      <form id="deletion-form" novalidate>
+        <div class="field-wrap">
+          <label for="email">Registered email address</label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            autocomplete="email"
+            inputmode="email"
+            placeholder="name@example.com"
+            aria-describedby="status"
+            aria-invalid="false"
+          />
+        </div>
+        <button type="submit" id="submit-btn">Delete My Account</button>
+      </form>
 
-<h2>Detea – Official Account Deletion Page</h2>
+      <div id="status" class="status" role="status" aria-live="polite"></div>
 
-<p>
-Detea is an application developed and published by <b>Jamdagni Corporation</b>.
-</p>
+      <footer>
+        © Detea · Developed and published by Jamdagni Corporation.<br />
+        For questions, contact support through the app or your store listing.
+      </footer>
+    </main>
+  </div>
 
-<p>Enter your registered email:</p>
+  <script>
+    (function () {
+      var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-<input type="email" id="email" placeholder="Enter your email" style="padding:10px; width:250px;">
-<br><br>
+      var form = document.getElementById('deletion-form');
+      var emailInput = document.getElementById('email');
+      var submitBtn = document.getElementById('submit-btn');
+      var statusEl = document.getElementById('status');
 
-<button onclick="submitRequest()" style="padding:10px 20px; background:#E91E63; color:white; border:none;">
-Delete My Account
-</button>
+      function setStatus(type, text) {
+        statusEl.className = 'status visible ' + (type || '');
+        statusEl.textContent = text || '';
+        emailInput.setAttribute('aria-invalid', type === 'error' ? 'true' : 'false');
+      }
 
-<p id="msg"></p>
+      function clearStatus() {
+        statusEl.className = 'status';
+        statusEl.textContent = '';
+        emailInput.setAttribute('aria-invalid', 'false');
+      }
 
-<script>
-function submitRequest() {
-  const email = document.getElementById("email").value;
+      function simulateSubmit(callback) {
+        var delayMs = 1200 + Math.floor(Math.random() * 400);
+        window.setTimeout(callback, delayMs);
+      }
 
-  if (!email) {
-    document.getElementById("msg").innerText = "Please enter email";
-    return;
-  }
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        clearStatus();
 
-  document.getElementById("msg").innerText = "Request submitted!";
-}
-</script>
+        var raw = (emailInput.value || '').trim();
 
+        if (!raw) {
+          setStatus('error', 'Please enter your registered email');
+          emailInput.focus();
+          return;
+        }
+
+        if (!EMAIL_RE.test(raw)) {
+          setStatus('error', 'Please enter a valid email address');
+          emailInput.focus();
+          return;
+        }
+
+        submitBtn.disabled = true;
+        setStatus('submitting', 'Submitting request…');
+
+        simulateSubmit(function () {
+          submitBtn.disabled = false;
+          setStatus(
+            'success',
+            'Your request has been submitted successfully. We will verify ownership of the provided email address by sending a confirmation email. Please follow the instructions in that email to proceed with account deletion.'
+          );
+          emailInput.value = '';
+        });
+      });
+    })();
+  </script>
 </body>
 </html>
