@@ -799,8 +799,8 @@ export default function ChatPage() {
       // Provide more specific error messages based on error type
       if (error.message) {
         // Determine the correct environment variable name based on current provider
-        const envKeyName = apiProvider === 'openai' ? 'REACT_APP_OPENAI_API_KEY' : 
-                          apiProvider === 'gemini' ? 'REACT_APP_GOOGLE_API_KEY' : 
+        const envKeyName = apiProvider === 'openai' ? 'REACT_APP_OPENAI_API_KEY' :
+                          apiProvider === 'gemini' ? 'REACT_APP_GOOGLE_API_KEY or REACT_APP_VERTEX_GEMINI_URL' :
                           'REACT_APP_GROK_API_KEY';
         const providerName = apiProvider === 'openai' ? 'OpenAI' : 
                             apiProvider === 'gemini' ? 'Gemini' : 

@@ -71,6 +71,146 @@ class ChatService {
     return this.openaiModelName; // Default fallback
   }
 
+  /** Base URL for local Vertex proxy (no trailing slash). When set, Gemini chat + share suggestions can use Vertex instead of the browser API key. */
+  getVertexGeminiUrl() {
+    return (process.env.REACT_APP_VERTEX_GEMINI_URL || '').trim().replace(/\/$/, '');
+  }
+
+  /**
+   * Call backend-vertex POST /generateContent. Returns model text only.
+   */
+  async callVertexGenerateContent({ prompt, temperature = 0.65, maxOutputTokens = 1024, signal } = {}) {
+    const base = this.getVertexGeminiUrl();
+    if (!base) {
+      throw new Error('Vertex Gemini URL is not configured. Set REACT_APP_VERTEX_GEMINI_URL (e.g. http://localhost:3001).');
+    }
+    const res = await fetch(`${base}/generateContent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, temperature, maxOutputTokens }),
+      signal,
+    });
+    if (!res.ok) {
+      const t = await res.text().catch(() => '');
+      throw new Error(`Vertex AI proxy error: ${res.status} ${t.substring(0, 240)}`);
+    }
+    const data = await res.json();
+    if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
+      return data.candidates[0].content.parts.map((p) => (p && p.text) || '').join('');
+    }
+    throw new Error('Unexpected response from Vertex AI proxy');
+  }
+
+  _buildReflectionShareSuggestionsPrompt(reflection, platform) {
+    const platformLabel = platform === 'x' ? 'X (Twitter)' : platform.charAt(0).toUpperCase() + platform.slice(1);
+
+    const platformStyleGuide = {
+      linkedin: `LINKEDIN STYLE (strict — follow all):
+
+UNIQUE INSIGHT (do not merely summarize the day):
+- Derive a sharp insight from what they wrote: client or colleague questions, building in public, tensions, tradeoffs, or lessons learned.
+- Personal backstory or biography: ONLY if the user explicitly said it in the reflection below. Paraphrase only facts they stated. If nothing relevant appears, omit backstory entirely — never invent or assume a past.
+
+ONE POST = ONE IDEA (journalist mindset):
+- Each post has one clear angle and one main takeaway, like a strong lead — not a laundry list of unrelated points.
+
+STRUCTURE (skimmable):
+- Write for skimmers: short paragraphs, optional bullet points, or a tight framework when it fits (e.g. Problem → tension → lesson, or a short story arc to one point). Plain, simple language.
+
+HOOK (first ~2 lines are critical):
+- Open with something that earns the scroll: a number, direct address ("you"), a striking detail from THEIR reflection, or a sharp question. The hook must match the single idea.
+
+DELIVER + CLOSE:
+- The body must fulfill the hook’s promise. End with a clear call to action (one question, comment prompt, or one concrete next step).
+
+POLISH:
+- First person where natural. 0–3 relevant hashtags (e.g. #Learning). No meta ("here’s my LinkedIn post"). Emoji only if light and natural.`,
+      x: `X (TWITTER) STYLE (strict):
+- Very concise. Each post MUST be under 280 characters (count them).
+- Punchy, direct. Line breaks for emphasis. One clear idea per post.
+- Can be witty, candid, or reflective. 1–2 hashtags max. Emoji sparingly if at all.`,
+      reddit: `REDDIT STYLE (strict):
+- Casual, conversational, like r/CasualConversation or a personal story sub.
+- First-person, relatable, authentic. Can be self-deprecating or funny.
+- Natural paragraph flow. No corporate speak. Feels like talking to a friend.`,
+    };
+    const styleGuide = platformStyleGuide[platform] || platformStyleGuide.linkedin;
+
+    const linkedinReflectionExtra =
+      platform === 'linkedin'
+        ? `
+LinkedIn (extra — every post):
+- Again: no invented personal history. Backstory only when the reflection explicitly contains it.
+- Hook in the opening lines; skimmable middle; explicit CTA at the end.
+`
+        : '';
+
+    return `You are turning a day's reflection into separate social posts. You MUST create one standalone post for EACH distinct event or moment mentioned in the reflection.
+
+PLATFORM: ${platformLabel}. Write EVERY post in that platform's native style so it reads like a real ${platformLabel} post.
+
+${styleGuide}
+${linkedinReflectionExtra}
+Step 1 – List EVERY main event/moment in the reflection. Include ALL of these when present:
+- Embarrassing or funny moments (e.g. wrong door, mix-up, mistake)
+- Books, articles, or media mentioned by name (e.g. "The Three-Body Problem", "Source Code", "Crime and Punishment")
+- People you met or talked about
+- Places you went (e.g. library, office, college)
+- Work or projects you did (e.g. deep work, project in the library)
+Do not skip any major event. If the user mentions a book, there must be a post about that book. If they mention a mix-up and a book, output two posts (one per event).
+
+Step 2 – For EACH event you listed, write ONE complete, standalone post that:
+- Focuses only on that single event
+- Expands on the thoughts, emotions, or insights from that moment
+- Feels natural and reflective, like a real social post (not a dry summary)${
+        platform === 'linkedin'
+          ? `
+- For LinkedIn: one clear angle per post; strong hook in the first two lines; skimmable structure (short paragraphs and/or bullets); deliver on the hook; end with a CTA; never fabricate backstory not present in the reflection`
+          : ''
+      }
+- Is written EXACTLY in the ${platformLabel} style described above (tone, length, structure)
+
+Output format (strict):
+- For each post, first write exactly: EVENT: <short event label>
+- Then on the next lines write the full post text.
+- Separate each post with a line that contains only: ---
+- Do NOT use "Option 1", "Option 2", or any option labels. Only EVENT: and the post content.
+
+Example format (reflection mentioned a mix-up AND a book):
+EVENT: The Director's office mix-up
+[Full post about that moment only.]
+
+---
+EVENT: Reading The Three-Body Problem
+[Full post about the book and your thoughts only.]
+
+Reflection:
+${(reflection || '').trim()}`;
+  }
+
+  _parseShareSuggestionModelOutput(trimmed, reflection) {
+    const reflectionTrim = (reflection || '').trim();
+    if (!trimmed) return [{ eventLabel: 'Reflection', post: reflectionTrim }];
+
+    let blocks = trimmed.split(/\n *--- *\n/).map((s) => s.trim()).filter(Boolean);
+    if (blocks.length <= 1 && (trimmed.match(/EVENT:\s*/gi) || []).length >= 2) {
+      const eventParts = trimmed.split(/\s*EVENT:\s*/i);
+      blocks = eventParts
+        .map((p) => p.trim())
+        .filter(Boolean)
+        .map((p) => (p.match(/^EVENT:/i) ? p : `EVENT: ${p}`));
+    }
+    const result = [];
+    for (const block of blocks) {
+      const eventMatch = block.match(/^EVENT:\s*(.+?)(?:\n|$)/i);
+      const eventLabel = eventMatch ? eventMatch[1].trim() : '';
+      const post = eventMatch ? block.slice(block.indexOf('\n') + 1).trim() : block;
+      if (post) result.push({ eventLabel: eventLabel || 'Moment', post });
+    }
+    if (result.length === 0) return [{ eventLabel: 'Reflection', post: reflectionTrim }];
+    return result;
+  }
+
   /**
    * Detect if message contains URLs/links
    */
@@ -832,13 +972,15 @@ Be thorough and detailed. This description will be used to generate a response.`
     this.openaiApiKey = process.env.REACT_APP_OPENAI_API_KEY || this.openaiApiKey || '';
     this.geminiApiKey = process.env.REACT_APP_GOOGLE_API_KEY || this.geminiApiKey || '';
     this.grokApiKey = process.env.REACT_APP_GROK_API_KEY || this.grokApiKey || '';
-    
-    // Validate API key
+
+    const vertexForGemini = this.apiProvider === 'gemini' && !!this.getVertexGeminiUrl();
+
+    // Validate API key (Gemini can use Vertex proxy without a browser API key)
     const apiKey = this.getApiKey();
-    if (!apiKey || apiKey.trim() === '') {
+    if (!vertexForGemini && (!apiKey || apiKey.trim() === '')) {
       const providerName = this.apiProvider === 'openai' ? 'OpenAI' : this.apiProvider === 'gemini' ? 'Gemini' : 'Grok';
       const envKeyName = this.apiProvider === 'openai' ? 'REACT_APP_OPENAI_API_KEY' : this.apiProvider === 'gemini' ? 'REACT_APP_GOOGLE_API_KEY' : 'REACT_APP_GROK_API_KEY';
-      
+
       console.error('❌ CHAT DEBUG: API key is missing!');
       console.error(`❌ CHAT DEBUG: Provider: ${providerName}`);
       console.error(`❌ CHAT DEBUG: Environment variable: ${envKeyName}`);
@@ -847,15 +989,21 @@ Be thorough and detailed. This description will be used to generate a response.`
       console.error(`❌ CHAT DEBUG: All env vars:`, {
         'REACT_APP_OPENAI_API_KEY': process.env.REACT_APP_OPENAI_API_KEY ? 'SET' : 'NOT SET',
         'REACT_APP_GOOGLE_API_KEY': process.env.REACT_APP_GOOGLE_API_KEY ? 'SET' : 'NOT SET',
-        'REACT_APP_GROK_API_KEY': process.env.REACT_APP_GROK_API_KEY ? 'SET' : 'NOT SET'
+        'REACT_APP_GROK_API_KEY': process.env.REACT_APP_GROK_API_KEY ? 'SET' : 'NOT SET',
+        'REACT_APP_VERTEX_GEMINI_URL': process.env.REACT_APP_VERTEX_GEMINI_URL ? 'SET' : 'NOT SET',
       });
-      
-      throw new Error(`${providerName} API key is not configured. Please check your ${envKeyName} in the .env file and restart the React development server.`);
+
+      throw new Error(
+        `${providerName} API key is not configured. For Gemini via Vertex, set REACT_APP_VERTEX_GEMINI_URL (e.g. http://localhost:3001). Otherwise set ${envKeyName} in .env and restart the dev server.`
+      );
     }
-    
-    // Log API key status (first 10 chars only for security)
-    console.log('✅ CHAT DEBUG: API key found (first 10 chars):', apiKey.substring(0, 10) + '...');
-    console.log('✅ CHAT DEBUG: API key length:', apiKey.length);
+
+    if (vertexForGemini) {
+      console.log('✅ CHAT DEBUG: Using Vertex AI proxy for Gemini:', this.getVertexGeminiUrl());
+    } else {
+      console.log('✅ CHAT DEBUG: API key found (first 10 chars):', apiKey.substring(0, 10) + '...');
+      console.log('✅ CHAT DEBUG: API key length:', apiKey.length);
+    }
     
     try {
       // Check if we have an image (file or base64) or URL
@@ -1278,6 +1426,33 @@ Assistant:`;
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${apiKey}`
         };
+      } else if (vertexForGemini) {
+        const vController = new AbortController();
+        const vTimeoutId = setTimeout(() => vController.abort(), 60000);
+        try {
+          const aiText = await this.callVertexGenerateContent({
+            prompt: simplePrompt,
+            temperature: 0.65,
+            maxOutputTokens: 1024,
+            signal: vController.signal,
+          });
+          clearTimeout(vTimeoutId);
+          if (!aiText || !aiText.trim()) {
+            throw new Error('Empty response from Vertex AI.');
+          }
+          return aiText.trim();
+        } catch (fetchError) {
+          clearTimeout(vTimeoutId);
+          if (fetchError.name === 'AbortError') {
+            console.error('❌ CHAT DEBUG: Vertex request timed out after 60 seconds');
+            throw new Error('Request timed out. The Vertex AI server may be slow or unavailable. Please try again.');
+          }
+          if (fetchError.message && (fetchError.message.includes('Failed to fetch') || fetchError.message.includes('NetworkError'))) {
+            console.error('❌ CHAT DEBUG: Network error reaching Vertex proxy');
+            throw new Error('Unable to connect to the Vertex AI server. Is backend-vertex running? Check REACT_APP_VERTEX_GEMINI_URL.');
+          }
+          throw fetchError;
+        }
       } else {
         // Gemini API - v1, key as query param
         apiUrl = `${this.geminiBaseURL}/models/${this.geminiModelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
@@ -1296,18 +1471,18 @@ Assistant:`;
           'Content-Type': 'application/json'
         };
       }
-      
+
       console.log('📤 CHAT DEBUG: Full API URL:', apiUrl);
       console.log('📤 CHAT DEBUG: API Base URL:', this.getBaseURL());
       console.log('📤 CHAT DEBUG: Model:', modelToUse);
       console.log('📤 CHAT DEBUG: Prompt length:', simplePrompt.length);
       console.log('📤 CHAT DEBUG: Has image context:', hasImageContext);
       console.log('📤 CHAT DEBUG: API Key present:', apiKey ? 'YES' : 'NO');
-      
+
       // Add timeout to prevent hanging requests (60 seconds for chat)
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
-      
+
       let response;
       try {
         response = await fetch(apiUrl, {
@@ -1431,11 +1606,14 @@ Assistant:`;
     this.geminiApiKey = process.env.REACT_APP_GOOGLE_API_KEY || this.geminiApiKey || '';
     this.grokApiKey = process.env.REACT_APP_GROK_API_KEY || this.grokApiKey || '';
 
+    const vertexForGemini = this.apiProvider === 'gemini' && !!this.getVertexGeminiUrl();
     const apiKey = this.getApiKey();
-    if (!apiKey || apiKey.trim() === '') {
+    if (!vertexForGemini && (!apiKey || apiKey.trim() === '')) {
       const providerName = this.apiProvider === 'openai' ? 'OpenAI' : this.apiProvider === 'gemini' ? 'Gemini' : 'Grok';
       const envKeyName = this.apiProvider === 'openai' ? 'REACT_APP_OPENAI_API_KEY' : this.apiProvider === 'gemini' ? 'REACT_APP_GOOGLE_API_KEY' : 'REACT_APP_GROK_API_KEY';
-      throw new Error(`${providerName} API key is not set. Add ${envKeyName} in .env`);
+      throw new Error(
+        `${providerName} API key is not set. Add ${envKeyName} in .env, or for Gemini via Vertex set REACT_APP_VERTEX_GEMINI_URL.`
+      );
     }
 
     const prompt = `Apply the following edit to the text below. Return ONLY the edited text, no quotes, no explanation, no preamble.
@@ -1464,6 +1642,22 @@ ${text}`;
         max_tokens: 1000
       };
       headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` };
+    } else if (vertexForGemini) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      try {
+        const edited = await this.callVertexGenerateContent({
+          prompt,
+          temperature: 0.3,
+          maxOutputTokens: 1000,
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        return (edited || '').trim();
+      } catch (e) {
+        clearTimeout(timeoutId);
+        throw e;
+      }
     } else {
       apiUrl = `${this.geminiBaseURL}/models/${this.geminiModelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
       requestBody = {
@@ -1550,6 +1744,25 @@ ${text}`;
         }
       }
 
+      if (this.getVertexGeminiUrl()) {
+        try {
+          const sharePrompt = this._buildReflectionShareSuggestionsPrompt(reflection, platform);
+          const vController = new AbortController();
+          const vTimeout = setTimeout(() => vController.abort(), 45000);
+          const raw = await this.callVertexGenerateContent({
+            prompt: sharePrompt,
+            temperature: 0.5,
+            maxOutputTokens: 4096,
+            signal: vController.signal,
+          });
+          clearTimeout(vTimeout);
+          return this._parseShareSuggestionModelOutput((raw || '').trim(), reflection);
+        } catch (vertexErr) {
+          console.warn('Vertex share suggestions failed:', vertexErr);
+          lastErr = vertexErr;
+        }
+      }
+
       // In native/local: backend unreachable — return reflection as single post so user can still choose & share.
       if (originLooksLocal && lastErr) {
         const trimmed = (reflection || '').trim();
@@ -1573,97 +1786,16 @@ ${text}`;
       throw new Error(`Suggestions failed: ${msg}`);
     }
 
-    // Web fallback: Share suggestion text is generated with OpenAI directly
+    // Web fallback: OpenAI directly, or Vertex above when REACT_APP_VERTEX_GEMINI_URL is set
     this.openaiApiKey = (process.env.REACT_APP_OPENAI_API_KEY || process.env.OPENAI_API_KEY || this.openaiApiKey || '').trim();
     const apiKey = this.openaiApiKey;
     if (!apiKey || apiKey.trim() === '') {
-      throw new Error('OpenAI API key is not set. Add REACT_APP_OPENAI_API_KEY to .env for share suggestions (LinkedIn, X, Reddit).');
+      throw new Error(
+        'OpenAI API key is not set. Add REACT_APP_OPENAI_API_KEY to .env for share suggestions, or set REACT_APP_VERTEX_GEMINI_URL to use Vertex AI instead.'
+      );
     }
 
-    const platformLabel = platform === 'x' ? 'X (Twitter)' : platform.charAt(0).toUpperCase() + platform.slice(1);
-
-    const platformStyleGuide = {
-      linkedin: `LINKEDIN STYLE (strict — follow all):
-
-UNIQUE INSIGHT (do not merely summarize the day):
-- Derive a sharp insight from what they wrote: client or colleague questions, building in public, tensions, tradeoffs, or lessons learned.
-- Personal backstory or biography: ONLY if the user explicitly said it in the reflection below. Paraphrase only facts they stated. If nothing relevant appears, omit backstory entirely — never invent or assume a past.
-
-ONE POST = ONE IDEA (journalist mindset):
-- Each post has one clear angle and one main takeaway, like a strong lead — not a laundry list of unrelated points.
-
-STRUCTURE (skimmable):
-- Write for skimmers: short paragraphs, optional bullet points, or a tight framework when it fits (e.g. Problem → tension → lesson, or a short story arc to one point). Plain, simple language.
-
-HOOK (first ~2 lines are critical):
-- Open with something that earns the scroll: a number, direct address ("you"), a striking detail from THEIR reflection, or a sharp question. The hook must match the single idea.
-
-DELIVER + CLOSE:
-- The body must fulfill the hook’s promise. End with a clear call to action (one question, comment prompt, or one concrete next step).
-
-POLISH:
-- First person where natural. 0–3 relevant hashtags (e.g. #Learning). No meta ("here’s my LinkedIn post"). Emoji only if light and natural.`,
-      x: `X (TWITTER) STYLE (strict):
-- Very concise. Each post MUST be under 280 characters (count them).
-- Punchy, direct. Line breaks for emphasis. One clear idea per post.
-- Can be witty, candid, or reflective. 1–2 hashtags max. Emoji sparingly if at all.`,
-      reddit: `REDDIT STYLE (strict):
-- Casual, conversational, like r/CasualConversation or a personal story sub.
-- First-person, relatable, authentic. Can be self-deprecating or funny.
-- Natural paragraph flow. No corporate speak. Feels like talking to a friend.`
-    };
-    const styleGuide = platformStyleGuide[platform] || platformStyleGuide.linkedin;
-
-    const linkedinReflectionExtra =
-      platform === 'linkedin'
-        ? `
-LinkedIn (extra — every post):
-- Again: no invented personal history. Backstory only when the reflection explicitly contains it.
-- Hook in the opening lines; skimmable middle; explicit CTA at the end.
-`
-        : '';
-
-    const prompt = `You are turning a day's reflection into separate social posts. You MUST create one standalone post for EACH distinct event or moment mentioned in the reflection.
-
-PLATFORM: ${platformLabel}. Write EVERY post in that platform's native style so it reads like a real ${platformLabel} post.
-
-${styleGuide}
-${linkedinReflectionExtra}
-Step 1 – List EVERY main event/moment in the reflection. Include ALL of these when present:
-- Embarrassing or funny moments (e.g. wrong door, mix-up, mistake)
-- Books, articles, or media mentioned by name (e.g. "The Three-Body Problem", "Source Code", "Crime and Punishment")
-- People you met or talked about
-- Places you went (e.g. library, office, college)
-- Work or projects you did (e.g. deep work, project in the library)
-Do not skip any major event. If the user mentions a book, there must be a post about that book. If they mention a mix-up and a book, output two posts (one per event).
-
-Step 2 – For EACH event you listed, write ONE complete, standalone post that:
-- Focuses only on that single event
-- Expands on the thoughts, emotions, or insights from that moment
-- Feels natural and reflective, like a real social post (not a dry summary)${
-        platform === 'linkedin'
-          ? `
-- For LinkedIn: one clear angle per post; strong hook in the first two lines; skimmable structure (short paragraphs and/or bullets); deliver on the hook; end with a CTA; never fabricate backstory not present in the reflection`
-          : ''
-      }
-- Is written EXACTLY in the ${platformLabel} style described above (tone, length, structure)
-
-Output format (strict):
-- For each post, first write exactly: EVENT: <short event label>
-- Then on the next lines write the full post text.
-- Separate each post with a line that contains only: ---
-- Do NOT use "Option 1", "Option 2", or any option labels. Only EVENT: and the post content.
-
-Example format (reflection mentioned a mix-up AND a book):
-EVENT: The Director's office mix-up
-[Full post about that moment only.]
-
----
-EVENT: Reading The Three-Body Problem
-[Full post about the book and your thoughts only.]
-
-Reflection:
-${(reflection || '').trim()}`;
+    const prompt = this._buildReflectionShareSuggestionsPrompt(reflection, platform);
 
     const apiUrl = `${this.openaiBaseURL}/chat/completions`;
     const requestBody = {
@@ -1699,27 +1831,7 @@ ${(reflection || '').trim()}`;
 
     const data = await response.json();
     const raw = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) ? data.choices[0].message.content : '';
-    const trimmed = (raw || '').trim();
-    if (!trimmed) return [{ eventLabel: 'Reflection', post: reflection.trim() }];
-
-    // Split by --- first; if only one block but text has multiple "EVENT:", split by EVENT: to get all
-    let blocks = trimmed.split(/\n *--- *\n/).map(s => s.trim()).filter(Boolean);
-    if (blocks.length <= 1 && (trimmed.match(/EVENT:\s*/gi) || []).length >= 2) {
-      const eventParts = trimmed.split(/\s*EVENT:\s*/i);
-      blocks = eventParts
-        .map(p => p.trim())
-        .filter(Boolean)
-        .map(p => (p.match(/^EVENT:/i) ? p : 'EVENT: ' + p));
-    }
-    const result = [];
-    for (const block of blocks) {
-      const eventMatch = block.match(/^EVENT:\s*(.+?)(?:\n|$)/i);
-      const eventLabel = eventMatch ? eventMatch[1].trim() : '';
-      const post = eventMatch ? block.slice(block.indexOf('\n') + 1).trim() : block;
-      if (post) result.push({ eventLabel: eventLabel || 'Moment', post });
-    }
-    if (result.length === 0) return [{ eventLabel: 'Reflection', post: reflection.trim() }];
-    return result;
+    return this._parseShareSuggestionModelOutput((raw || '').trim(), reflection);
   }
 
   /**
@@ -1871,9 +1983,6 @@ ${(reflection || '').trim()}`;
 
     this.openaiApiKey = (process.env.REACT_APP_OPENAI_API_KEY || process.env.OPENAI_API_KEY || this.openaiApiKey || '').trim();
     const apiKey = this.openaiApiKey;
-    if (!apiKey) {
-      return fallback;
-    }
 
     const platformLabel = platform === 'x' ? 'X (Twitter)' : platform.charAt(0).toUpperCase() + platform.slice(1);
     const platformStyleGuide = {
@@ -1905,42 +2014,64 @@ Rules:
 Return ONLY valid JSON with this exact shape (no markdown fences):
 {"posts":[{"eventLabel":"News","post":"..."}]}`;
 
-    const apiUrl = `${this.openaiBaseURL}/chat/completions`;
-    const requestBody = {
-      model: this.openaiModelName,
-      messages: [{ role: 'user', content: userContent }],
-      temperature: 0.55,
-      max_tokens: 2000,
-      response_format: { type: 'json_object' },
-    };
+    let raw = '';
+    if (this.getVertexGeminiUrl()) {
+      try {
+        const vController = new AbortController();
+        const vTimeout = setTimeout(() => vController.abort(), 45000);
+        raw = await this.callVertexGenerateContent({
+          prompt: userContent,
+          temperature: 0.55,
+          maxOutputTokens: 4096,
+          signal: vController.signal,
+        });
+        clearTimeout(vTimeout);
+      } catch (e) {
+        console.warn('Vertex news article suggestions failed:', e);
+        raw = '';
+      }
+    }
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 45000);
-    let response;
-    try {
-      response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify(requestBody),
-        signal: controller.signal,
-      });
-    } catch {
+    if (!String(raw || '').trim() && apiKey) {
+      const apiUrl = `${this.openaiBaseURL}/chat/completions`;
+      const requestBody = {
+        model: this.openaiModelName,
+        messages: [{ role: 'user', content: userContent }],
+        temperature: 0.55,
+        max_tokens: 2000,
+        response_format: { type: 'json_object' },
+      };
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 45000);
+      let response;
+      try {
+        response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify(requestBody),
+          signal: controller.signal,
+        });
+      } catch {
+        clearTimeout(timeoutId);
+        return fallback;
+      }
       clearTimeout(timeoutId);
-      return fallback;
-    }
-    clearTimeout(timeoutId);
 
-    if (!response.ok) return fallback;
+      if (!response.ok) return fallback;
 
-    let data;
-    try {
-      data = await response.json();
-    } catch {
-      return fallback;
+      let data;
+      try {
+        data = await response.json();
+      } catch {
+        return fallback;
+      }
+      raw = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content)
+        ? data.choices[0].message.content
+        : '';
     }
-    const raw = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content)
-      ? data.choices[0].message.content
-      : '';
+
+    if (!String(raw || '').trim()) return fallback;
     let parsed;
     try {
       parsed = JSON.parse((raw || '').trim());
