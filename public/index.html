@@ -194,6 +194,50 @@
       border: 1px solid rgba(134, 239, 172, 0.28);
     }
 
+    /* Toggle between request form and post-submit success view */
+    .panel-hidden {
+      display: none !important;
+    }
+
+    .success-screen {
+      text-align: left;
+    }
+
+    .success-screen h2 {
+      margin: 0 0 1.25rem;
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+
+    .success-panel {
+      border-radius: var(--radius);
+      border: 1.5px solid #4ade80;
+      background: rgba(22, 101, 52, 0.35);
+      padding: 1.25rem 1.35rem;
+      animation: successIn 0.45s ease;
+    }
+
+    .success-panel p {
+      margin: 0;
+      font-size: 0.9375rem;
+      line-height: 1.6;
+      color: #bbf7d0;
+      font-weight: 500;
+    }
+
+    @keyframes successIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
     footer {
       margin-top: 2rem;
       padding-top: 1.5rem;
@@ -209,30 +253,42 @@
   <div class="shell">
     <main class="card" role="main">
       <p class="eyebrow">Detea</p>
-      <h1>Account deletion request</h1>
-      <p class="intro">
-        Use this page to start the process of deleting your Detea account and associated data.
-        <strong>Jamdagni Corporation</strong> will handle your request in line with applicable policies.
-      </p>
 
-      <form id="deletion-form" novalidate>
-        <div class="field-wrap">
-          <label for="email">Registered email address</label>
-          <input
-            id="email"
-            name="email"
-            type="email"
-            autocomplete="email"
-            inputmode="email"
-            placeholder="name@example.com"
-            aria-describedby="status"
-            aria-invalid="false"
-          />
+      <div id="screen-form">
+        <h1>Account deletion request</h1>
+        <p class="intro">
+          Use this page to start the process of deleting your Detea account and associated data.
+          <strong>Jamdagni Corporation</strong> will handle your request in line with applicable policies.
+        </p>
+
+        <form id="deletion-form" novalidate>
+          <div class="field-wrap">
+            <label for="email">Registered email address</label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              autocomplete="email"
+              inputmode="email"
+              placeholder="name@example.com"
+              aria-describedby="status"
+              aria-invalid="false"
+            />
+          </div>
+          <button type="submit" id="submit-btn">Delete My Account</button>
+        </form>
+
+        <div id="status" class="status" role="status" aria-live="polite"></div>
+      </div>
+
+      <div id="screen-success" class="success-screen panel-hidden" aria-hidden="true">
+        <h2 id="success-heading" tabindex="-1">Request submitted</h2>
+        <div class="success-panel">
+          <p>
+            Your request has been submitted successfully. We will verify ownership of the provided email address by sending a confirmation email. Please follow the instructions in that email to proceed with account deletion.
+          </p>
         </div>
-        <button type="submit" id="submit-btn">Delete My Account</button>
-      </form>
-
-      <div id="status" class="status" role="status" aria-live="polite"></div>
+      </div>
 
       <footer>
         © Detea · Developed and published by Jamdagni Corporation.<br />
@@ -245,6 +301,9 @@
     (function () {
       var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+      var screenForm = document.getElementById('screen-form');
+      var screenSuccess = document.getElementById('screen-success');
+      var successHeading = document.getElementById('success-heading');
       var form = document.getElementById('deletion-form');
       var emailInput = document.getElementById('email');
       var submitBtn = document.getElementById('submit-btn');
@@ -260,6 +319,14 @@
         statusEl.className = 'status';
         statusEl.textContent = '';
         emailInput.setAttribute('aria-invalid', 'false');
+      }
+
+      function showSuccessScreen() {
+        screenForm.classList.add('panel-hidden');
+        screenSuccess.classList.remove('panel-hidden');
+        screenSuccess.setAttribute('aria-hidden', 'false');
+        document.title = 'Detea — Request submitted';
+        successHeading.focus();
       }
 
       function simulateSubmit(callback) {
@@ -289,12 +356,9 @@
         setStatus('submitting', 'Submitting request…');
 
         simulateSubmit(function () {
-          submitBtn.disabled = false;
-          setStatus(
-            'success',
-            'Your request has been submitted successfully. We will verify ownership of the provided email address by sending a confirmation email. Please follow the instructions in that email to proceed with account deletion.'
-          );
           emailInput.value = '';
+          clearStatus();
+          showSuccessScreen();
         });
       });
     })();
