@@ -6,7 +6,7 @@ const PORT = 3000;
 
 const PROJECT_ID = "project-c212527d-22ac-4bbe-aaf";
 const LOCATION = "us-central1";
-const MODEL = "gemini-1.5-flash";
+const MODEL = "gemini-2.5-flash";
 
 const vertexAI = new VertexAI({ project: PROJECT_ID, location: LOCATION });
 const generativeModel = vertexAI.getGenerativeModel({ model: MODEL });
