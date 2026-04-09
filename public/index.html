@@ -1,24 +1,41 @@
 <!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#0B0E14" />
-    <meta
-      name="description"
-      content="Detea - Your Social Tea"
-    />
-    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
-    <link rel="icon" href="%PUBLIC_URL%/DEITECIrc.webp?v=2" />
-    <link rel="apple-touch-icon" href="%PUBLIC_URL%/DEITECIrc.webp?v=2" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" crossorigin="anonymous" />
-    <title>Detea</title>
-  </head>
-  <body style="background-color: #131314; margin: 0; padding: 0; min-height: 100vh;">
-    <noscript>You need to enable JavaScript to run this app.</noscript>
-    <div id="root" style="background-color: #131314; min-height: 100vh;"></div>
-  </body>
-</html>
+<html>
+<head>
+  <title>Detea - Account Deletion</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
 
+<body style="font-family: Arial; text-align:center; padding:40px; background:#121212; color:white;">
+
+<h2>Detea – Official Account Deletion Page</h2>
+
+<p>
+Detea is an application developed and published by <b>Jamdagni Corporation</b>.
+</p>
+
+<p>Enter your registered email:</p>
+
+<input type="email" id="email" placeholder="Enter your email" style="padding:10px; width:250px;">
+<br><br>
+
+<button onclick="submitRequest()" style="padding:10px 20px; background:#E91E63; color:white; border:none;">
+Delete My Account
+</button>
+
+<p id="msg"></p>
+
+<script>
+function submitRequest() {
+  const email = document.getElementById("email").value;
+
+  if (!email) {
+    document.getElementById("msg").innerText = "Please enter email";
+    return;
+  }
+
+  document.getElementById("msg").innerText = "Request submitted!";
+}
+</script>
+
+</body>
+</html>
