@@ -65,7 +65,7 @@ A beautiful and intuitive emotional wellness companion app built with React. Dei
    ```
 
 5. **Open your browser**
-   Navigate to `http://localhost:3000`
+   Navigate to `http://127.0.0.1:3000`
 
 ## App Flow
 

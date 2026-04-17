@@ -100,7 +100,7 @@ The warm-up system consists of three main components:
 - Prevents cold start delays for first user requests
 
 ### 2. Keep-alive Ping
-- Sends periodic requests to `http://localhost:11434/api/generate` every 4 minutes
+- Sends periodic requests to `http://127.0.0.1:11434/api/generate` every 4 minutes
 - Uses minimal prompts ("ping") to keep model active
 - Prevents model from unloading during idle periods
 
@@ -143,10 +143,10 @@ Update your frontend services to use the new backend endpoints:
 
 ```javascript
 // In your ChatService.js
-const baseURL = 'http://localhost:3001'; // Your backend server
+const baseURL = 'https://detea-backend.onrender.com'; // Your deployed backend server
 
 // Replace Ollama calls with backend API calls
-const response = await fetch(`${baseURL}/api/chat`, {
+const response = await fetch(`${baseURL}/chat`, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ message, conversationHistory })

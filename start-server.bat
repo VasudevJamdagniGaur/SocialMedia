@@ -30,7 +30,7 @@ if %errorlevel% neq 0 (
 )
 
 REM Check if Ollama is running
-curl -s http://localhost:11434/api/tags >nul 2>&1
+curl -s http://127.0.0.1:11434/api/tags >nul 2>&1
 if %errorlevel% neq 0 (
     echo ⚠️  Ollama is not running. Please start Ollama first:
     echo    ollama serve
@@ -57,8 +57,8 @@ if not exist "node_modules" (
 )
 
 echo 🔥 Starting server with Ollama warm-up...
-echo 🌐 Server will be available at: http://localhost:3001
-echo 💬 Health check: http://localhost:3001/health
+echo 🌐 Backend base URL: https://detea-backend.onrender.com
+echo 💬 Health check: https://detea-backend.onrender.com/health
 echo.
 
 REM Start the server

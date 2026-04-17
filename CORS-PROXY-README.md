@@ -30,12 +30,12 @@ chmod +x start-cors-proxy.sh
 node cors-proxy-server.js
 ```
 
-The server will start on `http://localhost:3001`
+The backend used by the frontend is `https://detea-backend.onrender.com`
 
 ## How It Works
 
-1. The proxy server runs on `localhost:3001`
-2. Your frontend makes requests to `http://localhost:3001/api/generate`
+1. The proxy server runs locally
+2. Your frontend makes requests to your deployed backend (recommended)
 3. The proxy forwards the request to RunPod with CORS headers
 4. The response is sent back to your frontend
 
@@ -45,10 +45,7 @@ The following services now use the proxy:
 - `emotionalAnalysisService.js` - For emotional analysis
 - `habitAnalysisService.js` - For habit analysis
 
-Both services will:
-1. Try the proxy first (`http://localhost:3001`)
-2. Fallback to direct URL if proxy is not available
-3. Handle errors gracefully
+Both services handle errors gracefully.
 
 ## Troubleshooting
 
@@ -64,7 +61,7 @@ If you see "Port 3001 is already in use":
 
 ### Still Getting CORS Errors
 - Make sure the proxy server is running
-- Check that requests are going to `localhost:3001`
+- Check that requests are going to your backend origin
 - Restart the proxy server
 - Clear browser cache
 

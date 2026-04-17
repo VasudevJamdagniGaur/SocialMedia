@@ -202,7 +202,7 @@ app.use((err, _req, res, _next) => {
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
-  console.log(`Vertex AI backend listening on http://localhost:${PORT}`);
+  console.log(`Vertex AI backend listening on http://0.0.0.0:${PORT}`);
   console.log(`  Project: ${PROJECT_ID}  Region: ${LOCATION}  Model: ${MODEL_ID}`);
   console.log(`  Credentials: ${process.env.GOOGLE_APPLICATION_CREDENTIALS}`);
 });

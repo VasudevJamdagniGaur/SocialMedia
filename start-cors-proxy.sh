@@ -28,10 +28,10 @@ if [ ! -d "node_modules" ]; then
 fi
 
 echo "🔥 Starting CORS proxy server..."
-echo "🌐 Server will be available at: http://localhost:3001"
-echo "💬 Chat API: http://localhost:3001/api/chat"
-echo "🧠 Emotional Analysis API: http://localhost:3001/api/emotional-analysis"
-echo "🔍 Pattern Analysis API: http://localhost:3001/api/pattern-analysis"
+echo "🌐 Backend base URL: https://detea-backend.onrender.com"
+echo "💬 Chat API: https://detea-backend.onrender.com/chat"
+echo "🧠 Emotional Analysis API: https://detea-backend.onrender.com/analyze-pattern"
+echo "🔍 Pattern Analysis API: https://detea-backend.onrender.com/analyze-pattern"
 echo "🔗 Proxying to RunPod: https://rr9rd9oc5khoyk-11434.proxy.runpod.net/"
 echo ""
 

@@ -85,7 +85,7 @@ No browser, no `signInWithPopup`, no `signInWithRedirect`, no redirect URIs.
 
 Do these in order:
 
-1. **Run the app as a native APK** – Do **not** open `http://localhost:3000` in Chrome. Build and run: `npm run build` → `npx cap sync android` → open `android/` in Android Studio → Run on device (or `npx cap run android`). In browser you get: *"Google Sign-In is only available in the native app."*
+1. **Run the app as a native APK** – Do **not** open `http://127.0.0.1:3000` in Chrome. Build and run: `npm run build` → `npx cap sync android` → open `android/` in Android Studio → Run on device (or `npx cap run android`). In browser you get: *"Google Sign-In is only available in the native app."*
 
 2. **Firebase: Android app + SHA-1** – Firebase Console → Project settings → Your apps → your **Android** app. Package name must be exactly `therapist.deite.app`. Download **google-services.json** into `android/app/`. Add **SHA-1**: run `cd android && ./gradlew signingReport`, copy SHA-1 under **Variant: debug**, then in Firebase → your Android app → **Add fingerprint** → paste SHA-1.
 

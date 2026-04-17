@@ -24,7 +24,7 @@ class ChatService {
     // Debug: Log API key status (first 10 chars only for security)
     console.log('🔑 API Keys loaded:');
     console.log('  OpenAI:', this.openaiApiKey ? `${this.openaiApiKey.substring(0, 10)}... (${this.openaiApiKey.length} chars)` : 'NOT SET');
-    console.log('  Gemini (Vertex backend):', isVertexBackendConfigured() ? getVertexBackendBaseUrl() : 'NOT SET (REACT_APP_VERTEX_GEMINI_URL / REACT_APP_VERTEX_BACKEND_URL)');
+    console.log('  Gemini (Vertex backend):', isVertexBackendConfigured() ? getVertexBackendBaseUrl() : 'NOT SET (REACT_APP_BACKEND_URL / REACT_APP_VERTEX_BACKEND_URL / REACT_APP_VERTEX_GEMINI_URL)');
     console.log('  Grok:', this.grokApiKey ? `${this.grokApiKey.substring(0, 10)}... (${this.grokApiKey.length} chars)` : 'NOT SET');
     console.log('🔍 Environment variables check:');
     console.log('  REACT_APP_GROK_API_KEY exists:', !!process.env.REACT_APP_GROK_API_KEY);
@@ -960,7 +960,7 @@ Be thorough and detailed. This description will be used to generate a response.`
     const apiKey = this.getApiKey();
     if (this.apiProvider === 'gemini' && !vertexForGemini) {
       throw new Error(
-        'Gemini uses your Vertex backend only. Set REACT_APP_VERTEX_BACKEND_URL or REACT_APP_VERTEX_GEMINI_URL (e.g. http://localhost:3001) in .env and restart the dev server.'
+        'Gemini uses your backend only. Set REACT_APP_BACKEND_URL (preferred) or REACT_APP_VERTEX_BACKEND_URL / REACT_APP_VERTEX_GEMINI_URL and restart the dev server.'
       );
     }
     if (!vertexForGemini && (!apiKey || apiKey.trim() === '')) {
@@ -1425,7 +1425,7 @@ Assistant:`;
           }
           if (fetchError.message && (fetchError.message.includes('Failed to fetch') || fetchError.message.includes('NetworkError'))) {
             console.error('❌ CHAT DEBUG: Network error reaching Vertex backend');
-            throw new Error('Unable to connect to the Vertex backend. Is it running? Check REACT_APP_VERTEX_GEMINI_URL.');
+            throw new Error('Unable to connect to the backend. Check REACT_APP_BACKEND_URL (preferred) or REACT_APP_VERTEX_BACKEND_URL / REACT_APP_VERTEX_GEMINI_URL.');
           }
           throw fetchError;
         }
@@ -1549,7 +1549,7 @@ Assistant:`;
     const apiKey = this.getApiKey();
     if (this.apiProvider === 'gemini' && !vertexForGemini) {
       throw new Error(
-        'Gemini uses your Vertex backend only. Set REACT_APP_VERTEX_BACKEND_URL or REACT_APP_VERTEX_GEMINI_URL in .env.'
+        'Gemini uses your backend only. Set REACT_APP_BACKEND_URL (preferred) or REACT_APP_VERTEX_BACKEND_URL / REACT_APP_VERTEX_GEMINI_URL in .env.'
       );
     }
     if (!vertexForGemini && (!apiKey || apiKey.trim() === '')) {
@@ -1719,12 +1719,12 @@ ${text}`;
       throw new Error(`Suggestions failed: ${msg}`);
     }
 
-    // Web fallback: OpenAI directly, or Vertex above when REACT_APP_VERTEX_GEMINI_URL is set
+    // Web fallback: OpenAI directly, or backend route above when configured
     this.openaiApiKey = (process.env.REACT_APP_OPENAI_API_KEY || process.env.OPENAI_API_KEY || this.openaiApiKey || '').trim();
     const apiKey = this.openaiApiKey;
     if (!apiKey || apiKey.trim() === '') {
       throw new Error(
-        'OpenAI API key is not set. Add REACT_APP_OPENAI_API_KEY to .env for share suggestions, or set REACT_APP_VERTEX_GEMINI_URL to use Vertex AI instead.'
+        'OpenAI API key is not set. Add REACT_APP_OPENAI_API_KEY to .env for share suggestions, or set REACT_APP_BACKEND_URL (preferred) / REACT_APP_VERTEX_BACKEND_URL / REACT_APP_VERTEX_GEMINI_URL to use your backend instead.'
       );
     }
 

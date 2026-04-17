@@ -1507,7 +1507,7 @@ export default function ShareSuggestionsPage() {
       const out = await chatService.editImageWithInstruction(instr, source);
       if (!out) {
         throw new Error(
-          'No image returned. Image generation may require server-side support. Ensure REACT_APP_VERTEX_GEMINI_URL points at your backend, or try again later.'
+          'No image returned. Image generation may require server-side support. Ensure REACT_APP_BACKEND_URL (preferred) or REACT_APP_VERTEX_BACKEND_URL / REACT_APP_VERTEX_GEMINI_URL points at your backend, or try again later.'
         );
       }
       setSuggestionImageUrls((prev) => {

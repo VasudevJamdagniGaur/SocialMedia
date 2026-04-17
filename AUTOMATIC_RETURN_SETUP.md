@@ -51,10 +51,10 @@ This is configured in:
 3. That page redirects to `therapist.deite.app://signup`
 4. Android catches the deep link and opens app
 
-#### Option 2: Use http://localhost (Fallback)
+#### Option 2: Use http://127.0.0.1 (Fallback)
 Change in `src/services/authService.js`:
 ```javascript
-const continueUrl = encodeURIComponent('http://localhost/signup');
+const continueUrl = encodeURIComponent('http://127.0.0.1/signup');
 ```
 Then manually return to app (less ideal but works)
 

@@ -25,7 +25,7 @@ if ! command -v ollama &> /dev/null; then
 fi
 
 # Check if Ollama is running
-if ! curl -s http://localhost:11434/api/tags > /dev/null; then
+if ! curl -s http://127.0.0.1:11434/api/tags > /dev/null; then
     echo "⚠️  Ollama is not running. Starting Ollama..."
     ollama serve &
     sleep 5
@@ -48,8 +48,8 @@ if [ ! -d "node_modules" ]; then
 fi
 
 echo "🔥 Starting server with Ollama warm-up..."
-echo "🌐 Server will be available at: http://localhost:3001"
-echo "💬 Health check: http://localhost:3001/health"
+echo "🌐 Backend base URL: https://detea-backend.onrender.com"
+echo "💬 Health check: https://detea-backend.onrender.com/health"
 echo ""
 
 # Start the server

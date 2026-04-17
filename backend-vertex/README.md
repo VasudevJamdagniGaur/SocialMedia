@@ -36,5 +36,5 @@ node index.js
 ## React app
 
 ```env
-REACT_APP_VERTEX_GEMINI_URL=http://localhost:3001
+REACT_APP_BACKEND_URL=https://detea-backend.onrender.com
 ```

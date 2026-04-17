@@ -97,7 +97,7 @@ Make sure your **origin** is in Firebase Console:
 - Go to: Firebase Console → Authentication → Settings → Authorized domains
 - For native app WebView, you might see origin as:
   - `capacitor://localhost` 
-  - `http://localhost`
+  - `http://127.0.0.1`
   - Your actual domain if deployed
   
 **Note:** Capacitor WebView uses `capacitor://localhost` which Firebase might not allow. If redirect fails, check the console error message.
