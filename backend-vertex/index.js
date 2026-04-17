@@ -4,8 +4,17 @@
  */
 import cors from "cors";
 import express from "express";
-import { LOCATION, MODEL_ID, PORT, PROJECT_ID } from "./lib/config.js";
-import { generateText } from "./lib/generateText.js";
+import fs from "fs";
+
+if (process.env.GOOGLE_CREDENTIALS) {
+  fs.writeFileSync("service-account.json", process.env.GOOGLE_CREDENTIALS);
+  process.env.GOOGLE_APPLICATION_CREDENTIALS = "./service-account.json";
+}
+
+const [{ LOCATION, MODEL_ID, PROJECT_ID }, { generateText }] = await Promise.all([
+  import("./lib/config.js"),
+  import("./lib/generateText.js"),
+]);
 
 const app = express();
 app.use(cors());
