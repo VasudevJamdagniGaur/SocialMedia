@@ -5,9 +5,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { prefetchExploreTopicRaw } from '../lib/podExploreTopicPrefetchCache';
 import { getNewsWithLiveFallback } from '../services/cachedNewsService';
 import { recordHubVerticalDwell } from '../services/hubVerticalPersonalizationService';
-
-const GEMINI_MODEL = 'gemini-3-flash-preview';
-const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
+import { getVertexBackendBaseUrl, vertexChat } from '../services/vertexApiClient';
 
 export default function PodEntrepreneurshipPage() {
   const navigate = useNavigate();
@@ -102,42 +100,26 @@ export default function PodEntrepreneurshipPage() {
     };
   }, []);
 
-  // Founder Take: Gemini-generated short posts
+  // Founder Take: AI-generated short posts (Vertex backend)
   useEffect(() => {
     let cancelled = false;
-    const googleKey = (process.env.REACT_APP_GOOGLE_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
 
     const loadFounder = async () => {
       setIsLoadingFounder(true);
       setFounderError('');
-      if (!googleKey) {
+      if (!getVertexBackendBaseUrl()) {
         setFounderPosts(FALLBACK_FOUNDER);
         setIsLoadingFounder(false);
         return;
       }
 
       try {
-        const prompt =
+        const message =
           'You write for a mobile app "Founder Take" feed. Output exactly 3 separate founder insight posts. ' +
           'Each post is 2–4 sentences, practical and specific (no hashtags). ' +
           'Separate posts ONLY with the delimiter ||| (three pipe characters). No numbering or labels.';
 
-        const res = await fetch(
-          `${GEMINI_BASE}/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(googleKey)}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: { temperature: 0.75, maxOutputTokens: 600 },
-            }),
-          }
-        );
-        if (!res.ok) throw new Error(`Gemini ${res.status}`);
-        const data = await res.json();
-        const text =
-          data?.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') ||
-          '';
+        const text = await vertexChat(message, { temperature: 0.75, maxOutputTokens: 600 });
         const parts = text
           .split('|||')
           .map((s) => s.trim())

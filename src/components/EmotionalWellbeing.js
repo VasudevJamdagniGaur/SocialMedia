@@ -33,6 +33,7 @@ import {
 } from 'recharts';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
+import { isVertexBackendConfigured, vertexGenerateContent } from '../services/vertexApiClient';
 
 // Error Boundary Component
 class ErrorBoundary extends React.Component {
@@ -2971,42 +2972,21 @@ Return in this JSON format:
 }`;
 
     try {
-      const apiKey = process.env.REACT_APP_GOOGLE_API_KEY || '';
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${encodeURIComponent(apiKey)}`;
-      
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{
-              text: explanationPrompt
-            }]
-          }],
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 300
-          }
-        })
+      if (!isVertexBackendConfigured()) {
+        throw new Error('Vertex backend URL not configured');
+      }
+      const responseText = await vertexGenerateContent({
+        prompt: explanationPrompt,
+        temperature: 0.7,
+        maxOutputTokens: 300,
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        // Parse Google API response format
-        let responseText = '';
-        if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
-          responseText = data.candidates[0].content.parts.map(part => part.text).join('');
-        }
-        
-        if (responseText) {
-          const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
-            const explanations = JSON.parse(jsonMatch[0]);
-            console.log('✅ AI explanations generated:', explanations);
-            return explanations;
-          }
+      if (responseText) {
+        const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const explanations = JSON.parse(jsonMatch[0]);
+          console.log('✅ AI explanations generated:', explanations);
+          return explanations;
         }
       }
     } catch (error) {

@@ -10,6 +10,10 @@ dist/
 .env.local
 functions/.env
 
+# GCP service account keys (never commit)
+backend-vertex/service-account.json
+**/service-account*.json
+
 # misc
 .DS_Store
 .vscode/

@@ -1507,7 +1507,7 @@ export default function ShareSuggestionsPage() {
       const out = await chatService.editImageWithInstruction(instr, source);
       if (!out) {
         throw new Error(
-          'No image returned. Add REACT_APP_GOOGLE_API_KEY to .env (Gemini), restart the dev server, and try again.'
+          'No image returned. Image generation may require server-side support. Ensure REACT_APP_VERTEX_GEMINI_URL points at your backend, or try again later.'
         );
       }
       setSuggestionImageUrls((prev) => {
@@ -2772,7 +2772,7 @@ export default function ShareSuggestionsPage() {
                         onChange={handleReplaceImageFile}
                       />
                       <p className="text-xs mt-1" style={{ color: isDarkMode ? HUB.textSecondary : '#666' }}>
-                        This image will be shared with your post. Tap the pencil to replace it, remove it, or edit it with AI (uses your Google / Gemini key).
+                        This image will be shared with your post. Tap the pencil to replace it, remove it, or edit it with AI when your app backend supports it.
                       </p>
                     </div>
                   )}
@@ -2866,8 +2866,8 @@ export default function ShareSuggestionsPage() {
                   Edit with AI
                 </h3>
                 <p className="text-xs mb-3" style={{ color: isDarkMode ? HUB.textSecondary : '#666' }}>
-                  Describe how you want the image changed (e.g. &quot;warmer lighting&quot;, &quot;crop to the person&quot;, &quot;more contrast&quot;). Uses Gemini via{' '}
-                  <code className="text-[11px]">REACT_APP_GOOGLE_API_KEY</code>.
+                  Describe how you want the image changed (e.g. &quot;warmer lighting&quot;, &quot;crop to the person&quot;, &quot;more contrast&quot;). Requires multimodal support on your Vertex backend; set{' '}
+                  <code className="text-[11px]">REACT_APP_VERTEX_GEMINI_URL</code>.
                 </p>
                 <textarea
                   value={aiEditInstruction}

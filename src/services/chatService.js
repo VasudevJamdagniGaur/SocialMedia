@@ -2,27 +2,29 @@ import { getCurrentUser } from './authService';
 import firestoreService from './firestoreService';
 import { getDateId } from '../utils/dateUtils';
 import { decodeGoogleNewsUrl } from '../lib/podTopicNewsShared';
+import {
+  getVertexBackendBaseUrl,
+  isVertexBackendConfigured,
+  vertexChat,
+  vertexGenerateContent,
+} from './vertexApiClient';
 
 class ChatService {
   constructor() {
     this.openaiApiKey = process.env.REACT_APP_OPENAI_API_KEY || process.env.OPENAI_API_KEY || '';
-    this.geminiApiKey = process.env.REACT_APP_GOOGLE_API_KEY || process.env.GOOGLE_API_KEY || '';
     this.grokApiKey = process.env.REACT_APP_GROK_API_KEY || process.env.GROK_API_KEY || '';
     this.apiProvider = 'openai'; // 'openai', 'gemini', or 'grok'
     this.openaiBaseURL = 'https://api.openai.com/v1';
-    this.geminiBaseURL = 'https://generativelanguage.googleapis.com/v1beta';
     this.grokBaseURL = 'https://api.x.ai/v1';
     this.openaiModelName = 'gpt-4o';
-    this.geminiModelName = 'gemini-3-flash-preview';
+    this.geminiModelName = 'vertex-backend';
     this.grokModelName = 'grok-3';
     this.visionModelName = 'gpt-4o'; // For OpenAI vision
-    // Image generation: Gemini (gemini-3-pro-image-preview / Nano Banana Pro)
-    this.geminiImageModelName = 'gemini-3-pro-image-preview';
 
     // Debug: Log API key status (first 10 chars only for security)
     console.log('🔑 API Keys loaded:');
     console.log('  OpenAI:', this.openaiApiKey ? `${this.openaiApiKey.substring(0, 10)}... (${this.openaiApiKey.length} chars)` : 'NOT SET');
-    console.log('  Gemini:', this.geminiApiKey ? `${this.geminiApiKey.substring(0, 10)}... (${this.geminiApiKey.length} chars)` : 'NOT SET');
+    console.log('  Gemini (Vertex backend):', isVertexBackendConfigured() ? getVertexBackendBaseUrl() : 'NOT SET (REACT_APP_VERTEX_GEMINI_URL / REACT_APP_VERTEX_BACKEND_URL)');
     console.log('  Grok:', this.grokApiKey ? `${this.grokApiKey.substring(0, 10)}... (${this.grokApiKey.length} chars)` : 'NOT SET');
     console.log('🔍 Environment variables check:');
     console.log('  REACT_APP_GROK_API_KEY exists:', !!process.env.REACT_APP_GROK_API_KEY);
@@ -46,7 +48,7 @@ class ChatService {
    */
   getApiKey() {
     if (this.apiProvider === 'openai') return this.openaiApiKey;
-    if (this.apiProvider === 'gemini') return this.geminiApiKey;
+    if (this.apiProvider === 'gemini') return '';
     if (this.apiProvider === 'grok') return this.grokApiKey;
     return this.openaiApiKey; // Default fallback
   }
@@ -56,7 +58,7 @@ class ChatService {
    */
   getBaseURL() {
     if (this.apiProvider === 'openai') return this.openaiBaseURL;
-    if (this.apiProvider === 'gemini') return this.geminiBaseURL;
+    if (this.apiProvider === 'gemini') return getVertexBackendBaseUrl() || '';
     if (this.apiProvider === 'grok') return this.grokBaseURL;
     return this.openaiBaseURL; // Default fallback
   }
@@ -71,34 +73,16 @@ class ChatService {
     return this.openaiModelName; // Default fallback
   }
 
-  /** Base URL for local Vertex proxy (no trailing slash). When set, Gemini chat + share suggestions can use Vertex instead of the browser API key. */
+  /** Base URL for Vertex Express backend (no trailing slash). */
   getVertexGeminiUrl() {
-    return (process.env.REACT_APP_VERTEX_GEMINI_URL || '').trim().replace(/\/$/, '');
+    return getVertexBackendBaseUrl();
   }
 
   /**
-   * Call backend-vertex POST /generateContent. Returns model text only.
+   * Call backend POST /generateContent. Returns model text only.
    */
   async callVertexGenerateContent({ prompt, temperature = 0.65, maxOutputTokens = 1024, signal } = {}) {
-    const base = this.getVertexGeminiUrl();
-    if (!base) {
-      throw new Error('Vertex Gemini URL is not configured. Set REACT_APP_VERTEX_GEMINI_URL (e.g. http://localhost:3001).');
-    }
-    const res = await fetch(`${base}/generateContent`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, temperature, maxOutputTokens }),
-      signal,
-    });
-    if (!res.ok) {
-      const t = await res.text().catch(() => '');
-      throw new Error(`Vertex AI proxy error: ${res.status} ${t.substring(0, 240)}`);
-    }
-    const data = await res.json();
-    if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
-      return data.candidates[0].content.parts.map((p) => (p && p.text) || '').join('');
-    }
-    throw new Error('Unexpected response from Vertex AI proxy');
+    return vertexGenerateContent({ prompt, temperature, maxOutputTokens, signal });
   }
 
   _buildReflectionShareSuggestionsPrompt(reflection, platform) {
@@ -968,41 +952,34 @@ Be thorough and detailed. This description will be used to generate a response.`
     console.log('🚀 CHAT DEBUG: Using URL:', this.getBaseURL());
     
     // Reload API keys from environment (in case .env was updated)
-    // This allows picking up new keys without restarting the app
     this.openaiApiKey = process.env.REACT_APP_OPENAI_API_KEY || this.openaiApiKey || '';
-    this.geminiApiKey = process.env.REACT_APP_GOOGLE_API_KEY || this.geminiApiKey || '';
     this.grokApiKey = process.env.REACT_APP_GROK_API_KEY || this.grokApiKey || '';
 
-    const vertexForGemini = this.apiProvider === 'gemini' && !!this.getVertexGeminiUrl();
+    const vertexForGemini = this.apiProvider === 'gemini' && isVertexBackendConfigured();
 
-    // Validate API key (Gemini can use Vertex proxy without a browser API key)
     const apiKey = this.getApiKey();
+    if (this.apiProvider === 'gemini' && !vertexForGemini) {
+      throw new Error(
+        'Gemini uses your Vertex backend only. Set REACT_APP_VERTEX_BACKEND_URL or REACT_APP_VERTEX_GEMINI_URL (e.g. http://localhost:3001) in .env and restart the dev server.'
+      );
+    }
     if (!vertexForGemini && (!apiKey || apiKey.trim() === '')) {
-      const providerName = this.apiProvider === 'openai' ? 'OpenAI' : this.apiProvider === 'gemini' ? 'Gemini' : 'Grok';
-      const envKeyName = this.apiProvider === 'openai' ? 'REACT_APP_OPENAI_API_KEY' : this.apiProvider === 'gemini' ? 'REACT_APP_GOOGLE_API_KEY' : 'REACT_APP_GROK_API_KEY';
+      const providerName = this.apiProvider === 'openai' ? 'OpenAI' : 'Grok';
+      const envKeyName = this.apiProvider === 'openai' ? 'REACT_APP_OPENAI_API_KEY' : 'REACT_APP_GROK_API_KEY';
 
       console.error('❌ CHAT DEBUG: API key is missing!');
       console.error(`❌ CHAT DEBUG: Provider: ${providerName}`);
       console.error(`❌ CHAT DEBUG: Environment variable: ${envKeyName}`);
-      console.error(`❌ CHAT DEBUG: process.env.${envKeyName}:`, process.env[envKeyName] ? `${process.env[envKeyName].substring(0, 10)}...` : 'undefined');
-      console.error(`❌ CHAT DEBUG: this.grokApiKey:`, this.grokApiKey ? `${this.grokApiKey.substring(0, 10)}...` : 'empty');
-      console.error(`❌ CHAT DEBUG: All env vars:`, {
-        'REACT_APP_OPENAI_API_KEY': process.env.REACT_APP_OPENAI_API_KEY ? 'SET' : 'NOT SET',
-        'REACT_APP_GOOGLE_API_KEY': process.env.REACT_APP_GOOGLE_API_KEY ? 'SET' : 'NOT SET',
-        'REACT_APP_GROK_API_KEY': process.env.REACT_APP_GROK_API_KEY ? 'SET' : 'NOT SET',
-        'REACT_APP_VERTEX_GEMINI_URL': process.env.REACT_APP_VERTEX_GEMINI_URL ? 'SET' : 'NOT SET',
-      });
 
       throw new Error(
-        `${providerName} API key is not configured. For Gemini via Vertex, set REACT_APP_VERTEX_GEMINI_URL (e.g. http://localhost:3001). Otherwise set ${envKeyName} in .env and restart the dev server.`
+        `${providerName} API key is not configured. Set ${envKeyName} in .env and restart the dev server.`
       );
     }
 
     if (vertexForGemini) {
-      console.log('✅ CHAT DEBUG: Using Vertex AI proxy for Gemini:', this.getVertexGeminiUrl());
+      console.log('✅ CHAT DEBUG: Using Vertex backend for Gemini:', this.getVertexGeminiUrl());
     } else {
       console.log('✅ CHAT DEBUG: API key found (first 10 chars):', apiKey.substring(0, 10) + '...');
-      console.log('✅ CHAT DEBUG: API key length:', apiKey.length);
     }
     
     try {
@@ -1430,46 +1407,30 @@ Assistant:`;
         const vController = new AbortController();
         const vTimeoutId = setTimeout(() => vController.abort(), 60000);
         try {
-          const aiText = await this.callVertexGenerateContent({
-            prompt: simplePrompt,
+          const aiText = await vertexChat(simplePrompt, {
+            signal: vController.signal,
             temperature: 0.65,
             maxOutputTokens: 1024,
-            signal: vController.signal,
           });
           clearTimeout(vTimeoutId);
           if (!aiText || !aiText.trim()) {
-            throw new Error('Empty response from Vertex AI.');
+            throw new Error('Empty response from Vertex backend.');
           }
           return aiText.trim();
         } catch (fetchError) {
           clearTimeout(vTimeoutId);
           if (fetchError.name === 'AbortError') {
             console.error('❌ CHAT DEBUG: Vertex request timed out after 60 seconds');
-            throw new Error('Request timed out. The Vertex AI server may be slow or unavailable. Please try again.');
+            throw new Error('Request timed out. The Vertex backend may be slow or unavailable. Please try again.');
           }
           if (fetchError.message && (fetchError.message.includes('Failed to fetch') || fetchError.message.includes('NetworkError'))) {
-            console.error('❌ CHAT DEBUG: Network error reaching Vertex proxy');
-            throw new Error('Unable to connect to the Vertex AI server. Is backend-vertex running? Check REACT_APP_VERTEX_GEMINI_URL.');
+            console.error('❌ CHAT DEBUG: Network error reaching Vertex backend');
+            throw new Error('Unable to connect to the Vertex backend. Is it running? Check REACT_APP_VERTEX_GEMINI_URL.');
           }
           throw fetchError;
         }
       } else {
-        // Gemini API - v1, key as query param
-        apiUrl = `${this.geminiBaseURL}/models/${this.geminiModelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
-        requestBody = {
-          contents: [{
-            parts: [{
-              text: simplePrompt
-            }]
-          }],
-          generationConfig: {
-            temperature: 0.65,
-            maxOutputTokens: 500
-          }
-        };
-        headers = {
-          'Content-Type': 'application/json'
-        };
+        throw new Error(`Unsupported API provider: ${this.apiProvider}`);
       }
 
       console.log('📤 CHAT DEBUG: Full API URL:', apiUrl);
@@ -1513,8 +1474,8 @@ Assistant:`;
         const errorText = await response.text();
         console.error('❌ CHAT DEBUG: Error response:', errorText);
         
-        const providerName = this.apiProvider === 'openai' ? 'OpenAI' : this.apiProvider === 'gemini' ? 'Gemini' : 'Grok';
-        const envKeyName = this.apiProvider === 'openai' ? 'REACT_APP_OPENAI_API_KEY' : this.apiProvider === 'gemini' ? 'REACT_APP_GOOGLE_API_KEY' : 'REACT_APP_GROK_API_KEY';
+        const providerName = this.apiProvider === 'openai' ? 'OpenAI' : 'Grok';
+        const envKeyName = this.apiProvider === 'openai' ? 'REACT_APP_OPENAI_API_KEY' : 'REACT_APP_GROK_API_KEY';
         
         // Provide more specific error messages
         if (response.status === 400) {
@@ -1538,42 +1499,21 @@ Assistant:`;
       
       // Handle response based on provider
       const data = await response.json();
-      const providerDisplayName = this.apiProvider === 'openai' ? 'OpenAI' : this.apiProvider === 'gemini' ? 'Gemini' : 'Grok';
+      const providerDisplayName = this.apiProvider === 'openai' ? 'OpenAI' : 'Grok';
       console.log(`✅ CHAT DEBUG: Received response from ${providerDisplayName} API`);
       console.log('✅ CHAT DEBUG: Response keys:', Object.keys(data));
       
       let aiResponse = '';
       
-      if (this.apiProvider === 'openai' || this.apiProvider === 'grok') {
-        // Parse OpenAI/Grok API response format (same structure)
-        if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) {
-          aiResponse = data.choices[0].message.content;
-        } else {
-          console.error(`❌ CHAT DEBUG: Unexpected response format from ${providerDisplayName} API`);
-          console.error('❌ CHAT DEBUG: Full response data:', JSON.stringify(data, null, 2));
-          
-          // Check for error in response
-          if (data.error) {
-            throw new Error(`${providerDisplayName} API Error: ${data.error.message || JSON.stringify(data.error)}`);
-          }
-          
-          throw new Error(`Unexpected response format from ${providerDisplayName} API. Please check your API key and try again. Check console for full response details.`);
-        }
+      if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) {
+        aiResponse = data.choices[0].message.content;
       } else {
-        // Parse Gemini API response format
-        if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
-          aiResponse = data.candidates[0].content.parts.map(part => part.text).join('');
-        } else {
-          console.error('❌ CHAT DEBUG: Unexpected response format from Gemini API');
-          console.error('❌ CHAT DEBUG: Full response data:', JSON.stringify(data, null, 2));
-          
-          // Check for error in response
-          if (data.error) {
-            throw new Error(`Gemini API Error: ${data.error.message || JSON.stringify(data.error)}`);
-          }
-          
-          throw new Error('Unexpected response format from Gemini API. Please check your API key and try again. Check console for full response details.');
+        console.error(`❌ CHAT DEBUG: Unexpected response format from ${providerDisplayName} API`);
+        console.error('❌ CHAT DEBUG: Full response data:', JSON.stringify(data, null, 2));
+        if (data.error) {
+          throw new Error(`${providerDisplayName} API Error: ${data.error.message || JSON.stringify(data.error)}`);
         }
+        throw new Error(`Unexpected response format from ${providerDisplayName} API. Please check your API key and try again.`);
       }
       
       if (!aiResponse || aiResponse.trim() === '') {
@@ -1603,17 +1543,19 @@ Assistant:`;
     this.setApiProvider(savedProvider);
 
     this.openaiApiKey = process.env.REACT_APP_OPENAI_API_KEY || this.openaiApiKey || '';
-    this.geminiApiKey = process.env.REACT_APP_GOOGLE_API_KEY || this.geminiApiKey || '';
     this.grokApiKey = process.env.REACT_APP_GROK_API_KEY || this.grokApiKey || '';
 
-    const vertexForGemini = this.apiProvider === 'gemini' && !!this.getVertexGeminiUrl();
+    const vertexForGemini = this.apiProvider === 'gemini' && isVertexBackendConfigured();
     const apiKey = this.getApiKey();
-    if (!vertexForGemini && (!apiKey || apiKey.trim() === '')) {
-      const providerName = this.apiProvider === 'openai' ? 'OpenAI' : this.apiProvider === 'gemini' ? 'Gemini' : 'Grok';
-      const envKeyName = this.apiProvider === 'openai' ? 'REACT_APP_OPENAI_API_KEY' : this.apiProvider === 'gemini' ? 'REACT_APP_GOOGLE_API_KEY' : 'REACT_APP_GROK_API_KEY';
+    if (this.apiProvider === 'gemini' && !vertexForGemini) {
       throw new Error(
-        `${providerName} API key is not set. Add ${envKeyName} in .env, or for Gemini via Vertex set REACT_APP_VERTEX_GEMINI_URL.`
+        'Gemini uses your Vertex backend only. Set REACT_APP_VERTEX_BACKEND_URL or REACT_APP_VERTEX_GEMINI_URL in .env.'
       );
+    }
+    if (!vertexForGemini && (!apiKey || apiKey.trim() === '')) {
+      const providerName = this.apiProvider === 'openai' ? 'OpenAI' : 'Grok';
+      const envKeyName = this.apiProvider === 'openai' ? 'REACT_APP_OPENAI_API_KEY' : 'REACT_APP_GROK_API_KEY';
+      throw new Error(`${providerName} API key is not set. Add ${envKeyName} in .env.`);
     }
 
     const prompt = `Apply the following edit to the text below. Return ONLY the edited text, no quotes, no explanation, no preamble.
@@ -1646,7 +1588,7 @@ ${text}`;
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000);
       try {
-        const edited = await this.callVertexGenerateContent({
+        const edited = await vertexGenerateContent({
           prompt,
           temperature: 0.3,
           maxOutputTokens: 1000,
@@ -1659,12 +1601,7 @@ ${text}`;
         throw e;
       }
     } else {
-      apiUrl = `${this.geminiBaseURL}/models/${this.geminiModelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
-      requestBody = {
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.3, maxOutputTokens: 1000 }
-      };
-      headers = { 'Content-Type': 'application/json' };
+      throw new Error(`Unsupported API provider for edit: ${this.apiProvider}`);
     }
 
     const controller = new AbortController();
@@ -1683,13 +1620,9 @@ ${text}`;
     }
 
     const data = await response.json();
-    let edited = '';
-    if (this.apiProvider === 'openai' || this.apiProvider === 'grok') {
-      edited = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) ? data.choices[0].message.content : '';
-    } else {
-      edited = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts)
-        ? data.candidates[0].content.parts.map(p => p.text).join('') : '';
-    }
+    const edited = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content)
+      ? data.choices[0].message.content
+      : '';
     return (edited || '').trim();
   }
 
@@ -2360,10 +2293,9 @@ ${JSON.stringify(payloadItems)}`;
    * @returns {Promise<{ personality: string[], event: string[], place: string[], brand: string[], object: string[] }>}
    */
   async _detectFamousEntities(postText) {
-    const apiKey = (this.geminiApiKey || process.env.REACT_APP_GOOGLE_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
     const text = (postText || '').trim();
     const empty = { personality: [], event: [], place: [], brand: [], object: [] };
-    if (!apiKey || !text) return empty;
+    if (!text || !isVertexBackendConfigured()) return empty;
 
     const prompt = `Extract ONLY famous or well-known entities from the text. Return STRICT JSON, no markdown.
 
@@ -2383,18 +2315,7 @@ Text:
 ${text.slice(0, 1000)}`;
 
     try {
-      const apiUrl = `${this.geminiBaseURL}/models/${this.geminiModelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
-      const res = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 300 }
-        })
-      });
-      if (!res.ok) return empty;
-      const data = await res.json();
-      let raw = (data.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '').trim();
+      let raw = (await vertexGenerateContent({ prompt, temperature: 0.1, maxOutputTokens: 300 }) || '').trim();
       raw = raw.replace(/```json?/gi, '').replace(/```/g, '').trim();
       const jsonMatch = raw.match(/\{[\s\S]*\}/);
       if (!jsonMatch) return empty;
@@ -2420,9 +2341,8 @@ ${text.slice(0, 1000)}`;
    * @returns {Promise<string|null>} - Full image generation prompt or null
    */
   async _buildStructuredPromptForNoFamous(postText, userContext = null) {
-    const apiKey = (this.geminiApiKey || process.env.REACT_APP_GOOGLE_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
     const text = (postText || '').trim();
-    if (!apiKey || !text) return null;
+    if (!text || !isVertexBackendConfigured()) return null;
 
     const age = (userContext?.age || '').trim() || '30';
     const gender = (userContext?.gender || '').trim() || 'person';
@@ -2455,18 +2375,11 @@ Post:
 ${text.slice(0, 2000)}`;
 
     try {
-      const apiUrl = `${this.geminiBaseURL}/models/${this.geminiModelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
-      const res = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: extractPrompt }] }],
-          generationConfig: { temperature: 0.2, maxOutputTokens: 350 }
-        })
-      });
-      if (!res.ok) return null;
-      const data = await res.json();
-      let raw = (data.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '').trim();
+      let raw = (await vertexGenerateContent({
+        prompt: extractPrompt,
+        temperature: 0.2,
+        maxOutputTokens: 350,
+      }) || '').trim();
       raw = raw.replace(/```json?/gi, '').replace(/```/g, '').trim();
       const jsonMatch = raw.match(/\{[\s\S]*\}/);
       if (!jsonMatch) return null;
@@ -2548,9 +2461,8 @@ Output strictly as a detailed photographic scene description in this format:`;
    * @returns {Promise<string|null>} - One-sentence image description or null
    */
   async _getImagePromptFromContent(postText, userContext = null) {
-    const apiKey = (this.geminiApiKey || process.env.REACT_APP_GOOGLE_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
     const text = (postText || '').trim();
-    if (!apiKey || !text) return null;
+    if (!text || !isVertexBackendConfigured()) return null;
 
     const nationality = (userContext?.nationality || 'Indian').trim();
     const userHint = userContext?.displayName || userContext?.age
@@ -2571,18 +2483,11 @@ Post:
 ${text.slice(0, 800)}`;
 
     try {
-      const apiUrl = `${this.geminiBaseURL}/models/${this.geminiModelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
-      const res = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.3, maxOutputTokens: 80 }
-        })
-      });
-      if (!res.ok) return null;
-      const data = await res.json();
-      const raw = (data.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '').trim();
+      const raw = (await vertexGenerateContent({
+        prompt,
+        temperature: 0.3,
+        maxOutputTokens: 80,
+      }) || '').trim();
       const sentence = raw.replace(/^["']|["']$/g, '').trim().slice(0, 200);
       return sentence || null;
     } catch (e) {
@@ -2598,10 +2503,9 @@ ${text.slice(0, 800)}`;
    * @returns {Promise<{ persons: string[], places: string[], events: string[] }>}
    */
   async extractEntitiesWithNER(postText) {
-    const apiKey = (this.geminiApiKey || process.env.REACT_APP_GOOGLE_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
     const empty = { persons: [], places: [], events: [] };
     const text = (postText || '').trim();
-    if (!apiKey || !text) return empty;
+    if (!text || !isVertexBackendConfigured()) return empty;
 
     const prompt = `You are an entity extraction system.
 
@@ -2626,23 +2530,13 @@ ${text}`;
 
     try {
       console.log('[Entity extraction] Input length:', text.length, 'Preview:', text.slice(0, 120) + (text.length > 120 ? '...' : ''));
-      const apiUrl = `${this.geminiBaseURL}/models/${this.geminiModelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
-      const res = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 350 }
-        })
-      });
-      if (!res.ok) {
-        console.warn('[Entity extraction] API not ok:', res.status);
-        return this._fallbackEntityExtraction(text);
-      }
-      const data = await res.json();
-      let raw = (data.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '').trim();
+      let raw = (await vertexGenerateContent({
+        prompt,
+        temperature: 0.1,
+        maxOutputTokens: 350,
+      }) || '').trim();
 
-      console.log('Raw Gemini entity output:', raw);
+      console.log('Raw entity extraction output:', raw);
 
       raw = raw
         .replace(/```json/gi, '')
@@ -2781,9 +2675,8 @@ ${text}`;
       }
     }
 
-    const geminiKey = (this.geminiApiKey || process.env.REACT_APP_GOOGLE_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
-    if (!geminiKey) {
-      console.warn('[Image] Gemini API key not set');
+    if (!isVertexBackendConfigured()) {
+      console.warn('[Image] Vertex backend URL not set; image generation requires the backend.');
       return null;
     }
 
@@ -2801,7 +2694,7 @@ ${text}`;
       const gender = (userContext?.gender || '').trim().toLowerCase() || 'person';
       const nationality = (userContext?.nationality || 'Indian').trim();
       const fallback = `A realistic photograph of a ${age} year old ${gender} (${nationality}), ${firstSentence}, natural lighting, high detail, not a celebrity, not stock.`;
-      const generated = await this._generateImageWithGemini(fallback, geminiKey, referenceImage);
+      const generated = await this._generateImageWithGemini(fallback, referenceImage);
       if (generated && cacheKey && typeof localStorage !== 'undefined') {
         try {
           const payload = JSON.stringify({ text: fullText, image: generated });
@@ -2815,7 +2708,7 @@ ${text}`;
 
     const strictRules = 'STRICT: Same image logic for all platforms. Depict the SITUATION from the post (e.g. director\'s office mix-up = corridor with doors; reading a book = person in setting with the book visible). Do NOT focus on the face—use a medium or wide shot with scene and environment. No portrait or face-close-up. No animals unless mentioned. Avoid famous faces. High realism.';
     const fullPrompt = `${imagePrompt} ${strictRules}`;
-    const generated = await this._generateImageWithGemini(fullPrompt, geminiKey, referenceImage);
+    const generated = await this._generateImageWithGemini(fullPrompt, referenceImage);
     if (generated && cacheKey && typeof localStorage !== 'undefined') {
       try {
         const payload = JSON.stringify({ text: fullText, image: generated });
@@ -2877,54 +2770,15 @@ ${text}`;
    * Call Gemini Image Generation API; returns data URL or null.
    * When referenceImage is provided, the model uses it so the generated person resembles the user's profile photo.
    * @param {string} prompt - Full image prompt
-   * @param {string} apiKey - Gemini API key
    * @param {{ base64: string, mimeType: string }|null} [referenceImage] - User's profile image to use as visual reference
    * @returns {Promise<string|null>}
    */
-  async _generateImageWithGemini(prompt, apiKey, referenceImage = null) {
-    try {
-      const referenceInstruction = referenceImage
-        ? `The image above is the user's profile photo. Generate a realistic photograph that shows THIS SAME PERSON (same face structure, skin tone, hairstyle, general appearance) in the scene described below. Do not replicate the face exactly—create a natural, candid variation of this person in the described situation. Scene to generate:\n\n`
-        : '';
-      const textPart = referenceInstruction + prompt;
-
-      const parts = [];
-      if (referenceImage) {
-        parts.push({
-          inlineData: {
-            mimeType: referenceImage.mimeType,
-            data: referenceImage.base64
-          }
-        });
-      }
-      parts.push({ text: textPart });
-
-      const apiUrl = `${this.geminiBaseURL}/models/${this.geminiImageModelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
-      const res = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts }],
-          generationConfig: {
-            responseModalities: ['TEXT', 'IMAGE'],
-            imageConfig: { aspectRatio: '1:1', imageSize: '2K' }
-          }
-        })
-      });
-      if (!res.ok) {
-        console.warn('[Image] Gemini image API error:', res.status, await res.text());
-        return null;
-      }
-      const data = await res.json();
-      const responseParts = data.candidates?.[0]?.content?.parts ?? [];
-      const imagePart = responseParts.find(p => p.inlineData && p.inlineData.data);
-      if (!imagePart?.inlineData) return null;
-      const { mimeType = 'image/png', data: base64 } = imagePart.inlineData;
-      return `data:${mimeType};base64,${base64}`;
-    } catch (e) {
-      console.warn('[Image] Gemini generation failed:', e.message);
-      return null;
-    }
+  async _generateImageWithGemini(prompt, referenceImage = null) {
+    void prompt;
+    void referenceImage;
+    // Multimodal image generation is not exposed on the Vertex Express backend; avoid browser API keys.
+    console.warn('[Image] Inline image generation is not available via the Vertex text backend.');
+    return null;
   }
 
   /**
@@ -2937,9 +2791,8 @@ ${text}`;
   async editImageWithInstruction(instruction, imageUrlOrDataUrl) {
     const instr = String(instruction || '').trim();
     if (!instr) return null;
-    const apiKey = (this.geminiApiKey || process.env.REACT_APP_GOOGLE_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
-    if (!apiKey) {
-      console.warn('[Image edit] Gemini API key not set (REACT_APP_GOOGLE_API_KEY)');
+    if (!isVertexBackendConfigured()) {
+      console.warn('[Image edit] Vertex backend URL not set');
       return null;
     }
     const source = await this._getProfileImageAsBase64(imageUrlOrDataUrl);
@@ -2952,46 +2805,17 @@ ${text}`;
       `USER INSTRUCTION: ${instr}`,
       'OUTPUT REQUIREMENTS: Return exactly one edited image. Preserve subject identity and scene coherence unless the instruction explicitly asks to remove or replace them. Match photorealistic style unless the user requests otherwise.',
     ].join('\n\n');
-    return this._generateImageWithGeminiEdit(prompt, apiKey, source);
+    void prompt;
+    void source;
+    console.warn('[Image edit] Multimodal image edit is not available via the Vertex text backend.');
+    return null;
   }
 
   async _generateImageWithGeminiEdit(prompt, apiKey, sourceImage) {
-    try {
-      const parts = [
-        {
-          inlineData: {
-            mimeType: sourceImage.mimeType,
-            data: sourceImage.base64,
-          },
-        },
-        { text: prompt },
-      ];
-      const apiUrl = `${this.geminiBaseURL}/models/${this.geminiImageModelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
-      const res = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts }],
-          generationConfig: {
-            responseModalities: ['TEXT', 'IMAGE'],
-            imageConfig: { aspectRatio: '1:1', imageSize: '2K' },
-          },
-        }),
-      });
-      if (!res.ok) {
-        console.warn('[Image edit] Gemini API error:', res.status, await res.text());
-        return null;
-      }
-      const data = await res.json();
-      const responseParts = data.candidates?.[0]?.content?.parts ?? [];
-      const imagePart = responseParts.find((p) => p.inlineData && p.inlineData.data);
-      if (!imagePart?.inlineData) return null;
-      const { mimeType = 'image/png', data: base64 } = imagePart.inlineData;
-      return `data:${mimeType};base64,${base64}`;
-    } catch (e) {
-      console.warn('[Image edit] Gemini edit failed:', e.message);
-      return null;
-    }
+    void prompt;
+    void apiKey;
+    void sourceImage;
+    return null;
   }
 
   /**

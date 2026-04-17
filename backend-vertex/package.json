@@ -3,10 +3,11 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Express backend using Google Vertex AI Gemini via @google-cloud/vertexai (ADC).",
+  "description": "Express backend using Google Vertex AI Gemini via @google-cloud/vertexai (service account).",
+  "main": "index.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js"
+    "start": "node index.js",
+    "dev": "nodemon index.js"
   },
   "dependencies": {
     "@google-cloud/vertexai": "^1.10.0",

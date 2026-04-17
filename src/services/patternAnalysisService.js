@@ -1,11 +1,9 @@
 import firestoreService from './firestoreService';
 import { getDateIdDaysAgo, getDateId } from '../utils/dateUtils';
+import { isVertexBackendConfigured, vertexAnalyzePattern } from './vertexApiClient';
 
 class PatternAnalysisService {
   constructor() {
-    this.apiKey = process.env.REACT_APP_GOOGLE_API_KEY || '';
-    this.baseURL = 'https://generativelanguage.googleapis.com/v1beta/models';
-    this.modelName = 'gemini-3-flash-preview';
     this.minDaysRequired = 1; // Minimum days needed for meaningful analysis (reduced from 3)
     this.minMessagesRequired = 1; // Minimum total messages needed (reduced from 8)
     this.minDaysFor3Months = 1; // Minimum days for 3-month analysis (reduced from 7)
@@ -43,39 +41,27 @@ class PatternAnalysisService {
   }
 
   /**
-   * Perform AI analysis on chat data using CORS proxy server
+   * Perform AI analysis on chat data via Vertex Express backend (POST /analyze-pattern).
    */
   async performAIAnalysis(chatData, days) {
     console.log('🤖 Performing AI analysis on chat data...');
-    
+
+    if (!isVertexBackendConfigured()) {
+      console.warn('⚠️ Vertex backend URL not set; using default pattern analysis.');
+      return this.getDefaultAnalysis();
+    }
+
     try {
-      // Use the CORS proxy server
-      const response = await fetch(this.analysisEndpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          chatData: chatData,
-          days: days
-        })
+      const resultText = await vertexAnalyzePattern({
+        days,
+        chatData,
+        instruction:
+          'Analyze chat logs for emotional triggers, joy sources, and distractions. Respond with ONLY valid JSON (no markdown) in this exact shape: {"triggers":{"stress":["string"],"joy":["string"],"distraction":["string"]},"insights":{"primaryStressSource":"string","mainJoySource":"string","behavioralPattern":"string"},"recommendations":["string"]}',
       });
 
-      if (!response.ok) {
-        throw new Error(`Proxy server error: ${response.status} ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      
-      console.log('✅ PATTERN DEBUG: Received analysis from proxy:', data);
-      
-      if (data.success && data.analysis) {
-        console.log('✅ AI analysis completed:', data.analysis);
-        return data.analysis;
-      } else {
-        return this.getDefaultAnalysis();
-      }
-
+      const parsed = this.parseAnalysisResult(resultText);
+      console.log('✅ AI analysis completed:', parsed);
+      return parsed;
     } catch (error) {
       console.error('❌ Error in AI analysis:', error);
       return this.getDefaultAnalysis();
