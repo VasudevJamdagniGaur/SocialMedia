@@ -7,6 +7,7 @@ import reflectionService from '../services/reflectionService';
 import firestoreService from '../services/firestoreService';
 import CalendarPopup from './CalendarPopup';
 import HubTrendingFeed from './HubTrendingFeed';
+import TrendingTea from './TrendingTea';
 import { prefetchSportsExploreTopics } from '../lib/podSportsTopicPrefetchCache';
 import { getDateId, formatDateForDisplay } from '../utils/dateUtils';
 import { recordHubVerticalClick } from '../services/hubVerticalPersonalizationService';
@@ -556,6 +557,9 @@ export default function PodPage() {
 
           return (
         <>
+        <div className="px-1 mb-4">
+          <TrendingTea isDarkMode={isDarkMode} />
+        </div>
         <div className="px-1 mb-1">
           <HubTrendingFeed isDarkMode={isDarkMode} />
         </div>
