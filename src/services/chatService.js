@@ -2077,29 +2077,30 @@ ${text}`;
 
     const platformLabel = platform === 'x' ? 'X (Twitter)' : platform.charAt(0).toUpperCase() + platform.slice(1);
     const platformStyleGuide = {
-      linkedin: `LINKEDIN (strict):
-- Unique angle per post: insight or framing from the article — not a bland recap. One post = one idea.
-- Do not invent a personal backstory for the reader or author; only use facts from the article (title, summary, body) provided below.
-- Hook in the first ~2 lines (numbers, direct reader address, or striking fact from the story). Body must deliver on that hook; simple language; skimmable (short paragraphs and/or bullets; PAS-style OK when it fits).
-- End each post with a clear CTA (question, debate prompt, or what to watch next).
-- First person only if natural for commentary; 0–3 hashtags. No meta instructions in the post text.`,
-      x: `X: Under 280 characters per post. Punchy. 1–2 hashtags max.`,
-      reddit: `REDDIT: Casual first-person, conversational, like r/worldnews discussion — not corporate.`,
+      linkedin: `LINKEDIN — write like YOU, not a news desk:
+- You just came across this in your news / feed / timeline — say that naturally (e.g. "Saw this…", "Been reading about…", "This popped up in my news today…"). Do NOT sound like you're filing a report or summarizing an article for an editor.
+- Share what stuck with you and your honest take: surprise, skepticism, warmth, debate — one clear angle per post.
+- First person ("I", "my") is expected. Sound human and opinionated, still fair — no invented facts; only what the story/thread supports.
+- Not allowed: wire-service tone, "This article discusses…", "According to reports…", "In recent news…", or neutral third-person recap unless it's one short beat before your reaction.
+- Short paragraphs or a tight hook + 2–3 lines; optional 0–3 hashtags. End with a question or invite to disagree if it fits.`,
+      x: `X: First person. You're reacting to something you saw in the news — hot take or quick gut reaction, not a summary. Under 280 characters. 0–2 hashtags. No "breaking:" headline voice.`,
+      reddit: `REDDIT: You read the story / thread and you're chiming in like a real user — opinion + vibe, not a Wikipedia summary. Casual, first-person, can be blunt or funny.`,
     };
     const style = platformStyleGuide[platform] || platformStyleGuide.linkedin;
 
-    const userContent = `Write social posts about this news story for ${platformLabel}.
+    const userContent = `Write social posts for ${platformLabel} as if the poster just learned this from their news (feed, Reddit, alerts — whatever fits) and is sharing their reaction and opinion — NOT writing a news summary or explainer.
 
 ${style}
 
-Article:
+Story context (ground truth — do not invent beyond this):
 Title: ${title}
 ${source ? `Source: ${source}\n` : ''}${description ? `Summary: ${description}\n` : ''}URL: ${url}
-${articleText ? `\nArticle text:\n${articleText.slice(0, 6000)}\n` : ''}
+${articleText ? `\nArticle / thread text:\n${articleText.slice(0, 6000)}\n` : ''}
 
 Rules:
 - Output 1 to 3 posts. Each "post" is ONLY the text someone would publish — no instructions, no labels like "Post 1:", no JSON explanation.
-- Base content on title/summary/article text; do not invent facts beyond those inputs.
+- Each post must feel like a real person's post: what they noticed + how they feel about it. Never sound like a journalist briefing readers.
+- Base reactions only on the story context above; do not invent facts.
 - Do not repeat this prompt or system rules in the output.
 
 Return ONLY valid JSON with this exact shape (no markdown fences):
@@ -2112,7 +2113,7 @@ Return ONLY valid JSON with this exact shape (no markdown fences):
         const vTimeout = setTimeout(() => vController.abort(), 45000);
         raw = await this.callVertexGenerateContent({
           prompt: userContent,
-          temperature: 0.55,
+          temperature: 0.62,
           maxOutputTokens: 4096,
           signal: vController.signal,
         });
@@ -2128,7 +2129,7 @@ Return ONLY valid JSON with this exact shape (no markdown fences):
       const requestBody = {
         model: this.openaiModelName,
         messages: [{ role: 'user', content: userContent }],
-        temperature: 0.55,
+        temperature: 0.62,
         max_tokens: 2000,
         response_format: { type: 'json_object' },
       };
