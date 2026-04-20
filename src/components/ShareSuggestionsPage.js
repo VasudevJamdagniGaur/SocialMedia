@@ -463,6 +463,11 @@ export default function ShareSuggestionsPage() {
       const description = String(details?.description || '').trim();
       const text = String(details?.text || '').trim();
 
+      // Reddit thread bundles (post + comments) are for model context only — never show raw in the card.
+      if (/Subreddit:\s*r\/|Top comments:|Comment by u\//i.test(text)) {
+        return '';
+      }
+
       const maxWords = 78;
       const titleNorm = title.replace(/\s+/g, ' ').trim().toLowerCase();
       const descNorm = description.replace(/\s+/g, ' ').trim().toLowerCase();
@@ -535,9 +540,12 @@ export default function ShareSuggestionsPage() {
   }, [isNewsShareMode, newsArticleFromState?.url, buildLocalNewsCardSummary]);
 
   const effectiveNewsArticle = isNewsShareMode ? (newsArticleDetails || newsArticleFromState) : null;
+  // While fetch + Gemini summary run, do not fall back to buildLocalNewsCardSummary — it would flash raw article/thread text.
   const effectiveNewsCardText =
     isNewsShareMode
-      ? newsCardSummary || buildLocalNewsCardSummary(effectiveNewsArticle)
+      ? isLoadingNewsDetails
+        ? ''
+        : newsCardSummary || buildLocalNewsCardSummary(effectiveNewsArticle)
       : '';
 
   const suggestionPromptText = isNewsShareMode
