@@ -129,6 +129,95 @@ export function browseTopicOnGoogleNews(topicId) {
   return googleNewsSearchUrl(q.trim());
 }
 
+function isDirectImageUrl(u) {
+  const s = typeof u === 'string' ? u.trim() : '';
+  if (!s) return false;
+  const path = s.split('?')[0].split('#')[0];
+  return /\.(jpe?g|png|gif|webp)$/i.test(path);
+}
+
+function resolveRedditPostImage(post) {
+  try {
+    const src = post?.preview?.images?.[0]?.source?.url;
+    if (typeof src === 'string' && /^https?:\/\//i.test(src)) {
+      return src.replace(/&amp;/g, '&').trim();
+    }
+  } catch {
+    /* ignore */
+  }
+  const url = typeof post?.url === 'string' ? post.url.trim() : '';
+  if (isDirectImageUrl(url)) return url;
+  const thumbnail = typeof post?.thumbnail === 'string' ? post.thumbnail.trim() : '';
+  if (/^https?:\/\//i.test(thumbnail)) return thumbnail;
+  return null;
+}
+
+async function tryCricketRowsFromReddit() {
+  try {
+    const res = await fetch('https://www.reddit.com/r/Cricket/hot.json?limit=50&raw_json=1', {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    });
+    if (!res.ok) return [];
+    const json = await res.json().catch(() => null);
+    const children = json?.data?.children;
+    if (!Array.isArray(children)) return [];
+
+    const seenTitles = new Set();
+    const picked = [];
+
+    for (const child of children) {
+      const post = child?.data;
+      if (!post || typeof post !== 'object') continue;
+
+      const title = typeof post.title === 'string' ? post.title.trim() : '';
+      if (!title) continue;
+
+      const titleKey = title.toLowerCase();
+      if (seenTitles.has(titleKey)) continue;
+      seenTitles.add(titleKey);
+
+      // Quality control: include only posts meeting ALL criteria.
+      if (post.stickied === true) continue;
+      if (String(post.author || '') === 'AutoModerator') continue;
+      if (!(typeof post.score === 'number' ? post.score : Number(post.score || 0)) || Number(post.score || 0) <= 20) continue;
+
+      const permalink = typeof post.permalink === 'string' ? post.permalink.trim() : '';
+      const url = permalink
+        ? `https://www.reddit.com${permalink.startsWith('/') ? '' : '/'}${permalink}`
+        : typeof post.url === 'string'
+          ? post.url.trim()
+          : '';
+      if (!/^https?:\/\//i.test(url)) continue;
+
+      const thumbnail = typeof post.thumbnail === 'string' ? post.thumbnail.trim() : '';
+      const thumb = /^https?:\/\//i.test(thumbnail) ? thumbnail : null;
+      const image = resolveRedditPostImage(post);
+
+      picked.push({
+        title,
+        url,
+        image,
+        thumbnail: thumb,
+        score: Number(post.score || 0),
+        num_comments: Number(post.num_comments || 0),
+        author: typeof post.author === 'string' && post.author.trim() ? post.author.trim() : 'unknown',
+        source: 'r/Cricket',
+        description: '',
+        publishedAt: new Date().toISOString(),
+        sourceSiteUrl: 'https://www.reddit.com/r/Cricket',
+        publisherUrl: '',
+      });
+
+      if (picked.length >= 15) break;
+    }
+
+    return picked.slice(0, 15);
+  } catch {
+    return [];
+  }
+}
+
 export function buildFallbackRows(topicId, label) {
   const q = GOOGLE_BROWSE_QUERY[topicId] || GOOGLE_BROWSE_QUERY.others;
   const baseUrl = googleNewsSearchUrl(q.trim());
@@ -315,6 +404,16 @@ export async function fetchSportsTopicRawItems(topicId, options = {}) {
   if (!config) return { items: [], error: '', allowRewrite: false };
 
   const title = config.label;
+
+  // Cricket: prefer Reddit hot feed (high-signal + built-in community ranking).
+  // We over-fetch then dedupe + filter (cross-posts, bots, low-score, stickies).
+  if (topicId === 'cricket') {
+    const redditRows = await tryCricketRowsFromReddit();
+    if (redditRows.length) {
+      return { items: redditRows, error: '', allowRewrite: false };
+    }
+  }
+
   if (!canFetchLiveNews()) {
     return {
       items: buildFallbackRows(topicId, title),

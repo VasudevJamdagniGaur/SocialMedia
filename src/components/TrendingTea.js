@@ -3,7 +3,102 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Loader2, Flame } from 'lucide-react';
 
 const REDDIT_HOT_URL =
-  'https://www.reddit.com/r/BollyBlindsNGossip/hot.json?limit=10';
+  'https://www.reddit.com/r/BollyBlindsNGossip/hot.json?limit=10&raw_json=1';
+
+const __TEA_TRENDING_URLS_KEY = 'deite_tea_trending_urls_v1';
+const __SHARE_NEWS_CARD_CACHE_KEY = 'deite_share_news_card_cache_v1';
+
+function safeReadJsonFromLocalStorage(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function safeWriteJsonToLocalStorage(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* private mode / storage full */
+  }
+}
+
+function writeTrendingTeaUrlsAndPruneShareCache(items) {
+  try {
+    const urls = (items || [])
+      .map((x) => (typeof x?.url === 'string' ? x.url.trim() : ''))
+      .filter(Boolean);
+    safeWriteJsonToLocalStorage(__TEA_TRENDING_URLS_KEY, urls);
+
+    const cache = safeReadJsonFromLocalStorage(__SHARE_NEWS_CARD_CACHE_KEY);
+    if (!cache || typeof cache !== 'object') return;
+    const keep = new Set(urls);
+    let changed = false;
+    for (const [k, v] of Object.entries(cache)) {
+      const kind = typeof v?.kind === 'string' ? v.kind : '';
+      if (kind === 'tea' && !keep.has(k)) {
+        delete cache[k];
+        changed = true;
+      }
+    }
+    if (changed) safeWriteJsonToLocalStorage(__SHARE_NEWS_CARD_CACHE_KEY, cache);
+  } catch {
+    /* ignore */
+  }
+}
+
+function withTimeoutSignal(ms, outerSignal) {
+  const ctrl = new AbortController();
+  const tid = setTimeout(() => ctrl.abort(), ms);
+  const onAbort = () => ctrl.abort();
+  if (outerSignal) {
+    if (outerSignal.aborted) ctrl.abort();
+    else outerSignal.addEventListener('abort', onAbort, { once: true });
+  }
+  return {
+    signal: ctrl.signal,
+    cleanup: () => {
+      clearTimeout(tid);
+      if (outerSignal) outerSignal.removeEventListener('abort', onAbort);
+    },
+  };
+}
+
+async function fetchRedditJsonViaProxies(targetUrl, { signal } = {}) {
+  const encoded = encodeURIComponent(targetUrl);
+  const attempts = [
+    `https://api.codetabs.com/v1/proxy?quest=${encoded}`,
+    `https://corsproxy.io/?${encoded}`,
+    `https://api.allorigins.win/get?url=${encoded}`,
+  ];
+  for (const proxyUrl of attempts) {
+    try {
+      const res = await fetch(proxyUrl, {
+        method: 'GET',
+        signal,
+        headers: { Accept: 'application/json' },
+      });
+      if (!res.ok) continue;
+      if (proxyUrl.includes('allorigins')) {
+        const j = await res.json().catch(() => null);
+        const txt = typeof j?.contents === 'string' ? j.contents : '';
+        if (!txt) continue;
+        const parsed = JSON.parse(txt);
+        if (parsed && typeof parsed === 'object') return parsed;
+        continue;
+      }
+      const json = await res.json().catch(() => null);
+      if (json && typeof json === 'object') return json;
+    } catch (e) {
+      if (e?.name === 'AbortError') throw e;
+      /* try next proxy */
+    }
+  }
+  return null;
+}
 
 /** Reddit post `url` field points to a direct image file */
 function isDirectImageUrl(postUrl) {
@@ -178,14 +273,30 @@ export default function TrendingTea() {
       setIsLoading(true);
       setError(null);
       try {
-        const res = await fetch(REDDIT_HOT_URL, {
-          signal: ac.signal,
-          headers: { Accept: 'application/json' },
-        });
-        if (!res.ok) {
-          throw new Error(`Could not load tea (${res.status})`);
+        const t = withTimeoutSignal(9000, ac.signal);
+        let json = null;
+        try {
+          const res = await fetch(REDDIT_HOT_URL, {
+            signal: t.signal,
+            headers: { Accept: 'application/json' },
+            cache: 'no-store',
+          });
+          if (res.ok) {
+            json = await res.json().catch(() => null);
+          } else {
+            // If Reddit responds but is blocked/limited, fall back to proxy attempt.
+            json = await fetchRedditJsonViaProxies(REDDIT_HOT_URL, { signal: t.signal });
+            if (!json) throw new Error(`Could not load tea (${res.status})`);
+          }
+        } catch (e) {
+          if (e?.name === 'AbortError') throw e;
+          // Network/CORS/adblock failures: retry via public proxies.
+          json = await fetchRedditJsonViaProxies(REDDIT_HOT_URL, { signal: t.signal });
+          if (!json) throw e;
+        } finally {
+          t.cleanup();
         }
-        const json = await res.json();
+
         const children = json?.data?.children;
         if (!Array.isArray(children)) {
           throw new Error('Unexpected response from Reddit');
@@ -193,7 +304,10 @@ export default function TrendingTea() {
         const mapped = children
           .map(mapRedditChildToTea)
           .filter(Boolean);
-        if (!cancelled) setTeaData(mapped);
+        if (!cancelled) {
+          setTeaData(mapped);
+          writeTrendingTeaUrlsAndPruneShareCache(mapped);
+        }
       } catch (e) {
         if (e.name === 'AbortError') return;
         if (!cancelled) {

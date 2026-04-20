@@ -430,6 +430,102 @@ function normalizeNewsArticle(raw) {
   };
 }
 
+const __SHARE_NEWS_CARD_CACHE_KEY = 'deite_share_news_card_cache_v1';
+const __TEA_TRENDING_URLS_KEY = 'deite_tea_trending_urls_v1';
+const __SHARE_NEWS_CARD_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+function safeReadJsonFromLocalStorage(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function safeWriteJsonToLocalStorage(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* storage full / private mode */
+  }
+}
+
+function normalizeUrlKey(url) {
+  const u = typeof url === 'string' ? url.trim() : '';
+  return u;
+}
+
+function isTeaSourceLabel(source) {
+  return /^r\/BollyBlindsNGossip$/i.test(String(source || '').trim());
+}
+
+function readShareNewsCardCache() {
+  const j = safeReadJsonFromLocalStorage(__SHARE_NEWS_CARD_CACHE_KEY);
+  if (!j || typeof j !== 'object') return {};
+  return j;
+}
+
+function writeShareNewsCardCache(cacheObj) {
+  if (!cacheObj || typeof cacheObj !== 'object') return;
+  safeWriteJsonToLocalStorage(__SHARE_NEWS_CARD_CACHE_KEY, cacheObj);
+}
+
+function getCachedNewsCardForUrl(url) {
+  const key = normalizeUrlKey(url);
+  if (!key) return null;
+  const cache = readShareNewsCardCache();
+  const entry = cache?.[key];
+  if (!entry || typeof entry !== 'object') return null;
+  const ts = typeof entry.ts === 'number' ? entry.ts : 0;
+  if (!ts || Date.now() - ts > __SHARE_NEWS_CARD_CACHE_TTL_MS) return null;
+  return entry;
+}
+
+function clampText(s, maxLen) {
+  const t = typeof s === 'string' ? s.trim() : '';
+  if (!t) return '';
+  if (t.length <= maxLen) return t;
+  return t.slice(0, Math.max(0, maxLen - 1)).trimEnd() + '…';
+}
+
+function buildCacheableArticleDetails(details) {
+  if (!details || typeof details !== 'object') return null;
+  const url = typeof details.url === 'string' ? details.url.trim() : '';
+  const title = typeof details.title === 'string' ? details.title.trim() : '';
+  if (!url || !title) return null;
+  return {
+    title,
+    url,
+    description: clampText(details.description || '', 600),
+    image: typeof details.image === 'string' && details.image.trim() ? details.image.trim() : null,
+    source: typeof details.source === 'string' ? details.source.trim() : '',
+    publisherUrl: typeof details.publisherUrl === 'string' ? details.publisherUrl.trim() : '',
+    // Keep only a bounded slice of text so we don't blow up localStorage.
+    text: clampText(details.text || '', 8000),
+  };
+}
+
+function upsertCachedNewsCard({ url, headline, summary, details, source }) {
+  const key = normalizeUrlKey(url);
+  if (!key) return;
+  const h = typeof headline === 'string' ? headline.trim() : '';
+  const s = typeof summary === 'string' ? summary.trim() : '';
+  const d = buildCacheableArticleDetails(details);
+  if (!h && !s && !d) return;
+
+  const cache = readShareNewsCardCache();
+  cache[key] = {
+    ts: Date.now(),
+    kind: isTeaSourceLabel(source) ? 'tea' : 'news',
+    headline: h,
+    summary: s,
+    details: d,
+  };
+  writeShareNewsCardCache(cache);
+}
+
 function buildNewsSharePromptContext(n) {
   const displayHeadline = String(n.displayHeadline || n.title || '').trim();
   return [
@@ -507,6 +603,18 @@ export default function ShareSuggestionsPage() {
       };
     }
 
+    // Use cached card/headline/summary to avoid refetching + re-summarizing on every open.
+    const cached = getCachedNewsCardForUrl(newsArticleFromState.url);
+    if (cached) {
+      setIsLoadingNewsDetails(false);
+      setNewsArticleDetails(cached.details || null);
+      setNewsCardSummary(typeof cached.summary === 'string' ? cached.summary : '');
+      setNewsCardHeadline(typeof cached.headline === 'string' ? cached.headline : '');
+      return () => {
+        cancelled = true;
+      };
+    }
+
     setIsLoadingNewsDetails(true);
     chatService
       .fetchNewsArticleDetails(newsArticleFromState, { minTextLength: 350, resolveGoogleNews: true })
@@ -523,15 +631,21 @@ export default function ShareSuggestionsPage() {
             chatService.summarizeNewsArticle(details, { minWords: 60, maxWords: 80 }),
             chatService.generateNewsShareCardHeadline(details),
           ]);
-          if (!cancelled && summary) {
-            setNewsCardSummary(summary);
-          } else if (!cancelled) {
-            const local = buildLocalNewsCardSummary(details);
-            setNewsCardSummary(local);
-          }
-          if (!cancelled && headline) {
-            setNewsCardHeadline(headline);
-          }
+          if (cancelled) return;
+          const localFallback = buildLocalNewsCardSummary(details);
+          const finalSummary = (summary || '').trim() || localFallback || '';
+          const finalHeadline = (headline || '').trim();
+
+          setNewsCardSummary(finalSummary);
+          if (finalHeadline) setNewsCardHeadline(finalHeadline);
+
+          upsertCachedNewsCard({
+            url: newsArticleFromState.url,
+            headline: finalHeadline,
+            summary: finalSummary,
+            details,
+            source: newsArticleFromState.source,
+          });
         }
       })
       .catch(() => {
