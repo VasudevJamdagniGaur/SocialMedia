@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Linkedin, Pencil } from 'lucide-react';
 import { Capacitor, CapacitorHttp } from '@capacitor/core';
@@ -431,9 +431,10 @@ function normalizeNewsArticle(raw) {
 }
 
 function buildNewsSharePromptContext(n) {
+  const displayHeadline = String(n.displayHeadline || n.title || '').trim();
   return [
     'The user wants social posts based on this NEWS ARTICLE (not a personal diary).',
-    `Headline: ${n.title}`,
+    `Headline: ${displayHeadline}`,
     n.source ? `Source: ${n.source}` : '',
     n.description ? `Summary: ${n.description}` : '',
     `Article URL: ${n.url}`,
@@ -455,6 +456,7 @@ export default function ShareSuggestionsPage() {
   const [newsArticleDetails, setNewsArticleDetails] = useState(null);
   const [isLoadingNewsDetails, setIsLoadingNewsDetails] = useState(isNewsShareMode);
   const [newsCardSummary, setNewsCardSummary] = useState('');
+  const [newsCardHeadline, setNewsCardHeadline] = useState('');
 
   const buildLocalNewsCardSummary = useCallback((details) => {
     try {
@@ -499,6 +501,7 @@ export default function ShareSuggestionsPage() {
       setNewsArticleDetails(null);
       setIsLoadingNewsDetails(false);
       setNewsCardSummary('');
+      setNewsCardHeadline('');
       return () => {
         cancelled = true;
       };
@@ -514,13 +517,20 @@ export default function ShareSuggestionsPage() {
         const details = looksUseful ? d : null;
         setNewsArticleDetails(details);
         setNewsCardSummary('');
+        setNewsCardHeadline('');
         if (details) {
-          const summary = await chatService.summarizeNewsArticle(details, { minWords: 60, maxWords: 80 });
+          const [summary, headline] = await Promise.all([
+            chatService.summarizeNewsArticle(details, { minWords: 60, maxWords: 80 }),
+            chatService.generateNewsShareCardHeadline(details),
+          ]);
           if (!cancelled && summary) {
             setNewsCardSummary(summary);
           } else if (!cancelled) {
             const local = buildLocalNewsCardSummary(details);
             setNewsCardSummary(local);
+          }
+          if (!cancelled && headline) {
+            setNewsCardHeadline(headline);
           }
         }
       })
@@ -528,6 +538,7 @@ export default function ShareSuggestionsPage() {
         if (cancelled) return;
         setNewsArticleDetails(null);
         setNewsCardSummary('');
+        setNewsCardHeadline('');
       })
       .finally(() => {
         if (cancelled) return;
@@ -548,12 +559,29 @@ export default function ShareSuggestionsPage() {
         : newsCardSummary || buildLocalNewsCardSummary(effectiveNewsArticle)
       : '';
 
+  const displayNewsHeadline =
+    isNewsShareMode && effectiveNewsArticle
+      ? newsCardHeadline || effectiveNewsArticle.title || ''
+      : '';
+
+  /** Article object with editorial headline for AI share generation (not raw Reddit title). */
+  const newsArticleForSuggestions = useMemo(() => {
+    if (!isNewsShareMode || !effectiveNewsArticle) return effectiveNewsArticle;
+    return {
+      ...effectiveNewsArticle,
+      title: (newsCardHeadline || effectiveNewsArticle.title || '').trim(),
+    };
+  }, [isNewsShareMode, effectiveNewsArticle, newsCardHeadline]);
+
   const suggestionPromptText = isNewsShareMode
-    ? buildNewsSharePromptContext({ ...effectiveNewsArticle, description: effectiveNewsCardText })
+    ? buildNewsSharePromptContext({
+        ...effectiveNewsArticle,
+        description: effectiveNewsCardText,
+        displayHeadline: newsCardHeadline || effectiveNewsArticle?.title,
+      })
     : reflectionFromState;
   const baselineShareText = isNewsShareMode
-    ? [effectiveNewsArticle.title, effectiveNewsCardText].filter(Boolean).join('\n\n') ||
-      effectiveNewsArticle.title
+    ? [displayNewsHeadline, effectiveNewsCardText].filter(Boolean).join('\n\n') || effectiveNewsArticle?.title
     : reflectionFromState;
   const eventLabelDefault = isNewsShareMode ? 'News' : 'Reflection';
   const shareReturnTo =
@@ -870,7 +898,7 @@ export default function ShareSuggestionsPage() {
     setSuggestionError(null);
     setSuggestionImageUrls([]);
     const suggestionsPromise = isNewsShareMode
-      ? chatService.generateNewsArticleShareSuggestions(effectiveNewsArticle, selectedPlatform)
+      ? chatService.generateNewsArticleShareSuggestions(newsArticleForSuggestions, selectedPlatform)
       : chatService.generateSocialPostSuggestions(suggestionPromptText, selectedPlatform);
 
     suggestionsPromise.then(async (list) => {
@@ -1043,7 +1071,7 @@ export default function ShareSuggestionsPage() {
         }
       });
     return () => { cancelled = true; };
-  }, [selectedPlatform, suggestionPromptText, dateStr, isLoadingNewsDetails, newsArticleDetails]);
+  }, [selectedPlatform, suggestionPromptText, dateStr, isLoadingNewsDetails, newsArticleDetails, newsArticleForSuggestions]);
 
   const fallbackSuggestions = buildFallbackSuggestions(
     isNewsShareMode ? baselineShareText : reflectionFromState
@@ -2439,15 +2467,24 @@ export default function ShareSuggestionsPage() {
           </p>
           {isNewsShareMode ? (
             <>
-              <a
-                href={effectiveNewsArticle?.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[15px] font-semibold leading-snug mt-2 block hover:underline"
-                style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}
-              >
-                {effectiveNewsArticle?.title}
-              </a>
+              {isLoadingNewsDetails ? (
+                <p
+                  className="text-[15px] font-semibold leading-snug mt-2"
+                  style={{ color: isDarkMode ? HUB.textSecondary : '#666' }}
+                >
+                  Reading the thread and shaping a headline…
+                </p>
+              ) : (
+                <a
+                  href={effectiveNewsArticle?.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[15px] font-semibold leading-snug mt-2 block hover:underline"
+                  style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}
+                >
+                  {newsCardHeadline || effectiveNewsArticle?.title}
+                </a>
+              )}
               {effectiveNewsCardText ? (
                 <p className="text-[15px] leading-relaxed mt-2" style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}>
                   {effectiveNewsCardText}

@@ -2383,6 +2383,143 @@ ${description && !descIsMostlyHeadline ? `Description: ${description}\n` : ''}${
   }
 
   /**
+   * One share-card headline from full article/thread text — not a copy of the raw post title.
+   * Teasing / light secrecy ok; must stay grounded in the provided content.
+   * @param {{title?:string,url?:string,description?:string,source?:string,text?:string}} details
+   * @returns {Promise<string>}
+   */
+  async generateNewsShareCardHeadline(details) {
+    const title = String(details?.title || '').trim();
+    const description = String(details?.description || '').trim();
+    const text = String(details?.text || '').trim();
+    if (!title) return '';
+
+    const titleNorm = title.replace(/\s+/g, ' ').trim().toLowerCase();
+    const descNorm = description.replace(/\s+/g, ' ').trim().toLowerCase();
+    const descIsMostlyHeadline =
+      description &&
+      (descNorm === titleNorm ||
+        (titleNorm.length > 12 && (descNorm === titleNorm || titleNorm.includes(descNorm) || descNorm.includes(titleNorm))));
+
+    const bodyForModel = text.slice(0, 12000);
+    const sourceText = [description, text].filter(Boolean).join('\n\n').slice(0, 14000);
+    if (!sourceText.trim()) return '';
+
+    const isRedditThreadBundle = /Top comments:|Comment by u\//i.test(text);
+    const hasEnough =
+      bodyForModel.length >= 120 ||
+      (description && !descIsMostlyHeadline && description.length >= 60) ||
+      (isRedditThreadBundle && bodyForModel.length >= 60);
+
+    if (!hasEnough && bodyForModel.length < 200 && (!description || descIsMostlyHeadline)) {
+      return '';
+    }
+
+    const userContent = `You write a single DISPLAY HEADLINE for a news / gossip share card.
+
+Rules:
+- Read the original post title AND the full article or thread text below. The headline must reflect what is actually discussed (names, event, stakes) — do NOT merely repeat or lightly rephrase the original post title.
+- Style: entertainment / industry coverage — confident, readable, with a hint of intrigue or "what this really means" without being vague. You may withhold one non-essential detail to create a little mystery, but do not mislead or invent facts.
+- Length: 7–14 words (one line). Plain text. Optional: at most ONE tasteful emoji at the very end if it truly fits; otherwise no emojis.
+- No quotes around the headline. No hashtags. No "Breaking:", "Exclusive:", or "You won't believe".
+
+Return ONLY valid JSON (no markdown) with this exact shape:
+{"headline":"..."}
+
+Original post title (for context — write something NEW, not a copy):
+${title}
+
+Content to ground the headline in:
+${description && !descIsMostlyHeadline ? `Short description: ${description}\n` : ''}${bodyForModel ? `Full text:\n${bodyForModel}\n` : ''}`.trim();
+
+    const parseHeadline = (raw) => {
+      let s = String(raw || '').trim();
+      const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (fence) s = fence[1].trim();
+      let parsed = null;
+      try {
+        parsed = s ? JSON.parse(s) : null;
+      } catch {
+        const m = s.match(/\{[\s\S]*"headline"[\s\S]*\}/);
+        if (m) {
+          try {
+            parsed = JSON.parse(m[0]);
+          } catch {
+            parsed = null;
+          }
+        }
+      }
+      let h = typeof parsed?.headline === 'string' ? parsed.headline.trim() : '';
+      h = h.replace(/^["'“”]+|["'“”]+$/g, '').replace(/\s+/g, ' ').trim();
+      if (h.length > 160) h = h.slice(0, 157).trim() + '…';
+      return h;
+    };
+
+    const headlineQuality = (h) => {
+      if (!h || h.length < 8) return '';
+      const hn = h.replace(/\s+/g, ' ').trim().toLowerCase();
+      if (hn === titleNorm) return '';
+      const tw = titleNorm.split(/\s+/).filter((w) => w.length > 2);
+      const hw = hn.split(/\s+/).filter((w) => w.length > 2);
+      if (tw.length >= 4 && hw.length >= 4) {
+        const overlap = tw.filter((w) => hn.includes(w)).length;
+        if (overlap / tw.length > 0.95 && Math.abs(hw.length - tw.length) <= 2) return '';
+      }
+      return h;
+    };
+
+    if (this.getVertexGeminiUrl()) {
+      try {
+        const vController = new AbortController();
+        const vTimeout = setTimeout(() => vController.abort(), 35000);
+        const raw = await this.callVertexGenerateContent({
+          prompt: userContent,
+          temperature: 0.72,
+          maxOutputTokens: 256,
+          signal: vController.signal,
+        });
+        clearTimeout(vTimeout);
+        const h = headlineQuality(parseHeadline(raw));
+        if (h) return h;
+      } catch (e) {
+        console.warn('Vertex share-card headline failed:', e);
+      }
+    }
+
+    this.openaiApiKey = (process.env.REACT_APP_OPENAI_API_KEY || process.env.OPENAI_API_KEY || this.openaiApiKey || '').trim();
+    const apiKey = this.openaiApiKey;
+    if (!apiKey) return '';
+
+    const apiUrl = `${this.openaiBaseURL}/chat/completions`;
+    const requestBody = {
+      model: this.openaiModelName,
+      messages: [{ role: 'user', content: userContent }],
+      temperature: 0.72,
+      max_tokens: 200,
+      response_format: { type: 'json_object' },
+    };
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    try {
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (!response.ok) return '';
+      const data = await response.json().catch(() => null);
+      const raw = data?.choices?.[0]?.message?.content ? String(data.choices[0].message.content) : '';
+      return headlineQuality(parseHeadline(raw));
+    } catch {
+      clearTimeout(timeoutId);
+      return '';
+    }
+  }
+
+  /**
    * Rewrite a list of news titles into spicy, non-repeating headings.
    * One OpenAI call for the whole list (fast + consistent).
    * @param {{title:string,url?:string,description?:string,mustMention?:string[]}[]} items
