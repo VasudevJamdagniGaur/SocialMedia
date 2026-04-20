@@ -1778,6 +1778,145 @@ ${text}`;
     return typeof url === 'string' && /news\.google\.com\/(rss\/)?articles\//i.test(url);
   }
 
+  /** Public Reddit thread permalink (post + comments JSON API). */
+  _isRedditThreadUrl(url) {
+    try {
+      const u = new URL(String(url || '').trim());
+      let host = u.hostname.toLowerCase().replace(/^www\./, '');
+      if (host.startsWith('np.')) host = host.slice(3);
+      if (host.startsWith('old.')) host = host.slice(4);
+      if (host.startsWith('m.')) host = host.slice(2);
+      if (host !== 'reddit.com' && !host.endsWith('.reddit.com')) return false;
+      return /\/comments\/[a-z0-9]+/i.test(u.pathname);
+    } catch {
+      return false;
+    }
+  }
+
+  _buildRedditJsonUrl(permalink) {
+    try {
+      const u = new URL(String(permalink || '').trim());
+      let host = u.hostname.toLowerCase();
+      if (host.startsWith('np.') || host.startsWith('old.')) host = 'www.reddit.com';
+      if (!host.endsWith('reddit.com')) return null;
+      let path = u.pathname || '';
+      if (path.endsWith('/')) path = path.slice(0, -1);
+      if (!/\/comments\/[a-z0-9]+/i.test(path)) return null;
+      const jsonPath = path.endsWith('.json') ? path : `${path}.json`;
+      const qs = new URLSearchParams(u.search);
+      qs.set('raw_json', '1');
+      qs.set('limit', '500');
+      return `${u.protocol}//${host}${jsonPath}?${qs.toString()}`;
+    } catch {
+      return null;
+    }
+  }
+
+  _redditHeroImageFromPost(post) {
+    if (!post || typeof post !== 'object') return null;
+    try {
+      const src = post?.preview?.images?.[0]?.source?.url;
+      if (typeof src === 'string' && src.startsWith('http')) {
+        return src.replace(/&amp;/g, '&').trim();
+      }
+    } catch {
+      /* ignore */
+    }
+    const link = typeof post.url === 'string' ? post.url.trim() : '';
+    if (/^https?:\/\//i.test(link) && /\.(jpe?g|png|gif|webp)(\?|$)/i.test(link.split('?')[0])) {
+      return link;
+    }
+    const th = typeof post.thumbnail === 'string' ? post.thumbnail.trim() : '';
+    if (th.startsWith('http')) return th;
+    return null;
+  }
+
+  /**
+   * Flatten top comment tree (depth-limited) for summarization context.
+   * @param {unknown[]} children
+   * @param {{ author: string, body: string }[]} out
+   */
+  _collectRedditComments(children, out, depth, maxDepth, maxCount) {
+    if (!Array.isArray(children) || out.length >= maxCount || depth > maxDepth) return;
+    for (const child of children) {
+      if (out.length >= maxCount) break;
+      if (!child || typeof child !== 'object') continue;
+      if (child.kind === 'more') continue;
+      if (child.kind !== 't1') continue;
+      const d = child.data;
+      if (!d || typeof d !== 'object') continue;
+      const body = typeof d.body === 'string' ? d.body.trim() : '';
+      if (!body || body === '[removed]' || body === '[deleted]') continue;
+      out.push({ author: String(d.author || 'unknown'), body });
+      if (depth < maxDepth && d.replies && d.replies.data && Array.isArray(d.replies.data.children)) {
+        this._collectRedditComments(d.replies.data.children, out, depth + 1, maxDepth, maxCount);
+      }
+    }
+  }
+
+  /**
+   * Post + comments via Reddit's public .json API (avoids HTML scrape / Jina 403 on reddit.com).
+   * @returns {Promise<{ title: string, url: string, description: string, image: string | null, source: string, text: string } | null>}
+   */
+  async _fetchRedditThreadPayload(permalink, seed) {
+    const jsonUrl = this._buildRedditJsonUrl(permalink);
+    if (!jsonUrl) return null;
+    try {
+      const res = await fetch(jsonUrl, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      });
+      if (!res.ok) return null;
+      const data = await res.json().catch(() => null);
+      if (!Array.isArray(data) || data.length < 1) return null;
+      const post = data[0]?.data?.children?.[0]?.data;
+      if (!post || typeof post !== 'object' || typeof post.title !== 'string') return null;
+
+      const title = String(post.title || '').trim();
+      const canonical =
+        typeof post.permalink === 'string' && post.permalink.trim()
+          ? `https://www.reddit.com${post.permalink.startsWith('/') ? '' : '/'}${post.permalink.trim()}`
+          : String(permalink || '').trim();
+
+      const selftext = typeof post.selftext === 'string' ? post.selftext.trim() : '';
+      const sub = typeof post.subreddit_name_prefixed === 'string' ? post.subreddit_name_prefixed.trim() : '';
+      const linkOut = typeof post.url === 'string' ? post.url.trim() : '';
+
+      const commentObjs = [];
+      this._collectRedditComments(data[1]?.data?.children, commentObjs, 0, 3, 40);
+
+      const chunks = [];
+      if (sub) chunks.push(`Subreddit: ${sub}`);
+      chunks.push(`Title: ${title}`);
+      if (selftext) {
+        chunks.push(`Post body:\n${selftext}`);
+      } else if (linkOut && /^https?:\/\//i.test(linkOut) && !/\/reddit\.com\//i.test(linkOut)) {
+        chunks.push(`Linked content URL: ${linkOut}`);
+      }
+      if (commentObjs.length) {
+        const lines = commentObjs.map((c) => `Comment by u/${c.author}: ${c.body}`);
+        chunks.push(`Top comments:\n${lines.join('\n\n')}`);
+      }
+
+      const text = chunks.join('\n\n').replace(/\s+\n/g, '\n').trim().slice(0, 16000);
+      if (text.length < 40) return null;
+
+      const image = this._redditHeroImageFromPost(post) || (seed && seed.image) || null;
+      const source = sub || (seed && String(seed.source || '').trim()) || 'Reddit';
+
+      return {
+        title,
+        url: canonical || String(permalink || '').trim(),
+        description: '',
+        image: typeof image === 'string' && image.startsWith('http') ? image : null,
+        source,
+        text,
+      };
+    } catch {
+      return null;
+    }
+  }
+
   async _fetchReadableTextViaJina(targetUrl) {
     const path = String(targetUrl || '').replace(/^https?:\/\//i, '').trim();
     if (!path) return '';
@@ -1812,6 +1951,11 @@ ${text}`;
       source: String(seed.source || '').trim(),
       text: '',
     };
+
+    // Reddit blocks scrapers; Jina often returns 403 boilerplate — thread text comes from .json API instead.
+    if (this._isRedditThreadUrl(targetUrl)) {
+      return out;
+    }
 
     for (const apiBase of apiBases) {
       if (!apiBase) continue;
@@ -1860,6 +2004,21 @@ ${text}`;
       return { ...base, text: maybeText };
     }
 
+    const seed = { title, description, image: image || null, source };
+    if (this._isRedditThreadUrl(url)) {
+      const reddit = await this._fetchRedditThreadPayload(url, seed);
+      if (reddit && typeof reddit.text === 'string' && reddit.text.length >= 40) {
+        return {
+          title: reddit.title || title,
+          url: reddit.url || url,
+          description: reddit.description != null ? reddit.description : description,
+          image: reddit.image || image || null,
+          source: reddit.source || source,
+          text: reddit.text,
+        };
+      }
+    }
+
     const origin = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '';
     const originLooksLocal =
       !origin ||
@@ -1871,7 +2030,6 @@ ${text}`;
       ? ['https://deitedatabase.web.app', 'https://deitedatabase.firebaseapp.com']
       : [origin, 'https://deitedatabase.web.app', 'https://deitedatabase.firebaseapp.com'].filter(Boolean);
 
-    const seed = { title, description, image: image || null, source };
     let best = await this._fetchArticlePayloadForUrl(url, seed, apiBases);
 
     if (
@@ -2082,10 +2240,6 @@ Return ONLY valid JSON with this exact shape (no markdown fences):
 
     if (!title) return '';
 
-    this.openaiApiKey = (process.env.REACT_APP_OPENAI_API_KEY || process.env.OPENAI_API_KEY || this.openaiApiKey || '').trim();
-    const apiKey = this.openaiApiKey;
-    if (!apiKey) return '';
-
     const titleNorm = title.replace(/\s+/g, ' ').trim().toLowerCase();
     const descNorm = description.replace(/\s+/g, ' ').trim().toLowerCase();
     const descIsMostlyHeadline =
@@ -2094,21 +2248,29 @@ Return ONLY valid JSON with this exact shape (no markdown fences):
         (titleNorm.length > 12 && (descNorm === titleNorm || titleNorm.includes(descNorm) || descNorm.includes(titleNorm))));
 
     const bodyForModel = text.slice(0, 10000);
-    if (bodyForModel.length < 280 && (!description || descIsMostlyHeadline)) {
-      return '';
-    }
-
     const sourceText = [description, text].filter(Boolean).join('\n\n').slice(0, 12000);
     if (!sourceText.trim()) return '';
+
+    const isRedditThreadBundle = /Top comments:|Comment by u\//i.test(text);
+    const hasEnoughForSummary =
+      bodyForModel.length >= 200 ||
+      (description && !descIsMostlyHeadline && description.length >= 80) ||
+      (isRedditThreadBundle && bodyForModel.length >= 60);
+
+    if (!hasEnoughForSummary && bodyForModel.length < 280 && (!description || descIsMostlyHeadline)) {
+      return '';
+    }
 
     const userContent = `Summarize this news event in ${minWords}–${maxWords} words.
 
 Rules:
 - One paragraph, plain text only.
 - Base the summary primarily on the article text; use the description only as extra context.
+- If the input is a Reddit thread (post plus comments), synthesize the announcement or question in the post and the most informative replies into one neutral summary of what is being discussed.
 - Include the key "what happened" plus the most important concrete details (names, dates, amounts, scores, locations) that are present in the input.
 - Do NOT add anything not stated or clearly implied by the input.
-- Do NOT repeat or lightly rephrase only the headline — include details from the article body.
+- Do NOT repeat or lightly rephrase only the headline — include details from the article body or thread.
+- Ignore boilerplate like HTTP errors, "403 Forbidden", or reader paywalls if they appear in the input; use only real post and comment content.
 - No intro like "In this article". No hashtags. No emojis.
 
 Return ONLY valid JSON (no markdown) with this exact shape:
@@ -2117,6 +2279,78 @@ Return ONLY valid JSON (no markdown) with this exact shape:
 Input:
 Title: ${title}
 ${description && !descIsMostlyHeadline ? `Description: ${description}\n` : ''}${bodyForModel ? `Article text:\n${bodyForModel}\n` : ''}`.trim();
+
+    const parseJsonSummary = (raw) => {
+      let s = String(raw || '').trim();
+      const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (fence) s = fence[1].trim();
+      let parsed = null;
+      try {
+        parsed = s ? JSON.parse(s) : null;
+      } catch {
+        const m = s.match(/\{[\s\S]*"summary"[\s\S]*\}/);
+        if (m) {
+          try {
+            parsed = JSON.parse(m[0]);
+          } catch {
+            parsed = null;
+          }
+        }
+      }
+      const summary = typeof parsed?.summary === 'string' ? parsed.summary.trim() : '';
+      return String(summary || '')
+        .replace(/\s+/g, ' ')
+        .replace(/\s+\.\s+/g, '. ')
+        .trim();
+    };
+
+    const applyQualityGates = (cleaned) => {
+      if (!cleaned) return '';
+      const words = cleaned.split(/\s+/).filter(Boolean);
+      const limited = words.slice(0, maxWords).join(' ');
+      const out = limited.replace(/\s+/g, ' ').trim();
+      const outNorm = out.replace(/\s+/g, ' ').trim().toLowerCase();
+      const tit = title.replace(/\s+/g, ' ').trim().toLowerCase();
+      if (
+        outNorm === tit ||
+        (tit.length > 8 &&
+          outNorm.length <= tit.length + 12 &&
+          tit.includes(outNorm.slice(0, Math.min(24, outNorm.length))))
+      ) {
+        return '';
+      }
+      const titleTokens = tit.split(/\s+/).filter((w) => w.length > 2);
+      if (titleTokens.length >= 3) {
+        const hits = titleTokens.filter((w) => outNorm.includes(w)).length;
+        if (hits / titleTokens.length > 0.9 && out.split(/\s+/).filter(Boolean).length <= title.split(/\s+/).filter(Boolean).length + 6) {
+          return '';
+        }
+      }
+      return out;
+    };
+
+    if (this.getVertexGeminiUrl()) {
+      try {
+        const vController = new AbortController();
+        const vTimeout = setTimeout(() => vController.abort(), 35000);
+        const raw = await this.callVertexGenerateContent({
+          prompt: userContent,
+          temperature: 0.35,
+          maxOutputTokens: 512,
+          signal: vController.signal,
+        });
+        clearTimeout(vTimeout);
+        const cleaned = parseJsonSummary(raw);
+        const gated = applyQualityGates(cleaned);
+        if (gated) return gated;
+      } catch (e) {
+        console.warn('Vertex news summary failed:', e);
+      }
+    }
+
+    this.openaiApiKey = (process.env.REACT_APP_OPENAI_API_KEY || process.env.OPENAI_API_KEY || this.openaiApiKey || '').trim();
+    const apiKey = this.openaiApiKey;
+    if (!apiKey) return '';
 
     const apiUrl = `${this.openaiBaseURL}/chat/completions`;
     const requestBody = {
@@ -2140,46 +2374,8 @@ ${description && !descIsMostlyHeadline ? `Description: ${description}\n` : ''}${
       if (!response.ok) return '';
       const data = await response.json().catch(() => null);
       const raw = data?.choices?.[0]?.message?.content ? String(data.choices[0].message.content) : '';
-      let parsed = null;
-      try {
-        parsed = raw ? JSON.parse(raw.trim()) : null;
-      } catch {
-        const m = (raw || '').match(/\{[\s\S]*"summary"[\s\S]*\}/);
-        if (m) {
-          try {
-            parsed = JSON.parse(m[0]);
-          } catch {
-            parsed = null;
-          }
-        }
-      }
-      const summary = typeof parsed?.summary === 'string' ? parsed.summary.trim() : '';
-      const cleaned = String(summary || '')
-        .replace(/\s+/g, ' ')
-        .replace(/\s+\.\s+/g, '. ')
-        .trim();
-      if (!cleaned) return '';
-      const words = cleaned.split(/\s+/).filter(Boolean);
-      const limited = words.slice(0, maxWords).join(' ');
-      const out = limited.replace(/\s+/g, ' ').trim();
-      const outNorm = out.replace(/\s+/g, ' ').trim().toLowerCase();
-      const tit = title.replace(/\s+/g, ' ').trim().toLowerCase();
-      if (
-        outNorm === tit ||
-        (tit.length > 8 &&
-          outNorm.length <= tit.length + 12 &&
-          tit.includes(outNorm.slice(0, Math.min(24, outNorm.length))))
-      ) {
-        return '';
-      }
-      const titleTokens = tit.split(/\s+/).filter((w) => w.length > 2);
-      if (titleTokens.length >= 3) {
-        const hits = titleTokens.filter((w) => outNorm.includes(w)).length;
-        if (hits / titleTokens.length > 0.9 && out.split(/\s+/).filter(Boolean).length <= title.split(/\s+/).filter(Boolean).length + 6) {
-          return '';
-        }
-      }
-      return out;
+      const cleaned = parseJsonSummary(raw);
+      return applyQualityGates(cleaned);
     } catch {
       clearTimeout(timeoutId);
       return '';

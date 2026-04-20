@@ -558,7 +558,7 @@ export default function PodPage() {
           return (
         <>
         <div className="px-1 mb-4">
-          <TrendingTea isDarkMode={isDarkMode} />
+          <TrendingTea />
         </div>
         <div className="px-1 mb-1">
           <HubTrendingFeed isDarkMode={isDarkMode} />

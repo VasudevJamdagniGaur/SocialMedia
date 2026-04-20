@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Loader2, Flame } from 'lucide-react';
 
 const REDDIT_HOT_URL =
@@ -31,53 +32,100 @@ function mapRedditChildToTea(child) {
   };
 }
 
-/**
- * Resolves preview image + handles load failures (broken icons).
- */
-function TeaPostMedia({ postUrl, thumbnail, isDarkMode }) {
+/** Image URL for share-suggestions hero (same rules as card preview). */
+function getTeaHeroImageUrl(item) {
   const isValidThumbnail =
-    typeof thumbnail === 'string' && thumbnail.trim().startsWith('http');
-  const isDirectImage = isDirectImageUrl(postUrl);
+    typeof item.thumbnail === 'string' && item.thumbnail.trim().startsWith('http');
+  if (isDirectImageUrl(item.postUrl)) return item.postUrl.trim();
+  if (isValidThumbnail) return item.thumbnail.trim();
+  return null;
+}
+
+const TEA_HERO_GRADIENTS = [
+  'linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%)',
+  'linear-gradient(135deg,#2d132c 0%,#801336 50%,#c72c41 100%)',
+  'linear-gradient(135deg,#0f2027 0%,#203a43 50%,#2c5364 100%)',
+  'linear-gradient(135deg,#1e3c72 0%,#2a5298 50%,#7e8ba3 100%)',
+  'linear-gradient(135deg,#232526 0%,#414345 100%)',
+];
+
+/**
+ * Horizontal card — hero image + title overlay (matches Hub trending swipe cards).
+ */
+function TeaTrendingCard({ item, idx, HUB, onSelect }) {
+  const isValidThumbnail =
+    typeof item.thumbnail === 'string' && item.thumbnail.trim().startsWith('http');
+  const isDirectImage = isDirectImageUrl(item.postUrl);
 
   let displayImage = null;
-  if (isDirectImage) displayImage = postUrl.trim();
-  else if (isValidThumbnail) displayImage = thumbnail.trim();
+  if (isDirectImage) displayImage = item.postUrl.trim();
+  else if (isValidThumbnail) displayImage = item.thumbnail.trim();
 
   const [imgFailed, setImgFailed] = useState(false);
 
   useEffect(() => {
     setImgFailed(false);
-  }, [postUrl, thumbnail]);
+  }, [item.postUrl, item.thumbnail]);
 
   const showImage = Boolean(displayImage) && !imgFailed;
 
-  const placeholderBg = isDarkMode ? 'rgba(30, 30, 30, 0.95)' : 'rgba(55, 55, 55, 0.35)';
-  const placeholderBorder = isDarkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)';
+  const cardClassName =
+    'relative flex-shrink-0 w-[min(260px,78vw)] snap-start snap-always rounded-xl overflow-hidden border transition-transform active:scale-[0.98] hover:opacity-95';
 
-  return (
-    <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg">
+  const cardStyle = {
+    borderColor: HUB.divider,
+    minHeight: 200,
+  };
+
+  const inner = (
+    <>
       {showImage ? (
         <img
           src={displayImage}
-          alt="Tea preview"
-          className="h-14 w-14 object-cover"
+          alt=""
+          className="absolute inset-0 z-[1] h-full w-full object-cover pointer-events-none"
           loading="lazy"
           decoding="async"
           onError={() => setImgFailed(true)}
         />
       ) : (
         <div
-          className="flex h-14 w-14 items-center justify-center rounded-lg text-xl leading-none select-none"
-          style={{
-            backgroundColor: placeholderBg,
-            border: `1px solid ${placeholderBorder}`,
-          }}
-          role="img"
-          aria-label="Text-only gossip, no preview"
+          className="absolute inset-0 z-[1] pointer-events-none flex items-center justify-center text-4xl leading-none select-none"
+          style={{ background: TEA_HERO_GRADIENTS[idx % TEA_HERO_GRADIENTS.length] }}
+          aria-hidden
         >
           ☕
         </div>
       )}
+      {showImage ? (
+        <div
+          className="absolute inset-0 z-[2] pointer-events-none"
+          style={{
+            background:
+              'linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.15) 40%, transparent 60%)',
+          }}
+        />
+      ) : (
+        <div className="absolute inset-0 z-[2] pointer-events-none bg-gradient-to-t from-black/88 via-black/25 to-transparent" />
+      )}
+      <div className="absolute inset-x-0 bottom-0 z-[3] p-3 pt-8 bg-gradient-to-t from-black via-black/80 to-transparent pointer-events-none">
+        <p className="text-sm font-semibold leading-snug line-clamp-4" style={{ color: '#fff' }}>
+          {item.title}
+        </p>
+      </div>
+    </>
+  );
+
+  return (
+    <div className={cardClassName} style={cardStyle}>
+      <button
+        type="button"
+        onClick={() => onSelect(item)}
+        disabled={!item.url}
+        className="absolute inset-0 z-[4] cursor-pointer border-0 bg-transparent p-0 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0F0F0F] focus-visible:ring-[#A855F7] disabled:cursor-not-allowed disabled:opacity-50"
+        aria-label={item.title}
+      />
+      {inner}
     </div>
   );
 }
@@ -85,10 +133,34 @@ function TeaPostMedia({ postUrl, thumbnail, isDarkMode }) {
 /**
  * Detea — trending gossip from r/BollyBlindsNGossip (public Reddit JSON, no API key).
  */
-export default function TrendingTea({ isDarkMode }) {
+export default function TrendingTea() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const returnTo = `${location.pathname}${location.search || ''}`;
+
   const [teaData, setTeaData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  const openShareSuggestions = useCallback(
+    (item) => {
+      if (!item.url) return;
+      navigate('/share-suggestions', {
+        state: {
+          newsArticle: {
+            title: item.title,
+            url: item.url,
+            description: '',
+            image: getTeaHeroImageUrl(item),
+            source: 'r/BollyBlindsNGossip',
+          },
+          returnTo,
+          platform: 'linkedin',
+        },
+      });
+    },
+    [navigate, returnTo]
+  );
 
   const HUB = {
     bg: '#0F0F0F',
@@ -200,66 +272,14 @@ export default function TrendingTea({ isDarkMode }) {
             role="region"
             aria-label="Tea gossip carousel"
           >
-            {teaData.map((item) => (
-              <article
+            {teaData.map((item, idx) => (
+              <TeaTrendingCard
                 key={item.id}
-                className="flex-shrink-0 w-[min(260px,78vw)] snap-start snap-always rounded-xl p-3 transition-opacity hover:opacity-95"
-                style={{
-                  background: 'rgba(255,255,255,0.04)',
-                  border: `1px solid ${HUB.divider}`,
-                  minHeight: 200,
-                }}
-              >
-                <div className="flex h-full min-h-0 flex-col gap-3">
-                  <div className="flex gap-3">
-                    <TeaPostMedia
-                      postUrl={item.postUrl}
-                      thumbnail={item.thumbnail}
-                      isDarkMode={isDarkMode}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p
-                        className="text-[15px] font-bold leading-snug line-clamp-4"
-                        style={{ color: HUB.text }}
-                      >
-                        {item.title}
-                      </p>
-                    </div>
-                  </div>
-                  <div
-                    className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-xs"
-                    style={{ color: HUB.textSecondary }}
-                  >
-                    <span className="inline-flex items-center gap-1">
-                      <span aria-hidden>🔥</span>
-                      <span>{item.score}</span>
-                    </span>
-                    <span className="inline-flex items-center gap-1">
-                      <span aria-hidden>💬</span>
-                      <span>{item.num_comments}</span>
-                    </span>
-                    <span
-                      className={`truncate max-w-full ${isDarkMode ? 'text-gray-500' : 'text-gray-600'}`}
-                    >
-                      @{item.author}
-                    </span>
-                  </div>
-                  {item.url ? (
-                    <a
-                      href={item.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex w-full justify-center text-sm font-medium rounded-lg px-3 py-2 transition-colors active:scale-[0.98]"
-                      style={{
-                        background: `${HUB.accent}22`,
-                        color: HUB.accent,
-                      }}
-                    >
-                      Read Full Tea
-                    </a>
-                  ) : null}
-                </div>
-              </article>
+                item={item}
+                idx={idx}
+                HUB={HUB}
+                onSelect={openShareSuggestions}
+              />
             ))}
           </div>
         )}
