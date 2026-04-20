@@ -551,6 +551,20 @@ export default function ShareSuggestionsPage() {
   }, [isNewsShareMode, newsArticleFromState?.url, buildLocalNewsCardSummary]);
 
   const effectiveNewsArticle = isNewsShareMode ? (newsArticleDetails || newsArticleFromState) : null;
+
+  /** Tea carousel → share flow uses `source: r/BollyBlindsNGossip` from TrendingTea. */
+  const isTeaArticleShare =
+    !!isNewsShareMode &&
+    /^r\/BollyBlindsNGossip$/i.test(String(effectiveNewsArticle?.source || '').trim());
+
+  const newsCardBadgeLabel = !isNewsShareMode
+    ? 'Your reflection'
+    : isTeaArticleShare
+      ? 'Tea'
+      : 'News';
+
+  const newsShareEventLabel = isTeaArticleShare ? 'Tea' : 'News';
+
   // While fetch + Gemini summary run, do not fall back to buildLocalNewsCardSummary — it would flash raw article/thread text.
   const effectiveNewsCardText =
     isNewsShareMode
@@ -583,7 +597,7 @@ export default function ShareSuggestionsPage() {
   const baselineShareText = isNewsShareMode
     ? [displayNewsHeadline, effectiveNewsCardText].filter(Boolean).join('\n\n') || effectiveNewsArticle?.title
     : reflectionFromState;
-  const eventLabelDefault = isNewsShareMode ? 'News' : 'Reflection';
+  const eventLabelDefault = isNewsShareMode ? newsShareEventLabel : 'Reflection';
   const shareReturnTo =
     typeof state.returnTo === 'string' && state.returnTo.startsWith('/') ? state.returnTo : '/dashboard';
   const platformFromState = state.platform; // 'linkedin' | 'x' | 'reddit' when from Dashboard icons
@@ -910,8 +924,8 @@ export default function ShareSuggestionsPage() {
         const posts = isNewsShareMode
           ? postsRaw.map((item) =>
               typeof item === 'object' && item?.post != null
-                ? { ...item, eventLabel: 'News' }
-                : { eventLabel: 'News', post: String(item || baselineShareText) }
+                ? { ...item, eventLabel: newsShareEventLabel }
+                : { eventLabel: newsShareEventLabel, post: String(item || baselineShareText) }
             )
           : postsRaw;
         const userForPosted = getCurrentUser();
@@ -2463,7 +2477,7 @@ export default function ShareSuggestionsPage() {
             className="text-sm font-medium"
             style={{ color: isNewsShareMode ? (isDarkMode ? HUB.accentHighlight : '#7C3AED') : isDarkMode ? HUB.textSecondary : '#666' }}
           >
-            {isNewsShareMode ? 'News' : 'Your reflection'}
+            {newsCardBadgeLabel}
           </p>
           {isNewsShareMode ? (
             <>
