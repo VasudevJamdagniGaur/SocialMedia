@@ -319,7 +319,7 @@ export default function HubTrendingFeed({ isDarkMode }) {
           <Flame className="w-4 h-4" style={{ color: HUB.accent }} strokeWidth={2} />
         </div>
         <div className="flex-1 min-w-0">
-          <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Trending</h2>
+          <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>News</h2>
         </div>
       </div>
       <div className="py-3 pl-4">
@@ -337,7 +337,7 @@ export default function HubTrendingFeed({ isDarkMode }) {
             className="flex gap-3 overflow-x-auto overflow-y-hidden pb-2 pr-4 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             style={{ WebkitOverflowScrolling: 'touch' }}
             role="region"
-            aria-label="Trending news carousel"
+            aria-label="News carousel"
           >
             {carouselItems.map((item, idx) => (
               <HubTrendingCard
