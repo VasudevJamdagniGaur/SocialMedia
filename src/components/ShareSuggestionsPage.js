@@ -526,6 +526,54 @@ function upsertCachedNewsCard({ url, headline, summary, details, source }) {
   writeShareNewsCardCache(cache);
 }
 
+function sanitizeTeaShareText(text) {
+  const raw = typeof text === 'string' ? text : '';
+  let s = raw.replace(/\s+/g, ' ').trim();
+  if (!s) return '';
+
+  // Never mention Reddit/subreddit/community in the displayed summary.
+  s = s
+    .replace(/\br\/[A-Za-z0-9_]+\b/g, '')
+    .replace(/\bReddit\b/gi, '')
+    .replace(/\bsubreddit\b/gi, '')
+    .replace(/\bReddit community\b/gi, '')
+    .replace(/\bthread\b/gi, 'discussion')
+    .replace(/\bcommunity\b/gi, 'people')
+    .replace(/\busers\b/gi, 'people');
+
+  // Reframe “discussion” lead-ins into a newsy / tea vibe.
+  s = s.replace(/^in (?:a|an)\s+discussion\s+on\s*,\s*/i, "Here's the tea: ");
+  s = s.replace(/^in (?:a|an)\s+discussion\s*,\s*/i, "Here's the tea: ");
+
+  // Remove leftover punctuation/spaces from stripped tokens.
+  s = s
+    // Common artifact after stripping “Reddit”: “discussions on .”
+    .replace(/\bdiscussions\s+on\s*\./gi, 'chatter.')
+    .replace(/\bdiscussions\s+on\s*,/gi, 'chatter,')
+    // If the model says "online discussion(s)", keep the vibe but drop "online".
+    .replace(/\bonline discussions\b/gi, 'chatter')
+    .replace(/\bonline discussion\b/gi, 'chatter')
+    .replace(/\bsparking\s+discussions\s+on\s*[,.:]/gi, 'stirring up chatter ')
+    .replace(/\bsparking\s+online\s+discussions\s*[,.:]?/gi, 'stirring up chatter ')
+    .replace(/\bsparking\s+discussions\b/gi, 'stirring up chatter')
+    .replace(/\bstirring up chatter\s+people\b/gi, 'stirring up chatter')
+    .replace(/\s+,/g, ',')
+    .replace(/\s+\./g, '.')
+    .replace(/\s+;/g, ';')
+    .replace(/\s+:/g, ':')
+    .replace(/\(\s*\)/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  // If it still starts with a dry framing, nudge it into a tea-ish tone.
+  s = s.replace(/^the (?:discussion|chatter)\b/i, "Here's the tea");
+  s = s.replace(/^people (?:speculated|discussed)\b/i, 'The buzz is');
+  // Fix common artifact after replacement: ". people" → ". People"
+  s = s.replace(/([.!?]\s+)people\b/g, '$1People');
+
+  return s;
+}
+
 function buildNewsSharePromptContext(n) {
   const displayHeadline = String(n.displayHeadline || n.title || '').trim();
   return [
@@ -608,8 +656,28 @@ export default function ShareSuggestionsPage() {
     if (cached) {
       setIsLoadingNewsDetails(false);
       setNewsArticleDetails(cached.details || null);
-      setNewsCardSummary(typeof cached.summary === 'string' ? cached.summary : '');
-      setNewsCardHeadline(typeof cached.headline === 'string' ? cached.headline : '');
+      const cachedSummary = typeof cached.summary === 'string' ? cached.summary : '';
+      const cachedHeadline = typeof cached.headline === 'string' ? cached.headline : '';
+      const isTea = isTeaSourceLabel(newsArticleFromState.source) || cached.kind === 'tea';
+
+      // If this is Tea, sanitize even legacy cached entries (and rewrite cache so it stays clean).
+      if (isTea) {
+        const cleaned = sanitizeTeaShareText(cachedSummary);
+        setNewsCardSummary(cleaned);
+        setNewsCardHeadline(cachedHeadline);
+        if (cleaned !== cachedSummary) {
+          upsertCachedNewsCard({
+            url: newsArticleFromState.url,
+            headline: cachedHeadline,
+            summary: cleaned,
+            details: cached.details || null,
+            source: newsArticleFromState.source,
+          });
+        }
+      } else {
+        setNewsCardSummary(cachedSummary);
+        setNewsCardHeadline(cachedHeadline);
+      }
       return () => {
         cancelled = true;
       };
@@ -633,7 +701,10 @@ export default function ShareSuggestionsPage() {
           ]);
           if (cancelled) return;
           const localFallback = buildLocalNewsCardSummary(details);
-          const finalSummary = (summary || '').trim() || localFallback || '';
+          const rawSummary = (summary || '').trim() || localFallback || '';
+          const finalSummary = isTeaSourceLabel(newsArticleFromState.source)
+            ? sanitizeTeaShareText(rawSummary)
+            : rawSummary;
           const finalHeadline = (headline || '').trim();
 
           setNewsCardSummary(finalSummary);
@@ -702,11 +773,20 @@ export default function ShareSuggestionsPage() {
   }, [isNewsShareMode, effectiveNewsArticle, newsCardHeadline]);
 
   const suggestionPromptText = isNewsShareMode
-    ? buildNewsSharePromptContext({
-        ...effectiveNewsArticle,
-        description: effectiveNewsCardText,
-        displayHeadline: newsCardHeadline || effectiveNewsArticle?.title,
-      })
+    ? [
+        buildNewsSharePromptContext({
+          ...effectiveNewsArticle,
+          // Tea: do not remind the model about Reddit; treat it like a generic story.
+          source: isTeaArticleShare ? '' : effectiveNewsArticle?.source,
+          description: effectiveNewsCardText,
+          displayHeadline: newsCardHeadline || effectiveNewsArticle?.title,
+        }),
+        isTeaArticleShare
+          ? 'Important: Do NOT mention Reddit, subreddit names, online communities, or "users" in your output.'
+          : '',
+      ]
+        .filter(Boolean)
+        .join('\n')
     : reflectionFromState;
   const baselineShareText = isNewsShareMode
     ? [displayNewsHeadline, effectiveNewsCardText].filter(Boolean).join('\n\n') || effectiveNewsArticle?.title
@@ -1025,6 +1105,7 @@ export default function ShareSuggestionsPage() {
     setIsLoadingSuggestions(true);
     setSuggestionError(null);
     setSuggestionImageUrls([]);
+    const isTeaShareFlow = isNewsShareMode && isTeaSourceLabel(newsArticleFromState?.source);
     const suggestionsPromise = isNewsShareMode
       ? chatService.generateNewsArticleShareSuggestions(newsArticleForSuggestions, selectedPlatform)
       : chatService.generateSocialPostSuggestions(suggestionPromptText, selectedPlatform);
@@ -1042,17 +1123,26 @@ export default function ShareSuggestionsPage() {
                 : { eventLabel: newsShareEventLabel, post: String(item || baselineShareText) }
             )
           : postsRaw;
+        const cleanedPosts =
+          isTeaShareFlow
+            ? posts.map((item) => ({
+                ...item,
+                post: sanitizeTeaShareText(
+                  typeof item === 'object' && item?.post != null ? String(item.post) : String(item || '')
+                ),
+              }))
+            : posts;
         const userForPosted = getCurrentUser();
         const postedKey = sharePostedLocalKey(userForPosted?.uid, dateStr, selectedPlatform);
         const { postedSet, captionOverrides } = getPostedStateForLoadedReflection(
           suggestionPromptText,
           postedKey
         );
-        setPlatformSuggestions(mergePostedIntoSuggestions(posts, postedSet, captionOverrides));
+        setPlatformSuggestions(mergePostedIntoSuggestions(cleanedPosts, postedSet, captionOverrides));
         setSelectedIndex(0);
         setIsLoadingSuggestions(false);
         // For LinkedIn, X, and Reddit: Prefer Firebase cache (no API re-calls), then localStorage, then Gemini; save to Firebase after generation
-        const postsWithText = posts.map((item) =>
+        const postsWithText = cleanedPosts.map((item) =>
           (typeof item === 'object' && item?.post != null ? item.post : String(item || '')).trim()
         );
 
@@ -1187,7 +1277,13 @@ export default function ShareSuggestionsPage() {
             postedKey
           );
           const fallbackPosts = [{ eventLabel: eventLabelDefault, post: baselineShareText }];
-          setPlatformSuggestions(mergePostedIntoSuggestions(fallbackPosts, postedSet, captionOverrides));
+          const cleanedFallbackPosts =
+            isTeaShareFlow
+              ? fallbackPosts.map((x) => ({ ...x, post: sanitizeTeaShareText(String(x.post || '')) }))
+              : fallbackPosts;
+          setPlatformSuggestions(
+            mergePostedIntoSuggestions(cleanedFallbackPosts, postedSet, captionOverrides)
+          );
           setSelectedIndex(0);
           if (isNewsShareMode) {
             const img = effectiveNewsArticle?.image || null;
@@ -1199,7 +1295,16 @@ export default function ShareSuggestionsPage() {
         }
       });
     return () => { cancelled = true; };
-  }, [selectedPlatform, suggestionPromptText, dateStr, isLoadingNewsDetails, newsArticleDetails, newsArticleForSuggestions]);
+  }, [
+    selectedPlatform,
+    suggestionPromptText,
+    dateStr,
+    isLoadingNewsDetails,
+    newsArticleDetails,
+    newsArticleForSuggestions,
+    isNewsShareMode,
+    newsArticleFromState?.source,
+  ]);
 
   const fallbackSuggestions = buildFallbackSuggestions(
     isNewsShareMode ? baselineShareText : reflectionFromState
