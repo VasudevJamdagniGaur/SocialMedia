@@ -434,6 +434,9 @@ const __SHARE_NEWS_CARD_CACHE_KEY = 'deite_share_news_card_cache_v1';
 const __TEA_TRENDING_URLS_KEY = 'deite_tea_trending_urls_v1';
 const __SHARE_NEWS_CARD_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
+const __SHARE_NEWS_SUGGESTIONS_CACHE_KEY = 'deite_share_news_suggestions_cache_v1';
+const __SHARE_NEWS_SUGGESTIONS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
 function safeReadJsonFromLocalStorage(key) {
   try {
     const raw = localStorage.getItem(key);
@@ -470,6 +473,45 @@ function readShareNewsCardCache() {
 function writeShareNewsCardCache(cacheObj) {
   if (!cacheObj || typeof cacheObj !== 'object') return;
   safeWriteJsonToLocalStorage(__SHARE_NEWS_CARD_CACHE_KEY, cacheObj);
+}
+
+function readShareNewsSuggestionsCache() {
+  const j = safeReadJsonFromLocalStorage(__SHARE_NEWS_SUGGESTIONS_CACHE_KEY);
+  if (!j || typeof j !== 'object') return {};
+  return j;
+}
+
+function writeShareNewsSuggestionsCache(obj) {
+  if (!obj || typeof obj !== 'object') return;
+  safeWriteJsonToLocalStorage(__SHARE_NEWS_SUGGESTIONS_CACHE_KEY, obj);
+}
+
+function getCachedShareSuggestionsForUrl(url, platform) {
+  const key = normalizeUrlKey(url);
+  const p = String(platform || '').trim().toLowerCase();
+  if (!key || !p) return null;
+  const cache = readShareNewsSuggestionsCache();
+  const entry = cache?.[key]?.[p];
+  if (!entry || typeof entry !== 'object') return null;
+  const ts = typeof entry.ts === 'number' ? entry.ts : 0;
+  if (!ts || Date.now() - ts > __SHARE_NEWS_SUGGESTIONS_TTL_MS) return null;
+  const posts = Array.isArray(entry.posts) ? entry.posts : null;
+  if (!posts || !posts.length) return null;
+  return posts;
+}
+
+function setCachedShareSuggestionsForUrl(url, platform, posts) {
+  const key = normalizeUrlKey(url);
+  const p = String(platform || '').trim().toLowerCase();
+  if (!key || !p) return;
+  if (!Array.isArray(posts) || !posts.length) return;
+  const cache = readShareNewsSuggestionsCache();
+  const prev = cache[key] && typeof cache[key] === 'object' ? cache[key] : {};
+  cache[key] = {
+    ...prev,
+    [p]: { ts: Date.now(), posts },
+  };
+  writeShareNewsSuggestionsCache(cache);
 }
 
 function getCachedNewsCardForUrl(url) {
@@ -1106,6 +1148,45 @@ export default function ShareSuggestionsPage() {
     setSuggestionError(null);
     setSuggestionImageUrls([]);
     const isTeaShareFlow = isNewsShareMode && isTeaSourceLabel(newsArticleFromState?.source);
+
+    // News share: cache suggestions per (article URL, platform) so switching tabs doesn't regenerate.
+    if (isNewsShareMode && newsArticleFromState?.url) {
+      const cachedPosts = getCachedShareSuggestionsForUrl(newsArticleFromState.url, selectedPlatform);
+      if (cachedPosts && cachedPosts.length) {
+        const userForPosted = getCurrentUser();
+        const postedKey = sharePostedLocalKey(userForPosted?.uid, dateStr, selectedPlatform);
+        const { postedSet, captionOverrides } = getPostedStateForLoadedReflection(
+          suggestionPromptText,
+          postedKey
+        );
+
+        const normalizedCached = cachedPosts.map((x) => {
+          if (typeof x === 'object' && x) return x;
+          return { eventLabel: newsShareEventLabel, post: String(x || baselineShareText) };
+        });
+        const cleanedCached = isTeaShareFlow
+          ? normalizedCached.map((item) => ({
+              ...item,
+              eventLabel: newsShareEventLabel,
+              post: sanitizeTeaShareText(String(item?.post || '')),
+            }))
+          : normalizedCached.map((item) => ({ ...item, eventLabel: newsShareEventLabel }));
+
+        setPlatformSuggestions(mergePostedIntoSuggestions(cleanedCached, postedSet, captionOverrides));
+        setSelectedIndex(0);
+        setIsLoadingSuggestions(false);
+
+        const img = effectiveNewsArticle?.image || null;
+        setSuggestionImageUrls(cleanedCached.map(() => img));
+        setSuggestionImagesFromChat(cleanedCached.map(() => false));
+        setIsLoadingImages(false);
+
+        return () => {
+          cancelled = true;
+        };
+      }
+    }
+
     const suggestionsPromise = isNewsShareMode
       ? chatService.generateNewsArticleShareSuggestions(newsArticleForSuggestions, selectedPlatform)
       : chatService.generateSocialPostSuggestions(suggestionPromptText, selectedPlatform);
@@ -1132,6 +1213,13 @@ export default function ShareSuggestionsPage() {
                 ),
               }))
             : posts;
+
+        if (isNewsShareMode && newsArticleFromState?.url) {
+          // Save raw-ish suggestions (eventLabel + post) so platform switches are instant.
+          // (Tea sanitization already applied above when needed.)
+          setCachedShareSuggestionsForUrl(newsArticleFromState.url, selectedPlatform, cleanedPosts);
+        }
+
         const userForPosted = getCurrentUser();
         const postedKey = sharePostedLocalKey(userForPosted?.uid, dateStr, selectedPlatform);
         const { postedSet, captionOverrides } = getPostedStateForLoadedReflection(
