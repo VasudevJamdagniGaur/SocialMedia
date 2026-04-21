@@ -2,6 +2,7 @@ import chatService from '../services/chatService';
 import {
   googleNewsSearchUrl,
   canFetchLiveNews,
+  fetchJsonGet,
   fetchNewsApiEverythingNormalized,
   fetchNewsApiTopHeadlinesNormalized,
   fetchLiveFromGoogleRssByQuery,
@@ -19,6 +20,15 @@ export const GOOGLE_BROWSE_QUERY = {
 };
 
 export const POD_SPORTS_EXPLORE_SLUGS = ['cricket', 'football', 'f1', 'chess', 'others'];
+
+/** Hot-feed subreddits per Explore tab (fetched via `fetchJsonGet` → reddit.com/r/{sub}/hot.json). */
+export const REDDIT_SPORTS_SUBS = {
+  cricket: ['Cricket', 'IndianCricket', 'IndiaCricketGossips'],
+  football: ['Championship', 'Soccer', 'Football', 'PremierLeague', 'Soccercirclejerk'],
+  f1: ['formula1', 'F1Discussions', 'formuladank', 'F1FeederSeries', 'GrandPrixRacing'],
+  chess: ['chess', 'TournamentChess', 'AnarchyChess', 'chessmemes'],
+  others: ['sports', 'sportsdiscussion', 'sportsarefun'],
+};
 
 export const TOPIC_META = {
   cricket: {
@@ -152,70 +162,98 @@ function resolveRedditPostImage(post) {
   return null;
 }
 
-async function tryCricketRowsFromReddit() {
-  try {
-    const res = await fetch('https://www.reddit.com/r/Cricket/hot.json?limit=50&raw_json=1', {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
-    });
-    if (!res.ok) return [];
-    const json = await res.json().catch(() => null);
-    const children = json?.data?.children;
-    if (!Array.isArray(children)) return [];
+function redditPermalinkUrl(post) {
+  const permalink = typeof post?.permalink === 'string' ? post.permalink.trim() : '';
+  if (permalink) {
+    return `https://www.reddit.com${permalink.startsWith('/') ? '' : '/'}${permalink}`;
+  }
+  const u = typeof post?.url === 'string' ? post.url.trim() : '';
+  return /^https?:\/\//i.test(u) ? u : '';
+}
 
-    const seenTitles = new Set();
-    const picked = [];
+function redditPublishedAt(post) {
+  const u = post?.created_utc;
+  const n = typeof u === 'number' ? u : Number(u || 0);
+  if (n > 0) return new Date(n * 1000).toISOString();
+  return new Date().toISOString();
+}
+
+/**
+ * @param {string[]} subs
+ * @param {{ maxPerSub?: number, maxKeep?: number, minScore?: number, filterPost?: (post: object) => boolean }} [options]
+ */
+async function tryRedditHotRows(subs, options = {}) {
+  const maxPerSub = typeof options.maxPerSub === 'number' ? options.maxPerSub : 40;
+  const maxKeep = typeof options.maxKeep === 'number' ? options.maxKeep : 22;
+  const minScore = typeof options.minScore === 'number' ? options.minScore : 15;
+  const filterPost = typeof options.filterPost === 'function' ? options.filterPost : null;
+
+  const seenTitles = new Set();
+  const seenUrls = new Set();
+  const picked = [];
+  const normalizeScore = (s) => (typeof s === 'number' ? s : Number(s || 0));
+
+  for (const sub of subs) {
+    if (picked.length >= maxKeep) break;
+    const url = `https://www.reddit.com/r/${encodeURIComponent(sub)}/hot.json?limit=${maxPerSub}&raw_json=1`;
+    let children = [];
+    try {
+      const jr = await fetchJsonGet(url, { timeoutMs: 20000 });
+      const listing = jr?.data?.data;
+      const ch = listing?.children;
+      children = Array.isArray(ch) ? ch : [];
+    } catch {
+      children = [];
+    }
 
     for (const child of children) {
+      if (picked.length >= maxKeep) break;
       const post = child?.data;
       if (!post || typeof post !== 'object') continue;
+      if (filterPost && !filterPost(post)) continue;
 
       const title = typeof post.title === 'string' ? post.title.trim() : '';
       if (!title) continue;
-
       const titleKey = title.toLowerCase();
       if (seenTitles.has(titleKey)) continue;
-      seenTitles.add(titleKey);
 
-      // Quality control: include only posts meeting ALL criteria.
       if (post.stickied === true) continue;
       if (String(post.author || '') === 'AutoModerator') continue;
-      if (!(typeof post.score === 'number' ? post.score : Number(post.score || 0)) || Number(post.score || 0) <= 20) continue;
+      const score = normalizeScore(post.score);
+      if (!score || score < minScore) continue;
 
-      const permalink = typeof post.permalink === 'string' ? post.permalink.trim() : '';
-      const url = permalink
-        ? `https://www.reddit.com${permalink.startsWith('/') ? '' : '/'}${permalink}`
-        : typeof post.url === 'string'
-          ? post.url.trim()
-          : '';
-      if (!/^https?:\/\//i.test(url)) continue;
+      const link = redditPermalinkUrl(post);
+      if (!/^https?:\/\//i.test(link)) continue;
+      if (seenUrls.has(link)) continue;
 
       const thumbnail = typeof post.thumbnail === 'string' ? post.thumbnail.trim() : '';
       const thumb = /^https?:\/\//i.test(thumbnail) ? thumbnail : null;
       const image = resolveRedditPostImage(post);
 
+      seenTitles.add(titleKey);
+      seenUrls.add(link);
       picked.push({
         title,
-        url,
+        url: link,
         image,
         thumbnail: thumb,
-        score: Number(post.score || 0),
+        score,
         num_comments: Number(post.num_comments || 0),
         author: typeof post.author === 'string' && post.author.trim() ? post.author.trim() : 'unknown',
-        source: 'r/Cricket',
+        source: `r/${sub}`,
         description: '',
-        publishedAt: new Date().toISOString(),
-        sourceSiteUrl: 'https://www.reddit.com/r/Cricket',
+        publishedAt: redditPublishedAt(post),
+        sourceSiteUrl: `https://www.reddit.com/r/${encodeURIComponent(sub)}`,
         publisherUrl: '',
       });
-
-      if (picked.length >= 15) break;
     }
-
-    return picked.slice(0, 15);
-  } catch {
-    return [];
   }
+
+  picked.sort(
+    (a, b) =>
+      Number(b.score || 0) - Number(a.score || 0) || Number(b.num_comments || 0) - Number(a.num_comments || 0)
+  );
+  return picked.slice(0, maxKeep);
 }
 
 export function buildFallbackRows(topicId, label) {
@@ -405,10 +443,68 @@ export async function fetchSportsTopicRawItems(topicId, options = {}) {
 
   const title = config.label;
 
-  // Cricket: prefer Reddit hot feed (high-signal + built-in community ranking).
-  // We over-fetch then dedupe + filter (cross-posts, bots, low-score, stickies).
+  // Cricket: Reddit-only (no NewsAPI / RSS fallback).
   if (topicId === 'cricket') {
-    const redditRows = await tryCricketRowsFromReddit();
+    const redditRows = await tryRedditHotRows(REDDIT_SPORTS_SUBS.cricket, {
+      maxPerSub: 50,
+      maxKeep: 18,
+      minScore: 18,
+    });
+    if (redditRows.length) {
+      return { items: redditRows, error: '', allowRewrite: false };
+    }
+    return {
+      items: buildFallbackRows(topicId, title),
+      error: 'Cricket posts are unavailable from Reddit right now. Try again shortly.',
+      allowRewrite: false,
+    };
+  }
+
+  // Football: listed subreddits first; News/RSS only if Reddit yields nothing.
+  if (topicId === 'football') {
+    const redditRows = await tryRedditHotRows(REDDIT_SPORTS_SUBS.football, {
+      maxPerSub: 40,
+      maxKeep: 22,
+      minScore: 16,
+    });
+    if (redditRows.length) {
+      return { items: redditRows, error: '', allowRewrite: false };
+    }
+  }
+
+  if (topicId === 'f1') {
+    const redditRows = await tryRedditHotRows(REDDIT_SPORTS_SUBS.f1, {
+      maxPerSub: 40,
+      maxKeep: 22,
+      minScore: 14,
+    });
+    if (redditRows.length) {
+      return { items: redditRows, error: '', allowRewrite: false };
+    }
+  }
+
+  if (topicId === 'chess') {
+    const redditRows = await tryRedditHotRows(REDDIT_SPORTS_SUBS.chess, {
+      maxPerSub: 40,
+      maxKeep: 22,
+      minScore: 12,
+    });
+    if (redditRows.length) {
+      return { items: redditRows, error: '', allowRewrite: false };
+    }
+  }
+
+  // Other sports: Reddit first; drop posts that match cricket/football/F1/chess (same as news filter).
+  if (topicId === 'others') {
+    const redditRows = await tryRedditHotRows(REDDIT_SPORTS_SUBS.others, {
+      maxPerSub: 45,
+      maxKeep: 28,
+      minScore: 14,
+      filterPost: (post) => {
+        const blob = `${post?.title || ''} ${typeof post?.selftext === 'string' ? post.selftext : ''}`;
+        return !matchesMainTopic(blob);
+      },
+    });
     if (redditRows.length) {
       return { items: redditRows, error: '', allowRewrite: false };
     }

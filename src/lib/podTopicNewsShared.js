@@ -887,6 +887,16 @@ async function fetchJsonMaybeNative(url, { timeoutMs }) {
   }
 }
 
+/**
+ * Shared GET for JSON APIs (e.g. Reddit `*.json`) with the same web + Capacitor behavior as NewsAPI fetches.
+ * @param {string} url
+ * @param {{ timeoutMs?: number }} [options]
+ * @returns {Promise<{ status?: number, ok: boolean, data: unknown, headers?: unknown }>}
+ */
+export async function fetchJsonGet(url, { timeoutMs = 15000 } = {}) {
+  return fetchJsonMaybeNative(url, { timeoutMs });
+}
+
 async function fetchNewsApiDirectFromEnv(endpoint, baseParams) {
   const apiKey = getNewsApiKey();
   if (!apiKey) {
