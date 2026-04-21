@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
@@ -7,6 +7,31 @@ import { recordHubNewsClick } from '../services/hubNewsService';
 import { prefetchExploreTopicRaw } from '../lib/podExploreTopicPrefetchCache';
 import { getNewsWithLiveFallback } from '../services/cachedNewsService';
 import { recordHubVerticalDwell } from '../services/hubVerticalPersonalizationService';
+import { fetchAiTechHubTrendingCarouselItems } from '../lib/podAiTechTopicFeed';
+import {
+  classifyExploreSlugForAiTechTrending,
+  isLikelyAiTechTrendingItem,
+} from '../lib/podAiTechTrendingPersonalization';
+import { getAiTechPersonalizationWeights } from '../services/aiTechPersonalizationService';
+
+/** Survives route changes so trending does not flash empty while reloading. */
+let podAiTechTrendingUiCache = {
+  /** @type {Array<object>|null} */
+  items: null,
+};
+
+function getCachedAiTechHubTrendingRows() {
+  const arr = podAiTechTrendingUiCache.items;
+  return Array.isArray(arr) && arr.length > 0 ? arr : null;
+}
+
+function effectiveAiTechTrendRank(item) {
+  const ts = Number(item.trendingScore) || 0;
+  if (ts) return ts;
+  const sc = Number(item.score) || 0;
+  const nc = Number(item.num_comments) || 0;
+  return sc * 3 + nc;
+}
 
 /**
  * Carousel card — tap opens share suggestions (LinkedIn / X / Reddit), same as Sports hub trending.
@@ -23,7 +48,10 @@ function AiTechTrendingCard({ item, idx, HUB, techGradients, navigate, returnTo 
   const openShareSuggestions = useCallback(() => {
     if (!item.url) return;
     const u = getCurrentUser();
-    if (u?.uid) void recordHubNewsClick(u.uid, 'ai-tech');
+    if (u?.uid) {
+      const cat = classifyExploreSlugForAiTechTrending(item);
+      void recordHubNewsClick(u.uid, cat);
+    }
     navigate('/share-suggestions', {
       state: {
         newsArticle: {
@@ -100,15 +128,16 @@ export default function PodAiTechPage() {
   const location = useLocation();
   const returnTo = `${location.pathname}${location.search || ''}`;
   const { isDarkMode } = useTheme();
-  const [trending, setTrending] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [trending, setTrending] = useState(() => getCachedAiTechHubTrendingRows() || []);
+  const [isLoading, setIsLoading] = useState(() => !getCachedAiTechHubTrendingRows());
   const [newsError, setNewsError] = useState('');
+  const loadTokenRef = useRef(0);
 
   const EXPLORE = [
     { label: 'AI Models', slug: 'ai-models' },
     { label: 'Startups', slug: 'startups' },
     { label: 'Tools', slug: 'tools' },
-    { label: 'Insights', slug: 'insights' },
+    { label: 'Vibe Coding', slug: 'vibe-coding' },
     { label: 'Big Tech', slug: 'big-tech' },
   ];
 
@@ -131,8 +160,6 @@ export default function PodAiTechPage() {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-
     const fallbackTrending = [
       {
         title: 'Major cloud providers expand AI chip and region capacity',
@@ -164,45 +191,96 @@ export default function PodAiTechPage() {
       },
     ];
 
+    const token = ++loadTokenRef.current;
+
     const load = async () => {
-      setIsLoading(true);
+      if (!getCachedAiTechHubTrendingRows()) setIsLoading(true);
       setNewsError('');
       try {
-        const { success, articles, error, fallbackError } = await getNewsWithLiveFallback('ai_tech');
-        if (cancelled) return;
-        if (!success) {
-          setTrending(fallbackTrending);
-          setNewsError(fallbackError || error || 'Could not load headlines.');
-          return;
+        let redditPrimary = [];
+        try {
+          redditPrimary = await fetchAiTechHubTrendingCarouselItems();
+        } catch {
+          redditPrimary = [];
         }
-        const normalized = articles.map((a) => ({
+        if (token !== loadTokenRef.current) return;
+
+        const { success, articles, error, fallbackError } = await getNewsWithLiveFallback('ai_tech');
+        if (token !== loadTokenRef.current) return;
+
+        let newsMerged = (success && Array.isArray(articles) ? articles : []).map((a) => ({
           title: a.title,
           source: a.source,
           url: a.url,
           image: a.image,
+          publishedAt: a.publishedAt,
           description: a.description || '',
+          city: null,
+          firestoreId: null,
+          trendingScore: Number(a.trendingScore) || 0,
+          likes: 0,
+          shares: 0,
+          views: 0,
         }));
-        setTrending(normalized.length ? normalized : fallbackTrending);
-        if (!normalized.length) {
+
+        const filteredNews = newsMerged.filter(isLikelyAiTechTrendingItem);
+        if (filteredNews.length >= 4) newsMerged = filteredNews;
+
+        const weights = await getAiTechPersonalizationWeights();
+
+        const allCandidates = [...redditPrimary, ...newsMerged];
+        allCandidates.sort((a, b) => {
+          const clsA = classifyExploreSlugForAiTechTrending(a);
+          const clsB = classifyExploreSlugForAiTechTrending(b);
+          const ra = (weights[clsA] || 0) * 2000 + effectiveAiTechTrendRank(a);
+          const rb = (weights[clsB] || 0) * 2000 + effectiveAiTechTrendRank(b);
+          if (rb !== ra) return rb - ra;
+          const ta = a.publishedAt ? Date.parse(a.publishedAt) : 0;
+          const tb = b.publishedAt ? Date.parse(b.publishedAt) : 0;
+          return tb - ta;
+        });
+
+        const seenUrls = new Set();
+        const merged = [];
+        for (const row of allCandidates) {
+          const u = (row?.url || '').trim();
+          if (!u || seenUrls.has(u)) continue;
+          seenUrls.add(u);
+          merged.push(row);
+          if (merged.length >= 10) break;
+        }
+
+        if (token !== loadTokenRef.current) return;
+
+        if (!merged.length && !success) {
+          podAiTechTrendingUiCache.items = fallbackTrending;
+          setTrending(fallbackTrending);
+          setNewsError(fallbackError || error || 'Could not load headlines.');
+          return;
+        }
+
+        const baseRows = merged.length ? merged.slice(0, 10) : fallbackTrending;
+        podAiTechTrendingUiCache.items = baseRows;
+        setTrending(baseRows);
+        if (merged.length > 0) {
+          setNewsError('');
+        } else {
           setNewsError(
             fallbackError ||
               'No AI & tech headlines. Set REACT_APP_NEWSAPI in .env or deploy newsIngestScheduler.'
           );
         }
       } catch {
-        if (!cancelled) {
-          setTrending(fallbackTrending);
-          setNewsError('Could not load cached headlines, showing top picks.');
-        }
+        if (token !== loadTokenRef.current) return;
+        podAiTechTrendingUiCache.items = fallbackTrending;
+        setTrending(fallbackTrending);
+        setNewsError('Could not load cached headlines, showing top picks.');
       } finally {
-        if (!cancelled) setIsLoading(false);
+        if (token === loadTokenRef.current) setIsLoading(false);
       }
     };
 
     load();
-    return () => {
-      cancelled = true;
-    };
   }, []);
 
   const HUB = {

@@ -182,7 +182,7 @@ function redditPublishedAt(post) {
  * @param {string[]} subs
  * @param {{ maxPerSub?: number, maxKeep?: number, minScore?: number, filterPost?: (post: object) => boolean }} [options]
  */
-async function tryRedditHotRows(subs, options = {}) {
+export async function tryRedditHotRows(subs, options = {}) {
   const maxPerSub = typeof options.maxPerSub === 'number' ? options.maxPerSub : 40;
   const maxKeep = typeof options.maxKeep === 'number' ? options.maxKeep : 22;
   const minScore = typeof options.minScore === 'number' ? options.minScore : 15;

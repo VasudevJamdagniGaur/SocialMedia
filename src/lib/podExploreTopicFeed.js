@@ -11,6 +11,7 @@ import {
   resolveExploreGoogleQuery,
   buildFallbackRows,
 } from './podExploreTopicConfig';
+import { fetchAiTechRedditExploreRows } from './podAiTechTopicFeed';
 
 /**
  * NewsAPI `everything` on AI/ML queries often returns PyPI/npm index rows: package name + semver
@@ -68,6 +69,14 @@ export async function fetchExploreTopicFeed({ section, topicId, startupRegion })
   }
 
   try {
+    if (section === 'ai-tech') {
+      const redditRows = await fetchAiTechRedditExploreRows(topicId);
+      if (redditRows?.length) {
+        const enriched = await enrichNewsItemsWithOgImages(redditRows, { enableOgFallback: true });
+        return { items: enriched.slice(0, 30), error: '' };
+      }
+    }
+
     if (!canFetchLiveNews()) {
       const googleQ = resolveExploreGoogleQuery(cfg, startupRegion);
       return {

@@ -10,6 +10,8 @@ import {
   resolveExploreGoogleQuery,
   browseGoogleQuery,
 } from '../lib/podExploreTopicConfig';
+import { POD_AI_TECH_EXPLORE_SLUGS } from '../lib/podAiTechTrendingPersonalization';
+import { recordAiTechExploreDwell } from '../services/aiTechPersonalizationService';
 import { fetchExploreTopicFeed } from '../lib/podExploreTopicFeed';
 import {
   exploreTopicCacheKey,
@@ -118,6 +120,32 @@ export default function PodExploreTopicPage() {
   useEffect(() => {
     loadNews({ initialLoad: true, forceRefresh: false });
   }, [section, topicId, startupRegion]);
+
+  useEffect(() => {
+    if (section !== 'ai-tech' || !topicId || !POD_AI_TECH_EXPLORE_SLUGS.includes(topicId)) return;
+    const key = `pod_ai_tech_explore_visit_${topicId}`;
+    if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(key)) return;
+    if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(key, '1');
+    void recordAiTechExploreDwell(topicId, 0, 1);
+  }, [section, topicId]);
+
+  useEffect(() => {
+    if (section !== 'ai-tech' || !topicId || !POD_AI_TECH_EXPLORE_SLUGS.includes(topicId)) return;
+    let start = Date.now();
+    const flush = () => {
+      const sec = Math.min(900, Math.round((Date.now() - start) / 1000));
+      start = Date.now();
+      if (sec >= 3) void recordAiTechExploreDwell(topicId, sec, 0);
+    };
+    const onVis = () => {
+      if (document.hidden) flush();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      flush();
+    };
+  }, [section, topicId]);
 
   const HUB = {
     bg: '#0F0F0F',

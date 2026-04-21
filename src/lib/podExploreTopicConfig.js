@@ -35,10 +35,10 @@ export const EXPLORE_TOPICS = {
       q: '(MLOps OR "machine learning" API OR "Hugging Face" OR LangChain OR "vector database" OR "AI SDK")',
       google: '(AI developer tools OR MLOps OR LangChain OR Hugging Face) when:7d',
     },
-    insights: {
-      label: 'Insights',
-      q: '(AI ethics OR "artificial intelligence" regulation OR AGI OR "AI safety" OR benchmark OR "AI policy")',
-      google: '(AI ethics OR artificial intelligence regulation OR AI safety research) when:7d',
+    'vibe-coding': {
+      label: 'Vibe Coding',
+      q: '(programming OR web development OR JavaScript OR TypeScript OR React OR software engineering OR "open source")',
+      google: '(programming OR web development OR software engineering OR open source) when:7d',
     },
     'big-tech': {
       label: 'Big Tech',

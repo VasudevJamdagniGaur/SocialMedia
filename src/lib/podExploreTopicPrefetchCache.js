@@ -38,7 +38,8 @@ export function invalidateExploreTopicFeedCache(key) {
  * Warm cache before navigating to /pod/explore/:section/:topicId (default region international).
  */
 export function prefetchExploreTopicRaw(section, topicId, startupRegion = 'international') {
-  if (!section || !topicId || !canFetchLiveNews()) return Promise.resolve();
+  if (!section || !topicId) return Promise.resolve();
+  if (!canFetchLiveNews() && section !== 'ai-tech') return Promise.resolve();
   const key = exploreTopicCacheKey(section, topicId, startupRegion);
   if (getExploreTopicFeedCache(key)) return Promise.resolve();
   if (inflight.has(key)) return inflight.get(key);
