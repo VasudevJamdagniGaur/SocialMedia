@@ -513,7 +513,7 @@ class FirestoreService {
 
   /**
    * Upload news-share image to Storage (stable path keyed by URL hash).
-   * @returns {Promise<string|null>} Download URL
+   * @returns {Promise<{ imageUrl: string, storagePath: string }|null>}
    */
   async uploadNewsShareImageFile(uid, file, articleUrl) {
     const isFileOrBlob = file && (file instanceof File || file instanceof Blob);
@@ -524,8 +524,9 @@ class FirestoreService {
       if (!key) return null;
       const ext = file instanceof File && file.name && file.name.includes('.') ? file.name.split('.').pop() : 'jpg';
       const storagePath = `newsShareCache/${uid}/${key}.${ext}`;
-      const path = storagePath;
-      const storageRef = ref(this.storage, path);
+      // Use a fresh storage handle in case `this.storage` is not initialized in the current runtime.
+      const storage = getStorage();
+      const storageRef = ref(storage, storagePath);
       await uploadBytes(storageRef, file);
       const imageUrl = await getDownloadURL(storageRef);
       return { imageUrl, storagePath };
