@@ -90,3 +90,20 @@ export async function vertexAnalyzePattern(data, opts = {}) {
   }
   return res.result;
 }
+
+/**
+ * POST /generate-news-image — Gemini image model on Vertex (editorial illustration).
+ * @param {string} prompt
+ * @param {{ signal?: AbortSignal }} [opts]
+ * @returns {Promise<string>} data URL
+ */
+export async function vertexGenerateNewsImage(prompt, opts = {}) {
+  const data = await fetchJson('/generate-news-image', {
+    body: { prompt: String(prompt || '').trim() },
+    signal: opts.signal,
+  });
+  if (typeof data.imageDataUrl !== 'string' || !data.imageDataUrl.startsWith('data:image')) {
+    throw new Error('Vertex /generate-news-image: response missing imageDataUrl');
+  }
+  return data.imageDataUrl;
+}

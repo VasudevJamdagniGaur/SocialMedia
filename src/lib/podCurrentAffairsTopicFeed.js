@@ -80,5 +80,6 @@ export async function fetchCurrentAffairsHubTrendingCarouselItems() {
     image: pick.image || pick.thumbnail || null,
     description: pick.description || '',
     publishedAt: pick.publishedAt,
+    exploreTopic: pick.exploreTopic || 'world-news',
   }));
 }

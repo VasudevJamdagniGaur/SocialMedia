@@ -7,6 +7,7 @@ import {
   isVertexBackendConfigured,
   vertexChat,
   vertexGenerateContent,
+  vertexGenerateNewsImage,
 } from './vertexApiClient';
 
 class ChatService {
@@ -3108,11 +3109,15 @@ ${text}`;
    * @returns {Promise<string|null>}
    */
   async _generateImageWithGemini(prompt, referenceImage = null) {
-    void prompt;
     void referenceImage;
-    // Multimodal image generation is not exposed on the Vertex Express backend; avoid browser API keys.
-    console.warn('[Image] Inline image generation is not available via the Vertex text backend.');
-    return null;
+    const p = String(prompt || '').trim();
+    if (!p || !isVertexBackendConfigured()) return null;
+    try {
+      return await vertexGenerateNewsImage(p);
+    } catch (e) {
+      console.warn('[Image] Vertex image generation failed:', e?.message || e);
+      return null;
+    }
   }
 
   /**

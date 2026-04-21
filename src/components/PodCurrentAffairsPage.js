@@ -1,13 +1,111 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useCallback, useEffect, useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
+import { googleNewsSearchUrl } from '../lib/podTopicNewsShared';
 import { prefetchExploreTopicRaw } from '../lib/podExploreTopicPrefetchCache';
 import { fetchCurrentAffairsHubTrendingCarouselItems } from '../lib/podCurrentAffairsTopicFeed';
+import { getCurrentUser } from '../services/authService';
+import { recordHubNewsClick } from '../services/hubNewsService';
 import { recordHubVerticalDwell } from '../services/hubVerticalPersonalizationService';
+
+/**
+ * Tap opens share suggestions (same flow as Sports hub trending), not the raw Reddit URL.
+ */
+function CurrentAffairsTrendingCard({ item, idx, HUB, navigate, returnTo }) {
+  const [heroFailed, setHeroFailed] = useState(false);
+
+  const gradients = [
+    'linear-gradient(135deg,#0c1929 0%,#1e3a5f 50%,#0f172a 100%)',
+    'linear-gradient(135deg,#1c1917 0%,#44403c 50%,#1c1917 100%)',
+    'linear-gradient(135deg,#134e4a 0%,#115e59 50%,#0f172a 100%)',
+    'linear-gradient(135deg,#312e81 0%,#1e1b4b 50%,#0f172a 100%)',
+    'linear-gradient(135deg,#1e293b 0%,#334155 50%,#0f172a 100%)',
+  ];
+
+  const src = typeof item.image === 'string' ? item.image.trim() : '';
+  const showImg = Boolean(src && (/^https?:\/\//i.test(src) || src.startsWith('data:')));
+
+  useEffect(() => {
+    setHeroFailed(false);
+  }, [src]);
+
+  const openShareSuggestions = useCallback(() => {
+    if (!item.url) return;
+    const u = getCurrentUser();
+    if (u?.uid) {
+      const cat = String(item.exploreTopic || 'general').trim() || 'general';
+      void recordHubNewsClick(u.uid, cat);
+    }
+    navigate('/share-suggestions', {
+      state: {
+        newsArticle: {
+          title: item.title,
+          url: item.url,
+          description: item.description || '',
+          image: item.image || null,
+          source: 'News',
+        },
+        returnTo,
+      },
+    });
+  }, [item, navigate, returnTo]);
+
+  return (
+    <div
+      className="relative flex-shrink-0 w-[min(260px,78vw)] snap-start snap-always rounded-xl overflow-hidden border transition-transform active:scale-[0.98] hover:opacity-95"
+      style={{
+        borderColor: HUB.divider,
+        minHeight: 200,
+      }}
+    >
+      <button
+        type="button"
+        onClick={openShareSuggestions}
+        disabled={!item.url}
+        className="absolute inset-0 z-0 cursor-pointer border-0 bg-transparent p-0 text-left disabled:cursor-not-allowed disabled:opacity-60"
+        aria-label={item.title}
+      />
+      {showImg && !heroFailed ? (
+        <img
+          src={src}
+          alt=""
+          className="absolute inset-0 z-[1] h-full w-full object-cover pointer-events-none"
+          loading="lazy"
+          decoding="async"
+          referrerPolicy="no-referrer"
+          onError={() => setHeroFailed(true)}
+        />
+      ) : (
+        <div
+          className="absolute inset-0 z-[1] pointer-events-none"
+          style={{ background: gradients[idx % gradients.length] }}
+        />
+      )}
+      {showImg && !heroFailed ? (
+        <div
+          className="absolute inset-0 z-[2] pointer-events-none"
+          style={{
+            background:
+              'linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.15) 40%, transparent 60%)',
+          }}
+        />
+      ) : (
+        <div className="absolute inset-0 z-[2] pointer-events-none bg-gradient-to-t from-black/88 via-black/25 to-transparent" />
+      )}
+      <div className="absolute inset-x-0 bottom-0 z-[3] p-3 pt-8 bg-gradient-to-t from-black via-black/80 to-transparent pointer-events-none">
+        <p className="text-sm font-semibold leading-snug line-clamp-4" style={{ color: '#fff' }}>
+          {item.title}
+        </p>
+      </div>
+    </div>
+  );
+}
 
 export default function PodCurrentAffairsPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnTo = `${location.pathname}${location.search || ''}`;
   const { isDarkMode } = useTheme();
   const [trending, setTrending] = useState([]);
   const [isLoadingNews, setIsLoadingNews] = useState(false);
@@ -41,10 +139,34 @@ export default function PodCurrentAffairsPage() {
     let cancelled = false;
 
     const fallbackTrending = [
-      { title: 'Global leaders meet on coordinated response to emerging crises', image: null },
-      { title: 'Markets weigh commodity shifts after latest supply chain updates', image: null },
-      { title: 'UN agencies highlight humanitarian needs in multiple regions', image: null },
-      { title: 'Scientists publish new findings on extreme weather patterns', image: null },
+      {
+        title: 'Global leaders meet on coordinated response to emerging crises',
+        image: null,
+        url: googleNewsSearchUrl('world news international'),
+        description: '',
+        exploreTopic: 'world-news',
+      },
+      {
+        title: 'Markets weigh commodity shifts after latest supply chain updates',
+        image: null,
+        url: googleNewsSearchUrl('economy news'),
+        description: '',
+        exploreTopic: 'economy',
+      },
+      {
+        title: 'UN agencies highlight humanitarian needs in multiple regions',
+        image: null,
+        url: googleNewsSearchUrl('world politics'),
+        description: '',
+        exploreTopic: 'politics',
+      },
+      {
+        title: 'Scientists publish new findings on extreme weather patterns',
+        image: null,
+        url: googleNewsSearchUrl('climate change news'),
+        description: '',
+        exploreTopic: 'climate',
+      },
     ];
 
     const load = async () => {
@@ -57,6 +179,8 @@ export default function PodCurrentAffairsPage() {
           title: a.title,
           url: a.url,
           image: a.image,
+          description: a.description || '',
+          exploreTopic: a.exploreTopic || 'world-news',
         }));
         setTrending(normalized.length ? normalized : fallbackTrending);
         if (!normalized.length) {
@@ -86,14 +210,6 @@ export default function PodCurrentAffairsPage() {
     accent: '#A855F7',
   };
   const cardStyle = { background: HUB.bg, border: `1px solid ${HUB.divider}` };
-
-  const newsGradients = [
-    'linear-gradient(135deg,#0c1929 0%,#1e3a5f 50%,#0f172a 100%)',
-    'linear-gradient(135deg,#1c1917 0%,#44403c 50%,#1c1917 100%)',
-    'linear-gradient(135deg,#134e4a 0%,#115e59 50%,#0f172a 100%)',
-    'linear-gradient(135deg,#312e81 0%,#1e1b4b 50%,#0f172a 100%)',
-    'linear-gradient(135deg,#1e293b 0%,#334155 50%,#0f172a 100%)',
-  ];
 
   return (
     <div
@@ -137,33 +253,16 @@ export default function PodCurrentAffairsPage() {
                     role="region"
                     aria-label="Trending posts ranked by engagement and your explore usage"
                   >
-                    {trending.slice(0, 10).map((item, idx) => {
-                      const bg = item.image
-                        ? `linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.15) 40%, transparent 60%), url(${item.image}) center/cover no-repeat`
-                        : newsGradients[idx % newsGradients.length];
-                      return (
-                        <a
-                          key={`${item.title}-${idx}`}
-                          href={item.url || undefined}
-                          target={item.url ? '_blank' : undefined}
-                          rel={item.url ? 'noopener noreferrer' : undefined}
-                          className="relative flex-shrink-0 w-[min(260px,78vw)] snap-start snap-always rounded-xl overflow-hidden border transition-transform active:scale-[0.98] hover:opacity-95"
-                          style={{
-                            borderColor: HUB.divider,
-                            minHeight: 200,
-                            background: bg,
-                            backgroundSize: item.image ? 'cover' : 'auto',
-                            backgroundPosition: item.image ? 'center' : undefined,
-                          }}
-                        >
-                          <div className="absolute inset-x-0 bottom-0 p-3 pt-10 bg-gradient-to-t from-black via-black/80 to-transparent">
-                            <p className="text-sm font-semibold leading-snug line-clamp-3" style={{ color: '#fff' }}>
-                              {item.title}
-                            </p>
-                          </div>
-                        </a>
-                      );
-                    })}
+                    {trending.slice(0, 10).map((item, idx) => (
+                      <CurrentAffairsTrendingCard
+                        key={`${item.title}-${idx}`}
+                        item={item}
+                        idx={idx}
+                        HUB={HUB}
+                        navigate={navigate}
+                        returnTo={returnTo}
+                      />
+                    ))}
                   </div>
                   {!!newsError && (
                     <p className="text-xs mt-2 pr-4" style={{ color: HUB.textSecondary }}>{newsError}</p>

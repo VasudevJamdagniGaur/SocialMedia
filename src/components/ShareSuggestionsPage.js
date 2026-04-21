@@ -1177,9 +1177,47 @@ export default function ShareSuggestionsPage() {
         setIsLoadingSuggestions(false);
 
         const img = effectiveNewsArticle?.image || null;
-        setSuggestionImageUrls(cleanedCached.map(() => img));
-        setSuggestionImagesFromChat(cleanedCached.map(() => false));
-        setIsLoadingImages(false);
+        const cachedTexts = cleanedCached.map((item) =>
+          (typeof item === 'object' && item?.post != null ? String(item.post) : String(item || '')).trim()
+        );
+        if (img) {
+          setSuggestionImageUrls(cleanedCached.map(() => img));
+          setSuggestionImagesFromChat(cleanedCached.map(() => false));
+          setIsLoadingImages(false);
+        } else if (selectedPlatform === 'reddit') {
+          setSuggestionImageUrls(cleanedCached.map(() => null));
+          setSuggestionImagesFromChat(cleanedCached.map(() => false));
+          setIsLoadingImages(false);
+        } else {
+          setSuggestionImageUrls(cleanedCached.map(() => null));
+          setSuggestionImagesFromChat(cleanedCached.map(() => false));
+          setIsLoadingImages(true);
+          const user = getCurrentUser();
+          const userContext = user
+            ? {
+                displayName: localStorage.getItem(`user_display_name_${user.uid}`) || user.displayName || '',
+                age: localStorage.getItem(`user_age_${user.uid}`) || '',
+                nationality: localStorage.getItem(`user_nationality_${user.uid}`) || 'Indian',
+                gender: localStorage.getItem(`user_gender_${user.uid}`) || '',
+                skinTone: localStorage.getItem(`user_skin_tone_${user.uid}`) || '',
+                hairstyle: localStorage.getItem(`user_hairstyle_${user.uid}`) || '',
+                clothingStyle: localStorage.getItem(`user_clothing_style_${user.uid}`) || '',
+                profession: localStorage.getItem(`user_profession_${user.uid}`) || '',
+                profileImageUrl: localStorage.getItem(`user_profile_picture_${user.uid}`) || '',
+              }
+            : null;
+          void Promise.all(
+            cachedTexts.map((postText) =>
+              postText
+                ? chatService.fetchImageForReflection(postText, userContext, selectedPlatform).catch(() => null)
+                : Promise.resolve(null)
+            )
+          ).then((urls) => {
+            if (cancelled) return;
+            setSuggestionImageUrls(urls);
+            setIsLoadingImages(false);
+          });
+        }
 
         return () => {
           cancelled = true;
@@ -1236,9 +1274,46 @@ export default function ShareSuggestionsPage() {
 
         if (isNewsShareMode) {
           const img = effectiveNewsArticle?.image || null;
-          setSuggestionImageUrls(postsWithText.map(() => img));
+          if (img) {
+            setSuggestionImageUrls(postsWithText.map(() => img));
+            setSuggestionImagesFromChat(postsWithText.map(() => false));
+            setIsLoadingImages(false);
+            return;
+          }
+          if (selectedPlatform === 'reddit') {
+            setSuggestionImageUrls(postsWithText.map(() => null));
+            setSuggestionImagesFromChat(postsWithText.map(() => false));
+            setIsLoadingImages(false);
+            return;
+          }
+          setSuggestionImageUrls(postsWithText.map(() => null));
           setSuggestionImagesFromChat(postsWithText.map(() => false));
-          setIsLoadingImages(false);
+          setIsLoadingImages(true);
+          const user = getCurrentUser();
+          const userContext = user
+            ? {
+                displayName: localStorage.getItem(`user_display_name_${user.uid}`) || user.displayName || '',
+                age: localStorage.getItem(`user_age_${user.uid}`) || '',
+                nationality: localStorage.getItem(`user_nationality_${user.uid}`) || 'Indian',
+                gender: localStorage.getItem(`user_gender_${user.uid}`) || '',
+                skinTone: localStorage.getItem(`user_skin_tone_${user.uid}`) || '',
+                hairstyle: localStorage.getItem(`user_hairstyle_${user.uid}`) || '',
+                clothingStyle: localStorage.getItem(`user_clothing_style_${user.uid}`) || '',
+                profession: localStorage.getItem(`user_profession_${user.uid}`) || '',
+                profileImageUrl: localStorage.getItem(`user_profile_picture_${user.uid}`) || '',
+              }
+            : null;
+          void Promise.all(
+            postsWithText.map((postText) =>
+              postText
+                ? chatService.fetchImageForReflection(postText, userContext, selectedPlatform).catch(() => null)
+                : Promise.resolve(null)
+            )
+          ).then((urls) => {
+            if (cancelled) return;
+            setSuggestionImageUrls(urls);
+            setIsLoadingImages(false);
+          });
           return;
         }
 

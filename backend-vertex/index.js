@@ -11,10 +11,12 @@ if (process.env.GOOGLE_CREDENTIALS) {
   process.env.GOOGLE_APPLICATION_CREDENTIALS = "./service-account.json";
 }
 
-const [{ LOCATION, MODEL_ID, PROJECT_ID }, { generateText }] = await Promise.all([
-  import("./lib/config.js"),
-  import("./lib/generateText.js"),
-]);
+const [{ LOCATION, MODEL_ID, PROJECT_ID }, { generateText }, { generateNewsIllustrationImage }] =
+  await Promise.all([
+    import("./lib/config.js"),
+    import("./lib/generateText.js"),
+    import("./lib/generateNewsImage.js"),
+  ]);
 
 const app = express();
 app.use(cors());
@@ -113,6 +115,24 @@ ${payload}`;
   } catch (err) {
     console.error("[/analyze-pattern]", err);
     return jsonError(res, 500, "Pattern analysis failed", err.message);
+  }
+});
+
+/** POST /generate-news-image → { prompt } → { imageDataUrl } — Gemini 2.5 Flash Image on Vertex */
+app.post("/generate-news-image", async (req, res) => {
+  try {
+    const { prompt } = req.body ?? {};
+    if (typeof prompt !== "string" || !prompt.trim()) {
+      return jsonError(res, 400, 'Missing or invalid "prompt" (non-empty string required)');
+    }
+    const imageDataUrl = await generateNewsIllustrationImage(prompt.trim());
+    if (!imageDataUrl) {
+      return jsonError(res, 502, "Image generation returned no image", "Model did not return an image part");
+    }
+    return res.json({ imageDataUrl });
+  } catch (err) {
+    console.error("[/generate-news-image]", err);
+    return jsonError(res, 500, "Image generation failed", err.message);
   }
 });
 
