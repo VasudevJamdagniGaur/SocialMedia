@@ -15,6 +15,7 @@ import firestoreService from '../services/firestoreService';
 import chatService from '../services/chatService';
 import { getDateId } from '../utils/dateUtils';
 import { db } from '../firebase/config';
+import { getCachedNewsImageForUrl, setCachedNewsImageForUrl } from '../lib/newsImageCache';
 import TweetShareCard from './TweetShareCard';
 import xLogoImg from '../assets/images/x-logo.png';
 import redditLogoImg from '../assets/images/reddit-logo.png';
@@ -1177,11 +1178,13 @@ export default function ShareSuggestionsPage() {
         setIsLoadingSuggestions(false);
 
         const img = effectiveNewsArticle?.image || null;
+        const cachedNewsImg = newsArticleFromState?.url ? getCachedNewsImageForUrl(newsArticleFromState.url) : null;
         const cachedTexts = cleanedCached.map((item) =>
           (typeof item === 'object' && item?.post != null ? String(item.post) : String(item || '')).trim()
         );
-        if (img) {
-          setSuggestionImageUrls(cleanedCached.map(() => img));
+        if (img || cachedNewsImg) {
+          const finalImg = img || cachedNewsImg;
+          setSuggestionImageUrls(cleanedCached.map(() => finalImg));
           setSuggestionImagesFromChat(cleanedCached.map(() => false));
           setIsLoadingImages(false);
         } else if (selectedPlatform === 'reddit') {
@@ -1209,6 +1212,7 @@ export default function ShareSuggestionsPage() {
             .then((one) => {
               if (cancelled) return;
               const fill = one || null;
+              if (fill && newsArticleFromState?.url) setCachedNewsImageForUrl(newsArticleFromState.url, fill);
               setSuggestionImageUrls(cleanedCached.map(() => fill));
               setIsLoadingImages(false);
             });
@@ -1269,8 +1273,10 @@ export default function ShareSuggestionsPage() {
 
         if (isNewsShareMode) {
           const img = effectiveNewsArticle?.image || null;
-          if (img) {
-            setSuggestionImageUrls(postsWithText.map(() => img));
+          const cachedNewsImg = newsArticleFromState?.url ? getCachedNewsImageForUrl(newsArticleFromState.url) : null;
+          if (img || cachedNewsImg) {
+            const finalImg = img || cachedNewsImg;
+            setSuggestionImageUrls(postsWithText.map(() => finalImg));
             setSuggestionImagesFromChat(postsWithText.map(() => false));
             setIsLoadingImages(false);
             return;
@@ -1301,6 +1307,7 @@ export default function ShareSuggestionsPage() {
             .then((one) => {
               if (cancelled) return;
               const fill = one || null;
+              if (fill && newsArticleFromState?.url) setCachedNewsImageForUrl(newsArticleFromState.url, fill);
               setSuggestionImageUrls(postsWithText.map(() => fill));
               setIsLoadingImages(false);
             });

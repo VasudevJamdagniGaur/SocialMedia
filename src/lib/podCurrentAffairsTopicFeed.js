@@ -1,6 +1,7 @@
 import { tryRedditHotRows } from './podSportsTopicFeed';
 import { getCurrentAffairsPersonalizationWeights } from '../services/currentAffairsPersonalizationService';
 import { POD_CURRENT_AFFAIRS_EXPLORE_SLUGS, REDDIT_CURRENT_AFFAIRS_SUBS } from './podCurrentAffairsConstants';
+import { getCachedNewsImageForUrl } from './newsImageCache';
 
 export { POD_CURRENT_AFFAIRS_EXPLORE_SLUGS, REDDIT_CURRENT_AFFAIRS_SUBS } from './podCurrentAffairsConstants';
 
@@ -77,7 +78,7 @@ export async function fetchCurrentAffairsHubTrendingCarouselItems() {
     title: pick.title,
     url: pick.url,
     source: pick.source || 'Reddit',
-    image: pick.image || pick.thumbnail || null,
+    image: pick.image || pick.thumbnail || getCachedNewsImageForUrl(pick.url) || null,
     description: pick.description || '',
     publishedAt: pick.publishedAt,
     exploreTopic: pick.exploreTopic || 'world-news',
