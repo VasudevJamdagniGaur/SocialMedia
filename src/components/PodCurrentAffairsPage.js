@@ -6,6 +6,7 @@ import { googleNewsSearchUrl } from '../lib/podTopicNewsShared';
 import { prefetchExploreTopicRaw } from '../lib/podExploreTopicPrefetchCache';
 import { fetchCurrentAffairsHubTrendingCarouselItems } from '../lib/podCurrentAffairsTopicFeed';
 import { getCurrentUser } from '../services/authService';
+import firestoreService from '../services/firestoreService';
 import { recordHubNewsClick } from '../services/hubNewsService';
 import { recordHubVerticalDwell } from '../services/hubVerticalPersonalizationService';
 
@@ -201,6 +202,44 @@ export default function PodCurrentAffairsPage() {
       cancelled = true;
     };
   }, []);
+
+  // After trending loads, swap in any cached/generated news image for this URL (if user is signed in).
+  useEffect(() => {
+    const u = getCurrentUser();
+    if (!u?.uid) return;
+    const base = Array.isArray(trending) ? trending : [];
+    const missing = base
+      .map((it, idx) => ({ it, idx }))
+      .filter(({ it }) => it && it.url && !it.image)
+      .slice(0, 10);
+    if (!missing.length) return;
+
+    let cancelled = false;
+    void (async () => {
+      const patches = await Promise.all(
+        missing.map(async ({ it, idx }) => {
+          const cachedUrl = await firestoreService.getNewsShareImageUrl(u.uid, it.url);
+          return cachedUrl ? { idx, image: cachedUrl } : null;
+        })
+      );
+      if (cancelled) return;
+      const next = [...base];
+      let changed = false;
+      for (const p of patches) {
+        if (!p) continue;
+        const cur = next[p.idx];
+        if (cur && !cur.image) {
+          next[p.idx] = { ...cur, image: p.image };
+          changed = true;
+        }
+      }
+      if (changed) setTrending(next);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [trending]);
 
   const HUB = {
     bg: '#0F0F0F',

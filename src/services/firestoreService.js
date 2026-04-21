@@ -29,6 +29,19 @@ class FirestoreService {
   }
 
   /**
+   * Stable cache key from a URL (news share image cache).
+   * @param {string} url
+   */
+  hashForNewsUrlCache(url) {
+    const raw = String(url || '').trim().slice(0, 900);
+    const s = raw.replace(/\s+/g, ' ').trim();
+    if (!s) return '';
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+    return Math.abs(h).toString(36);
+  }
+
+  /**
    * Ensure user document exists. When profilePicture or displayName is in userData,
    * also updates usersMetadata so getUser() returns the latest (metadata takes precedence).
    */
@@ -447,6 +460,74 @@ class FirestoreService {
       }, { merge: true });
     } catch (error) {
       console.warn('saveReflectionImageUrl failed:', error);
+    }
+  }
+
+  /**
+   * Get stored news-share image URL for this user + article URL.
+   * Used when a story has no hero image and we generate one once.
+   * @returns {Promise<string|null>}
+   */
+  async getNewsShareImageUrl(uid, articleUrl) {
+    const url = String(articleUrl || '').trim();
+    if (!uid || !url) return null;
+    try {
+      const key = this.hashForNewsUrlCache(url);
+      if (!key) return null;
+      const docRef = doc(this.db, 'newsImageCache', `${uid}_${key}`);
+      const snap = await getDoc(docRef);
+      if (snap.exists() && snap.data().imageUrl) return snap.data().imageUrl;
+      return null;
+    } catch (error) {
+      console.warn('getNewsShareImageUrl failed:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Save news-share image URL to Firestore so we can reload instantly for the same story.
+   */
+  async saveNewsShareImageUrl(uid, articleUrl, imageUrl) {
+    const url = String(articleUrl || '').trim();
+    if (!uid || !url || !imageUrl) return;
+    try {
+      const key = this.hashForNewsUrlCache(url);
+      if (!key) return;
+      const docRef = doc(this.db, 'newsImageCache', `${uid}_${key}`);
+      await setDoc(
+        docRef,
+        {
+          userId: uid,
+          articleUrl: url.slice(0, 1200),
+          imageUrl,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+    } catch (error) {
+      console.warn('saveNewsShareImageUrl failed:', error);
+    }
+  }
+
+  /**
+   * Upload news-share image to Storage (stable path keyed by URL hash).
+   * @returns {Promise<string|null>} Download URL
+   */
+  async uploadNewsShareImageFile(uid, file, articleUrl) {
+    const isFileOrBlob = file && (file instanceof File || file instanceof Blob);
+    const url = String(articleUrl || '').trim();
+    if (!uid || !isFileOrBlob || !url) return null;
+    try {
+      const key = this.hashForNewsUrlCache(url);
+      if (!key) return null;
+      const ext = file instanceof File && file.name && file.name.includes('.') ? file.name.split('.').pop() : 'jpg';
+      const path = `newsShareCache/${uid}/${key}.${ext}`;
+      const storageRef = ref(this.storage, path);
+      await uploadBytes(storageRef, file);
+      return await getDownloadURL(storageRef);
+    } catch (error) {
+      console.error('Error uploading news share cache image:', error);
+      return null;
     }
   }
 

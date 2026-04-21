@@ -15,7 +15,6 @@ import firestoreService from '../services/firestoreService';
 import chatService from '../services/chatService';
 import { getDateId } from '../utils/dateUtils';
 import { db } from '../firebase/config';
-import { getCachedNewsImageForUrl, setCachedNewsImageForUrl } from '../lib/newsImageCache';
 import TweetShareCard from './TweetShareCard';
 import xLogoImg from '../assets/images/x-logo.png';
 import redditLogoImg from '../assets/images/reddit-logo.png';
@@ -1178,13 +1177,11 @@ export default function ShareSuggestionsPage() {
         setIsLoadingSuggestions(false);
 
         const img = effectiveNewsArticle?.image || null;
-        const cachedNewsImg = newsArticleFromState?.url ? getCachedNewsImageForUrl(newsArticleFromState.url) : null;
         const cachedTexts = cleanedCached.map((item) =>
           (typeof item === 'object' && item?.post != null ? String(item.post) : String(item || '')).trim()
         );
-        if (img || cachedNewsImg) {
-          const finalImg = img || cachedNewsImg;
-          setSuggestionImageUrls(cleanedCached.map(() => finalImg));
+        if (img) {
+          setSuggestionImageUrls(cleanedCached.map(() => img));
           setSuggestionImagesFromChat(cleanedCached.map(() => false));
           setIsLoadingImages(false);
         } else if (selectedPlatform === 'reddit') {
@@ -1204,18 +1201,67 @@ export default function ShareSuggestionsPage() {
               (effectiveNewsArticle?.text || '').trim().slice(0, 2000),
               (cachedTexts[0] || '').slice(0, 1200),
             ].find((s) => s && s.length > 12) || '';
-          void chatService
-            .fetchSingleNewsShareIllustrationImage({
-              headline: headlineForImage,
-              storyText: storyForImage,
-            })
-            .then((one) => {
+          const user = getCurrentUser();
+          void (async () => {
+            try {
+              if (user?.uid && effectiveNewsArticle?.url) {
+                const cachedUrl = await firestoreService.getNewsShareImageUrl(user.uid, effectiveNewsArticle.url);
+                if (!cancelled && cachedUrl) {
+                  setSuggestionImageUrls(cleanedCached.map(() => cachedUrl));
+                  setIsLoadingImages(false);
+                  // Also refresh local cache so headline card loads instantly next time.
+                  upsertCachedNewsCard({
+                    url: effectiveNewsArticle.url,
+                    headline: newsCardHeadline || effectiveNewsArticle.title,
+                    summary: newsCardSummary || '',
+                    details: { ...(effectiveNewsArticle || {}), image: cachedUrl },
+                    source: newsArticleFromState?.source || '',
+                  });
+                  return;
+                }
+              }
+
+              const one = await chatService.fetchSingleNewsShareIllustrationImage({
+                headline: headlineForImage,
+                storyText: storyForImage,
+              });
               if (cancelled) return;
-              const fill = one || null;
-              if (fill && newsArticleFromState?.url) setCachedNewsImageForUrl(newsArticleFromState.url, fill);
-              setSuggestionImageUrls(cleanedCached.map(() => fill));
-              setIsLoadingImages(false);
-            });
+              if (!one) {
+                setSuggestionImageUrls(cleanedCached.map(() => null));
+                setIsLoadingImages(false);
+                return;
+              }
+
+              // Show immediately (data URL), then persist to Firebase and swap to CDN URL.
+              setSuggestionImageUrls(cleanedCached.map(() => one));
+
+              if (user?.uid && effectiveNewsArticle?.url) {
+                const compressed = await compressReflectionImage(one);
+                if (compressed) {
+                  const storedUrl = await firestoreService.uploadNewsShareImageFile(
+                    user.uid,
+                    compressed,
+                    effectiveNewsArticle.url
+                  );
+                  if (storedUrl) {
+                    await firestoreService.saveNewsShareImageUrl(user.uid, effectiveNewsArticle.url, storedUrl);
+                    if (!cancelled) {
+                      setSuggestionImageUrls(cleanedCached.map(() => storedUrl));
+                      upsertCachedNewsCard({
+                        url: effectiveNewsArticle.url,
+                        headline: newsCardHeadline || effectiveNewsArticle.title,
+                        summary: newsCardSummary || '',
+                        details: { ...(effectiveNewsArticle || {}), image: storedUrl },
+                        source: newsArticleFromState?.source || '',
+                      });
+                    }
+                  }
+                }
+              }
+            } finally {
+              if (!cancelled) setIsLoadingImages(false);
+            }
+          })();
         }
 
         return () => {
@@ -1273,10 +1319,8 @@ export default function ShareSuggestionsPage() {
 
         if (isNewsShareMode) {
           const img = effectiveNewsArticle?.image || null;
-          const cachedNewsImg = newsArticleFromState?.url ? getCachedNewsImageForUrl(newsArticleFromState.url) : null;
-          if (img || cachedNewsImg) {
-            const finalImg = img || cachedNewsImg;
-            setSuggestionImageUrls(postsWithText.map(() => finalImg));
+          if (img) {
+            setSuggestionImageUrls(postsWithText.map(() => img));
             setSuggestionImagesFromChat(postsWithText.map(() => false));
             setIsLoadingImages(false);
             return;
@@ -1299,18 +1343,65 @@ export default function ShareSuggestionsPage() {
               (effectiveNewsArticle?.text || '').trim().slice(0, 2000),
               (postsWithText[0] || '').slice(0, 1200),
             ].find((s) => s && s.length > 12) || '';
-          void chatService
-            .fetchSingleNewsShareIllustrationImage({
-              headline: headlineForImage,
-              storyText: storyForImage,
-            })
-            .then((one) => {
+          const user = getCurrentUser();
+          void (async () => {
+            try {
+              if (user?.uid && effectiveNewsArticle?.url) {
+                const cachedUrl = await firestoreService.getNewsShareImageUrl(user.uid, effectiveNewsArticle.url);
+                if (!cancelled && cachedUrl) {
+                  setSuggestionImageUrls(postsWithText.map(() => cachedUrl));
+                  setIsLoadingImages(false);
+                  upsertCachedNewsCard({
+                    url: effectiveNewsArticle.url,
+                    headline: newsCardHeadline || effectiveNewsArticle.title,
+                    summary: newsCardSummary || '',
+                    details: { ...(effectiveNewsArticle || {}), image: cachedUrl },
+                    source: newsArticleFromState?.source || '',
+                  });
+                  return;
+                }
+              }
+
+              const one = await chatService.fetchSingleNewsShareIllustrationImage({
+                headline: headlineForImage,
+                storyText: storyForImage,
+              });
               if (cancelled) return;
-              const fill = one || null;
-              if (fill && newsArticleFromState?.url) setCachedNewsImageForUrl(newsArticleFromState.url, fill);
-              setSuggestionImageUrls(postsWithText.map(() => fill));
-              setIsLoadingImages(false);
-            });
+              if (!one) {
+                setSuggestionImageUrls(postsWithText.map(() => null));
+                setIsLoadingImages(false);
+                return;
+              }
+
+              setSuggestionImageUrls(postsWithText.map(() => one));
+
+              if (user?.uid && effectiveNewsArticle?.url) {
+                const compressed = await compressReflectionImage(one);
+                if (compressed) {
+                  const storedUrl = await firestoreService.uploadNewsShareImageFile(
+                    user.uid,
+                    compressed,
+                    effectiveNewsArticle.url
+                  );
+                  if (storedUrl) {
+                    await firestoreService.saveNewsShareImageUrl(user.uid, effectiveNewsArticle.url, storedUrl);
+                    if (!cancelled) {
+                      setSuggestionImageUrls(postsWithText.map(() => storedUrl));
+                      upsertCachedNewsCard({
+                        url: effectiveNewsArticle.url,
+                        headline: newsCardHeadline || effectiveNewsArticle.title,
+                        summary: newsCardSummary || '',
+                        details: { ...(effectiveNewsArticle || {}), image: storedUrl },
+                        source: newsArticleFromState?.source || '',
+                      });
+                    }
+                  }
+                }
+              }
+            } finally {
+              if (!cancelled) setIsLoadingImages(false);
+            }
+          })();
           return;
         }
 
