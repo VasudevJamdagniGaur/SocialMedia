@@ -18,14 +18,14 @@ import {
   runTransaction,
 } from 'firebase/firestore';
 import { getStorage, ref, uploadString, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { db } from '../firebase/config';
+import firebaseApp, { db } from '../firebase/config';
 import { getDateId } from '../utils/dateUtils';
 import { getCurrentUser } from '../services/authService';
 
 class FirestoreService {
   constructor() {
     this.db = db;
-    this.storage = getStorage();
+    this.storage = getStorage(firebaseApp);
   }
 
   /**
@@ -525,7 +525,7 @@ class FirestoreService {
       const ext = file instanceof File && file.name && file.name.includes('.') ? file.name.split('.').pop() : 'jpg';
       const storagePath = `newsShareCache/${uid}/${key}.${ext}`;
       // Use a fresh storage handle in case `this.storage` is not initialized in the current runtime.
-      const storage = getStorage();
+      const storage = getStorage(firebaseApp);
       const storageRef = ref(storage, storagePath);
       await uploadBytes(storageRef, file);
       const imageUrl = await getDownloadURL(storageRef);
