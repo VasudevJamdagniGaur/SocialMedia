@@ -216,6 +216,14 @@ export default function PodCurrentAffairsPage() {
 
     let cancelled = false;
     void (async () => {
+      // Best-effort: delete cached/generated images that are no longer in this active trending list.
+      // (Keeps cache while story is present; removes after it has been absent for a while.)
+      void firestoreService.cleanupNewsShareImages(
+        u.uid,
+        base.map((x) => x?.url).filter(Boolean),
+        { maxAgeMs: 36 * 60 * 60 * 1000 } // 36h grace period
+      );
+
       const patches = await Promise.all(
         missing.map(async ({ it, idx }) => {
           const cachedUrl = await firestoreService.getNewsShareImageUrl(u.uid, it.url);

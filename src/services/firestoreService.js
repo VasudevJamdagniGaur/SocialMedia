@@ -17,7 +17,7 @@ import {
   deleteField,
   runTransaction,
 } from 'firebase/firestore';
-import { getStorage, ref, uploadString, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { getStorage, ref, uploadString, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db } from '../firebase/config';
 import { getDateId } from '../utils/dateUtils';
 import { getCurrentUser } from '../services/authService';
@@ -487,7 +487,7 @@ class FirestoreService {
   /**
    * Save news-share image URL to Firestore so we can reload instantly for the same story.
    */
-  async saveNewsShareImageUrl(uid, articleUrl, imageUrl) {
+  async saveNewsShareImageUrl(uid, articleUrl, imageUrl, storagePath = '') {
     const url = String(articleUrl || '').trim();
     if (!uid || !url || !imageUrl) return;
     try {
@@ -500,6 +500,8 @@ class FirestoreService {
           userId: uid,
           articleUrl: url.slice(0, 1200),
           imageUrl,
+          lastSeenAt: Date.now(),
+          storagePath: String(storagePath || '').trim() || deleteField(),
           updatedAt: serverTimestamp(),
         },
         { merge: true }
@@ -521,13 +523,94 @@ class FirestoreService {
       const key = this.hashForNewsUrlCache(url);
       if (!key) return null;
       const ext = file instanceof File && file.name && file.name.includes('.') ? file.name.split('.').pop() : 'jpg';
-      const path = `newsShareCache/${uid}/${key}.${ext}`;
+      const storagePath = `newsShareCache/${uid}/${key}.${ext}`;
+      const path = storagePath;
       const storageRef = ref(this.storage, path);
       await uploadBytes(storageRef, file);
-      return await getDownloadURL(storageRef);
+      const imageUrl = await getDownloadURL(storageRef);
+      return { imageUrl, storagePath };
     } catch (error) {
       console.error('Error uploading news share cache image:', error);
       return null;
+    }
+  }
+
+  /**
+   * Update lastSeenAt for this cached image (keep-alive while story is present).
+   */
+  async touchNewsShareImage(uid, articleUrl) {
+    const url = String(articleUrl || '').trim();
+    if (!uid || !url) return;
+    try {
+      const key = this.hashForNewsUrlCache(url);
+      if (!key) return;
+      const docRef = doc(this.db, 'newsImageCache', `${uid}_${key}`);
+      await setDoc(
+        docRef,
+        {
+          userId: uid,
+          articleUrl: url.slice(0, 1200),
+          lastSeenAt: Date.now(),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+    } catch (error) {
+      console.warn('touchNewsShareImage failed:', error);
+    }
+  }
+
+  /**
+   * Cleanup cached news images not in the active feed anymore.
+   * Deletes both Firestore doc and Storage object (when storagePath is known).
+   *
+   * Behavior:
+   * - Keeps entries whose articleUrl is currently active.
+   * - For non-active entries, deletes only if they haven't been seen recently (maxAgeMs) to avoid flapping.
+   *
+   * @param {string} uid
+   * @param {string[]} activeUrls
+   * @param {{ maxAgeMs?: number, maxDocs?: number }} [options]
+   */
+  async cleanupNewsShareImages(uid, activeUrls, options = {}) {
+    if (!uid) return;
+    const maxAgeMs = typeof options.maxAgeMs === 'number' ? options.maxAgeMs : 3 * 24 * 60 * 60 * 1000; // 3 days
+    const maxDocs = typeof options.maxDocs === 'number' ? options.maxDocs : 120;
+
+    const active = new Set((Array.isArray(activeUrls) ? activeUrls : []).map((u) => String(u || '').trim()).filter(Boolean));
+    if (active.size === 0) return;
+
+    try {
+      const col = collection(this.db, 'newsImageCache');
+      const q = query(col, where('userId', '==', uid), orderBy('updatedAt', 'desc'), limit(maxDocs));
+      const snap = await getDocs(q);
+      const now = Date.now();
+      await Promise.all(
+        snap.docs.map(async (d) => {
+          const data = d.data() || {};
+          const url = String(data.articleUrl || '').trim();
+          if (!url) return;
+          if (active.has(url)) {
+            // refresh lastSeenAt opportunistically
+            await setDoc(d.ref, { lastSeenAt: now, updatedAt: serverTimestamp() }, { merge: true });
+            return;
+          }
+          const lastSeenAt = typeof data.lastSeenAt === 'number' ? data.lastSeenAt : 0;
+          if (lastSeenAt && now - lastSeenAt < maxAgeMs) return;
+
+          const storagePath = String(data.storagePath || '').trim();
+          if (storagePath) {
+            try {
+              await deleteObject(ref(this.storage, storagePath));
+            } catch {
+              /* ignore storage delete */
+            }
+          }
+          await deleteDoc(d.ref);
+        })
+      );
+    } catch (error) {
+      console.warn('cleanupNewsShareImages failed:', error);
     }
   }
 

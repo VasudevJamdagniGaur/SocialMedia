@@ -1238,13 +1238,19 @@ export default function ShareSuggestionsPage() {
               if (user?.uid && effectiveNewsArticle?.url) {
                 const compressed = await compressReflectionImage(one);
                 if (compressed) {
-                  const storedUrl = await firestoreService.uploadNewsShareImageFile(
+                  const uploaded = await firestoreService.uploadNewsShareImageFile(
                     user.uid,
                     compressed,
                     effectiveNewsArticle.url
                   );
+                  const storedUrl = uploaded?.imageUrl || null;
                   if (storedUrl) {
-                    await firestoreService.saveNewsShareImageUrl(user.uid, effectiveNewsArticle.url, storedUrl);
+                    await firestoreService.saveNewsShareImageUrl(
+                      user.uid,
+                      effectiveNewsArticle.url,
+                      storedUrl,
+                      uploaded?.storagePath || ''
+                    );
                     if (!cancelled) {
                       setSuggestionImageUrls(cleanedCached.map(() => storedUrl));
                       upsertCachedNewsCard({
@@ -1378,13 +1384,19 @@ export default function ShareSuggestionsPage() {
               if (user?.uid && effectiveNewsArticle?.url) {
                 const compressed = await compressReflectionImage(one);
                 if (compressed) {
-                  const storedUrl = await firestoreService.uploadNewsShareImageFile(
+                  const uploaded = await firestoreService.uploadNewsShareImageFile(
                     user.uid,
                     compressed,
                     effectiveNewsArticle.url
                   );
+                  const storedUrl = uploaded?.imageUrl || null;
                   if (storedUrl) {
-                    await firestoreService.saveNewsShareImageUrl(user.uid, effectiveNewsArticle.url, storedUrl);
+                    await firestoreService.saveNewsShareImageUrl(
+                      user.uid,
+                      effectiveNewsArticle.url,
+                      storedUrl,
+                      uploaded?.storagePath || ''
+                    );
                     if (!cancelled) {
                       setSuggestionImageUrls(postsWithText.map(() => storedUrl));
                       upsertCachedNewsCard({
