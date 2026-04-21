@@ -5,7 +5,6 @@ import { useTheme } from '../contexts/ThemeContext';
 import { prefetchExploreTopicRaw } from '../lib/podExploreTopicPrefetchCache';
 import { getNewsWithLiveFallback } from '../services/cachedNewsService';
 import { recordHubVerticalDwell } from '../services/hubVerticalPersonalizationService';
-import { getVertexBackendBaseUrl, vertexChat } from '../services/vertexApiClient';
 
 export default function PodEntrepreneurshipPage() {
   const navigate = useNavigate();
@@ -13,9 +12,6 @@ export default function PodEntrepreneurshipPage() {
   const [trending, setTrending] = useState([]);
   const [isLoadingNews, setIsLoadingNews] = useState(false);
   const [newsError, setNewsError] = useState('');
-  const [founderPosts, setFounderPosts] = useState([]);
-  const [isLoadingFounder, setIsLoadingFounder] = useState(false);
-  const [founderError, setFounderError] = useState('');
 
   const EXPLORE = [
     { label: 'Startups', slug: 'startups' },
@@ -23,12 +19,6 @@ export default function PodEntrepreneurshipPage() {
     { label: 'Growth', slug: 'growth' },
     { label: 'Funding', slug: 'funding' },
     { label: 'Mindset', slug: 'mindset' },
-  ];
-
-  const FALLBACK_FOUNDER = [
-    'Your first 10 customers teach you more than any pitch deck. Talk to them weekly, write down objections, and let that shape the roadmap—not the other way around.',
-    'Runway is a strategy: shorten decision cycles, cut meetings that do not ship, and keep one “boring” revenue line healthy while you experiment on the side.',
-    'Hiring before product–market clarity often compounds chaos. Stay small until repeatability shows up in metrics, then scale the playbook—not the headcount guess.',
   ];
 
   useEffect(() => {
@@ -95,52 +85,6 @@ export default function PodEntrepreneurshipPage() {
     };
 
     load();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // Founder Take: AI-generated short posts (Vertex backend)
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadFounder = async () => {
-      setIsLoadingFounder(true);
-      setFounderError('');
-      if (!getVertexBackendBaseUrl()) {
-        setFounderPosts(FALLBACK_FOUNDER);
-        setIsLoadingFounder(false);
-        return;
-      }
-
-      try {
-        const message =
-          'You write for a mobile app "Founder Take" feed. Output exactly 3 separate founder insight posts. ' +
-          'Each post is 2–4 sentences, practical and specific (no hashtags). ' +
-          'Separate posts ONLY with the delimiter ||| (three pipe characters). No numbering or labels.';
-
-        const text = await vertexChat(message, { temperature: 0.75, maxOutputTokens: 600 });
-        const parts = text
-          .split('|||')
-          .map((s) => s.trim())
-          .filter(Boolean);
-        const posts = parts.length >= 3 ? parts.slice(0, 3) : parts.length > 0 ? parts : null;
-        if (!cancelled) {
-          if (posts && posts.length >= 3) setFounderPosts(posts.slice(0, 3));
-          else if (posts && posts.length > 0) setFounderPosts([...posts, ...FALLBACK_FOUNDER].slice(0, 3));
-          else setFounderPosts(FALLBACK_FOUNDER);
-        }
-      } catch {
-        if (!cancelled) {
-          setFounderPosts(FALLBACK_FOUNDER);
-          setFounderError('Showing curated insights while AI is unavailable.');
-        }
-      } finally {
-        if (!cancelled) setIsLoadingFounder(false);
-      }
-    };
-
-    loadFounder();
     return () => {
       cancelled = true;
     };
@@ -239,38 +183,6 @@ export default function PodEntrepreneurshipPage() {
                   </div>
                   {!!newsError && (
                     <p className="text-xs mt-2 pr-4" style={{ color: HUB.textSecondary }}>{newsError}</p>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* Founder Take */}
-          <div className="rounded-2xl overflow-hidden" style={cardStyle}>
-            <div className="flex items-center justify-between px-4 py-4" style={{ borderBottom: `1px solid ${HUB.divider}` }}>
-              <h2 className="text-base font-semibold" style={{ color: HUB.text }}>
-                <span className="mr-1.5" aria-hidden>🧠</span>
-                Founder Take
-              </h2>
-            </div>
-            <div className="px-4 py-3 space-y-3">
-              {isLoadingFounder ? (
-                <p className="text-sm" style={{ color: HUB.textSecondary }}>Generating founder insights...</p>
-              ) : (
-                <>
-                  {founderPosts.map((post, idx) => (
-                    <div
-                      key={idx}
-                      className="rounded-xl px-3 py-3"
-                      style={{ background: '#151515', border: `1px solid ${HUB.divider}` }}
-                    >
-                      <p className="text-sm leading-relaxed" style={{ color: HUB.text }}>
-                        {post}
-                      </p>
-                    </div>
-                  ))}
-                  {!!founderError && (
-                    <p className="text-xs" style={{ color: HUB.textSecondary }}>{founderError}</p>
                   )}
                 </>
               )}
