@@ -256,6 +256,76 @@ async function tryRedditHotRows(subs, options = {}) {
   return picked.slice(0, maxKeep);
 }
 
+function hasHubCarouselHeroImage(row) {
+  const u = String(row?.image || row?.thumbnail || '').trim();
+  return /^https?:\/\//i.test(u);
+}
+
+/** Prefer a high-score post that has a usable hero image; otherwise the top post by score. */
+function pickBestHubCarouselRow(rows) {
+  if (!Array.isArray(rows) || !rows.length) return null;
+  const byScore = [...rows].sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
+  const withHero = byScore.filter(hasHubCarouselHeroImage);
+  return withHero[0] || byScore[0];
+}
+
+/**
+ * One top Reddit post per Explore tab (Cricket → … → Others) for the Sports hub “Trending” carousel.
+ * @returns {Promise<object[]>} Rows shaped like Firestore/cached news items (`image`, `url`, `title`, `exploreTopic`, …).
+ */
+export async function fetchSportsHubTrendingCarouselItems() {
+  const topicOpts = {
+    cricket: { maxPerSub: 45, maxKeep: 22, minScore: 14 },
+    football: { maxPerSub: 40, maxKeep: 22, minScore: 12 },
+    f1: { maxPerSub: 40, maxKeep: 22, minScore: 10 },
+    chess: { maxPerSub: 40, maxKeep: 22, minScore: 8 },
+    others: { maxPerSub: 45, maxKeep: 26, minScore: 10 },
+  };
+
+  const runTopic = async (topicId) => {
+    const base = topicOpts[topicId] || { maxPerSub: 40, maxKeep: 22, minScore: 10 };
+    const filterPost =
+      topicId === 'others'
+        ? (post) => {
+            const blob = `${post?.title || ''} ${typeof post?.selftext === 'string' ? post.selftext : ''}`;
+            return !matchesMainTopic(blob);
+          }
+        : undefined;
+
+    let rows = await tryRedditHotRows(REDDIT_SPORTS_SUBS[topicId], { ...base, filterPost });
+    let pick = pickBestHubCarouselRow(rows);
+    if (!pick && base.minScore > 6) {
+      rows = await tryRedditHotRows(REDDIT_SPORTS_SUBS[topicId], {
+        ...base,
+        minScore: 6,
+        filterPost,
+      });
+      pick = pickBestHubCarouselRow(rows);
+    }
+    if (!pick) return null;
+
+    const hero = pick.image || pick.thumbnail || null;
+    return {
+      title: pick.title,
+      url: pick.url,
+      source: pick.source || 'Reddit',
+      image: hero,
+      description: '',
+      publishedAt: pick.publishedAt,
+      city: null,
+      firestoreId: null,
+      trendingScore: Number(pick.score) || 0,
+      likes: 0,
+      shares: 0,
+      views: 0,
+      exploreTopic: topicId,
+    };
+  };
+
+  const ordered = await Promise.all(POD_SPORTS_EXPLORE_SLUGS.map((id) => runTopic(id)));
+  return ordered.filter(Boolean);
+}
+
 export function buildFallbackRows(topicId, label) {
   const q = GOOGLE_BROWSE_QUERY[topicId] || GOOGLE_BROWSE_QUERY.others;
   const baseUrl = googleNewsSearchUrl(q.trim());

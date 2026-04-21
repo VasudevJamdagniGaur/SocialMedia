@@ -5,6 +5,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { onAuthStateChange, getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
 import { googleNewsSearchUrl } from '../lib/podTopicNewsShared';
+import { fetchSportsHubTrendingCarouselItems } from '../lib/podSportsTopicFeed';
 import {
   prefetchAllSportsExploreTopicsNow,
   prefetchSportsTopicRaw,
@@ -271,21 +272,21 @@ export default function PodSportsPage() {
     ];
 
     try {
+      let redditPrimary = [];
+      try {
+        redditPrimary = await fetchSportsHubTrendingCarouselItems();
+      } catch {
+        redditPrimary = [];
+      }
+      if (token !== loadTokenRef.current) return;
+
       const { success, articles, error, fallbackError } = await getNewsWithLiveFallback('sports');
       if (token !== loadTokenRef.current) return;
-      if (!success) {
-        podSportsTrendingUiCache.items = fallbackTrending;
-        setSportsTrending(fallbackTrending);
-        setSportsNewsError(
-          fallbackError || error || 'Could not load sports headlines (Firestore or NewsAPI).'
-        );
-        return;
-      }
 
       const user = getCurrentUser();
       const userCityNorm = '';
 
-      let merged = articles.map((a) => ({
+      let newsMerged = (success && Array.isArray(articles) ? articles : []).map((a) => ({
         title: a.title,
         source: a.source,
         url: a.url,
@@ -300,11 +301,11 @@ export default function PodSportsPage() {
         views: 0,
       }));
 
-      const filtered = merged.filter(isLikelySportsTrendingItem);
-      if (filtered.length >= 4) merged = filtered;
+      const filteredNews = newsMerged.filter(isLikelySportsTrendingItem);
+      if (filteredNews.length >= 4) newsMerged = filteredNews;
 
       const weights = await getSportsPersonalizationWeights(user?.uid || null);
-      merged.sort((a, b) => {
+      newsMerged.sort((a, b) => {
         const clsA = classifyExploreSlugForTrending(a);
         const clsB = classifyExploreSlugForTrending(b);
         const ra = effectiveSportsTrendRank(a, userCityNorm) + (weights[clsA] || 0);
@@ -316,16 +317,43 @@ export default function PodSportsPage() {
         return (b.createdAtMs || 0) - (a.createdAtMs || 0);
       });
 
+      const seenUrls = new Set();
+      const merged = [];
+      for (const r of redditPrimary) {
+        const u = (r?.url || '').trim();
+        if (!u || seenUrls.has(u)) continue;
+        seenUrls.add(u);
+        merged.push(r);
+      }
+      for (const a of newsMerged) {
+        if (merged.length >= 10) break;
+        const u = (a?.url || '').trim();
+        if (!u || seenUrls.has(u)) continue;
+        seenUrls.add(u);
+        merged.push(a);
+      }
+
       if (token !== loadTokenRef.current) return;
+
+      if (!merged.length && !success) {
+        podSportsTrendingUiCache.items = fallbackTrending;
+        setSportsTrending(fallbackTrending);
+        setSportsNewsError(
+          fallbackError || error || 'Could not load sports headlines (Firestore or NewsAPI).'
+        );
+        return;
+      }
+
       const baseRows = merged.length ? merged.slice(0, 10) : fallbackTrending;
       podSportsTrendingUiCache.items = baseRows;
       setSportsTrending(baseRows);
-      setSportsNewsError(
-        merged.length
-          ? ''
-          : fallbackError ||
-              'No sports headlines. Set REACT_APP_NEWSAPI in .env for local dev, or deploy newsIngestScheduler with keys on Functions.'
-      );
+      if (merged.length > 0) {
+        setSportsNewsError('');
+      } else {
+        setSportsNewsError(
+          'No live sports headlines right now. Set REACT_APP_NEWSAPI in .env for local dev, or deploy newsIngestScheduler with keys on Functions.'
+        );
+      }
     } catch (e) {
       if (token !== loadTokenRef.current) return;
       podSportsTrendingUiCache.items = fallbackTrending;

@@ -29,6 +29,8 @@ export function isLikelySportsTrendingItem(item) {
 
 /** Map a row to an Explore slug for personalization (cricket / football / f1 / chess / others). */
 export function classifyExploreSlugForTrending(item) {
+  const direct = String(item?.exploreTopic || '').trim();
+  if (direct && POD_SPORTS_EXPLORE_SLUGS.includes(direct)) return direct;
   for (const slug of ['cricket', 'football', 'f1', 'chess']) {
     if (sportArticleMatchesTopic(slug, item)) return slug;
   }
