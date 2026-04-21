@@ -240,12 +240,9 @@ export default function PodEntrepreneurshipPage() {
                             backgroundPosition: item.image ? 'center' : undefined,
                           }}
                         >
-                          <div className="absolute inset-x-0 bottom-0 p-3 pt-10 bg-gradient-to-t from-black via-black/80 to-transparent">
+                          <div className="absolute inset-x-0 bottom-0 p-3 pt-8 bg-gradient-to-t from-black via-black/80 to-transparent">
                             <p className="text-sm font-semibold leading-snug line-clamp-3" style={{ color: '#fff' }}>
                               {item.title}
-                            </p>
-                            <p className="text-[11px] mt-1.5 font-medium uppercase tracking-wide" style={{ color: 'rgba(255,255,255,0.65)' }}>
-                              {item.source}
                             </p>
                           </div>
                         </a>
