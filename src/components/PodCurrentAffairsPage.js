@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { prefetchExploreTopicRaw } from '../lib/podExploreTopicPrefetchCache';
-import { getNewsWithLiveFallback } from '../services/cachedNewsService';
+import { fetchCurrentAffairsHubTrendingCarouselItems } from '../lib/podCurrentAffairsTopicFeed';
 import { recordHubVerticalDwell } from '../services/hubVerticalPersonalizationService';
 
 export default function PodCurrentAffairsPage() {
@@ -17,7 +17,6 @@ export default function PodCurrentAffairsPage() {
     { label: 'Politics', slug: 'politics' },
     { label: 'Economy', slug: 'economy' },
     { label: 'Climate', slug: 'climate' },
-    { label: 'Conflicts', slug: 'conflicts' },
   ];
 
   useEffect(() => {
@@ -52,14 +51,9 @@ export default function PodCurrentAffairsPage() {
       setIsLoadingNews(true);
       setNewsError('');
       try {
-        const { success, articles, error, fallbackError } = await getNewsWithLiveFallback('current_affairs');
+        const articles = await fetchCurrentAffairsHubTrendingCarouselItems();
         if (cancelled) return;
-        if (!success) {
-          setTrending(fallbackTrending);
-          setNewsError(fallbackError || error || 'Could not load headlines.');
-          return;
-        }
-        const normalized = articles.map((a) => ({
+        const normalized = (articles || []).map((a) => ({
           title: a.title,
           source: a.source,
           url: a.url,
@@ -67,15 +61,12 @@ export default function PodCurrentAffairsPage() {
         }));
         setTrending(normalized.length ? normalized : fallbackTrending);
         if (!normalized.length) {
-          setNewsError(
-            fallbackError ||
-              'No current affairs headlines. Set REACT_APP_NEWSAPI in .env or deploy newsIngestScheduler.'
-          );
+          setNewsError('Could not load Reddit. Showing placeholder headlines.');
         }
       } catch {
         if (!cancelled) {
           setTrending(fallbackTrending);
-          setNewsError('Could not load cached headlines, showing top picks.');
+          setNewsError('Could not load Reddit, showing top picks.');
         }
       } finally {
         if (!cancelled) setIsLoadingNews(false);
@@ -138,14 +129,14 @@ export default function PodCurrentAffairsPage() {
             </div>
             <div className="py-3 pl-4">
               {isLoadingNews ? (
-                <p className="text-sm pr-4" style={{ color: HUB.textSecondary }}>Loading global headlines...</p>
+                <p className="text-sm pr-4" style={{ color: HUB.textSecondary }}>Loading from Reddit...</p>
               ) : (
                 <>
                   <div
                     className="flex gap-3 overflow-x-auto overflow-y-hidden pb-2 pr-4 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                     style={{ WebkitOverflowScrolling: 'touch' }}
                     role="region"
-                    aria-label="Trending current affairs headlines"
+                    aria-label="Trending posts ranked by engagement and your explore usage"
                   >
                     {trending.slice(0, 10).map((item, idx) => {
                       const bg = item.image

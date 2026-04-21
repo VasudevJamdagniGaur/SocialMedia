@@ -85,11 +85,6 @@ export const EXPLORE_TOPICS = {
       q: '("climate change" OR COP OR "renewable energy" OR emissions OR IPCC OR "extreme weather")',
       google: '(climate change news renewable energy IPCC) when:7d',
     },
-    conflicts: {
-      label: 'Conflicts',
-      q: '(war OR conflict OR military OR ceasefire OR "peace talks" OR NATO OR Ukraine OR Gaza)',
-      google: '(war conflict military news ceasefire) when:7d',
-    },
   },
 };
 

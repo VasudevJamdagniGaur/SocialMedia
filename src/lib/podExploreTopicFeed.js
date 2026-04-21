@@ -13,6 +13,7 @@ import {
 } from './podExploreTopicConfig';
 import { fetchAiTechRedditExploreRows } from './podAiTechTopicFeed';
 import { fetchEntrepreneurshipRedditExploreRows } from './podEntrepreneurshipTopicFeed';
+import { fetchCurrentAffairsRedditExploreRows } from './podCurrentAffairsTopicFeed';
 
 /**
  * NewsAPI `everything` on AI/ML queries often returns PyPI/npm index rows: package name + semver
@@ -84,6 +85,19 @@ export async function fetchExploreTopicFeed({ section, topicId, startupRegion })
         const enriched = await enrichNewsItemsWithOgImages(redditRows, { enableOgFallback: true });
         return { items: enriched.slice(0, 30), error: '' };
       }
+    }
+
+    if (section === 'current-affairs') {
+      const redditRows = await fetchCurrentAffairsRedditExploreRows(topicId);
+      if (redditRows?.length) {
+        const enriched = await enrichNewsItemsWithOgImages(redditRows, { enableOgFallback: true });
+        return { items: enriched.slice(0, 30), error: '' };
+      }
+      const googleQ = resolveExploreGoogleQuery(cfg, startupRegion);
+      return {
+        items: buildFallbackRows(title, googleQ),
+        error: 'Could not load Reddit. Showing browse links only.',
+      };
     }
 
     if (!canFetchLiveNews()) {

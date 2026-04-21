@@ -113,7 +113,7 @@ export function inferHubVerticalForNewsItem(item) {
   if (['cricket', 'football', 'f1', 'chess', 'others'].includes(cat)) return 'sports';
   if (cat === 'technology') return 'ai-tech';
   if (cat === 'business') return 'entrepreneurship';
-  if (cat === 'general' || cat === 'politics' || cat === 'economy' || cat === 'climate' || cat === 'conflicts') {
+  if (cat === 'general' || cat === 'politics' || cat === 'economy' || cat === 'climate') {
     return 'current-affairs';
   }
   return 'current-affairs';
