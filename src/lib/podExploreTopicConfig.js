@@ -63,21 +63,6 @@ export const EXPLORE_TOPICS = {
       q: '(founder OR "founder story" OR entrepreneur OR bootstrapping OR CEO startup)',
       google: '(startup founder OR entrepreneur CEO interview) when:7d',
     },
-    growth: {
-      label: 'Growth',
-      q: '(startup growth OR SaaS growth OR "go to market" OR GTM OR "product-led growth" OR scaling startup)',
-      google: '(startup growth strategy OR SaaS scaling) when:7d',
-    },
-    funding: {
-      label: 'Funding',
-      q: '("venture capital" OR VC OR "seed funding" OR "Series A" OR IPO OR valuation OR "investment round")',
-      google: '(venture capital funding OR startup investment round) when:7d',
-    },
-    mindset: {
-      label: 'Mindset',
-      q: '("founder mindset" OR leadership entrepreneur OR "startup advice" OR resilience founder)',
-      google: '(founder mindset OR entrepreneur leadership advice) when:7d',
-    },
   },
   'current-affairs': {
     'world-news': {

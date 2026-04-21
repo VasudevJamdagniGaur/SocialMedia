@@ -1,24 +1,46 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { prefetchExploreTopicRaw } from '../lib/podExploreTopicPrefetchCache';
 import { getNewsWithLiveFallback } from '../services/cachedNewsService';
 import { recordHubVerticalDwell } from '../services/hubVerticalPersonalizationService';
+import { fetchEntrepreneurshipHubTrendingCarouselItems } from '../lib/podEntrepreneurshipTopicFeed';
+import {
+  classifyExploreSlugForEntrepreneurshipTrending,
+  isLikelyEntrepreneurshipTrendingItem,
+} from '../lib/podEntrepreneurshipTrendingPersonalization';
+import { getEntrepreneurshipPersonalizationWeights } from '../services/entrepreneurshipPersonalizationService';
+
+let podEntrepreneurshipTrendingUiCache = {
+  /** @type {Array<object>|null} */
+  items: null,
+};
+
+function getCachedEntrepreneurshipHubTrendingRows() {
+  const arr = podEntrepreneurshipTrendingUiCache.items;
+  return Array.isArray(arr) && arr.length > 0 ? arr : null;
+}
+
+function effectiveEntrepreneurshipTrendRank(item) {
+  const ts = Number(item.trendingScore) || 0;
+  if (ts) return ts;
+  const sc = Number(item.score) || 0;
+  const nc = Number(item.num_comments) || 0;
+  return sc * 3 + nc;
+}
 
 export default function PodEntrepreneurshipPage() {
   const navigate = useNavigate();
   const { isDarkMode } = useTheme();
-  const [trending, setTrending] = useState([]);
-  const [isLoadingNews, setIsLoadingNews] = useState(false);
+  const [trending, setTrending] = useState(() => getCachedEntrepreneurshipHubTrendingRows() || []);
+  const [isLoadingNews, setIsLoadingNews] = useState(() => !getCachedEntrepreneurshipHubTrendingRows());
   const [newsError, setNewsError] = useState('');
+  const loadTokenRef = useRef(0);
 
   const EXPLORE = [
     { label: 'Startups', slug: 'startups' },
     { label: 'Founders', slug: 'founders' },
-    { label: 'Growth', slug: 'growth' },
-    { label: 'Funding', slug: 'funding' },
-    { label: 'Mindset', slug: 'mindset' },
   ];
 
   useEffect(() => {
@@ -39,55 +61,104 @@ export default function PodEntrepreneurshipPage() {
     };
   }, []);
 
-  // Trending: business / startup headlines
   useEffect(() => {
-    let cancelled = false;
+    const token = ++loadTokenRef.current;
 
     const fallbackTrending = [
-      { title: 'Early-stage funds tighten diligence as valuations reset', source: 'Venture Brief', image: null },
-      { title: 'SMB software startups lean into AI-assisted onboarding', source: 'Business Desk', image: null },
-      { title: 'Founders share playbooks for extending runway without layoffs', source: 'Founder Weekly', image: null },
-      { title: 'Regional accelerators report stronger applicant quality this quarter', source: 'Startup Wire', image: null },
+      { title: 'Early-stage funds tighten diligence as valuations reset', source: 'Venture Brief', image: null, url: '' },
+      { title: 'SMB software startups lean into AI-assisted onboarding', source: 'Business Desk', image: null, url: '' },
+      { title: 'Founders share playbooks for extending runway without layoffs', source: 'Founder Weekly', image: null, url: '' },
+      { title: 'Regional accelerators report stronger applicant quality this quarter', source: 'Startup Wire', image: null, url: '' },
     ];
 
     const load = async () => {
-      setIsLoadingNews(true);
+      if (!getCachedEntrepreneurshipHubTrendingRows()) setIsLoadingNews(true);
       setNewsError('');
       try {
-        const { success, articles, error, fallbackError } = await getNewsWithLiveFallback('entrepreneurship');
-        if (cancelled) return;
-        if (!success) {
-          setTrending(fallbackTrending);
-          setNewsError(fallbackError || error || 'Could not load headlines.');
-          return;
+        let redditPrimary = [];
+        try {
+          redditPrimary = await fetchEntrepreneurshipHubTrendingCarouselItems();
+        } catch {
+          redditPrimary = [];
         }
-        const normalized = articles.map((a) => ({
+        if (token !== loadTokenRef.current) return;
+
+        const { success, articles, error, fallbackError } = await getNewsWithLiveFallback('entrepreneurship');
+        if (token !== loadTokenRef.current) return;
+
+        let newsMerged = (success && Array.isArray(articles) ? articles : []).map((a) => ({
           title: a.title,
           source: a.source,
           url: a.url,
           image: a.image,
+          publishedAt: a.publishedAt,
+          description: a.description || '',
+          city: null,
+          firestoreId: null,
+          trendingScore: Number(a.trendingScore) || 0,
+          likes: 0,
+          shares: 0,
+          views: 0,
         }));
-        setTrending(normalized.length ? normalized : fallbackTrending);
-        if (!normalized.length) {
+
+        const filteredNews = newsMerged.filter(isLikelyEntrepreneurshipTrendingItem);
+        if (filteredNews.length >= 3) newsMerged = filteredNews;
+
+        const weights = await getEntrepreneurshipPersonalizationWeights();
+
+        const allCandidates = [...redditPrimary, ...newsMerged];
+        allCandidates.sort((a, b) => {
+          const clsA = classifyExploreSlugForEntrepreneurshipTrending(a);
+          const clsB = classifyExploreSlugForEntrepreneurshipTrending(b);
+          const ra = (weights[clsA] || 0) * 2000 + effectiveEntrepreneurshipTrendRank(a);
+          const rb = (weights[clsB] || 0) * 2000 + effectiveEntrepreneurshipTrendRank(b);
+          if (rb !== ra) return rb - ra;
+          const ta = a.publishedAt ? Date.parse(a.publishedAt) : 0;
+          const tb = b.publishedAt ? Date.parse(b.publishedAt) : 0;
+          return tb - ta;
+        });
+
+        const seenUrls = new Set();
+        const merged = [];
+        for (const row of allCandidates) {
+          const u = (row?.url || '').trim();
+          if (!u || seenUrls.has(u)) continue;
+          seenUrls.add(u);
+          merged.push(row);
+          if (merged.length >= 10) break;
+        }
+
+        if (token !== loadTokenRef.current) return;
+
+        if (!merged.length && !success) {
+          podEntrepreneurshipTrendingUiCache.items = fallbackTrending;
+          setTrending(fallbackTrending);
+          setNewsError(fallbackError || error || 'Could not load headlines.');
+          return;
+        }
+
+        const baseRows = merged.length ? merged.slice(0, 10) : fallbackTrending;
+        podEntrepreneurshipTrendingUiCache.items = baseRows;
+        setTrending(baseRows);
+        if (merged.length > 0) {
+          setNewsError('');
+        } else {
           setNewsError(
             fallbackError ||
               'No entrepreneurship headlines. Set REACT_APP_NEWSAPI in .env or deploy newsIngestScheduler.'
           );
         }
       } catch {
-        if (!cancelled) {
-          setTrending(fallbackTrending);
-          setNewsError('Could not load cached headlines, showing top picks.');
-        }
+        if (token !== loadTokenRef.current) return;
+        podEntrepreneurshipTrendingUiCache.items = fallbackTrending;
+        setTrending(fallbackTrending);
+        setNewsError('Could not load cached headlines, showing top picks.');
       } finally {
-        if (!cancelled) setIsLoadingNews(false);
+        if (token === loadTokenRef.current) setIsLoadingNews(false);
       }
     };
 
     load();
-    return () => {
-      cancelled = true;
-    };
   }, []);
 
   const HUB = {
@@ -131,7 +202,7 @@ export default function PodEntrepreneurshipPage() {
         </div>
 
         <div className="space-y-4">
-          {/* Trending (swipe) — startup / business cards */}
+          {/* Trending (swipe) — Reddit + news, ranked by Startups/Founders dwell */}
           <div className="rounded-2xl overflow-hidden" style={cardStyle}>
             <div className="flex items-center justify-between px-4 py-4" style={{ borderBottom: `1px solid ${HUB.divider}` }}>
               <h2 className="text-base font-semibold" style={{ color: HUB.text }}>
@@ -156,7 +227,7 @@ export default function PodEntrepreneurshipPage() {
                         : startupGradients[idx % startupGradients.length];
                       return (
                         <a
-                          key={`${item.title}-${idx}`}
+                          key={`${item.url || item.title}-${idx}`}
                           href={item.url || undefined}
                           target={item.url ? '_blank' : undefined}
                           rel={item.url ? 'noopener noreferrer' : undefined}

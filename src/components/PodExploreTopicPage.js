@@ -12,6 +12,8 @@ import {
 } from '../lib/podExploreTopicConfig';
 import { POD_AI_TECH_EXPLORE_SLUGS } from '../lib/podAiTechTrendingPersonalization';
 import { recordAiTechExploreDwell } from '../services/aiTechPersonalizationService';
+import { POD_ENTREPRENEURSHIP_EXPLORE_SLUGS } from '../lib/podEntrepreneurshipTrendingPersonalization';
+import { recordEntrepreneurshipExploreDwell } from '../services/entrepreneurshipPersonalizationService';
 import { fetchExploreTopicFeed } from '../lib/podExploreTopicFeed';
 import {
   exploreTopicCacheKey,
@@ -136,6 +138,32 @@ export default function PodExploreTopicPage() {
       const sec = Math.min(900, Math.round((Date.now() - start) / 1000));
       start = Date.now();
       if (sec >= 3) void recordAiTechExploreDwell(topicId, sec, 0);
+    };
+    const onVis = () => {
+      if (document.hidden) flush();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      flush();
+    };
+  }, [section, topicId]);
+
+  useEffect(() => {
+    if (section !== 'entrepreneurship' || !topicId || !POD_ENTREPRENEURSHIP_EXPLORE_SLUGS.includes(topicId)) return;
+    const key = `pod_entrepreneurship_explore_visit_${topicId}`;
+    if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(key)) return;
+    if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(key, '1');
+    void recordEntrepreneurshipExploreDwell(topicId, 0, 1);
+  }, [section, topicId]);
+
+  useEffect(() => {
+    if (section !== 'entrepreneurship' || !topicId || !POD_ENTREPRENEURSHIP_EXPLORE_SLUGS.includes(topicId)) return;
+    let start = Date.now();
+    const flush = () => {
+      const sec = Math.min(900, Math.round((Date.now() - start) / 1000));
+      start = Date.now();
+      if (sec >= 3) void recordEntrepreneurshipExploreDwell(topicId, sec, 0);
     };
     const onVis = () => {
       if (document.hidden) flush();
