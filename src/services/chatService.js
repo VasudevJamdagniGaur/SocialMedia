@@ -3056,6 +3056,27 @@ ${text}`;
   }
 
   /**
+   * Single Vertex illustration for an entire news share flow (no article hero image).
+   * Same data URL is reused for every suggestion card — one generation call.
+   * @param {{ headline?: string, storyText?: string }} opts
+   * @returns {Promise<string|null>}
+   */
+  async fetchSingleNewsShareIllustrationImage(opts = {}) {
+    const headline = String(opts.headline || '').trim();
+    const storyText = String(opts.storyText || '').trim();
+    if (!headline && !storyText) return null;
+    const prompt = [
+      'One editorial news illustration for social posts (same image for all variants).',
+      'Symbolic or environmental; tasteful; avoid graphic violence; no identifiable private individuals.',
+      headline ? `Headline: ${headline}` : '',
+      storyText ? `Story: ${storyText.slice(0, 4500)}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+    return this._generateImageWithGemini(prompt, null);
+  }
+
+  /**
    * Resolve profile image URL or data URL to base64 + mimeType for use as reference in image generation.
    * @param {string} urlOrDataUrl - Profile image URL (http/https) or data URL (data:image/...;base64,...)
    * @returns {Promise<{ base64: string, mimeType: string }|null>}

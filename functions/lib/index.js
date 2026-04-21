@@ -15,15 +15,25 @@ var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (
 }) : function(o, v) {
     o["default"] = v;
 });
-var __importStar = (this && this.__importStar) || function (mod) {
-    if (mod && mod.__esModule) return mod;
-    var result = {};
-    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
-    __setModuleDefault(result, mod);
-    return result;
-};
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.linkedInApi = exports.deleteAccountRequest = exports.newsIngestScheduler = exports.newsApi = exports.generatePostEmbedding = void 0;
+exports.linkedInApi = exports.generateNewsImage = exports.deleteAccountRequest = exports.newsIngestScheduler = exports.newsApi = exports.generatePostEmbedding = void 0;
 const path = __importStar(require("path"));
 const dotenv_1 = require("dotenv");
 // Load functions/.env so LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET are available (local emulator).
@@ -792,6 +802,8 @@ var newsIngest_1 = require("./newsIngest");
 Object.defineProperty(exports, "newsIngestScheduler", { enumerable: true, get: function () { return newsIngest_1.newsIngestScheduler; } });
 var deleteAccountRequest_1 = require("./deleteAccountRequest");
 Object.defineProperty(exports, "deleteAccountRequest", { enumerable: true, get: function () { return deleteAccountRequest_1.deleteAccountRequest; } });
+var generateNewsImage_1 = require("./generateNewsImage");
+Object.defineProperty(exports, "generateNewsImage", { enumerable: true, get: function () { return generateNewsImage_1.generateNewsImage; } });
 exports.linkedInApi = (0, https_1.onRequest)({ cors: true }, async (req, res) => {
     const path = (req.url || '').split('?')[0];
     if (path.endsWith('/exchange')) {

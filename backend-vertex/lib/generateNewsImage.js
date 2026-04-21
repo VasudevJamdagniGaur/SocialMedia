@@ -1,11 +1,14 @@
 /**
- * Gemini image generation on Vertex AI (gemini-2.5-flash-image).
+ * Gemini image on Vertex (nano banana / flash-image; env VERTEX_NANO_BANANA_IMAGE_MODEL).
  * Requires: Vertex AI API enabled, billing, service account with aiplatform.user role.
  */
 import { GoogleGenAI, Modality } from "@google/genai";
 import { PROJECT_ID, LOCATION } from "./config.js";
 
-const IMAGE_MODEL = process.env.VERTEX_GEMINI_IMAGE_MODEL || "gemini-2.5-flash-image";
+const IMAGE_MODEL =
+  process.env.VERTEX_NANO_BANANA_IMAGE_MODEL ||
+  process.env.VERTEX_GEMINI_IMAGE_MODEL ||
+  "gemini-2.5-flash-image";
 
 /**
  * @param {import('@google/genai').GenerateContentResponse} response

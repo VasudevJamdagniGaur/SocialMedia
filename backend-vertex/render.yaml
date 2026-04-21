@@ -1,0 +1,11 @@
+# Render Blueprint — deploy this service from the backend-vertex directory so POST /generate-news-image is live.
+# In the Render dashboard: set Root Directory to `backend-vertex` if the repo root is the monorepo.
+# https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: detea-backend
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node index.js
+    healthCheckPath: /health

@@ -1192,31 +1192,26 @@ export default function ShareSuggestionsPage() {
           setSuggestionImageUrls(cleanedCached.map(() => null));
           setSuggestionImagesFromChat(cleanedCached.map(() => false));
           setIsLoadingImages(true);
-          const user = getCurrentUser();
-          const userContext = user
-            ? {
-                displayName: localStorage.getItem(`user_display_name_${user.uid}`) || user.displayName || '',
-                age: localStorage.getItem(`user_age_${user.uid}`) || '',
-                nationality: localStorage.getItem(`user_nationality_${user.uid}`) || 'Indian',
-                gender: localStorage.getItem(`user_gender_${user.uid}`) || '',
-                skinTone: localStorage.getItem(`user_skin_tone_${user.uid}`) || '',
-                hairstyle: localStorage.getItem(`user_hairstyle_${user.uid}`) || '',
-                clothingStyle: localStorage.getItem(`user_clothing_style_${user.uid}`) || '',
-                profession: localStorage.getItem(`user_profession_${user.uid}`) || '',
-                profileImageUrl: localStorage.getItem(`user_profile_picture_${user.uid}`) || '',
-              }
-            : null;
-          void Promise.all(
-            cachedTexts.map((postText) =>
-              postText
-                ? chatService.fetchImageForReflection(postText, userContext, selectedPlatform).catch(() => null)
-                : Promise.resolve(null)
-            )
-          ).then((urls) => {
-            if (cancelled) return;
-            setSuggestionImageUrls(urls);
-            setIsLoadingImages(false);
-          });
+          const headlineForImage = (newsCardHeadline || effectiveNewsArticle?.title || '').trim();
+          const storyForImage =
+            [
+              (newsCardSummary || '').trim(),
+              (effectiveNewsArticle?.description || '').trim(),
+              String(buildLocalNewsCardSummary(effectiveNewsArticle) || '').trim(),
+              (effectiveNewsArticle?.text || '').trim().slice(0, 2000),
+              (cachedTexts[0] || '').slice(0, 1200),
+            ].find((s) => s && s.length > 12) || '';
+          void chatService
+            .fetchSingleNewsShareIllustrationImage({
+              headline: headlineForImage,
+              storyText: storyForImage,
+            })
+            .then((one) => {
+              if (cancelled) return;
+              const fill = one || null;
+              setSuggestionImageUrls(cleanedCached.map(() => fill));
+              setIsLoadingImages(false);
+            });
         }
 
         return () => {
@@ -1289,31 +1284,26 @@ export default function ShareSuggestionsPage() {
           setSuggestionImageUrls(postsWithText.map(() => null));
           setSuggestionImagesFromChat(postsWithText.map(() => false));
           setIsLoadingImages(true);
-          const user = getCurrentUser();
-          const userContext = user
-            ? {
-                displayName: localStorage.getItem(`user_display_name_${user.uid}`) || user.displayName || '',
-                age: localStorage.getItem(`user_age_${user.uid}`) || '',
-                nationality: localStorage.getItem(`user_nationality_${user.uid}`) || 'Indian',
-                gender: localStorage.getItem(`user_gender_${user.uid}`) || '',
-                skinTone: localStorage.getItem(`user_skin_tone_${user.uid}`) || '',
-                hairstyle: localStorage.getItem(`user_hairstyle_${user.uid}`) || '',
-                clothingStyle: localStorage.getItem(`user_clothing_style_${user.uid}`) || '',
-                profession: localStorage.getItem(`user_profession_${user.uid}`) || '',
-                profileImageUrl: localStorage.getItem(`user_profile_picture_${user.uid}`) || '',
-              }
-            : null;
-          void Promise.all(
-            postsWithText.map((postText) =>
-              postText
-                ? chatService.fetchImageForReflection(postText, userContext, selectedPlatform).catch(() => null)
-                : Promise.resolve(null)
-            )
-          ).then((urls) => {
-            if (cancelled) return;
-            setSuggestionImageUrls(urls);
-            setIsLoadingImages(false);
-          });
+          const headlineForImage = (newsCardHeadline || effectiveNewsArticle?.title || '').trim();
+          const storyForImage =
+            [
+              (newsCardSummary || '').trim(),
+              (effectiveNewsArticle?.description || '').trim(),
+              String(buildLocalNewsCardSummary(effectiveNewsArticle) || '').trim(),
+              (effectiveNewsArticle?.text || '').trim().slice(0, 2000),
+              (postsWithText[0] || '').slice(0, 1200),
+            ].find((s) => s && s.length > 12) || '';
+          void chatService
+            .fetchSingleNewsShareIllustrationImage({
+              headline: headlineForImage,
+              storyText: storyForImage,
+            })
+            .then((one) => {
+              if (cancelled) return;
+              const fill = one || null;
+              setSuggestionImageUrls(postsWithText.map(() => fill));
+              setIsLoadingImages(false);
+            });
           return;
         }
 

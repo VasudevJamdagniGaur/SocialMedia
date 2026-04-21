@@ -92,18 +92,68 @@ export async function vertexAnalyzePattern(data, opts = {}) {
 }
 
 /**
- * POST /generate-news-image — Gemini image model on Vertex (editorial illustration).
+ * POST /generate-news-image — tries primary backend (BASE_URL), then optional fallback.
+ * If Render returns 404, redeploy from `backend-vertex` (see `backend-vertex/render.yaml`)
+ * or set REACT_APP_GENERATE_NEWS_IMAGE_FALLBACK_URL to another host that exposes the same route.
  * @param {string} prompt
  * @param {{ signal?: AbortSignal }} [opts]
  * @returns {Promise<string>} data URL
  */
 export async function vertexGenerateNewsImage(prompt, opts = {}) {
-  const data = await fetchJson('/generate-news-image', {
-    body: { prompt: String(prompt || '').trim() },
-    signal: opts.signal,
+  const p = String(prompt || '').trim();
+  if (!p) throw new Error('vertexGenerateNewsImage: prompt is required');
+
+  const base = (BASE_URL || '').replace(/\/$/, '');
+  const fallback = (process.env.REACT_APP_GENERATE_NEWS_IMAGE_FALLBACK_URL || '').trim().replace(/\/$/, '');
+
+  /** @type {string[]} */
+  const urls = [];
+  if (base) urls.push(`${base}/generate-news-image`);
+  if (fallback) urls.push(`${fallback}/generate-news-image`);
+
+  const seen = new Set();
+  const unique = urls.filter((u) => {
+    if (!u || seen.has(u)) return false;
+    seen.add(u);
+    return true;
   });
-  if (typeof data.imageDataUrl !== 'string' || !data.imageDataUrl.startsWith('data:image')) {
-    throw new Error('Vertex /generate-news-image: response missing imageDataUrl');
+
+  if (!unique.length) {
+    throw new Error(
+      'No backend URL for image generation. Set REACT_APP_BACKEND_URL or REACT_APP_GENERATE_NEWS_IMAGE_FALLBACK_URL.'
+    );
   }
-  return data.imageDataUrl;
+
+  let lastErr;
+  for (const url of unique) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: p }),
+        signal: opts.signal,
+      });
+      const text = await res.text();
+      if (!res.ok) {
+        lastErr = new Error(
+          `HTTP ${res.status} from ${url}: ${text.slice(0, 200)}. If 404, redeploy backend-vertex so POST /generate-news-image exists, or set REACT_APP_GENERATE_NEWS_IMAGE_FALLBACK_URL.`
+        );
+        continue;
+      }
+      let data;
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        lastErr = new Error(`Non-JSON from ${url}`);
+        continue;
+      }
+      if (typeof data.imageDataUrl === 'string' && data.imageDataUrl.startsWith('data:image')) {
+        return data.imageDataUrl;
+      }
+      lastErr = new Error('Response missing imageDataUrl');
+    } catch (e) {
+      lastErr = e instanceof Error ? e : new Error(String(e));
+    }
+  }
+  throw lastErr || new Error('vertexGenerateNewsImage: all backends failed');
 }
