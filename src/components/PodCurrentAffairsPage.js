@@ -41,10 +41,10 @@ export default function PodCurrentAffairsPage() {
     let cancelled = false;
 
     const fallbackTrending = [
-      { title: 'Global leaders meet on coordinated response to emerging crises', source: 'World Desk', image: null },
-      { title: 'Markets weigh commodity shifts after latest supply chain updates', source: 'Economy Watch', image: null },
-      { title: 'UN agencies highlight humanitarian needs in multiple regions', source: 'Global Affairs', image: null },
-      { title: 'Scientists publish new findings on extreme weather patterns', source: 'Climate Brief', image: null },
+      { title: 'Global leaders meet on coordinated response to emerging crises', image: null },
+      { title: 'Markets weigh commodity shifts after latest supply chain updates', image: null },
+      { title: 'UN agencies highlight humanitarian needs in multiple regions', image: null },
+      { title: 'Scientists publish new findings on extreme weather patterns', image: null },
     ];
 
     const load = async () => {
@@ -55,7 +55,6 @@ export default function PodCurrentAffairsPage() {
         if (cancelled) return;
         const normalized = (articles || []).map((a) => ({
           title: a.title,
-          source: a.source,
           url: a.url,
           image: a.image,
         }));
@@ -160,9 +159,6 @@ export default function PodCurrentAffairsPage() {
                           <div className="absolute inset-x-0 bottom-0 p-3 pt-10 bg-gradient-to-t from-black via-black/80 to-transparent">
                             <p className="text-sm font-semibold leading-snug line-clamp-3" style={{ color: '#fff' }}>
                               {item.title}
-                            </p>
-                            <p className="text-[11px] mt-1.5 font-medium uppercase tracking-wide" style={{ color: 'rgba(255,255,255,0.65)' }}>
-                              {item.source}
                             </p>
                           </div>
                         </a>
