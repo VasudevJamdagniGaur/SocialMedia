@@ -1771,6 +1771,8 @@ ${text}`;
   /**
    * Social post suggestions for a news article — always uses OpenAI (skips /api/linkedin/suggestions)
    * so we never surface the internal prompt text as the post body on native/local builds.
+   * LinkedIn: 3–6 angle-diverse posts (80–150 words), JSON with angles + posts; `eventLabel` is derived from angle `type`.
+   * X / Reddit: 1–3 shorter posts, legacy `{ eventLabel, post }` JSON.
    * @param {{ title: string, url: string, description?: string, source?: string }} article
    * @param {'linkedin'|'x'|'reddit'} platform
    * @returns {Promise<{ eventLabel: string, post: string }[]>}
@@ -2061,6 +2063,86 @@ ${text}`;
     };
   }
 
+  /**
+   * Maps LinkedIn angle slug → short card label on ShareSuggestionsPage.
+   * @param {string} type
+   * @returns {string}
+   */
+  _newsAngleTypeToEventLabel(type) {
+    const t = String(type || '')
+      .trim()
+      .toLowerCase();
+    const map = {
+      insight: 'Insight',
+      contrarian: 'Contrarian',
+      actionable: 'Actionable',
+      business: 'Business',
+      leadership: 'Leadership',
+      prediction: 'Future',
+      ethical: 'Ethical',
+    };
+    return map[t] || (t ? t.charAt(0).toUpperCase() + t.slice(1) : 'News');
+  }
+
+  /**
+   * LinkedIn-only: multi-angle, professional posts from a news story (Tea / hubs / RSS).
+   * @param {{ title: string, url: string, description?: string, source?: string, articleText: string }} ctx
+   */
+  _buildLinkedInNewsArticleSuggestionsUserContent(ctx) {
+    const title = (ctx.title || '').trim();
+    const url = (ctx.url || '').trim();
+    const description = (ctx.description || '').trim();
+    const source = (ctx.source || '').trim();
+    const articleText = (ctx.articleText || '').trim();
+    return `You are generating LinkedIn post suggestions from a news story.
+
+GOAL:
+Create high-quality, diverse, thought-provoking LinkedIn posts.
+
+Requirements:
+
+1. Generate between 3 and 6 posts (choose a natural count for this story — vary count when appropriate, do not always output the same number).
+
+2. Each post MUST follow a DISTINCT angle. Choose from ONLY these angle types (use these exact "type" string values):
+   - insight — Insight / Learning
+   - contrarian — Contrarian / Debate
+   - actionable — Actionable / What next
+   - business — Business / Startup perspective
+   - leadership — Leadership angle
+   - prediction — Future prediction
+   - ethical — Ethical concern
+
+3. Process: First plan distinct angles (one line each), then write the full posts. Include both steps in your JSON.
+
+4. Each post MUST:
+   - Start with a strong professional hook
+   - Be insightful and structured; sound like a real human expert (not AI)
+   - Use a different professional mindset per post (e.g. founder, analyst, operator, leader) — do NOT repeat the same framing
+   - Include light formatting (line breaks between short paragraphs)
+   - Optionally end with a thoughtful question or crisp takeaway
+
+5. Tone: Professional, intelligent, slightly analytical.
+
+6. Length: Each post "content" field must be 80–150 words.
+
+7. Ground truth — base only on the story below; do not invent facts, names, numbers, or events.
+
+8. Do not write meta lines ("This article", "According to the piece", "Here's my LinkedIn post"). No wire-service recap voice.
+
+Story context:
+Title: ${title}
+${source ? `Source: ${source}\n` : ''}${description ? `Summary: ${description}\n` : ''}URL: ${url}
+${articleText ? `\nArticle / thread text:\n${articleText.slice(0, 6000)}\n` : ''}
+
+Output — return ONLY valid JSON (no markdown code fences). Use this exact shape:
+{"angles":[{"type":"insight","brief":"One-line plan for this angle only"}],"posts":[{"type":"insight","content":"Full post text only"}]}
+
+Rules for JSON:
+- "angles": 3–6 objects; each "type" must be one of the allowed slugs above; each "brief" is a single planning line (not the post).
+- "posts": same count as angles; order should match your plan; each "type" must match its angle and be unique across posts (no duplicate type).
+- "content" is only the text someone would publish on LinkedIn (no labels like "Post 1:" inside content).`;
+  }
+
   async generateNewsArticleShareSuggestions(article, platform) {
     const details = await this.fetchNewsArticleDetails(article);
     const title = (details.title || '').trim();
@@ -2089,7 +2171,16 @@ ${text}`;
     };
     const style = platformStyleGuide[platform] || platformStyleGuide.linkedin;
 
-    const userContent = `Write social posts for ${platformLabel} as if the poster just learned this from their news (feed, Reddit, alerts — whatever fits) and is sharing their reaction and opinion — NOT writing a news summary or explainer.
+    const isLinkedInNews = platform === 'linkedin';
+    const userContent = isLinkedInNews
+      ? this._buildLinkedInNewsArticleSuggestionsUserContent({
+          title,
+          url,
+          description,
+          source,
+          articleText,
+        })
+      : `Write social posts for ${platformLabel} as if the poster just learned this from their news (feed, Reddit, alerts — whatever fits) and is sharing their reaction and opinion — NOT writing a news summary or explainer.
 
 ${style}
 
@@ -2114,8 +2205,8 @@ Return ONLY valid JSON with this exact shape (no markdown fences):
         const vTimeout = setTimeout(() => vController.abort(), 45000);
         raw = await this.callVertexGenerateContent({
           prompt: userContent,
-          temperature: 0.62,
-          maxOutputTokens: 4096,
+          temperature: isLinkedInNews ? 0.68 : 0.62,
+          maxOutputTokens: isLinkedInNews ? 8192 : 4096,
           signal: vController.signal,
         });
         clearTimeout(vTimeout);
@@ -2130,8 +2221,8 @@ Return ONLY valid JSON with this exact shape (no markdown fences):
       const requestBody = {
         model: this.openaiModelName,
         messages: [{ role: 'user', content: userContent }],
-        temperature: 0.62,
-        max_tokens: 2000,
+        temperature: isLinkedInNews ? 0.68 : 0.62,
+        max_tokens: isLinkedInNews ? 4500 : 2000,
         response_format: { type: 'json_object' },
       };
 
@@ -2166,10 +2257,14 @@ Return ONLY valid JSON with this exact shape (no markdown fences):
 
     if (!String(raw || '').trim()) return fallback;
     let parsed;
+    const rawTrim = (raw || '').trim();
     try {
-      parsed = JSON.parse((raw || '').trim());
+      parsed = JSON.parse(rawTrim);
     } catch {
-      const m = (raw || '').match(/\{[\s\S]*"posts"[\s\S]*\}/);
+      const fence = rawTrim.match(/```(?:json)?\s*([\s\S]*?)```/);
+      const inner = fence ? fence[1].trim() : rawTrim;
+      let m = inner.match(/\{[\s\S]*"posts"[\s\S]*\}/);
+      if (!m) m = inner.match(/\[[\s\S]*\{[\s\S]*"type"[\s\S]*"content"[\s\S]*\}[\s\S]*\]/);
       if (!m) return fallback;
       try {
         parsed = JSON.parse(m[0]);
@@ -2177,7 +2272,12 @@ Return ONLY valid JSON with this exact shape (no markdown fences):
         return fallback;
       }
     }
-    const list = parsed && Array.isArray(parsed.posts) ? parsed.posts : [];
+    let list = [];
+    if (Array.isArray(parsed)) {
+      list = parsed;
+    } else if (parsed && Array.isArray(parsed.posts)) {
+      list = parsed.posts;
+    }
     const looksLikeInternalPrompt = (text) => {
       const t = String(text || '');
       return (
@@ -2187,7 +2287,8 @@ Return ONLY valid JSON with this exact shape (no markdown fences):
         /\bCRITICAL RULES\b/i.test(t) ||
         /\bHUMAN STYLE\b/i.test(t) ||
         /\bCONTENT STYLE\b/i.test(t) ||
-        /\bIMPORTANT\b/i.test(t)
+        /\bIMPORTANT\b/i.test(t) ||
+        /Create high-quality, diverse, thought-provoking LinkedIn posts/i.test(t)
       );
     };
 
@@ -2215,10 +2316,16 @@ Return ONLY valid JSON with this exact shape (no markdown fences):
     };
     const out = list
       .map((row) => {
-        const postRaw = typeof row?.post === 'string' ? row.post.trim() : '';
+        const postFromContent = typeof row?.content === 'string' ? row.content.trim() : '';
+        const postFromLegacy = typeof row?.post === 'string' ? row.post.trim() : '';
+        const postRaw = postFromContent || postFromLegacy;
         const post = stripPromptLeak(postRaw);
         if (!post || post.length < 8 || looksLikeInternalPrompt(post)) return null;
-        const ev = typeof row?.eventLabel === 'string' && row.eventLabel.trim() ? row.eventLabel.trim() : 'News';
+        const angleType = typeof row?.type === 'string' ? row.type.trim() : '';
+        const ev =
+          typeof row?.eventLabel === 'string' && row.eventLabel.trim()
+            ? row.eventLabel.trim()
+            : this._newsAngleTypeToEventLabel(angleType) || 'News';
         return { eventLabel: ev, post };
       })
       .filter(Boolean);
