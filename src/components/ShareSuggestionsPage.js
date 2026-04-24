@@ -2971,15 +2971,12 @@ export default function ShareSuggestionsPage() {
                   Reading the thread and shaping a headline…
                 </p>
               ) : (
-                <a
-                  href={effectiveNewsArticle?.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[15px] font-semibold leading-snug mt-2 block hover:underline"
+                <div
+                  className="text-[15px] font-semibold leading-snug mt-2 block"
                   style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}
                 >
                   {newsCardHeadline || effectiveNewsArticle?.title}
-                </a>
+                </div>
               )}
               {effectiveNewsCardText ? (
                 <p className="text-[15px] leading-relaxed mt-2" style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}>

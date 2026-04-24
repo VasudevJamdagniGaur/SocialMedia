@@ -894,7 +894,13 @@ async function fetchJsonMaybeNative(url, { timeoutMs }) {
  * @returns {Promise<{ status?: number, ok: boolean, data: unknown, headers?: unknown }>}
  */
 export async function fetchJsonGet(url, { timeoutMs = 15000 } = {}) {
-  return fetchJsonMaybeNative(url, { timeoutMs });
+  const raw = typeof url === 'string' ? url.trim() : '';
+  const REDDIT_WORLDNEWS_UPSTREAM =
+    'https://www.reddit.com/r/WorldNewsHeadlines/hot.json?limit=45&raw_json=1';
+  const REDDIT_WORLDNEWS_PROXY = 'http://localhost:3001/api/news';
+
+  const resolvedUrl = raw === REDDIT_WORLDNEWS_UPSTREAM ? REDDIT_WORLDNEWS_PROXY : url;
+  return fetchJsonMaybeNative(resolvedUrl, { timeoutMs });
 }
 
 async function fetchNewsApiDirectFromEnv(endpoint, baseParams) {
