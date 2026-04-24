@@ -11,7 +11,7 @@ if (process.env.GOOGLE_CREDENTIALS) {
   process.env.GOOGLE_APPLICATION_CREDENTIALS = "./service-account.json";
 }
 
-const [{ LOCATION, MODEL_ID, PROJECT_ID }, { generateText }, { generateNewsIllustrationImage }] =
+const [{ LOCATION, MODEL_ID, PROJECT_ID, PORT }, { generateText }, { generateNewsIllustrationImage }] =
   await Promise.all([
     import("./lib/config.js"),
     import("./lib/generateText.js"),
@@ -219,7 +219,6 @@ app.use((err, _req, res, _next) => {
   }
 });
 
-const PORT = process.env.PORT || 3001;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Vertex AI backend listening on http://0.0.0.0:${PORT}`);

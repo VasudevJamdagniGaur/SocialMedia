@@ -110,6 +110,15 @@ export async function vertexGenerateNewsImage(prompt, opts = {}) {
   const urls = [];
   if (base) urls.push(`${base}/generate-news-image`);
   if (fallback) urls.push(`${fallback}/generate-news-image`);
+  // Local dev convenience: the repo's `backend-vertex` server defaults to 3002
+  // (3001 is reserved for `detea-proxy`).
+  try {
+    if (typeof window !== 'undefined' && window?.location?.hostname === 'localhost') {
+      urls.push('http://localhost:3002/generate-news-image');
+    }
+  } catch {
+    /* ignore */
+  }
 
   const seen = new Set();
   const unique = urls.filter((u) => {

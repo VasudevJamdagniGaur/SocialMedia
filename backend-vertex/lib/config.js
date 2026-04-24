@@ -17,4 +17,5 @@ export const LOCATION = process.env.VERTEX_LOCATION || "us-central1";
 /** Single Vertex Gemini model (see Vertex AI model garden for your project). */
 export const MODEL_ID = process.env.VERTEX_GEMINI_MODEL || "gemini-2.5-flash";
 
-export const PORT = Number(process.env.PORT) || 3001;
+// 3001 is used by the local Reddit proxy (`detea-proxy`).
+export const PORT = Number(process.env.PORT) || 3002;

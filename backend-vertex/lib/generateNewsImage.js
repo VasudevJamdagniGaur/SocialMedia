@@ -64,7 +64,12 @@ export async function generateNewsIllustrationImage(prompt) {
 
   const response = await ai.models.generateContent({
     model: IMAGE_MODEL,
-    contents: full,
+    contents: [
+      {
+        role: "user",
+        parts: [{ text: full }],
+      },
+    ],
     config: {
       responseModalities: [Modality.TEXT, Modality.IMAGE],
     },
