@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Loader2, Flame } from 'lucide-react';
+import { filterPosts } from '../lib/redditPostFilter';
 
 const REDDIT_HOT_URL =
-  'https://www.reddit.com/r/BollyBlindsNGossip/hot.json?limit=10&raw_json=1';
+  'https://www.reddit.com/r/BollyBlindsNGossip/hot.json?limit=50&raw_json=1';
 
 const __TEA_TRENDING_URLS_KEY = 'deite_tea_trending_urls_v1';
 const __SHARE_NEWS_CARD_CACHE_KEY = 'deite_share_news_card_cache_v1';
@@ -301,9 +302,12 @@ export default function TrendingTea() {
         if (!Array.isArray(children)) {
           throw new Error('Unexpected response from Reddit');
         }
-        const mapped = children
-          .map(mapRedditChildToTea)
-          .filter(Boolean);
+        const rawPosts = children.map((c) => c?.data).filter(Boolean);
+        const filteredPosts = filterPosts(rawPosts);
+        const mapped = filteredPosts
+          .map((d) => mapRedditChildToTea({ data: d }))
+          .filter(Boolean)
+          .slice(0, 10);
         if (!cancelled) {
           setTeaData(mapped);
           writeTrendingTeaUrlsAndPruneShareCache(mapped);
