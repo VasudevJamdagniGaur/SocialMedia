@@ -7,6 +7,7 @@ import firestoreService from '../services/firestoreService';
 import { collection, addDoc, query, orderBy, getDocs, serverTimestamp, doc, setDoc, updateDoc, increment, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { userEventService } from '../services/userEventService';
+import { isAdmin } from '../utils/admin';
 
 export default function CommunityPage() {
   const navigate = useNavigate();
@@ -466,16 +467,27 @@ export default function CommunityPage() {
     };
   }, []);
 
-  // Load following list for "Following" tab
+  const user = getCurrentUser();
+  const admin = isAdmin(user);
+
+  // Temporary restriction: only admin can access Following/HUB.
+  // Non-admins get a My Presence only experience (no hidden tab placeholders).
   useEffect(() => {
-    const user = getCurrentUser();
+    if (!admin) {
+      if (activeTab !== 'mySpace') setActiveTab('mySpace');
+    }
+  }, [admin, activeTab]);
+
+  // Load following list for "Following" tab (admin only)
+  useEffect(() => {
+    if (!admin) return;
     if (!user) return;
     firestoreService.getFollowing(user.uid).then((result) => {
       if (result.success && result.followingIds) {
         setFollowingIds(result.followingIds);
       }
     });
-  }, []);
+  }, [admin, user?.uid]);
 
   // Load social shares for My Presence (shared to X, WhatsApp, More, image)
   useEffect(() => {
@@ -503,7 +515,13 @@ export default function CommunityPage() {
       .finally(() => setLinkedInPostsLoading(false));
   }, []);
 
-  const user = getCurrentUser();
+  const tabs = admin
+    ? [
+        { id: 'mySpace', label: 'My Presence' },
+        { id: 'following', label: 'Following' },
+        { id: 'explore', label: 'HUB' },
+      ]
+    : [{ id: 'mySpace', label: 'My Presence' }];
 
   const normalizeReflectionDate = (val) => {
     if (!val) return '';
@@ -1135,11 +1153,7 @@ export default function CommunityPage() {
           onTouchStart={handleTabTouchStart}
           onTouchEnd={handleTabTouchEnd}
         >
-          {[
-            { id: 'mySpace', label: 'My Presence' },
-            { id: 'following', label: 'Following' },
-            { id: 'explore', label: 'HUB' },
-          ].map((tab) => (
+          {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => switchTab(tab.id)}
@@ -1159,12 +1173,6 @@ export default function CommunityPage() {
               )}
             </button>
           ))}
-        </div>
-
-        {/* Stats line */}
-        <div className="py-3 flex items-center justify-center gap-6" style={{ fontSize: '12px', color: THREADS.textSecondary }}>
-          <span>{activeMembersCount.toLocaleString()} members</span>
-          <span>{postsTodayCount} today</span>
         </div>
 
         {/* Feed - Threads style flat list */}
