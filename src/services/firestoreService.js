@@ -622,13 +622,26 @@ class FirestoreService {
    * @param {object} params
    * @param {string} params.uid
    * @param {string} params.caption
-   * @param {File|null} [params.imageFile] - Image file to upload to Storage at posts/{uid}/{postId}.jpg
-   * @param {string|null} [params.imageUrl] - Already-uploaded image URL (e.g. from reflection cache); no upload
+   * @param {File|null} [params.imageFile] - Single image file to upload
+   * @param {File[]|null} [params.imageFiles] - Multiple image files to upload (preferred for multi-image posts)
+   * @param {string|null} [params.imageUrl] - Single already-uploaded image URL
+   * @param {string[]|null} [params.imageUrls] - Multiple already-uploaded image URLs
    * @param {string|null} [params.imageDataUrl] - Legacy base64; uploads via uploadPostImage (avoid if possible)
+   * @param {string[]|null} [params.imageDataUrls] - Multiple legacy base64 data URLs
    * @param {'x'|'linkedin'|'reddit'|'whatsapp'|'other'} params.platform
-   * @returns {Promise<{ success: boolean, postId?: string, imageUrl?: string, error?: string }>}
+   * @returns {Promise<{ success: boolean, postId?: string, imageUrl?: string, imageUrls?: string[], error?: string }>}
    */
-  async createPostForShare({ uid, caption, imageFile, imageUrl: imageUrlParam, imageDataUrl, platform }) {
+  async createPostForShare({
+    uid,
+    caption,
+    imageFile,
+    imageFiles,
+    imageUrl: imageUrlParam,
+    imageUrls,
+    imageDataUrl,
+    imageDataUrls,
+    platform,
+  }) {
     if (!uid || !caption) {
       return { success: false, error: 'Missing uid or caption' };
     }
@@ -644,21 +657,54 @@ class FirestoreService {
 
       // Posts collection reference
       const postsRef = collection(this.db, 'posts');
-      let imageUrl = imageUrlParam || null;
+      const urlList = [];
+      const fileList = [];
+      const dataUrlList = [];
+
+      if (typeof imageUrlParam === 'string' && imageUrlParam.trim()) urlList.push(imageUrlParam.trim());
+      if (Array.isArray(imageUrls)) {
+        imageUrls.forEach((u) => {
+          if (typeof u === 'string' && u.trim()) urlList.push(u.trim());
+        });
+      }
+
+      if (imageFile && (imageFile instanceof File || imageFile instanceof Blob)) fileList.push(imageFile);
+      if (Array.isArray(imageFiles)) {
+        imageFiles.forEach((f) => {
+          if (f && (f instanceof File || f instanceof Blob)) fileList.push(f);
+        });
+      }
+
+      if (typeof imageDataUrl === 'string' && imageDataUrl.trim()) dataUrlList.push(imageDataUrl.trim());
+      if (Array.isArray(imageDataUrls)) {
+        imageDataUrls.forEach((d) => {
+          if (typeof d === 'string' && d.trim()) dataUrlList.push(d.trim());
+        });
+      }
 
       // Upload image to Firebase Storage (never store image in Firestore)
-      if (imageFile && (imageFile instanceof File || imageFile instanceof Blob)) {
+      if (fileList.length > 0) {
         const tempPostRef = doc(postsRef);
         const tempPostId = tempPostRef.id;
-        // Use tempPostId for the storage path until we finalize the Firestore postId.
-        // (Avoid ReferenceError: postId is not defined at this point.)
-        imageUrl = await this.uploadPostImageToPath(uid, tempPostId, imageFile);
-        if (!imageUrl) {
-          imageUrl = await this.uploadPostImageFromFile(uid, imageFile);
+        for (let i = 0; i < fileList.length; i++) {
+          const f = fileList[i];
+          // Suffix the storage key so all images are saved separately.
+          const key = `${tempPostId}-${i}`;
+          let uploaded = await this.uploadPostImageToPath(uid, key, f);
+          if (!uploaded) uploaded = await this.uploadPostImageFromFile(uid, f);
+          if (uploaded) urlList.push(uploaded);
         }
-      } else if (!imageUrl && imageDataUrl) {
-        imageUrl = await this.uploadPostImage(uid, imageDataUrl);
       }
+      if (dataUrlList.length > 0) {
+        for (const d of dataUrlList) {
+          const uploaded = await this.uploadPostImage(uid, d);
+          if (uploaded) urlList.push(uploaded);
+        }
+      }
+
+      const uniqueUrls = [...new Set(urlList.filter(Boolean))];
+      const imageUrl = uniqueUrls.length ? uniqueUrls[0] : null;
+      const imageUrlsFinal = uniqueUrls.length ? uniqueUrls : [];
 
       // De-duplication: if a post with the same caption + image already exists for this user,
       // reuse it instead of creating another post.
@@ -691,7 +737,7 @@ class FirestoreService {
             platform,
             createdAt: serverTimestamp(),
           });
-          return { success: true, postId: existingPostId, imageUrl: imageUrl || null };
+          return { success: true, postId: existingPostId, imageUrl: imageUrl || null, imageUrls: imageUrlsFinal };
         }
       } catch (dedupeError) {
         console.warn('createPostForShare dedupe check failed, proceeding to create new post:', dedupeError);
@@ -706,6 +752,7 @@ class FirestoreService {
         userId: uid,
         caption: normalizedCaption,
         imageUrl: imageUrl || null,
+        imageUrls: imageUrlsFinal.length ? imageUrlsFinal : null,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         likeCount: 0,
@@ -730,7 +777,7 @@ class FirestoreService {
         createdAt: serverTimestamp(),
       });
 
-      return { success: true, postId, imageUrl: imageUrl || null };
+      return { success: true, postId, imageUrl: imageUrl || null, imageUrls: imageUrlsFinal };
     } catch (error) {
       console.error('Error creating post for share:', error);
       return { success: false, error: error.message };

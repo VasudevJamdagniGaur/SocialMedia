@@ -523,6 +523,9 @@ async function handleLinkedInSuggestions(
     const { reflection, platform } = (req.body || {}) as { reflection?: string; platform?: string };
     const t = (reflection || '').trim();
     const p = (platform || 'linkedin').toLowerCase();
+    const wantsStream =
+      String((req.query as any)?.stream || '').trim() === '1' ||
+      String(req.headers['accept'] || '').toLowerCase().includes('text/event-stream');
     if (!t) {
       res.status(400).json({ error: 'Missing reflection' });
       return;
@@ -609,14 +612,96 @@ ${t}`;
         model: 'gpt-4o',
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.5,
-        max_tokens: 2400
-      })
+        max_tokens: 2400,
+        ...(wantsStream ? { stream: true } : {}),
+      }),
     });
 
     if (!response.ok) {
       const errText = await response.text().catch(() => '');
       logger.warn('[suggestions] openai not ok', { status: response.status, body: errText.slice(0, 200) });
       res.status(500).json({ error: `OpenAI error ${response.status}: ${errText.slice(0, 150)}` });
+      return;
+    }
+
+    if (wantsStream) {
+      // SSE: stream deltas to client, then send final raw.
+      // Note: we stream plain text; client can parse into posts after completion.
+      const anyRes: any = res;
+      res.set('Content-Type', 'text/event-stream; charset=utf-8');
+      res.set('Cache-Control', 'no-cache, no-transform');
+      res.set('Connection', 'keep-alive');
+
+      // Initial ping so proxies open the stream
+      try {
+        anyRes.write?.(`event: ready\ndata: ${JSON.stringify({ ok: true })}\n\n`);
+      } catch {
+        // ignore
+      }
+
+      const decoder = new TextDecoder();
+      let buf = '';
+      let full = '';
+      const body = response.body;
+      if (!body) {
+        anyRes.write?.(`event: done\ndata: ${JSON.stringify({ raw: '' })}\n\n`);
+        anyRes.end?.();
+        return;
+      }
+
+      const reader = (body as any).getReader?.();
+      if (!reader) {
+        // Node fetch stream may not expose getReader; fall back to non-stream JSON.
+        const data = (await response.json()) as any;
+        const raw = (data?.choices?.[0]?.message?.content || '').trim();
+        anyRes.write?.(`event: done\ndata: ${JSON.stringify({ raw })}\n\n`);
+        anyRes.end?.();
+        return;
+      }
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        buf += chunk;
+
+        // OpenAI stream is SSE: lines "data: {json}\n\n"
+        let idx;
+        while ((idx = buf.indexOf('\n\n')) !== -1) {
+          const frame = buf.slice(0, idx);
+          buf = buf.slice(idx + 2);
+          const lines = frame.split('\n').map((l) => l.trim());
+          for (const line of lines) {
+            if (!line.startsWith('data:')) continue;
+            const payload = line.slice(5).trim();
+            if (!payload) continue;
+            if (payload === '[DONE]') {
+              try {
+                anyRes.write?.(`event: done\ndata: ${JSON.stringify({ raw: full.trim() })}\n\n`);
+              } finally {
+                anyRes.end?.();
+              }
+              return;
+            }
+            try {
+              const j = JSON.parse(payload);
+              const delta = j?.choices?.[0]?.delta?.content;
+              if (typeof delta === 'string' && delta) {
+                full += delta;
+                anyRes.write?.(`event: delta\ndata: ${JSON.stringify({ text: delta })}\n\n`);
+              }
+            } catch {
+              // ignore bad frames
+            }
+          }
+        }
+      }
+
+      try {
+        anyRes.write?.(`event: done\ndata: ${JSON.stringify({ raw: full.trim() })}\n\n`);
+      } finally {
+        anyRes.end?.();
+      }
       return;
     }
 

@@ -59,8 +59,14 @@ const getCachedImageForPost = (text) => {
     if (!raw) return null;
     try {
       const parsed = JSON.parse(raw);
-      if (parsed && parsed.text === (text || '').trim() && typeof parsed.image === 'string') {
-        return parsed.image;
+      if (parsed && parsed.text === (text || '').trim()) {
+        if (Array.isArray(parsed.images) && parsed.images.length) {
+          const first = parsed.images.find((x) => typeof x === 'string' && x.trim());
+          return first ? first.trim() : null;
+        }
+        if (typeof parsed.image === 'string' && parsed.image.trim()) {
+          return parsed.image.trim();
+        }
       }
       return typeof raw === 'string' ? raw : null;
     } catch {
@@ -68,6 +74,31 @@ const getCachedImageForPost = (text) => {
     }
   } catch {
     return null;
+  }
+};
+
+const getCachedImagesForPost = (text) => {
+  if (typeof localStorage === 'undefined') return [];
+  const key = buildImageCacheKey(text);
+  if (!key) return [];
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.text === (text || '').trim()) {
+        if (Array.isArray(parsed.images)) {
+          return parsed.images.filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim());
+        }
+        if (typeof parsed.image === 'string' && parsed.image.trim()) return [parsed.image.trim()];
+      }
+      if (typeof raw === 'string' && raw.trim()) return [raw.trim()];
+      return [];
+    } catch {
+      return typeof raw === 'string' && raw.trim() ? [raw.trim()] : [];
+    }
+  } catch {
+    return [];
   }
 };
 
@@ -849,8 +880,11 @@ export default function ShareSuggestionsPage() {
   const [selectedPlatform, setSelectedPlatform] = useState(platformFromState || 'linkedin');
   const [platformSuggestions, setPlatformSuggestions] = useState([]);
   const [suggestionImageUrls, setSuggestionImageUrls] = useState([]); // one image per suggestion (Gemini entities → Gemini image model)
+  const [suggestionImageOptions, setSuggestionImageOptions] = useState([]); // string[][]: all images user can pick/keep per suggestion
+  const [suggestionActiveImageIdx, setSuggestionActiveImageIdx] = useState([]); // number[]: which option is currently active for each suggestion
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(true);
   const [suggestionError, setSuggestionError] = useState(null);
+  const [suggestionsStreamPreview, setSuggestionsStreamPreview] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isLoadingImages, setIsLoadingImages] = useState(false);
   const [sharePanelOpen, setSharePanelOpen] = useState(false);
@@ -1154,6 +1188,7 @@ export default function ShareSuggestionsPage() {
     setIsLoadingSuggestions(true);
     setSuggestionError(null);
     setSuggestionImageUrls([]);
+    setSuggestionsStreamPreview('');
     const isTeaShareFlow = isNewsShareMode && isTeaSourceLabel(newsArticleFromState?.source);
 
     // News share: cache suggestions per (article URL, platform) so switching tabs doesn't regenerate.
@@ -1288,7 +1323,16 @@ export default function ShareSuggestionsPage() {
 
     const suggestionsPromise = isNewsShareMode
       ? chatService.generateNewsArticleShareSuggestions(newsArticleForSuggestions, selectedPlatform)
-      : chatService.generateSocialPostSuggestions(suggestionPromptText, selectedPlatform);
+      : chatService.generateSocialPostSuggestionsStream(suggestionPromptText, selectedPlatform, {
+          onDelta: (text) => {
+            if (cancelled) return;
+            if (!text) return;
+            setSuggestionsStreamPreview((prev) => {
+              const next = `${prev || ''}${text}`;
+              return next.length > 1800 ? next.slice(-1800) : next;
+            });
+          },
+        });
 
     suggestionsPromise.then(async (list) => {
         if (cancelled) return;
@@ -1592,7 +1636,7 @@ export default function ShareSuggestionsPage() {
     const caption = normSuggestionPost(
       ((editableShareText || '').trim() || (selectedText || '')).trim()
     );
-    const raw = suggestionImageUrls[selectedIndex] || null;
+    const raw = (suggestionImageUrls && suggestionImageUrls[selectedIndex]) || null;
     const rawSig =
       !raw ? 'n' :
       typeof raw !== 'string' ? 'x' :
@@ -1613,6 +1657,18 @@ export default function ShareSuggestionsPage() {
     suggestionImageUrls,
     xExportImageDataUrl,
   ]);
+
+  const getActiveImageForSuggestion = useCallback(
+    (idx) => {
+      const list = Array.isArray(suggestionImageOptions?.[idx]) ? suggestionImageOptions[idx] : null;
+      const ai = typeof suggestionActiveImageIdx?.[idx] === 'number' ? suggestionActiveImageIdx[idx] : 0;
+      if (list && list.length) return list[Math.min(Math.max(ai, 0), list.length - 1)] || null;
+      return Array.isArray(suggestionImageUrls) ? (suggestionImageUrls[idx] || null) : null;
+    },
+    [suggestionImageOptions, suggestionActiveImageIdx, suggestionImageUrls]
+  );
+
+  const activeSuggestionImage = getActiveImageForSuggestion(selectedIndex);
 
   /**
    * Persist share to Firestore so the post stays in My Presence after app reopen.
@@ -1646,31 +1702,41 @@ export default function ShareSuggestionsPage() {
     const imageForPost =
       'suggestionImageUrlSnapshot' in options
         ? options.suggestionImageUrlSnapshot
-        : Array.isArray(suggestionImageUrls) && suggestionImageUrls[selectedIndex]
-          ? suggestionImageUrls[selectedIndex]
-          : null;
+        : activeSuggestionImage;
     const imageToStore = options.imageDataUrlForStorage ?? imageForPost;
 
     // 2) Prepare image: File for upload to Storage at posts/{uid}/{postId}.jpg, or existing URL
-    let imageFile = null;
-    let imageUrl = null;
-    if (imageToStore && typeof imageToStore === 'string') {
-      if (imageToStore.startsWith('data:image')) {
+    const keptImagesRaw = Array.isArray(suggestionImageOptions?.[selectedIndex]) && suggestionImageOptions[selectedIndex].length
+      ? suggestionImageOptions[selectedIndex]
+      : (imageToStore ? [imageToStore] : []);
+    const keptImages = keptImagesRaw
+      .filter((x) => typeof x === 'string' && x.trim())
+      .map((x) => x.trim())
+      .slice(0, 6);
+
+    const imageFiles = [];
+    const imageUrls = [];
+
+    for (const img of keptImages) {
+      if (img.startsWith('data:image')) {
         if (skipCompression) {
-          // Upload the original bytes so My Presence matches the exact shared image.
-          imageUrl = await firestoreService.uploadPostImage(user.uid, imageToStore);
+          const uploaded = await firestoreService.uploadPostImage(user.uid, img);
+          if (uploaded) imageUrls.push(uploaded);
         } else {
-          const compressed = await compressImageForStorage(imageToStore);
+          const compressed = await compressImageForStorage(img);
           if (compressed) {
-            imageFile = compressed;
+            imageFiles.push(compressed);
           } else {
-            imageUrl = await firestoreService.uploadPostImage(user.uid, imageToStore);
+            const uploaded = await firestoreService.uploadPostImage(user.uid, img);
+            if (uploaded) imageUrls.push(uploaded);
           }
         }
-      } else if (imageToStore.startsWith('http://') || imageToStore.startsWith('https://')) {
-        imageUrl = imageToStore;
+      } else if (img.startsWith('http://') || img.startsWith('https://')) {
+        imageUrls.push(img);
       }
     }
+
+    let imageUrl = imageUrls.length ? imageUrls[0] : null;
     if (!imageUrl && content) {
       const lookupList = Array.isArray(options.reflectionImageLookupTexts)
         ? [...new Set(options.reflectionImageLookupTexts.filter(Boolean))]
@@ -1705,11 +1771,15 @@ export default function ShareSuggestionsPage() {
     const result = await firestoreService.createPostForShare({
       uid: user.uid,
       caption: content,
-      imageFile: imageFile || undefined,
+      imageFiles: imageFiles.length ? imageFiles : undefined,
       imageUrl: imageUrl || undefined,
+      imageUrls: imageUrls.length ? imageUrls : undefined,
       platform: plat,
     });
     const finalImageUrl = result?.imageUrl || imageUrl || null;
+    const finalImageUrls = Array.isArray(result?.imageUrls) && result.imageUrls.length
+      ? result.imageUrls
+      : (imageUrls.length ? imageUrls : (finalImageUrl ? [finalImageUrl] : []));
 
     // 4) Create Community "My Presence" entry with URL only (for feed that reads from communityPosts)
     const postData = {
@@ -1721,6 +1791,7 @@ export default function ShareSuggestionsPage() {
       comments: [],
       profilePicture: profileImage,
       image: finalImageUrl,
+      images: finalImageUrls.length ? finalImageUrls : null,
       source: 'social_share',
       sharedPlatform: plat,
       reflectionDate: (() => {
@@ -1939,9 +2010,30 @@ export default function ShareSuggestionsPage() {
 
   const handleRemoveImage = () => {
     setImageEditMenuOpen(false);
+    setSuggestionImageOptions((prev) => {
+      const next = Array.isArray(prev) ? [...prev] : [];
+      const list = Array.isArray(next[selectedIndex]) ? [...next[selectedIndex]] : [];
+      const ai = typeof suggestionActiveImageIdx?.[selectedIndex] === 'number' ? suggestionActiveImageIdx[selectedIndex] : 0;
+      if (list.length) {
+        list.splice(Math.min(Math.max(ai, 0), list.length - 1), 1);
+      }
+      next[selectedIndex] = list;
+      return next;
+    });
+    setSuggestionActiveImageIdx((prev) => {
+      const next = Array.isArray(prev) ? [...prev] : [];
+      const listLen = Array.isArray(suggestionImageOptions?.[selectedIndex]) ? suggestionImageOptions[selectedIndex].length : 0;
+      const ai = typeof next[selectedIndex] === 'number' ? next[selectedIndex] : 0;
+      const afterLen = Math.max(0, listLen - 1);
+      next[selectedIndex] = afterLen ? Math.min(ai, afterLen - 1) : 0;
+      return next;
+    });
     setSuggestionImageUrls((prev) => {
       const next = [...(prev || [])];
-      next[selectedIndex] = null;
+      const list = Array.isArray(suggestionImageOptions?.[selectedIndex]) ? suggestionImageOptions[selectedIndex] : [];
+      const ai = typeof suggestionActiveImageIdx?.[selectedIndex] === 'number' ? suggestionActiveImageIdx[selectedIndex] : 0;
+      const after = list.filter((x, i) => i !== Math.min(Math.max(ai, 0), list.length - 1));
+      next[selectedIndex] = after.length ? after[Math.min(ai, after.length - 1)] : null;
       return next;
     });
     setSuggestionImagesFromChat((prev) => {
@@ -1958,6 +2050,19 @@ export default function ShareSuggestionsPage() {
     reader.onloadend = () => {
       const dataUrl = reader.result;
       if (typeof dataUrl === 'string') {
+        setSuggestionImageOptions((prev) => {
+          const next = Array.isArray(prev) ? [...prev] : [];
+          const list = Array.isArray(next[selectedIndex]) ? [...next[selectedIndex]] : [];
+          list.push(dataUrl);
+          next[selectedIndex] = list;
+          return next;
+        });
+        setSuggestionActiveImageIdx((prev) => {
+          const next = Array.isArray(prev) ? [...prev] : [];
+          const list = Array.isArray(suggestionImageOptions?.[selectedIndex]) ? suggestionImageOptions[selectedIndex] : [];
+          next[selectedIndex] = (list?.length || 0); // new last index
+          return next;
+        });
         setSuggestionImageUrls((prev) => {
           const next = [...(prev || [])];
           next[selectedIndex] = dataUrl;
@@ -1974,6 +2079,29 @@ export default function ShareSuggestionsPage() {
     reader.readAsDataURL(file);
     e.target.value = '';
   };
+
+  // Ensure options/active-index arrays exist for every suggestion slot.
+  useEffect(() => {
+    const urls = Array.isArray(suggestionImageUrls) ? suggestionImageUrls : [];
+    if (!urls.length) return;
+    setSuggestionImageOptions((prev) => {
+      const next = Array.isArray(prev) ? [...prev] : [];
+      for (let i = 0; i < urls.length; i++) {
+        const u = urls[i];
+        if (!Array.isArray(next[i]) || next[i].length === 0) {
+          next[i] = u ? [u] : [];
+        }
+      }
+      return next;
+    });
+    setSuggestionActiveImageIdx((prev) => {
+      const next = Array.isArray(prev) ? [...prev] : [];
+      for (let i = 0; i < urls.length; i++) {
+        if (typeof next[i] !== 'number') next[i] = 0;
+      }
+      return next;
+    });
+  }, [suggestionImageUrls]);
 
   const dataURLtoFile = (dataUrl, filename = 'post-image.png') => {
     try {
@@ -3072,6 +3200,22 @@ export default function ShareSuggestionsPage() {
                 <p className="text-sm" style={{ color: isDarkMode ? HUB.textSecondary : '#666' }}>
                   Creating {PLATFORM_LABELS[selectedPlatform]}-style suggestions...
                 </p>
+                {suggestionsStreamPreview ? (
+                  <div className="w-full mt-3 max-w-md">
+                    <div
+                      className="w-full rounded-lg border p-3 text-[12px] leading-relaxed whitespace-pre-wrap"
+                      style={{
+                        background: isDarkMode ? HUB.bg : '#F5F5F5',
+                        borderColor: isDarkMode ? HUB.divider : 'rgba(0,0,0,0.12)',
+                        color: isDarkMode ? HUB.text : '#111',
+                        maxHeight: 180,
+                        overflowY: 'auto',
+                      }}
+                    >
+                      {suggestionsStreamPreview}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             ) : platformSuggestions.length > 0 ? (
               <div className="space-y-3 mb-8">
@@ -3236,7 +3380,7 @@ export default function ShareSuggestionsPage() {
                 </p>
               </div>
               {/* X with image: show only the image card (no separate image, no separate text) */}
-              {selectedPlatform === 'x' && suggestionImageUrls[selectedIndex] ? (
+              {selectedPlatform === 'x' && activeSuggestionImage ? (
                 <div className="w-full flex justify-center mb-4 flex-1 min-h-0">
                   <div className="w-full max-w-[360px] mx-auto">
                     <TweetShareCard
@@ -3245,18 +3389,56 @@ export default function ShareSuggestionsPage() {
                       displayName={tweetDisplayName}
                       username={tweetUsername}
                       text={editableShareText || selectedText || ''}
-                      imageUrl={suggestionImageUrls[selectedIndex]}
+                      imageUrl={activeSuggestionImage}
                       profileImageUrl={tweetProfileImage}
                     />
                   </div>
                 </div>
               ) : (
                 <>
-                  {suggestionImageUrls[selectedIndex] && (
+                  {activeSuggestionImage && (
                     <div className="w-full rounded-xl overflow-hidden mb-3 flex-shrink-0 bg-black/10 relative group">
+                      {Array.isArray(suggestionImageOptions?.[selectedIndex]) && suggestionImageOptions[selectedIndex].length > 1 && (
+                        <div className="px-2 pt-2 pb-1 flex gap-2 overflow-x-auto">
+                          {suggestionImageOptions[selectedIndex].map((src, i) => (
+                            <button
+                              key={`${i}-${String(src).slice(0, 20)}`}
+                              type="button"
+                              onClick={() => {
+                                setSuggestionActiveImageIdx((prev) => {
+                                  const next = Array.isArray(prev) ? [...prev] : [];
+                                  next[selectedIndex] = i;
+                                  return next;
+                                });
+                                setSuggestionImageUrls((prev) => {
+                                  const next = [...(prev || [])];
+                                  next[selectedIndex] = src;
+                                  return next;
+                                });
+                              }}
+                              className="shrink-0 rounded-lg overflow-hidden border"
+                              style={{
+                                borderColor:
+                                  (suggestionActiveImageIdx?.[selectedIndex] ?? 0) === i
+                                    ? (isDarkMode ? HUB.accentHighlight : '#7C3AED')
+                                    : (isDarkMode ? HUB.divider : 'rgba(0,0,0,0.12)'),
+                              }}
+                              aria-label={`Select image ${i + 1}`}
+                            >
+                              <img
+                                src={src}
+                                alt=""
+                                className="h-[54px] w-[54px] object-cover"
+                                loading="lazy"
+                                decoding="async"
+                              />
+                            </button>
+                          ))}
+                        </div>
+                      )}
                       <div className="w-full min-h-[200px] max-h-[320px] flex items-center justify-center">
                         <img
-                          src={suggestionImageUrls[selectedIndex]}
+                          src={activeSuggestionImage}
                           alt="Post"
                           className="max-w-full max-h-[320px] w-auto h-auto object-contain"
                         />
@@ -3342,7 +3524,7 @@ export default function ShareSuggestionsPage() {
                 <button
                   type="button"
                   onClick={
-                    (selectedPlatform === 'x' || selectedPlatform === 'reddit') && suggestionImageUrls[selectedIndex]
+                    (selectedPlatform === 'x' || selectedPlatform === 'reddit') && activeSuggestionImage
                       ? handleShareImageToXOrReddit
                       : handleShareToSelectedPlatform
                   }
@@ -3350,12 +3532,12 @@ export default function ShareSuggestionsPage() {
                     !selectedPlatform ||
                     (
                       // X with image: allow image-only sharing even when text is empty
-                      !(selectedPlatform === 'x' && !!suggestionImageUrls[selectedIndex]) &&
+                      !(selectedPlatform === 'x' && !!activeSuggestionImage) &&
                       (!(editableShareText || '').trim() && !(selectedText || '').trim())
                     ) ||
                     (
                       sharePanelOpen &&
-                      !!suggestionImageUrls[selectedIndex] &&
+                      !!activeSuggestionImage &&
                       (selectedPlatform === 'x' || selectedPlatform === 'reddit') &&
                       sharePanelPrepStatus.status === 'preparing'
                     )
@@ -3377,7 +3559,7 @@ export default function ShareSuggestionsPage() {
                 >
                   {selectedPlatform
                     ? sharePanelOpen &&
-                      !!suggestionImageUrls[selectedIndex] &&
+                      !!activeSuggestionImage &&
                       (selectedPlatform === 'x' || selectedPlatform === 'reddit') &&
                       sharePanelPrepStatus.status === 'preparing'
                       ? 'Preparing…'

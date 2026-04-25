@@ -15,25 +15,15 @@ var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (
 }) : function(o, v) {
     o["default"] = v;
 });
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.linkedInApi = exports.generateNewsImage = exports.deleteAccountRequest = exports.newsIngestScheduler = exports.newsApi = exports.generatePostEmbedding = void 0;
+exports.linkedInApi = exports.deleteAccountRequest = exports.newsIngestScheduler = exports.newsApi = exports.generatePostEmbedding = void 0;
 const path = __importStar(require("path"));
 const dotenv_1 = require("dotenv");
 // Load functions/.env so LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET are available (local emulator).
@@ -459,6 +449,8 @@ async function handleLinkedInSuggestions(req, res) {
         const { reflection, platform } = (req.body || {});
         const t = (reflection || '').trim();
         const p = (platform || 'linkedin').toLowerCase();
+        const wantsStream = String(req.query?.stream || '').trim() === '1' ||
+            String(req.headers['accept'] || '').toLowerCase().includes('text/event-stream');
         if (!t) {
             res.status(400).json({ error: 'Missing reflection' });
             return;
@@ -539,13 +531,95 @@ ${t}`;
                 model: 'gpt-4o',
                 messages: [{ role: 'user', content: prompt }],
                 temperature: 0.5,
-                max_tokens: 2400
-            })
+                max_tokens: 2400,
+                ...(wantsStream ? { stream: true } : {}),
+            }),
         });
         if (!response.ok) {
             const errText = await response.text().catch(() => '');
             firebase_functions_1.logger.warn('[suggestions] openai not ok', { status: response.status, body: errText.slice(0, 200) });
             res.status(500).json({ error: `OpenAI error ${response.status}: ${errText.slice(0, 150)}` });
+            return;
+        }
+        if (wantsStream) {
+            // SSE: stream deltas to client, then send final raw.
+            // Note: we stream plain text; client can parse into posts after completion.
+            const anyRes = res;
+            res.set('Content-Type', 'text/event-stream; charset=utf-8');
+            res.set('Cache-Control', 'no-cache, no-transform');
+            res.set('Connection', 'keep-alive');
+            // Initial ping so proxies open the stream
+            try {
+                anyRes.write?.(`event: ready\ndata: ${JSON.stringify({ ok: true })}\n\n`);
+            }
+            catch {
+                // ignore
+            }
+            const decoder = new TextDecoder();
+            let buf = '';
+            let full = '';
+            const body = response.body;
+            if (!body) {
+                anyRes.write?.(`event: done\ndata: ${JSON.stringify({ raw: '' })}\n\n`);
+                anyRes.end?.();
+                return;
+            }
+            const reader = body.getReader?.();
+            if (!reader) {
+                // Node fetch stream may not expose getReader; fall back to non-stream JSON.
+                const data = (await response.json());
+                const raw = (data?.choices?.[0]?.message?.content || '').trim();
+                anyRes.write?.(`event: done\ndata: ${JSON.stringify({ raw })}\n\n`);
+                anyRes.end?.();
+                return;
+            }
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done)
+                    break;
+                const chunk = decoder.decode(value, { stream: true });
+                buf += chunk;
+                // OpenAI stream is SSE: lines "data: {json}\n\n"
+                let idx;
+                while ((idx = buf.indexOf('\n\n')) !== -1) {
+                    const frame = buf.slice(0, idx);
+                    buf = buf.slice(idx + 2);
+                    const lines = frame.split('\n').map((l) => l.trim());
+                    for (const line of lines) {
+                        if (!line.startsWith('data:'))
+                            continue;
+                        const payload = line.slice(5).trim();
+                        if (!payload)
+                            continue;
+                        if (payload === '[DONE]') {
+                            try {
+                                anyRes.write?.(`event: done\ndata: ${JSON.stringify({ raw: full.trim() })}\n\n`);
+                            }
+                            finally {
+                                anyRes.end?.();
+                            }
+                            return;
+                        }
+                        try {
+                            const j = JSON.parse(payload);
+                            const delta = j?.choices?.[0]?.delta?.content;
+                            if (typeof delta === 'string' && delta) {
+                                full += delta;
+                                anyRes.write?.(`event: delta\ndata: ${JSON.stringify({ text: delta })}\n\n`);
+                            }
+                        }
+                        catch {
+                            // ignore bad frames
+                        }
+                    }
+                }
+            }
+            try {
+                anyRes.write?.(`event: done\ndata: ${JSON.stringify({ raw: full.trim() })}\n\n`);
+            }
+            finally {
+                anyRes.end?.();
+            }
             return;
         }
         const data = (await response.json());
@@ -802,8 +876,6 @@ var newsIngest_1 = require("./newsIngest");
 Object.defineProperty(exports, "newsIngestScheduler", { enumerable: true, get: function () { return newsIngest_1.newsIngestScheduler; } });
 var deleteAccountRequest_1 = require("./deleteAccountRequest");
 Object.defineProperty(exports, "deleteAccountRequest", { enumerable: true, get: function () { return deleteAccountRequest_1.deleteAccountRequest; } });
-var generateNewsImage_1 = require("./generateNewsImage");
-Object.defineProperty(exports, "generateNewsImage", { enumerable: true, get: function () { return generateNewsImage_1.generateNewsImage; } });
 exports.linkedInApi = (0, https_1.onRequest)({ cors: true }, async (req, res) => {
     const path = (req.url || '').split('?')[0];
     if (path.endsWith('/exchange')) {

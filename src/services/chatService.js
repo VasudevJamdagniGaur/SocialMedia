@@ -1769,6 +1769,107 @@ ${text}`;
   }
 
   /**
+   * Generate share suggestions via backend streaming (SSE).
+   * Calls POST /api/linkedin/suggestions?stream=1 and emits incremental text deltas.
+   *
+   * @param {string} reflection
+   * @param {'linkedin'|'x'|'reddit'} platform
+   * @param {{ onDelta?: (text: string) => void, signal?: AbortSignal }} [options]
+   * @returns {Promise<{ eventLabel: string, post: string }[]>}
+   */
+  async generateSocialPostSuggestionsStream(reflection, platform, options = {}) {
+    const onDelta = typeof options.onDelta === 'function' ? options.onDelta : null;
+    const origin = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '';
+    const originLooksLocal =
+      !origin ||
+      origin.includes('localhost') ||
+      origin.startsWith('capacitor://') ||
+      origin.startsWith('ionic://') ||
+      origin.startsWith('file://');
+    const candidates = originLooksLocal
+      ? ['https://deitedatabase.web.app', 'https://deitedatabase.firebaseapp.com']
+      : [origin, 'https://deitedatabase.web.app', 'https://deitedatabase.firebaseapp.com'];
+
+    let lastErr = null;
+    for (const apiBase of candidates) {
+      if (!apiBase) continue;
+      try {
+        const res = await fetch(`${apiBase}/api/linkedin/suggestions?stream=1`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+          body: JSON.stringify({ reflection: (reflection || '').trim(), platform }),
+          signal: options.signal,
+        });
+        if (!res.ok || !res.body) {
+          const t = await res.text().catch(() => '');
+          lastErr = new Error(`Suggestions stream failed: ${res.status} ${t.slice(0, 160)}. URL=${apiBase}/api/linkedin/suggestions?stream=1`);
+          continue;
+        }
+
+        const decoder = new TextDecoder();
+        const reader = res.body.getReader();
+        let buf = '';
+        let fullRaw = '';
+
+        const emitDelta = (s) => {
+          if (!s) return;
+          fullRaw += s;
+          if (onDelta) onDelta(s);
+        };
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+
+          // SSE frames separated by blank line
+          let idx;
+          while ((idx = buf.indexOf('\n\n')) !== -1) {
+            const frame = buf.slice(0, idx);
+            buf = buf.slice(idx + 2);
+            const lines = frame.split('\n');
+            let eventName = '';
+            let dataLine = '';
+            for (const line of lines) {
+              if (line.startsWith('event:')) eventName = line.slice(6).trim();
+              if (line.startsWith('data:')) dataLine += line.slice(5).trim();
+            }
+            if (!dataLine) continue;
+            try {
+              const payload = JSON.parse(dataLine);
+              if (eventName === 'delta' && typeof payload.text === 'string') {
+                emitDelta(payload.text);
+              } else if (eventName === 'done') {
+                const raw = typeof payload.raw === 'string' ? payload.raw : fullRaw;
+                const parsed = this._parseShareSuggestionModelOutput((raw || '').trim(), reflection);
+                return Array.isArray(parsed) && parsed.length ? parsed : [{ eventLabel: 'Reflection', post: (reflection || '').trim() }];
+              }
+            } catch {
+              // ignore malformed frames
+            }
+          }
+        }
+
+        // If stream ended without done, parse whatever we got.
+        const parsed = this._parseShareSuggestionModelOutput((fullRaw || '').trim(), reflection);
+        return Array.isArray(parsed) && parsed.length ? parsed : [{ eventLabel: 'Reflection', post: (reflection || '').trim() }];
+      } catch (e) {
+        const msg = e && (e.message || String(e)) ? (e.message || String(e)) : 'unknown';
+        lastErr = new Error(`Suggestions stream unreachable: ${msg}. URL=${apiBase}/api/linkedin/suggestions?stream=1`);
+        continue;
+      }
+    }
+
+    // Fall back to non-streaming logic if stream endpoint isn't reachable.
+    if (originLooksLocal && lastErr) {
+      const trimmed = (reflection || '').trim();
+      if (trimmed) return [{ eventLabel: 'Reflection', post: trimmed }];
+      throw lastErr;
+    }
+    return this.generateSocialPostSuggestions(reflection, platform);
+  }
+
+  /**
    * Social post suggestions for a news article — always uses OpenAI (skips /api/linkedin/suggestions)
    * so we never surface the internal prompt text as the post body on native/local builds.
    * LinkedIn: 3–6 angle-diverse posts (80–150 words), JSON with angles + posts; `eventLabel` from angle `type`.

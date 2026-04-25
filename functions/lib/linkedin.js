@@ -19,35 +19,15 @@ var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (
 }) : function(o, v) {
     o["default"] = v;
 });
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getLinkedInConfig = getLinkedInConfig;
-exports.exchangeCodeForToken = exchangeCodeForToken;
-exports.getLinkedInPersonUrn = getLinkedInPersonUrn;
-exports.storeLinkedInToken = storeLinkedInToken;
-exports.getLinkedInAccessToken = getLinkedInAccessToken;
-exports.registerImageUpload = registerImageUpload;
-exports.uploadImageToLinkedIn = uploadImageToLinkedIn;
-exports.getLinkedInAssetStatus = getLinkedInAssetStatus;
-exports.waitForLinkedInAssetAvailable = waitForLinkedInAssetAvailable;
-exports.createLinkedInUgcPost = createLinkedInUgcPost;
-exports.getLinkedInPostAnalytics = getLinkedInPostAnalytics;
+exports.getLinkedInPostAnalytics = exports.createLinkedInUgcPost = exports.waitForLinkedInAssetAvailable = exports.getLinkedInAssetStatus = exports.uploadImageToLinkedIn = exports.registerImageUpload = exports.getLinkedInAccessToken = exports.storeLinkedInToken = exports.getLinkedInPersonUrn = exports.exchangeCodeForToken = exports.getLinkedInConfig = void 0;
 const admin = __importStar(require("firebase-admin"));
 const firebase_functions_1 = require("firebase-functions");
 const REDIRECT_URI = 'https://deitedatabase.firebaseapp.com/auth/linkedin/callback';
@@ -64,6 +44,7 @@ function getLinkedInConfig() {
     const clientSecret = (process.env.LINKEDIN_CLIENT_SECRET || '').trim();
     return { clientId, clientSecret, redirectUri: REDIRECT_URI };
 }
+exports.getLinkedInConfig = getLinkedInConfig;
 /**
  * Exchange authorization code for access token.
  */
@@ -91,6 +72,7 @@ async function exchangeCodeForToken(code) {
     }
     return (await res.json());
 }
+exports.exchangeCodeForToken = exchangeCodeForToken;
 /**
  * Get current member's person URN (e.g. urn:li:person:abc123).
  */
@@ -112,6 +94,7 @@ async function getLinkedInPersonUrn(accessToken) {
         throw new Error('LinkedIn /me did not return id');
     return `urn:li:person:${id}`;
 }
+exports.getLinkedInPersonUrn = getLinkedInPersonUrn;
 /**
  * Store LinkedIn token in Firestore: users/{uid}.linkedin (accessToken, expiresAt).
  * Caller may also set linkedinPersonUrn after getLinkedInPersonUrn().
@@ -127,6 +110,7 @@ async function storeLinkedInToken(uid, accessToken, expiresIn) {
         },
     }, { merge: true });
 }
+exports.storeLinkedInToken = storeLinkedInToken;
 /**
  * Get valid LinkedIn access token for user from Firestore.
  * Returns null if missing or expired (within 5 min buffer).
@@ -142,6 +126,7 @@ async function getLinkedInAccessToken(uid) {
         return null;
     return linkedin.accessToken;
 }
+exports.getLinkedInAccessToken = getLinkedInAccessToken;
 /**
  * Step 1: Register image upload with LinkedIn.
  */
@@ -179,6 +164,7 @@ async function registerImageUpload(accessToken, personUrn, fileSizeBytes) {
         throw new Error('LinkedIn registerUpload response missing uploadUrl or asset');
     return { uploadUrl, asset };
 }
+exports.registerImageUpload = registerImageUpload;
 /**
  * Step 2: Upload image binary to LinkedIn uploadUrl.
  */
@@ -197,6 +183,7 @@ async function uploadImageToLinkedIn(accessToken, uploadUrl, imageBuffer, conten
         throw new Error(`LinkedIn image upload failed: ${res.status}`);
     }
 }
+exports.uploadImageToLinkedIn = uploadImageToLinkedIn;
 const LINKEDIN_REST_ASSETS = 'https://api.linkedin.com/rest/assets';
 /**
  * Extract asset id from URN (urn:li:digitalmediaAsset:XXXX -> XXXX).
@@ -230,6 +217,7 @@ async function getLinkedInAssetStatus(accessToken, assetUrn) {
     const status = data.recipes?.[0]?.status ?? 'UNKNOWN';
     return status;
 }
+exports.getLinkedInAssetStatus = getLinkedInAssetStatus;
 /**
  * Poll asset status until AVAILABLE or timeout. Required so the post is actually visible;
  * creating ugcPost before the asset is AVAILABLE can return 201 but the post won't appear.
@@ -249,6 +237,7 @@ async function waitForLinkedInAssetAvailable(accessToken, assetUrn, options = {}
     }
     throw new Error('LinkedIn asset did not become AVAILABLE in time');
 }
+exports.waitForLinkedInAssetAvailable = waitForLinkedInAssetAvailable;
 /**
  * Step 3: Create UGC post with caption and image asset.
  */
@@ -301,6 +290,7 @@ async function createLinkedInUgcPost(accessToken, personUrn, caption, assetUrn) 
         throw new Error('LinkedIn ugcPosts did not return post id (body or x-restli-id)');
     return id;
 }
+exports.createLinkedInUgcPost = createLinkedInUgcPost;
 /** UGC post URN for social metadata (id from API may be full URN or numeric). */
 function toUgcPostUrn(id) {
     if (!id)
@@ -343,4 +333,5 @@ async function getLinkedInPostAnalytics(accessToken, ugcPostIdOrUrn) {
         lastFetchedAt: Date.now(),
     };
 }
+exports.getLinkedInPostAnalytics = getLinkedInPostAnalytics;
 //# sourceMappingURL=linkedin.js.map
