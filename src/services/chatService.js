@@ -1771,8 +1771,9 @@ ${text}`;
   /**
    * Social post suggestions for a news article — always uses OpenAI (skips /api/linkedin/suggestions)
    * so we never surface the internal prompt text as the post body on native/local builds.
-   * LinkedIn: 3–6 angle-diverse posts (80–150 words), JSON with angles + posts; `eventLabel` is derived from angle `type`.
-   * X / Reddit: 1–3 shorter posts, legacy `{ eventLabel, post }` JSON.
+   * LinkedIn: 3–6 angle-diverse posts (80–150 words), JSON with angles + posts; `eventLabel` from angle `type`.
+   * X: 5–10 tweets (≤220 chars), JSON `{ posts: [{ type, content }] }`; `eventLabel` from tweet style `type`.
+   * Reddit: 1–3 posts, legacy `{ eventLabel, post }` JSON.
    * @param {{ title: string, url: string, description?: string, source?: string }} article
    * @param {'linkedin'|'x'|'reddit'} platform
    * @returns {Promise<{ eventLabel: string, post: string }[]>}
@@ -2064,7 +2065,7 @@ ${text}`;
   }
 
   /**
-   * Maps LinkedIn angle slug → short card label on ShareSuggestionsPage.
+   * Maps LinkedIn angle slug → card label (full “take” phrase on ShareSuggestionsPage).
    * @param {string} type
    * @returns {string}
    */
@@ -2073,15 +2074,18 @@ ${text}`;
       .trim()
       .toLowerCase();
     const map = {
-      insight: 'Insight',
-      contrarian: 'Contrarian',
-      actionable: 'Actionable',
-      business: 'Business',
-      leadership: 'Leadership',
-      prediction: 'Future',
-      ethical: 'Ethical',
+      insight: 'Insight / Learning',
+      contrarian: 'Contrarian / Debate',
+      actionable: 'Actionable / What next',
+      business: 'Business / Startup perspective',
+      leadership: 'Leadership angle',
+      prediction: 'Future prediction',
+      ethical: 'Ethical concern',
     };
-    return map[t] || (t ? t.charAt(0).toUpperCase() + t.slice(1) : 'News');
+    if (map[t]) return map[t];
+    if (!t) return '';
+    const words = t.replace(/_/g, ' ').trim();
+    return words ? `Other perspective: ${words.charAt(0).toUpperCase()}${words.slice(1)}` : '';
   }
 
   /**
@@ -2143,6 +2147,99 @@ Rules for JSON:
 - "content" is only the text someone would publish on LinkedIn (no labels like "Post 1:" inside content).`;
   }
 
+  /**
+   * Maps X tweet style slug → card label on ShareSuggestionsPage.
+   * @param {string} type
+   * @returns {string}
+   */
+  _xNewsStyleTypeToEventLabel(type) {
+    const t = String(type || '')
+      .trim()
+      .toLowerCase();
+    const map = {
+      funny: 'Funny',
+      sarcastic: 'Sarcastic',
+      supportive: 'Supportive',
+      critical: 'Critical / skeptical',
+      relatable: 'Relatable',
+      shock: 'Shock reaction',
+      meme: 'Meme-style',
+      insight: 'Short insight',
+      question: 'Question',
+    };
+    if (map[t]) return map[t];
+    if (!t) return '';
+    const words = t.replace(/_/g, ' ').trim();
+    return words ? `Other: ${words.charAt(0).toUpperCase()}${words.slice(1)}` : '';
+  }
+
+  /**
+   * X (Twitter) only: many short, personality-driven tweets from one news story.
+   * @param {{ title: string, url: string, description?: string, source?: string, articleText: string }} ctx
+   */
+  _buildXNewsArticleSuggestionsUserContent(ctx) {
+    const title = (ctx.title || '').trim();
+    const url = (ctx.url || '').trim();
+    const description = (ctx.description || '').trim();
+    const source = (ctx.source || '').trim();
+    const articleText = (ctx.articleText || '').trim();
+    return `You are generating X (Twitter) posts from a news story.
+
+GOAL:
+Create short, punchy, personality-driven tweets.
+Each tweet should focus on ONE specific idea, reaction, or angle — NOT the full story.
+
+CORE RULE:
+Each tweet = ONE thought, ONE reaction, ONE punch.
+Do NOT try to explain the whole news.
+
+---
+
+Requirements:
+
+1. Generate between 5 and 10 tweets (pick a natural count for this story — vary it; do not always output the same number).
+
+2. Each tweet MUST use a DIFFERENT style/tone. Use these exact "type" string values (one tweet per type you use; no duplicate types in your list):
+   - funny — Funny
+   - sarcastic — Sarcastic
+   - supportive — Supportive
+   - critical — Critical / skeptical
+   - relatable — Relatable
+   - shock — Shock reaction
+   - meme — Meme-style
+   - insight — Short insight
+   - question — Question
+
+3. Each tweet MUST:
+   - Focus on ONE small slice of the news (not a summary of the whole piece)
+   - Be 220 characters or fewer (count characters including line breaks; stay under the limit)
+   - Start with a strong hook
+   - Feel natural and human (not AI-generated)
+   - Avoid repeating the same idea across tweets (different angles, different people’s vibes)
+
+4. Tone: Casual, internet-native, slightly edgy but not offensive, hateful, or targeting protected groups.
+
+5. Style: Short sentences; line breaks when they add punch; emojis optional and sparse; at most 1 hashtag per tweet (optional — many tweets should have zero); rhetorical questions allowed.
+
+6. Good moves: react to one detail only; joke; question one decision; highlight irony; meme-like observation — never a thread that explains the article.
+
+7. Ground truth — only what the story supports; do not invent facts, quotes, or numbers.
+
+8. Do not summarize the news. Do not open with "In the news" or "According to reports."
+
+Story context:
+Title: ${title}
+${source ? `Source: ${source}\n` : ''}${description ? `Summary: ${description}\n` : ''}URL: ${url}
+${articleText ? `\nArticle / thread text:\n${articleText.slice(0, 6000)}\n` : ''}
+
+Output — return ONLY valid JSON (no markdown code fences). Root must be an object with this exact shape:
+{"posts":[{"type":"funny","content":"tweet text only"}]}
+
+Rules:
+- "posts": 5–10 objects; each "type" is one of the allowed slugs; each "type" appears at most once.
+- "content" is ONLY publishable tweet text (no "Tweet 1:" prefix). Under 220 characters each.`;
+  }
+
   async generateNewsArticleShareSuggestions(article, platform) {
     const details = await this.fetchNewsArticleDetails(article);
     const title = (details.title || '').trim();
@@ -2172,6 +2269,7 @@ Rules for JSON:
     const style = platformStyleGuide[platform] || platformStyleGuide.linkedin;
 
     const isLinkedInNews = platform === 'linkedin';
+    const isXNews = platform === 'x';
     const userContent = isLinkedInNews
       ? this._buildLinkedInNewsArticleSuggestionsUserContent({
           title,
@@ -2180,7 +2278,15 @@ Rules for JSON:
           source,
           articleText,
         })
-      : `Write social posts for ${platformLabel} as if the poster just learned this from their news (feed, Reddit, alerts — whatever fits) and is sharing their reaction and opinion — NOT writing a news summary or explainer.
+      : isXNews
+        ? this._buildXNewsArticleSuggestionsUserContent({
+            title,
+            url,
+            description,
+            source,
+            articleText,
+          })
+        : `Write social posts for ${platformLabel} as if the poster just learned this from their news (feed, Reddit, alerts — whatever fits) and is sharing their reaction and opinion — NOT writing a news summary or explainer.
 
 ${style}
 
@@ -2205,8 +2311,8 @@ Return ONLY valid JSON with this exact shape (no markdown fences):
         const vTimeout = setTimeout(() => vController.abort(), 45000);
         raw = await this.callVertexGenerateContent({
           prompt: userContent,
-          temperature: isLinkedInNews ? 0.68 : 0.62,
-          maxOutputTokens: isLinkedInNews ? 8192 : 4096,
+          temperature: isLinkedInNews ? 0.68 : isXNews ? 0.78 : 0.62,
+          maxOutputTokens: isLinkedInNews ? 8192 : isXNews ? 6144 : 4096,
           signal: vController.signal,
         });
         clearTimeout(vTimeout);
@@ -2221,8 +2327,8 @@ Return ONLY valid JSON with this exact shape (no markdown fences):
       const requestBody = {
         model: this.openaiModelName,
         messages: [{ role: 'user', content: userContent }],
-        temperature: isLinkedInNews ? 0.68 : 0.62,
-        max_tokens: isLinkedInNews ? 4500 : 2000,
+        temperature: isLinkedInNews ? 0.68 : isXNews ? 0.78 : 0.62,
+        max_tokens: isLinkedInNews ? 4500 : isXNews ? 3500 : 2000,
         response_format: { type: 'json_object' },
       };
 
@@ -2288,7 +2394,8 @@ Return ONLY valid JSON with this exact shape (no markdown fences):
         /\bHUMAN STYLE\b/i.test(t) ||
         /\bCONTENT STYLE\b/i.test(t) ||
         /\bIMPORTANT\b/i.test(t) ||
-        /Create high-quality, diverse, thought-provoking LinkedIn posts/i.test(t)
+        /Create high-quality, diverse, thought-provoking LinkedIn posts/i.test(t) ||
+        /You are generating X \(Twitter\) posts from a news story/i.test(t)
       );
     };
 
@@ -2318,14 +2425,19 @@ Return ONLY valid JSON with this exact shape (no markdown fences):
       .map((row) => {
         const postFromContent = typeof row?.content === 'string' ? row.content.trim() : '';
         const postFromLegacy = typeof row?.post === 'string' ? row.post.trim() : '';
-        const postRaw = postFromContent || postFromLegacy;
-        const post = stripPromptLeak(postRaw);
-        if (!post || post.length < 8 || looksLikeInternalPrompt(post)) return null;
+        let post = stripPromptLeak(postFromContent || postFromLegacy);
+        if (platform === 'x' && post.length > 220) {
+          post = post.slice(0, 220).trimEnd();
+        }
+        const minPostLen = platform === 'x' ? 5 : 8;
+        if (!post || post.length < minPostLen || looksLikeInternalPrompt(post)) return null;
         const angleType = typeof row?.type === 'string' ? row.type.trim() : '';
-        const ev =
-          typeof row?.eventLabel === 'string' && row.eventLabel.trim()
-            ? row.eventLabel.trim()
-            : this._newsAngleTypeToEventLabel(angleType) || 'News';
+        let ev = typeof row?.eventLabel === 'string' && row.eventLabel.trim() ? row.eventLabel.trim() : '';
+        if (!ev) {
+          if (platform === 'x') ev = this._xNewsStyleTypeToEventLabel(angleType) || 'News';
+          else if (platform === 'linkedin') ev = this._newsAngleTypeToEventLabel(angleType) || 'News';
+          else ev = 'News';
+        }
         return { eventLabel: ev, post };
       })
       .filter(Boolean);

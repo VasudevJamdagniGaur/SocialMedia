@@ -74,6 +74,13 @@ const getCachedImageForPost = (text) => {
 /** Normalize suggestion/caption text for stable "posted" matching across reloads. */
 const normSuggestionPost = (s) => (s || '').replace(/\s+/g, ' ').trim();
 
+/** Keep API angle / take labels (LinkedIn); only use News/Tea when no label was stored. */
+const coalesceNewsSuggestionEventLabel = (item, fallback) => {
+  if (!item || typeof item !== 'object') return fallback;
+  const el = typeof item.eventLabel === 'string' ? item.eventLabel.trim() : '';
+  return el || fallback;
+};
+
 const SHARE_POSTED_STORAGE_PREFIX = 'share_suggestions_posted_v1';
 
 const sharePostedLocalKey = (uid, dateStr, platform) => {
@@ -1167,10 +1174,13 @@ export default function ShareSuggestionsPage() {
         const cleanedCached = isTeaShareFlow
           ? normalizedCached.map((item) => ({
               ...item,
-              eventLabel: newsShareEventLabel,
+              eventLabel: coalesceNewsSuggestionEventLabel(item, newsShareEventLabel),
               post: sanitizeTeaShareText(String(item?.post || '')),
             }))
-          : normalizedCached.map((item) => ({ ...item, eventLabel: newsShareEventLabel }));
+          : normalizedCached.map((item) => ({
+              ...item,
+              eventLabel: coalesceNewsSuggestionEventLabel(item, newsShareEventLabel),
+            }));
 
         setPlatformSuggestions(mergePostedIntoSuggestions(cleanedCached, postedSet, captionOverrides));
         setSelectedIndex(0);
@@ -1289,7 +1299,7 @@ export default function ShareSuggestionsPage() {
         const posts = isNewsShareMode
           ? postsRaw.map((item) =>
               typeof item === 'object' && item?.post != null
-                ? { ...item, eventLabel: newsShareEventLabel }
+                ? { ...item, eventLabel: coalesceNewsSuggestionEventLabel(item, newsShareEventLabel) }
                 : { eventLabel: newsShareEventLabel, post: String(item || baselineShareText) }
             )
           : postsRaw;
