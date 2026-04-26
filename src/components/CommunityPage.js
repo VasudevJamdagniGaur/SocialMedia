@@ -118,7 +118,6 @@ export default function CommunityPage() {
   const [isPosting, setIsPosting] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState('x'); // 'x' | 'linkedin' | 'reddit'
   const [mediaItems, setMediaItems] = useState([]); // [{ id: string, src: string, source: 'device' | 'url' }]
-  const [mediaUrlDraft, setMediaUrlDraft] = useState('');
   const [communityPosts, setCommunityPosts] = useState([]);
   const [postComments, setPostComments] = useState({});
   const [postLikes, setPostLikes] = useState({});
@@ -128,7 +127,6 @@ export default function CommunityPage() {
   const [replyText, setReplyText] = useState(''); // Reply input text
   const [postImage, setPostImage] = useState(null);
   const [postImageUrl, setPostImageUrl] = useState('');
-  const [uploadOption, setUploadOption] = useState(null); // 'device' or 'url'
   const [showFAB, setShowFAB] = useState(true);
   const [lastScrollY, setLastScrollY] = useState(0);
   const [activeMembersCount, setActiveMembersCount] = useState(0);
@@ -951,9 +949,7 @@ export default function CommunityPage() {
       setPostContent('');
       setPostImage(null);
       setPostImageUrl('');
-      setUploadOption(null);
       setMediaItems([]);
-      setMediaUrlDraft('');
       setSelectedPlatform('x');
       setShowCreatePost(false);
     } catch (error) {
@@ -979,12 +975,10 @@ export default function CommunityPage() {
     setPostContent('');
     setSelectedPlatform('x');
     setMediaItems([]);
-    setMediaUrlDraft('');
 
     // Legacy state (kept for backwards compatibility elsewhere in the file)
     setPostImage(null);
     setPostImageUrl('');
-    setUploadOption(null);
   };
 
   const addMediaFromFiles = (fileList) => {
@@ -1009,17 +1003,6 @@ export default function CommunityPage() {
       reader.onerror = () => {};
       reader.readAsDataURL(file);
     });
-  };
-
-  const addMediaFromUrl = () => {
-    const url = (mediaUrlDraft || '').trim();
-    if (!url) return;
-    if (!validateImageUrl(url)) {
-      alert('Please enter a valid image URL');
-      return;
-    }
-    setMediaItems((prev) => [{ id: `${Date.now()}-${Math.random().toString(16).slice(2)}`, src: url, source: 'url' }, ...prev].slice(0, 10));
-    setMediaUrlDraft('');
   };
 
   const removeMediaItem = (id) => {
@@ -2006,37 +1989,8 @@ export default function CommunityPage() {
                         <span className="text-[12px] font-medium" style={{ color: THREADS.text }}>
                           Upload photos
                         </span>
-                        <span className="text-[11px] mt-1" style={{ color: THREADS.textSecondary }}>
-                          or
-                        </span>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            addMediaFromUrl();
-                          }}
-                          className="mt-1 text-[12px] underline underline-offset-2 hover:opacity-80"
-                          style={{ color: THREADS.accent }}
-                        >
-                          From URL
-                        </button>
                       </div>
                     </label>
-
-                    <div className="mt-3">
-                      <input
-                        type="url"
-                        value={mediaUrlDraft}
-                        onChange={(e) => setMediaUrlDraft(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') addMediaFromUrl();
-                        }}
-                        placeholder="Paste image URL"
-                        className="w-full rounded-xl px-3 py-2 text-[12px] border-none outline-none placeholder:opacity-60"
-                        style={{ background: 'rgba(255,255,255,0.06)', color: THREADS.text }}
-                      />
-                    </div>
                   </div>
 
                   {/* Preview cards */}
