@@ -9,6 +9,90 @@ import { db } from '../firebase/config';
 import { userEventService } from '../services/userEventService';
 import { isAdmin } from '../utils/admin';
 
+function PlatformButton({ label, iconText, selected, onClick, colors }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className="flex items-center justify-center px-3 py-2 rounded-2xl min-w-[56px] transition-all active:scale-[0.99]"
+      style={{
+        background: selected ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.02)',
+        border: `1px solid ${selected ? colors.accent : colors.divider}`,
+        boxShadow: selected ? `0 0 0 1px ${colors.accent}, 0 10px 24px rgba(168, 85, 247, 0.18)` : 'none',
+      }}
+    >
+      <div
+        className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+        style={{
+          background: selected ? 'rgba(168, 85, 247, 0.12)' : 'rgba(255,255,255,0.04)',
+          border: `1px solid ${colors.divider}`,
+          color: selected ? colors.accentHighlight : colors.textSecondary,
+          fontWeight: 700,
+          fontSize: 13,
+        }}
+        aria-hidden
+      >
+        {iconText}
+      </div>
+    </button>
+  );
+}
+
+function SuggestionChip({ label, iconText, onClick, colors }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-2 px-3 py-2 rounded-full text-[12px] transition-colors hover:bg-white/10 active:scale-[0.99]"
+      style={{
+        border: `1px solid ${colors.accent}`,
+        color: colors.accentHighlight,
+        background: 'rgba(168, 85, 247, 0.05)',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      <span
+        className="w-5 h-5 rounded-full inline-flex items-center justify-center"
+        style={{ background: 'rgba(168, 85, 247, 0.16)', color: colors.accentHighlight, fontSize: 12 }}
+        aria-hidden
+      >
+        {iconText}
+      </span>
+      {label}
+    </button>
+  );
+}
+
+function MediaCard({ src, onRemove, colors }) {
+  return (
+    <div
+      className="relative w-[110px] h-[110px] rounded-2xl overflow-hidden flex-shrink-0"
+      style={{ border: `1px solid ${colors.divider}`, background: 'rgba(255,255,255,0.03)' }}
+    >
+      <img
+        src={src}
+        alt=""
+        className="w-full h-full object-cover"
+        referrerPolicy="no-referrer"
+        onError={(e) => {
+          e.currentTarget.style.display = 'none';
+        }}
+      />
+      <button
+        type="button"
+        onClick={onRemove}
+        className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center"
+        style={{ background: 'rgba(0,0,0,0.55)', border: `1px solid ${colors.divider}` }}
+        aria-label="Remove media"
+      >
+        <X className="w-4 h-4" style={{ color: colors.text }} />
+      </button>
+    </div>
+  );
+}
+
 export default function CommunityPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -32,6 +116,10 @@ export default function CommunityPage() {
   const [showCreatePost, setShowCreatePost] = useState(false);
   const [postContent, setPostContent] = useState('');
   const [isPosting, setIsPosting] = useState(false);
+  const [selectedPlatform, setSelectedPlatform] = useState('x'); // 'x' | 'linkedin' | 'instagram'
+  const [mediaItems, setMediaItems] = useState([]); // [{ id: string, src: string, source: 'device' | 'url' }]
+  const [mediaUrlDraft, setMediaUrlDraft] = useState('');
+  const [showCreatePostPreview, setShowCreatePostPreview] = useState(false);
   const [communityPosts, setCommunityPosts] = useState([]);
   const [postComments, setPostComments] = useState({});
   const [postLikes, setPostLikes] = useState({});
@@ -808,7 +896,8 @@ export default function CommunityPage() {
   };
 
   const handleCreatePost = async () => {
-    if (!postContent.trim() && !postImage && !postImageUrl.trim()) return;
+    const firstMediaSrc = mediaItems?.[0]?.src || postImage || (postImageUrl?.trim?.() ? postImageUrl.trim() : null);
+    if (!postContent.trim() && !firstMediaSrc) return;
     
     const user = getCurrentUser();
     if (!user) {
@@ -816,8 +905,8 @@ export default function CommunityPage() {
       return;
     }
 
-    // Validate URL if provided
-    if (postImageUrl.trim() && !validateImageUrl(postImageUrl.trim())) {
+    // Validate URL if provided (legacy + new media flow)
+    if (firstMediaSrc && typeof firstMediaSrc === 'string' && firstMediaSrc.startsWith('http') && !validateImageUrl(firstMediaSrc)) {
       alert('Please enter a valid image URL');
       return;
     }
@@ -832,7 +921,7 @@ export default function CommunityPage() {
         likes: 0,
         comments: [],
         profilePicture: profilePicture || null,
-        image: postImage || postImageUrl.trim() || null
+        image: firstMediaSrc || null
       };
 
       await addDoc(collection(db, 'communityPosts'), postData);
@@ -854,6 +943,10 @@ export default function CommunityPage() {
       setPostImage(null);
       setPostImageUrl('');
       setUploadOption(null);
+      setMediaItems([]);
+      setMediaUrlDraft('');
+      setSelectedPlatform('x');
+      setShowCreatePostPreview(false);
       setShowCreatePost(false);
     } catch (error) {
       console.error('Error creating post:', error);
@@ -861,6 +954,81 @@ export default function CommunityPage() {
     } finally {
       setIsPosting(false);
     }
+  };
+
+  const CREATE_POST = {
+    maxChars: 500,
+    platforms: [
+      { id: 'x', label: 'X (Twitter)', icon: 'X' },
+      { id: 'linkedin', label: 'LinkedIn', icon: 'in' },
+      { id: 'instagram', label: 'Instagram', icon: 'IG' },
+    ],
+    suggestions: [
+      { id: 'viral', label: 'Make it viral', icon: '↗', append: '\n\nMake it viral:' },
+      { id: 'hook', label: 'Add a hook', icon: '🎣', append: '\n\nHook idea:' },
+      { id: 'sarcastic', label: 'Make it sarcastic', icon: '😏', append: '\n\nSarcastic angle:' },
+    ],
+  };
+
+  const resetCreatePostState = () => {
+    setShowCreatePost(false);
+    setPostContent('');
+    setSelectedPlatform('x');
+    setMediaItems([]);
+    setMediaUrlDraft('');
+    setShowCreatePostPreview(false);
+
+    // Legacy state (kept for backwards compatibility elsewhere in the file)
+    setPostImage(null);
+    setPostImageUrl('');
+    setUploadOption(null);
+  };
+
+  const handleAppendSuggestion = (appendText) => {
+    setPostContent((prev) => {
+      const base = prev || '';
+      const next = `${base}${base.trim().length ? '' : ''}${appendText}`;
+      return next.slice(0, CREATE_POST.maxChars);
+    });
+  };
+
+  const addMediaFromFiles = (fileList) => {
+    const files = Array.from(fileList || []).filter(Boolean);
+    if (!files.length) return;
+    const imageFiles = files.filter((f) => f.type?.startsWith?.('image/'));
+    if (!imageFiles.length) return;
+
+    const tooLarge = imageFiles.find((f) => (f.size || 0) > 10 * 1024 * 1024);
+    if (tooLarge) {
+      alert('Each image must be less than 10MB');
+      return;
+    }
+
+    imageFiles.forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const src = ev.target?.result;
+        if (!src) return;
+        setMediaItems((prev) => [{ id: `${Date.now()}-${Math.random().toString(16).slice(2)}`, src, source: 'device' }, ...prev].slice(0, 10));
+      };
+      reader.onerror = () => {};
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const addMediaFromUrl = () => {
+    const url = (mediaUrlDraft || '').trim();
+    if (!url) return;
+    if (!validateImageUrl(url)) {
+      alert('Please enter a valid image URL');
+      return;
+    }
+    setMediaItems((prev) => [{ id: `${Date.now()}-${Math.random().toString(16).slice(2)}`, src: url, source: 'url' }, ...prev].slice(0, 10));
+    setMediaUrlDraft('');
+  };
+
+  const removeMediaItem = (id) => {
+    setMediaItems((prev) => prev.filter((m) => m.id !== id));
   };
 
   const handlePostLike = async (postId) => {
@@ -1692,7 +1860,7 @@ export default function CommunityPage() {
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ backgroundColor: 'rgba(0, 0, 0, 0.7)' }}
-          onClick={() => setShowCreatePost(false)}
+          onClick={resetCreatePostState}
         >
           <div
             className="rounded-2xl p-6 w-full max-w-sm relative"
@@ -1703,170 +1871,286 @@ export default function CommunityPage() {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold" style={{ color: THREADS.text }}>
-                Create a Post
-              </h2>
+            {/* Top bar */}
+            <div className="flex items-center justify-between mb-5">
               <button
-                onClick={() => {
-                  setShowCreatePost(false);
-                  setPostContent('');
-                  setPostImage(null);
-                  setPostImageUrl('');
-                  setUploadOption(null);
-                }}
-                className="p-1 rounded-full hover:opacity-80 transition-opacity hover:bg-white/10"
+                type="button"
+                onClick={resetCreatePostState}
+                className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors"
+                aria-label="Close"
               >
-                <XCircle className="w-5 h-5" style={{ color: THREADS.textSecondary }} />
+                <X className="w-5 h-5" style={{ color: THREADS.textSecondary }} />
               </button>
+              <h2 className="text-[18px] font-semibold tracking-tight" style={{ color: THREADS.text }}>
+                Create Post <span style={{ color: THREADS.accent }}>✨</span>
+              </h2>
+              <div className="w-9 h-9" />
             </div>
 
-            <textarea
-              value={postContent}
-              onChange={(e) => setPostContent(e.target.value)}
-              placeholder="What's on your mind?"
-              rows={6}
-              className="w-full rounded-xl px-4 py-3 text-sm border-none outline-none resize-none mb-4 placeholder:opacity-60"
-              style={{
-                background: 'rgba(255,255,255,0.06)',
-                color: THREADS.text,
-              }}
-            />
-
-            {/* Photo Upload Options */}
-            {!uploadOption && (
-              <div className="mb-4">
-                <p className="text-sm mb-3" style={{ color: THREADS.textSecondary }}>
-                  Add a photo:
+            {/* Scrollable content */}
+            <div
+              className="space-y-5 overflow-y-auto pr-1"
+              style={{ maxHeight: 'calc(80vh - 140px)' }}
+            >
+              {/* 1. Platform selection */}
+              <div>
+                <p className="text-[13px] font-medium mb-3" style={{ color: THREADS.text }}>
+                  1. Where are you posting?
                 </p>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={() => setUploadOption('device')}
-                    className="flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all hover:opacity-90"
-                    style={{ borderColor: THREADS.divider, background: 'rgba(255,255,255,0.04)' }}
-                  >
-                    <Image className="w-6 h-6 mb-2" style={{ color: THREADS.accent }} />
-                    <span className="text-xs font-medium" style={{ color: THREADS.text }}>Upload Photo</span>
-                  </button>
-                  <button
-                    onClick={() => setUploadOption('url')}
-                    className="flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all hover:opacity-90"
-                    style={{ borderColor: THREADS.divider, background: 'rgba(255,255,255,0.04)' }}
-                  >
-                    <Link className="w-6 h-6 mb-2" style={{ color: THREADS.accent }} />
-                    <span className="text-xs font-medium" style={{ color: THREADS.text }}>From URL</span>
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Device Upload Option */}
-            {uploadOption === 'device' && (
-              <div className="mb-4">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm" style={{ color: THREADS.textSecondary }}>Upload from device</p>
-                  <button
-                    onClick={() => { setUploadOption(null); setPostImage(null); }}
-                    className="text-xs hover:opacity-80 transition-opacity"
-                    style={{ color: THREADS.textSecondary }}
-                  >
-                    Change option
-                  </button>
-                </div>
-                <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" id="image-upload-input" />
-                <label
-                  htmlFor="image-upload-input"
-                  className="block w-full rounded-xl px-4 py-3 text-sm text-center cursor-pointer transition-all hover:opacity-90"
-                  style={{ background: 'rgba(255,255,255,0.06)', color: THREADS.text, border: `1px solid ${THREADS.divider}` }}
-                >
-                  {postImage ? 'Change Photo' : 'Choose Photo'}
-                </label>
-                {postImage && (
-                  <div className="mt-3 relative">
-                    <img 
-                      src={postImage} 
-                      alt="Preview" 
-                      className="w-full rounded-lg max-h-48 object-cover"
+                <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1">
+                  {CREATE_POST.platforms.map((p) => (
+                    <PlatformButton
+                      key={p.id}
+                      label={p.label}
+                      iconText={p.icon}
+                      selected={selectedPlatform === p.id}
+                      onClick={() => setSelectedPlatform(p.id)}
+                      colors={THREADS}
                     />
-                    <button
-                      onClick={() => setPostImage(null)}
-                      className="absolute top-2 right-2 p-1 rounded-full bg-black/50 hover:bg-black/70 transition-all"
-                    >
-                      <X className="w-4 h-4 text-white" />
-                    </button>
-                  </div>
-                )}
+                  ))}
+                </div>
               </div>
-            )}
 
-            {/* URL Upload Option */}
-            {uploadOption === 'url' && (
-              <div className="mb-4">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm" style={{ color: THREADS.textSecondary }}>Upload from URL</p>
+              {/* 2. Idea input */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-[13px] font-medium" style={{ color: THREADS.text }}>
+                    2. Describe your idea (rough is fine)
+                  </p>
                   <button
-                    onClick={() => { setUploadOption(null); setPostImageUrl(''); }}
-                    className="text-xs hover:opacity-80 transition-opacity"
-                    style={{ color: THREADS.textSecondary }}
+                    type="button"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[12px] hover:bg-white/10 transition-colors"
+                    style={{ color: THREADS.accent, border: `1px solid ${THREADS.divider}`, background: 'rgba(255,255,255,0.02)' }}
+                    onClick={() => {}}
                   >
-                    Change option
+                    <span className="inline-flex items-center justify-center w-4 h-4 rounded-full" style={{ background: `${THREADS.accent}20`, color: THREADS.accent }}>
+                      <span style={{ fontSize: 11, lineHeight: 1 }}>💡</span>
+                    </span>
+                    Tips
                   </button>
                 </div>
-                <input
-                  type="url"
-                  value={postImageUrl}
-                  onChange={(e) => handleImageUrlChange(e.target.value)}
-                  placeholder="https://example.com/image.jpg"
-                  className="w-full rounded-xl px-4 py-3 text-sm border-none outline-none mb-3 placeholder:opacity-60"
-                  style={{ background: 'rgba(255,255,255,0.06)', color: THREADS.text }}
-                />
-                {postImageUrl && (
-                  <div className="relative">
-                    <img 
-                      src={postImageUrl} 
-                      alt="Preview" 
-                      className="w-full rounded-lg max-h-48 object-cover"
-                      onError={(e) => {
-                        e.target.style.display = 'none';
-                        alert('Failed to load image from URL. Please check the URL and try again.');
+
+                <div
+                  className="rounded-2xl p-4"
+                  style={{
+                    background: '#1A1A1A',
+                    border: `1px solid ${THREADS.divider}`,
+                  }}
+                >
+                  <textarea
+                    value={postContent}
+                    onChange={(e) => setPostContent(e.target.value.slice(0, CREATE_POST.maxChars))}
+                    placeholder="Write your idea here..."
+                    rows={5}
+                    className="w-full bg-transparent outline-none resize-none text-[14px] leading-relaxed placeholder:opacity-60"
+                    style={{ color: THREADS.text }}
+                  />
+                  <div className="flex items-center justify-end">
+                    <span className="text-[11px]" style={{ color: THREADS.textSecondary }}>
+                      {(postContent || '').length}/{CREATE_POST.maxChars}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex gap-2 overflow-x-auto no-scrollbar pt-3">
+                  {CREATE_POST.suggestions.map((s) => (
+                    <SuggestionChip
+                      key={s.id}
+                      label={s.label}
+                      iconText={s.icon}
+                      onClick={() => handleAppendSuggestion(s.append)}
+                      colors={THREADS}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* 3. Media upload */}
+              <div>
+                <p className="text-[13px] font-medium mb-3" style={{ color: THREADS.text }}>
+                  3. Add media
+                </p>
+
+                <div className="flex gap-3">
+                  {/* Upload box */}
+                  <div className="flex-shrink-0 w-[150px]">
+                    <input
+                      id="create-post-media-input"
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => {
+                        addMediaFromFiles(e.target.files);
+                        e.target.value = '';
                       }}
                     />
-                    <button
-                      onClick={() => setPostImageUrl('')}
-                      className="absolute top-2 right-2 p-1 rounded-full bg-black/50 hover:bg-black/70 transition-all"
+                    <label
+                      htmlFor="create-post-media-input"
+                      className="w-full h-[110px] rounded-2xl flex flex-col items-center justify-center cursor-pointer select-none"
+                      style={{
+                        border: `1px dashed ${THREADS.accent}`,
+                        background: 'rgba(168, 85, 247, 0.06)',
+                      }}
                     >
-                      <X className="w-4 h-4 text-white" />
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
+                      <div className="w-10 h-10 rounded-2xl flex items-center justify-center mb-2" style={{ background: 'rgba(0,0,0,0.25)', border: `1px solid ${THREADS.divider}` }}>
+                        <Image className="w-5 h-5" style={{ color: THREADS.accent }} />
+                      </div>
+                      <span className="text-[12px] font-medium" style={{ color: THREADS.text }}>
+                        Upload photos
+                      </span>
+                      <span className="text-[11px] mt-1" style={{ color: THREADS.textSecondary }}>
+                        or
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          addMediaFromUrl();
+                        }}
+                        className="mt-1 text-[12px] underline underline-offset-2 hover:opacity-80"
+                        style={{ color: THREADS.accent }}
+                      >
+                        From URL
+                      </button>
+                    </label>
 
-            <div className="flex items-center space-x-3">
+                    <div className="mt-3">
+                      <input
+                        type="url"
+                        value={mediaUrlDraft}
+                        onChange={(e) => setMediaUrlDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') addMediaFromUrl();
+                        }}
+                        placeholder="Paste image URL"
+                        className="w-full rounded-xl px-3 py-2 text-[12px] border-none outline-none placeholder:opacity-60"
+                        style={{ background: 'rgba(255,255,255,0.06)', color: THREADS.text }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Preview cards */}
+                  <div className="flex-1 overflow-x-auto no-scrollbar">
+                    <div className="flex gap-3">
+                      {mediaItems.length === 0 ? (
+                        <div
+                          className="h-[110px] flex items-center justify-center px-4 rounded-2xl"
+                          style={{ border: `1px solid ${THREADS.divider}`, background: 'rgba(255,255,255,0.03)', color: THREADS.textSecondary, minWidth: 180 }}
+                        >
+                          <span className="text-[12px]">No media added yet</span>
+                        </div>
+                      ) : (
+                        mediaItems.map((m) => (
+                          <MediaCard key={m.id} src={m.src} onRemove={() => removeMediaItem(m.id)} colors={THREADS} />
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom actions */}
+            <div className="mt-5 space-y-3">
               <button
+                type="button"
                 onClick={() => {
-                  setShowCreatePost(false);
-                  setPostContent('');
-                  setPostImage(null);
-                  setPostImageUrl('');
-                  setUploadOption(null);
+                  // Placeholder for AI generation hook (future).
+                  // Keeping Firestore post creation available for now:
+                  handleCreatePost();
                 }}
-                className="flex-1 rounded-xl px-4 py-2 text-sm font-medium transition-opacity hover:opacity-80 bg-white/10 text-white"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreatePost}
-                disabled={(!postContent.trim() && !postImage && !postImageUrl.trim()) || isPosting}
-                className="flex-1 rounded-xl px-4 py-2 text-sm font-medium transition-opacity disabled:opacity-50"
+                disabled={(!postContent.trim() && mediaItems.length === 0) || isPosting}
+                className="w-full h-[50px] rounded-2xl font-semibold text-[15px] transition-opacity disabled:opacity-50"
                 style={{
-                  backgroundColor: (postContent.trim() || postImage || postImageUrl.trim()) && !isPosting ? THREADS.accent : THREADS.divider,
                   color: '#fff',
+                  background: `linear-gradient(135deg, ${THREADS.accent} 0%, ${THREADS.accentHighlight} 100%)`,
+                  boxShadow: `0 10px 30px rgba(168, 85, 247, 0.25)`,
                 }}
               >
-                {isPosting ? 'Posting...' : 'Post'}
+                {isPosting ? 'Generating…' : '✨ Generate Post'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowCreatePostPreview(true)}
+                className="w-full h-[46px] rounded-2xl font-medium text-[14px] transition-colors"
+                style={{
+                  color: THREADS.text,
+                  background: 'rgba(255,255,255,0.03)',
+                  border: `1px solid ${THREADS.divider}`,
+                }}
+              >
+                👁 Preview
               </button>
             </div>
+
+            {/* Preview overlay */}
+            {showCreatePostPreview && (
+              <div
+                className="absolute inset-0 rounded-2xl p-5"
+                style={{
+                  background: THREADS.bgSecondary,
+                  border: `1px solid ${THREADS.divider}`,
+                  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6)',
+                }}
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-[16px] font-semibold" style={{ color: THREADS.text }}>
+                    Preview
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setShowCreatePostPreview(false)}
+                    className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors"
+                    aria-label="Close preview"
+                  >
+                    <X className="w-5 h-5" style={{ color: THREADS.textSecondary }} />
+                  </button>
+                </div>
+
+                <div className="space-y-3 overflow-y-auto pr-1" style={{ maxHeight: 'calc(80vh - 220px)' }}>
+                  <div className="text-[12px]" style={{ color: THREADS.textSecondary }}>
+                    Platform: <span style={{ color: THREADS.text }}>{selectedPlatform}</span>
+                  </div>
+                  <div className="rounded-2xl p-4" style={{ background: '#1A1A1A', border: `1px solid ${THREADS.divider}` }}>
+                    <p className="text-[14px] whitespace-pre-wrap" style={{ color: THREADS.text }}>
+                      {postContent?.trim?.() ? postContent : '—'}
+                    </p>
+                  </div>
+                  {mediaItems.length > 0 && (
+                    <div className="flex gap-3 overflow-x-auto no-scrollbar">
+                      {mediaItems.slice(0, 10).map((m) => (
+                        <div key={m.id} className="w-[110px] h-[110px] rounded-2xl overflow-hidden flex-shrink-0" style={{ border: `1px solid ${THREADS.divider}` }}>
+                          <img src={m.src} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-5 grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreatePostPreview(false)}
+                    className="h-[46px] rounded-2xl font-medium text-[14px] hover:opacity-90 transition-opacity"
+                    style={{ background: 'rgba(255,255,255,0.06)', color: THREADS.text, border: `1px solid ${THREADS.divider}` }}
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCreatePost}
+                    disabled={(!postContent.trim() && mediaItems.length === 0) || isPosting}
+                    className="h-[46px] rounded-2xl font-semibold text-[14px] transition-opacity disabled:opacity-50"
+                    style={{ background: THREADS.accent, color: '#fff' }}
+                  >
+                    {isPosting ? 'Posting…' : 'Post'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
