@@ -674,6 +674,17 @@ export default function ShareSuggestionsPage() {
   const location = useLocation();
   const { isDarkMode } = useTheme();
   const state = location.state || {};
+  const suggestionsOnly = !!state.suggestionsOnly;
+  const myPresenceEnabled = !suggestionsOnly;
+  const mediaFromStateRaw = state.media;
+  const mediaFromState =
+    Array.isArray(mediaFromStateRaw)
+      ? mediaFromStateRaw
+          .filter((x) => typeof x === 'string' && x.trim())
+          .map((x) => x.trim())
+          .filter((x) => x.startsWith('data:image') || x.startsWith('http://') || x.startsWith('https://'))
+          .slice(0, 6)
+      : [];
   const reflectionFromState = (state.reflection ?? '').trim();
   const newsArticleFromState = normalizeNewsArticle(state.newsArticle);
   const isNewsShareMode = !!newsArticleFromState;
@@ -968,14 +979,16 @@ export default function ShareSuggestionsPage() {
             title: 'Share image',
             dialogTitle: 'Share',
           });
-          const imageForStorage = prep.preparedImageDataUrl || rawImage || null;
-          setPendingMyPresenceShare({
-            plat: selectedPlatform || 'other',
-            caption: t,
-            imageDataUrlForStorage: imageForStorage,
-            skipCompression: suggestionImagesFromChat[selectedIndex],
-          });
-          triggerPostShareConfirmation();
+          if (myPresenceEnabled) {
+            const imageForStorage = prep.preparedImageDataUrl || rawImage || null;
+            setPendingMyPresenceShare({
+              plat: selectedPlatform || 'other',
+              caption: t,
+              imageDataUrlForStorage: imageForStorage,
+              skipCompression: suggestionImagesFromChat[selectedIndex],
+            });
+            triggerPostShareConfirmation();
+          }
           setSharePanelOpen(false);
           return;
         } catch (e) {
@@ -1005,14 +1018,16 @@ export default function ShareSuggestionsPage() {
               await navigator.share(payload);
             }
           }
-          const imageForStorage = prep.preparedImageDataUrl || rawImage || null;
-          setPendingMyPresenceShare({
-            plat: selectedPlatform || 'other',
-            caption: t,
-            imageDataUrlForStorage: imageForStorage,
-            skipCompression: suggestionImagesFromChat[selectedIndex],
-          });
-          triggerPostShareConfirmation();
+          if (myPresenceEnabled) {
+            const imageForStorage = prep.preparedImageDataUrl || rawImage || null;
+            setPendingMyPresenceShare({
+              plat: selectedPlatform || 'other',
+              caption: t,
+              imageDataUrlForStorage: imageForStorage,
+              skipCompression: suggestionImagesFromChat[selectedIndex],
+            });
+            triggerPostShareConfirmation();
+          }
           setSharePanelOpen(false);
           return;
         } catch (e) {
@@ -1115,15 +1130,17 @@ export default function ShareSuggestionsPage() {
         return;
       }
 
-      const imageForStorage = imageDataUrl || rawImage || null;
-      // Defer "My Presence" persistence until user confirms.
-      setPendingMyPresenceShare({
-        plat: selectedPlatform || 'other',
-                    caption: t,
-                    imageDataUrlForStorage: imageForStorage,
-                    skipCompression: suggestionImagesFromChat[selectedIndex],
-      });
-      triggerPostShareConfirmation();
+      if (myPresenceEnabled) {
+        const imageForStorage = imageDataUrl || rawImage || null;
+        // Defer "My Presence" persistence until user confirms.
+        setPendingMyPresenceShare({
+          plat: selectedPlatform || 'other',
+          caption: t,
+          imageDataUrlForStorage: imageForStorage,
+          skipCompression: suggestionImagesFromChat[selectedIndex],
+        });
+        triggerPostShareConfirmation();
+      }
       setSharePanelOpen(false);
     } catch (e) {
       setShareErrorToastMessage(`Share failed: ${formatShareError(e)}`);
@@ -1376,6 +1393,18 @@ export default function ShareSuggestionsPage() {
         const postsWithText = cleanedPosts.map((item) =>
           (typeof item === 'object' && item?.post != null ? item.post : String(item || '')).trim()
         );
+
+        // If user provided media (e.g., from Create Post), prefer it for all suggestions.
+        // This keeps the exact uploaded photo instead of generating a new one.
+        if (!isNewsShareMode && mediaFromState.length) {
+          const first = mediaFromState[0] || null;
+          setSuggestionImageUrls(postsWithText.map(() => first));
+          setSuggestionImageOptions(postsWithText.map(() => mediaFromState));
+          setSuggestionActiveImageIdx(postsWithText.map(() => 0));
+          setSuggestionImagesFromChat(postsWithText.map(() => !!first && first.startsWith('data:image')));
+          setIsLoadingImages(false);
+          return;
+        }
 
         if (isNewsShareMode) {
           const img = effectiveNewsArticle?.image || null;
@@ -1683,6 +1712,7 @@ export default function ShareSuggestionsPage() {
    * }} [options] - Image + cache hints; use snapshot fields when firing recordShare after optimistic UI updates
    */
   const recordShare = async (plat, text, options = {}) => {
+    if (!myPresenceEnabled) return;
     const user = getCurrentUser();
     const content = (text || selectedText || '').trim();
     if (!user?.uid || !content) return;
@@ -1819,6 +1849,7 @@ export default function ShareSuggestionsPage() {
 
   // Reserved for flows that defer My Presence until after "Yes, I posted!" (e.g. if a backend pre-created the asset).
   const persistMyPresenceOnly = async ({ plat, caption, imageUrl }) => {
+    if (!myPresenceEnabled) return;
     const user = getCurrentUser();
     const content = (caption || '').trim();
     if (!user?.uid || !content) return;
@@ -1859,6 +1890,7 @@ export default function ShareSuggestionsPage() {
   const textToShare = (sharePanelOpen && editableShareText !== '') ? editableShareText : selectedText;
 
   const triggerPostShareConfirmation = () => {
+    if (!myPresenceEnabled) return;
     if (!selectedPlatform || !['linkedin', 'x', 'reddit'].includes(selectedPlatform)) return;
     setShareConfirmation({
       open: true,
@@ -2914,7 +2946,7 @@ export default function ShareSuggestionsPage() {
           </div>
         </div>
       )}
-      {shareConfirmation.open && (
+      {myPresenceEnabled && shareConfirmation.open && (
         <div className="fixed inset-x-0 bottom-20 flex justify-center pointer-events-none z-[9999]">
           <div
             className="rounded-2xl shadow-lg text-sm pointer-events-auto px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3"

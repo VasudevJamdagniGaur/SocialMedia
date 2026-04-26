@@ -116,7 +116,7 @@ export default function CommunityPage() {
   const [showCreatePost, setShowCreatePost] = useState(false);
   const [postContent, setPostContent] = useState('');
   const [isPosting, setIsPosting] = useState(false);
-  const [selectedPlatform, setSelectedPlatform] = useState('x'); // 'x' | 'linkedin' | 'instagram'
+  const [selectedPlatform, setSelectedPlatform] = useState('x'); // 'x' | 'linkedin' | 'reddit'
   const [mediaItems, setMediaItems] = useState([]); // [{ id: string, src: string, source: 'device' | 'url' }]
   const [mediaUrlDraft, setMediaUrlDraft] = useState('');
   const [communityPosts, setCommunityPosts] = useState([]);
@@ -894,6 +894,14 @@ export default function CommunityPage() {
     }
   };
 
+  const withTimeout = (promise, ms, label = 'Request') => {
+    let timeoutId;
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    });
+    return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timeoutId));
+  };
+
   const handleCreatePost = async () => {
     const firstMediaSrc = mediaItems?.[0]?.src || postImage || (postImageUrl?.trim?.() ? postImageUrl.trim() : null);
     if (!postContent.trim() && !firstMediaSrc) return;
@@ -923,7 +931,9 @@ export default function CommunityPage() {
         image: firstMediaSrc || null
       };
 
-      await addDoc(collection(db, 'communityPosts'), postData);
+      // Firestore can hang indefinitely when offline / network issues.
+      // Ensure UI doesn't get stuck in "Generating…".
+      await withTimeout(addDoc(collection(db, 'communityPosts'), postData), 15000, 'Create post');
       
       // Note: The real-time listener will automatically update the posts and postsTodayCount
       // No need to manually reload here
@@ -948,7 +958,8 @@ export default function CommunityPage() {
       setShowCreatePost(false);
     } catch (error) {
       console.error('Error creating post:', error);
-      alert('Failed to create post. Please try again.');
+      const msg = error?.message || 'Failed to create post. Please try again.';
+      alert(msg);
     } finally {
       setIsPosting(false);
     }
@@ -959,7 +970,7 @@ export default function CommunityPage() {
     platforms: [
       { id: 'x', label: 'X (Twitter)', icon: 'X' },
       { id: 'linkedin', label: 'LinkedIn', icon: 'in' },
-      { id: 'instagram', label: 'Instagram', icon: 'IG' },
+      { id: 'reddit', label: 'Reddit', icon: 'r/' },
     ],
     suggestions: [
       { id: 'viral', label: 'Make it viral', icon: '↗', append: '\n\nMake it viral:' },
@@ -1985,33 +1996,68 @@ export default function CommunityPage() {
                     />
                     <label
                       htmlFor="create-post-media-input"
-                      className="w-full h-[110px] rounded-2xl flex flex-col items-center justify-center cursor-pointer select-none"
+                      className="w-full h-[110px] rounded-2xl flex flex-col items-center justify-center cursor-pointer select-none relative overflow-hidden"
                       style={{
                         border: `1px dashed ${THREADS.accent}`,
                         background: 'rgba(168, 85, 247, 0.06)',
                       }}
                     >
-                      <div className="w-10 h-10 rounded-2xl flex items-center justify-center mb-2" style={{ background: 'rgba(0,0,0,0.25)', border: `1px solid ${THREADS.divider}` }}>
-                        <Image className="w-5 h-5" style={{ color: THREADS.accent }} />
+                      {mediaItems.length > 0 && (
+                        <>
+                          <img
+                            src={mediaItems[0]?.src}
+                            alt=""
+                            className="absolute inset-0 w-full h-full object-cover opacity-80"
+                            referrerPolicy="no-referrer"
+                          />
+                          <div
+                            className="absolute inset-0"
+                            style={{
+                              background:
+                                'linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.25) 45%, rgba(0,0,0,0.65) 100%)',
+                            }}
+                          />
+                          {mediaItems.length > 1 && (
+                            <div
+                              className="absolute top-2 right-2 px-2 py-1 rounded-full text-[11px] font-semibold"
+                              style={{ background: 'rgba(0,0,0,0.55)', color: '#fff', border: `1px solid ${THREADS.divider}` }}
+                            >
+                              +{mediaItems.length - 1}
+                            </div>
+                          )}
+                        </>
+                      )}
+
+                      <div className="relative z-10 flex flex-col items-center justify-center">
+                        <div
+                          className="w-10 h-10 rounded-2xl flex items-center justify-center mb-2"
+                          style={{
+                            background: 'rgba(0,0,0,0.25)',
+                            border: `1px solid ${THREADS.divider}`,
+                            backdropFilter: 'blur(6px)',
+                          }}
+                        >
+                          <Image className="w-5 h-5" style={{ color: THREADS.accent }} />
+                        </div>
+                        <span className="text-[12px] font-medium" style={{ color: THREADS.text }}>
+                          Upload photos
+                        </span>
+                        <span className="text-[11px] mt-1" style={{ color: THREADS.textSecondary }}>
+                          or
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            addMediaFromUrl();
+                          }}
+                          className="mt-1 text-[12px] underline underline-offset-2 hover:opacity-80"
+                          style={{ color: THREADS.accent }}
+                        >
+                          From URL
+                        </button>
                       </div>
-                      <span className="text-[12px] font-medium" style={{ color: THREADS.text }}>
-                        Upload photos
-                      </span>
-                      <span className="text-[11px] mt-1" style={{ color: THREADS.textSecondary }}>
-                        or
-                      </span>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          addMediaFromUrl();
-                        }}
-                        className="mt-1 text-[12px] underline underline-offset-2 hover:opacity-80"
-                        style={{ color: THREADS.accent }}
-                      >
-                        From URL
-                      </button>
                     </label>
 
                     <div className="mt-3">
@@ -2062,9 +2108,27 @@ export default function CommunityPage() {
               <button
                 type="button"
                 onClick={() => {
-                  // Placeholder for AI generation hook (future).
-                  // Keeping Firestore post creation available for now:
-                  handleCreatePost();
+                  const text = (postContent || '').trim();
+                  if (!text && mediaItems.length === 0) return;
+
+                  // Route to existing suggestions screen (LinkedIn / X / Reddit).
+                  const platform =
+                    selectedPlatform === 'x'
+                      ? 'x'
+                      : selectedPlatform === 'reddit'
+                        ? 'reddit'
+                        : 'linkedin';
+
+                  setShowCreatePost(false);
+                  navigate('/share-suggestions', {
+                    state: {
+                      reflection: text || ' ',
+                      platform,
+                      returnTo: '/community',
+                      suggestionsOnly: true,
+                      media: mediaItems.map((m) => m?.src).filter(Boolean).slice(0, 6),
+                    },
+                  });
                 }}
                 disabled={(!postContent.trim() && mediaItems.length === 0) || isPosting}
                 className="w-full h-[50px] rounded-2xl font-semibold text-[15px] transition-opacity disabled:opacity-50"
