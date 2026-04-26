@@ -972,11 +972,6 @@ export default function CommunityPage() {
       { id: 'linkedin', label: 'LinkedIn', icon: 'in' },
       { id: 'reddit', label: 'Reddit', icon: 'r/' },
     ],
-    suggestions: [
-      { id: 'viral', label: 'Make it viral', icon: '↗', append: '\n\nMake it viral:' },
-      { id: 'hook', label: 'Add a hook', icon: '🎣', append: '\n\nHook idea:' },
-      { id: 'sarcastic', label: 'Make it sarcastic', icon: '😏', append: '\n\nSarcastic angle:' },
-    ],
   };
 
   const resetCreatePostState = () => {
@@ -990,14 +985,6 @@ export default function CommunityPage() {
     setPostImage(null);
     setPostImageUrl('');
     setUploadOption(null);
-  };
-
-  const handleAppendSuggestion = (appendText) => {
-    setPostContent((prev) => {
-      const base = prev || '';
-      const next = `${base}${base.trim().length ? '' : ''}${appendText}`;
-      return next.slice(0, CREATE_POST.maxChars);
-    });
   };
 
   const addMediaFromFiles = (fileList) => {
@@ -1959,18 +1946,6 @@ export default function CommunityPage() {
                       {(postContent || '').length}/{CREATE_POST.maxChars}
                     </span>
                   </div>
-                </div>
-
-                <div className="flex gap-2 overflow-x-auto no-scrollbar pt-3">
-                  {CREATE_POST.suggestions.map((s) => (
-                    <SuggestionChip
-                      key={s.id}
-                      label={s.label}
-                      iconText={s.icon}
-                      onClick={() => handleAppendSuggestion(s.append)}
-                      colors={THREADS}
-                    />
-                  ))}
                 </div>
               </div>
 
