@@ -119,7 +119,6 @@ export default function CommunityPage() {
   const [selectedPlatform, setSelectedPlatform] = useState('x'); // 'x' | 'linkedin' | 'instagram'
   const [mediaItems, setMediaItems] = useState([]); // [{ id: string, src: string, source: 'device' | 'url' }]
   const [mediaUrlDraft, setMediaUrlDraft] = useState('');
-  const [showCreatePostPreview, setShowCreatePostPreview] = useState(false);
   const [communityPosts, setCommunityPosts] = useState([]);
   const [postComments, setPostComments] = useState({});
   const [postLikes, setPostLikes] = useState({});
@@ -946,7 +945,6 @@ export default function CommunityPage() {
       setMediaItems([]);
       setMediaUrlDraft('');
       setSelectedPlatform('x');
-      setShowCreatePostPreview(false);
       setShowCreatePost(false);
     } catch (error) {
       console.error('Error creating post:', error);
@@ -976,7 +974,6 @@ export default function CommunityPage() {
     setSelectedPlatform('x');
     setMediaItems([]);
     setMediaUrlDraft('');
-    setShowCreatePostPreview(false);
 
     // Legacy state (kept for backwards compatibility elsewhere in the file)
     setPostImage(null);
@@ -1858,21 +1855,22 @@ export default function CommunityPage() {
       {/* Create Post Modal - Threads style */}
       {showCreatePost && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ backgroundColor: 'rgba(0, 0, 0, 0.7)' }}
-          onClick={resetCreatePostState}
+          className="fixed inset-0 z-50"
+          style={{ backgroundColor: THREADS.bg }}
         >
           <div
-            className="rounded-2xl p-6 w-full max-w-sm relative"
+            className="w-full h-full relative"
             style={{
               backgroundColor: THREADS.bgSecondary,
-              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
-              border: `1px solid ${THREADS.divider}`,
+              paddingTop: 'max(14px, env(safe-area-inset-top, 0px))',
+              paddingBottom: 'max(14px, env(safe-area-inset-bottom, 0px))',
             }}
-            onClick={(e) => e.stopPropagation()}
           >
             {/* Top bar */}
-            <div className="flex items-center justify-between mb-5">
+            <div
+              className="flex items-center justify-between px-5 pb-4"
+              style={{ borderBottom: `1px solid ${THREADS.divider}` }}
+            >
               <button
                 type="button"
                 onClick={resetCreatePostState}
@@ -1889,8 +1887,8 @@ export default function CommunityPage() {
 
             {/* Scrollable content */}
             <div
-              className="space-y-5 overflow-y-auto pr-1"
-              style={{ maxHeight: 'calc(80vh - 140px)' }}
+              className="space-y-5 overflow-y-auto px-5 pt-5"
+              style={{ height: 'calc(100dvh - 180px)' }}
             >
               {/* 1. Platform selection */}
               <div>
@@ -2053,7 +2051,14 @@ export default function CommunityPage() {
             </div>
 
             {/* Bottom actions */}
-            <div className="mt-5 space-y-3">
+            <div
+              className="px-5 pt-4 pb-4 space-y-3 sticky"
+              style={{
+                borderTop: `1px solid ${THREADS.divider}`,
+                background: THREADS.bgSecondary,
+                bottom: 'calc(env(safe-area-inset-bottom, 0px) + 76px)',
+              }}
+            >
               <button
                 type="button"
                 onClick={() => {
@@ -2071,86 +2076,7 @@ export default function CommunityPage() {
               >
                 {isPosting ? 'Generating…' : '✨ Generate Post'}
               </button>
-
-              <button
-                type="button"
-                onClick={() => setShowCreatePostPreview(true)}
-                className="w-full h-[46px] rounded-2xl font-medium text-[14px] transition-colors"
-                style={{
-                  color: THREADS.text,
-                  background: 'rgba(255,255,255,0.03)',
-                  border: `1px solid ${THREADS.divider}`,
-                }}
-              >
-                👁 Preview
-              </button>
             </div>
-
-            {/* Preview overlay */}
-            {showCreatePostPreview && (
-              <div
-                className="absolute inset-0 rounded-2xl p-5"
-                style={{
-                  background: THREADS.bgSecondary,
-                  border: `1px solid ${THREADS.divider}`,
-                  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6)',
-                }}
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-[16px] font-semibold" style={{ color: THREADS.text }}>
-                    Preview
-                  </h3>
-                  <button
-                    type="button"
-                    onClick={() => setShowCreatePostPreview(false)}
-                    className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors"
-                    aria-label="Close preview"
-                  >
-                    <X className="w-5 h-5" style={{ color: THREADS.textSecondary }} />
-                  </button>
-                </div>
-
-                <div className="space-y-3 overflow-y-auto pr-1" style={{ maxHeight: 'calc(80vh - 220px)' }}>
-                  <div className="text-[12px]" style={{ color: THREADS.textSecondary }}>
-                    Platform: <span style={{ color: THREADS.text }}>{selectedPlatform}</span>
-                  </div>
-                  <div className="rounded-2xl p-4" style={{ background: '#1A1A1A', border: `1px solid ${THREADS.divider}` }}>
-                    <p className="text-[14px] whitespace-pre-wrap" style={{ color: THREADS.text }}>
-                      {postContent?.trim?.() ? postContent : '—'}
-                    </p>
-                  </div>
-                  {mediaItems.length > 0 && (
-                    <div className="flex gap-3 overflow-x-auto no-scrollbar">
-                      {mediaItems.slice(0, 10).map((m) => (
-                        <div key={m.id} className="w-[110px] h-[110px] rounded-2xl overflow-hidden flex-shrink-0" style={{ border: `1px solid ${THREADS.divider}` }}>
-                          <img src={m.src} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-5 grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setShowCreatePostPreview(false)}
-                    className="h-[46px] rounded-2xl font-medium text-[14px] hover:opacity-90 transition-opacity"
-                    style={{ background: 'rgba(255,255,255,0.06)', color: THREADS.text, border: `1px solid ${THREADS.divider}` }}
-                  >
-                    Back
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleCreatePost}
-                    disabled={(!postContent.trim() && mediaItems.length === 0) || isPosting}
-                    className="h-[46px] rounded-2xl font-semibold text-[14px] transition-opacity disabled:opacity-50"
-                    style={{ background: THREADS.accent, color: '#fff' }}
-                  >
-                    {isPosting ? 'Posting…' : 'Post'}
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}
