@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Linkedin, Pencil } from 'lucide-react';
+import { ArrowLeft, Pencil } from 'lucide-react';
 import { Capacitor, CapacitorHttp } from '@capacitor/core';
 import { App } from '@capacitor/app';
 import { Share } from '@capacitor/share';
@@ -16,7 +16,6 @@ import chatService from '../services/chatService';
 import { getDateId } from '../utils/dateUtils';
 import { db } from '../firebase/config';
 import TweetShareCard from './TweetShareCard';
-import xLogoImg from '../assets/images/x-logo.png';
 import redditLogoImg from '../assets/images/reddit-logo.png';
 
 const HUB = {
@@ -3173,41 +3172,56 @@ export default function ShareSuggestionsPage() {
           <button
             type="button"
             onClick={() => setSelectedPlatform('linkedin')}
-            className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all hover:opacity-100 overflow-hidden"
+            className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 transition-all hover:opacity-100 overflow-hidden"
             style={{
-              background: selectedPlatform === 'linkedin' ? 'rgba(10, 102, 194, 0.35)' : 'rgba(10, 102, 194, 0.2)',
-              border: `2px solid ${selectedPlatform === 'linkedin' ? '#0A66C2' : 'rgba(10, 102, 194, 0.4)'}`,
-              opacity: selectedPlatform === null || selectedPlatform === 'linkedin' ? 1 : 0.7,
+              background: selectedPlatform === 'linkedin' ? 'rgba(168, 85, 247, 0.16)' : 'rgba(255,255,255,0.04)',
+              border: `2px solid ${selectedPlatform === 'linkedin' ? HUB.accent : 'rgba(255,255,255,0.06)'}`,
+              boxShadow: selectedPlatform === 'linkedin' ? '0 0 0 3px rgba(168, 85, 247, 0.18)' : 'none',
+              opacity: selectedPlatform === null || selectedPlatform === 'linkedin' ? 1 : 0.72,
             }}
             title="LinkedIn – get LinkedIn-style post suggestions"
           >
-            <Linkedin className="w-7 h-7" style={{ color: '#0A66C2' }} strokeWidth={2} />
+            <span className="font-semibold tracking-tight" style={{ color: 'rgba(255,255,255,0.92)', fontSize: 16 }}>
+              in
+            </span>
           </button>
           <button
             type="button"
             onClick={() => setSelectedPlatform('x')}
-            className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all hover:opacity-100"
+            className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 transition-all hover:opacity-100"
             style={{
-              background: 'transparent',
-              border: 'none',
-              opacity: selectedPlatform === null || selectedPlatform === 'x' ? 1 : 0.7,
+              background: selectedPlatform === 'x' ? 'rgba(168, 85, 247, 0.16)' : 'rgba(255,255,255,0.04)',
+              border: `2px solid ${selectedPlatform === 'x' ? HUB.accent : 'rgba(255,255,255,0.06)'}`,
+              boxShadow: selectedPlatform === 'x' ? '0 0 0 3px rgba(168, 85, 247, 0.18)' : 'none',
+              opacity: selectedPlatform === null || selectedPlatform === 'x' ? 1 : 0.72,
             }}
             title="X (Twitter) – get X-style post suggestions"
           >
-            <img src={xLogoImg} alt="X" className="object-contain" style={{ width: '45px', height: '45px' }} />
+            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                fill="rgba(255,255,255,0.92)"
+                d="M18.244 2H21.62l-7.38 8.436L22.92 22h-6.8l-5.32-6.96L4.69 22H1.31l7.9-9.04L1.08 2h6.97l4.81 6.3L18.244 2Zm-1.19 18h1.87L6.99 3.95H4.98L17.055 20Z"
+              />
+            </svg>
           </button>
           <button
             type="button"
             onClick={() => setSelectedPlatform('reddit')}
-            className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all hover:opacity-100"
+            className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 transition-all hover:opacity-100"
             style={{
-              background: 'transparent',
-              border: 'none',
-              opacity: selectedPlatform === null || selectedPlatform === 'reddit' ? 1 : 0.7,
+              background: selectedPlatform === 'reddit' ? 'rgba(168, 85, 247, 0.16)' : 'rgba(255,255,255,0.04)',
+              border: `2px solid ${selectedPlatform === 'reddit' ? HUB.accent : 'rgba(255,255,255,0.06)'}`,
+              boxShadow: selectedPlatform === 'reddit' ? '0 0 0 3px rgba(168, 85, 247, 0.18)' : 'none',
+              opacity: selectedPlatform === null || selectedPlatform === 'reddit' ? 1 : 0.72,
             }}
             title="Reddit – get Reddit-style post suggestions"
           >
-            <img src={redditLogoImg} alt="Reddit" className="object-contain" style={{ width: '45px', height: '45px' }} />
+            <img
+              src={redditLogoImg}
+              alt="Reddit"
+              className="object-contain"
+              style={{ width: 22, height: 22 }}
+            />
           </button>
         </div>
 

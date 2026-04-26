@@ -1913,17 +1913,6 @@ export default function CommunityPage() {
                   <p className="text-[13px] font-medium" style={{ color: THREADS.text }}>
                     2. Describe your idea (rough is fine)
                   </p>
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[12px] hover:bg-white/10 transition-colors"
-                    style={{ color: THREADS.accent, border: `1px solid ${THREADS.divider}`, background: 'rgba(255,255,255,0.02)' }}
-                    onClick={() => {}}
-                  >
-                    <span className="inline-flex items-center justify-center w-4 h-4 rounded-full" style={{ background: `${THREADS.accent}20`, color: THREADS.accent }}>
-                      <span style={{ fontSize: 11, lineHeight: 1 }}>💡</span>
-                    </span>
-                    Tips
-                  </button>
                 </div>
 
                 <div
