@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
 import { MessageCircle, Heart, User, Sun, Moon, Send, X, Plus, XCircle, Image, Link, Share2, Repeat, Bookmark, MoreVertical, Trash2 } from 'lucide-react';
 import { getCurrentUser } from '../services/authService';
@@ -11,6 +11,7 @@ import { isAdmin } from '../utils/admin';
 
 export default function CommunityPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { isDarkMode, toggleTheme } = useTheme();
   // --- Feed event tracking (impression/view/scroll/dwell + engagement events) ---
   const sessionIdRef = useRef(null);
@@ -469,6 +470,17 @@ export default function CommunityPage() {
 
   const user = getCurrentUser();
   const admin = isAdmin(user);
+
+  // Open "Create Post" directly when coming from Dashboard FAB.
+  const openedFromFabRef = useRef(false);
+  useEffect(() => {
+    const flag = !!location?.state?.openCreatePost;
+    if (flag && !openedFromFabRef.current) {
+      openedFromFabRef.current = true;
+      setActiveTab('mySpace');
+      setShowCreatePost(true);
+    }
+  }, [location?.state?.openCreatePost]);
 
   // Temporary restriction: only admin can access Following/HUB.
   // Non-admins get a My Presence only experience (no hidden tab placeholders).

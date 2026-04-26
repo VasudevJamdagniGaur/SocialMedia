@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
-import { MessageCircle, Calendar, Heart, Sparkles, User, Sun, Moon, ChevronRight, Share2 } from "lucide-react";
+import { MessageCircle, Calendar, Heart, Sparkles, User, Sun, Moon, ChevronRight, Share2, Plus } from "lucide-react";
 import { useTheme } from '../contexts/ThemeContext';
 import CalendarPopup from './CalendarPopup';
 import reflectionService from '../services/reflectionService';
@@ -43,6 +43,20 @@ export default function DashboardPage() {
   const [isLoadingReflection, setIsLoadingReflection] = useState(false);
   const [chatDays, setChatDays] = useState([]);
   const [profilePicture, setProfilePicture] = useState(null);
+  const [showFAB, setShowFAB] = useState(true);
+  const [lastScrollY, setLastScrollY] = useState(0);
+
+  // Scroll detection for FAB visibility (same behavior as Community)
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      if (currentScrollY < lastScrollY) setShowFAB(true);
+      else if (currentScrollY > lastScrollY && currentScrollY > 100) setShowFAB(false);
+      setLastScrollY(currentScrollY);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [lastScrollY]);
 
   // Persist selected date so it stays the same after navigation/back.
   useEffect(() => {
@@ -805,6 +819,22 @@ export default function DashboardPage() {
         onDateSelect={handleDateSelect}
         chatDays={chatDays}
       />
+
+      {/* FAB - same + button as Community */}
+      <button
+        type="button"
+        onClick={() => navigate('/community', { state: { openCreatePost: true } })}
+        className={`fixed bottom-20 right-4 z-40 w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-105 active:scale-95 ${
+          showFAB ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
+        }`}
+        style={{
+          backgroundColor: HUB.accent,
+          boxShadow: `0 4px 20px ${HUB.accentShadow}60`,
+        }}
+        aria-label="Create a post"
+      >
+        <Plus className="w-6 h-6 text-white" strokeWidth={2.5} />
+      </button>
     </div>
   );
 }
