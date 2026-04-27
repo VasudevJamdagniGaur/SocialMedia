@@ -31,7 +31,8 @@ function PlatformButton({ label, iconText, selected, onClick, colors }) {
           border: `1px solid ${colors.divider}`,
           color: selected ? colors.accentHighlight : colors.textSecondary,
           fontWeight: 700,
-          fontSize: 13,
+          fontSize: iconText === 'in' ? 18 : 13,
+          lineHeight: 1,
         }}
         aria-hidden
       >

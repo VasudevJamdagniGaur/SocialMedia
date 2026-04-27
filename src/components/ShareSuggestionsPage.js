@@ -16,7 +16,7 @@ import chatService from '../services/chatService';
 import { getDateId } from '../utils/dateUtils';
 import { db } from '../firebase/config';
 import TweetShareCard from './TweetShareCard';
-import redditLogoImg from '../assets/images/reddit-logo.png';
+import redditLogoImg from '../assets/images/reddit-logo-mono.png';
 import Skeleton from './skeleton/Skeleton';
 
 const HUB = {
@@ -3275,7 +3275,10 @@ export default function ShareSuggestionsPage() {
             }}
             title="LinkedIn – get LinkedIn-style post suggestions"
           >
-            <span className="font-semibold tracking-tight" style={{ color: 'rgba(255,255,255,0.92)', fontSize: 16 }}>
+            <span
+              className="font-semibold tracking-tight"
+              style={{ color: 'rgba(255,255,255,0.92)', fontSize: 24, lineHeight: 1 }}
+            >
               in
             </span>
           </button>
