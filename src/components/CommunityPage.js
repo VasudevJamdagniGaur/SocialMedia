@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
 import { MessageCircle, Heart, User, Sun, Moon, Send, X, Plus, XCircle, Image, Link, Share2, Repeat, Bookmark, MoreVertical, Trash2 } from 'lucide-react';
+import redditLogoImg from '../assets/images/reddit-logo-mono.png';
 import { getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
 import { collection, addDoc, query, orderBy, getDocs, serverTimestamp, doc, setDoc, updateDoc, increment, deleteDoc, onSnapshot } from 'firebase/firestore';
@@ -10,7 +11,7 @@ import { userEventService } from '../services/userEventService';
 import { isAdmin } from '../utils/admin';
 import Skeleton from './skeleton/Skeleton';
 
-function PlatformButton({ label, iconText, selected, onClick, colors }) {
+function PlatformButton({ label, platformId, selected, onClick, colors }) {
   return (
     <button
       type="button"
@@ -29,14 +30,36 @@ function PlatformButton({ label, iconText, selected, onClick, colors }) {
         style={{
           background: selected ? 'rgba(168, 85, 247, 0.12)' : 'rgba(255,255,255,0.04)',
           border: `1px solid ${colors.divider}`,
-          color: selected ? colors.accentHighlight : colors.textSecondary,
+          color: 'rgba(255,255,255,0.92)',
           fontWeight: 700,
-          fontSize: iconText === 'in' ? 18 : 13,
           lineHeight: 1,
         }}
         aria-hidden
       >
-        {iconText}
+        {platformId === 'linkedin' ? (
+          <span className="font-semibold tracking-tight" style={{ fontSize: 18, lineHeight: 1 }}>
+            in
+          </span>
+        ) : platformId === 'x' ? (
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              fill="rgba(255,255,255,0.92)"
+              d="M18.244 2H21.62l-7.38 8.436L22.92 22h-6.8l-5.32-6.96L4.69 22H1.31l7.9-9.04L1.08 2h6.97l4.81 6.3L18.244 2Zm-1.19 18h1.87L6.99 3.95H4.98L17.055 20Z"
+            />
+          </svg>
+        ) : (
+          <img
+            src={redditLogoImg}
+            alt=""
+            className="object-contain"
+            style={{
+              width: 31,
+              height: 31,
+              opacity: 0.92,
+              filter: 'grayscale(1) brightness(1.35) contrast(1.05)',
+            }}
+          />
+        )}
       </div>
     </button>
   );
@@ -966,9 +989,9 @@ export default function CommunityPage() {
   const CREATE_POST = {
     maxChars: 500,
     platforms: [
-      { id: 'x', label: 'X (Twitter)', icon: 'X' },
-      { id: 'linkedin', label: 'LinkedIn', icon: 'in' },
-      { id: 'reddit', label: 'Reddit', icon: 'r/' },
+      { id: 'x', label: 'X (Twitter)' },
+      { id: 'linkedin', label: 'LinkedIn' },
+      { id: 'reddit', label: 'Reddit' },
     ],
   };
 
@@ -1893,7 +1916,7 @@ export default function CommunityPage() {
                     <PlatformButton
                       key={p.id}
                       label={p.label}
-                      iconText={p.icon}
+                      platformId={p.id}
                       selected={selectedPlatform === p.id}
                       onClick={() => setSelectedPlatform(p.id)}
                       colors={THREADS}
