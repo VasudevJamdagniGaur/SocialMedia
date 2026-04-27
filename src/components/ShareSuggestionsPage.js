@@ -3643,9 +3643,6 @@ export default function ShareSuggestionsPage() {
                         className="hidden"
                         onChange={handleReplaceImageFile}
                       />
-                      <p className="text-xs mt-1" style={{ color: isDarkMode ? HUB.textSecondary : '#666' }}>
-                        This image will be shared with your post. Tap the pencil to replace it, remove it, or edit it with AI when your app backend supports it.
-                      </p>
                     </div>
                   )}
                   <textarea
