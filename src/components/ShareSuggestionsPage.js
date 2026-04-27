@@ -1991,6 +1991,35 @@ export default function ShareSuggestionsPage() {
     });
   };
 
+  // When we open an external app (LinkedIn/X/Reddit) on mobile, prompt the user after they return.
+  useEffect(() => {
+    if (!myPresenceEnabled) return;
+    if (!isNative()) return;
+    if (!pendingMyPresenceShare) return;
+
+    let handle;
+    (async () => {
+      try {
+        handle = await App.addListener('appStateChange', (state) => {
+          if (!state?.isActive) return;
+          if (!pendingMyPresenceShare) return;
+          if (shareConfirmation.open) return;
+          triggerPostShareConfirmation();
+        });
+      } catch {
+        // ignore
+      }
+    })();
+
+    return () => {
+      try {
+        handle?.remove?.();
+      } catch {
+        // ignore
+      }
+    };
+  }, [myPresenceEnabled, pendingMyPresenceShare, shareConfirmation.open, selectedIndex, selectedPlatform]);
+
   const copyCaptionToClipboardForLinkedIn = async (text) => {
     if (!text) return;
     if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) return;
@@ -2010,30 +2039,73 @@ export default function ShareSuggestionsPage() {
   const shareToLinkedIn = (text) => {
     const t = ((text ?? textToShare) || '').trim();
     if (!t) return;
+
+    if (myPresenceEnabled) {
+      const img = suggestionImageUrls[selectedIndex] || null;
+      setPendingMyPresenceShare({
+        plat: 'linkedin',
+        caption: t,
+        imageDataUrlForStorage: img,
+        skipCompression: suggestionImagesFromChat[selectedIndex],
+      });
+    }
+
     copyCaptionToClipboardForLinkedIn(t);
     const appUrl = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : 'https://deitedatabase.firebaseapp.com';
     const shareUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(appUrl)}`;
     if (isNative()) {
+      setSharePanelOpen(false);
       App.openUrl({ url: shareUrl }).catch(() => window.open(shareUrl, '_blank', 'noopener,noreferrer'));
     } else {
       window.open(shareUrl, '_blank', 'noopener,noreferrer');
+      if (myPresenceEnabled) triggerPostShareConfirmation();
     }
   };
 
   const shareToTwitter = (text) => {
     const t = text ?? textToShare;
     if (!t) return;
+
+    if (myPresenceEnabled) {
+      const img = suggestionImageUrls[selectedIndex] || null;
+      setPendingMyPresenceShare({
+        plat: 'x',
+        caption: t,
+        imageDataUrlForStorage: img,
+        skipCompression: suggestionImagesFromChat[selectedIndex],
+      });
+    }
+
+    if (isNative()) {
+      setSharePanelOpen(false);
+    }
     window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(t)}`, '_blank', 'noopener,noreferrer');
+    if (!isNative() && myPresenceEnabled) triggerPostShareConfirmation();
   };
 
   const shareToReddit = (text) => {
     const t = text ?? textToShare;
     if (!t) return;
+
+    if (myPresenceEnabled) {
+      const img = suggestionImageUrls[selectedIndex] || null;
+      setPendingMyPresenceShare({
+        plat: 'reddit',
+        caption: t,
+        imageDataUrlForStorage: img,
+        skipCompression: suggestionImagesFromChat[selectedIndex],
+      });
+    }
+
+    if (isNative()) {
+      setSharePanelOpen(false);
+    }
     window.open(
       `https://www.reddit.com/submit?title=${encodeURIComponent('My reflection')}&selftext=${encodeURIComponent(t)}`,
       '_blank',
       'noopener,noreferrer'
     );
+    if (!isNative() && myPresenceEnabled) triggerPostShareConfirmation();
   };
 
   const openSharePanel = (text) => {
