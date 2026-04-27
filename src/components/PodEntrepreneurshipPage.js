@@ -6,6 +6,7 @@ import { prefetchExploreTopicRaw } from '../lib/podExploreTopicPrefetchCache';
 import { getNewsWithLiveFallback } from '../services/cachedNewsService';
 import { recordHubVerticalDwell } from '../services/hubVerticalPersonalizationService';
 import { fetchEntrepreneurshipHubTrendingCarouselItems } from '../lib/podEntrepreneurshipTopicFeed';
+import CardSkeleton from './skeleton/CardSkeleton';
 import {
   classifyExploreSlugForEntrepreneurshipTrending,
   isLikelyEntrepreneurshipTrendingItem,
@@ -212,7 +213,7 @@ export default function PodEntrepreneurshipPage() {
             </div>
             <div className="py-3 pl-4">
               {isLoadingNews ? (
-                <p className="text-sm pr-4" style={{ color: HUB.textSecondary }}>Loading startup headlines...</p>
+                <CardSkeleton count={4} />
               ) : (
                 <>
                   <div

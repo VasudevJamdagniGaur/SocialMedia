@@ -8,6 +8,8 @@ import { getDateId, formatDateForDisplay } from '../utils/dateUtils';
 import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import CalendarPopup from './CalendarPopup';
+import ListSkeleton from './skeleton/ListSkeleton';
+import Skeleton from './skeleton/Skeleton';
 
 export default function AllDayReflectionsPage() {
   const navigate = useNavigate();
@@ -496,15 +498,8 @@ export default function AllDayReflectionsPage() {
 
       {/* Reflections List - Community-style flat cards with dividers */}
       {isLoading ? (
-        <div className="flex flex-col items-center justify-center py-12">
-          <div className="flex space-x-1 mb-3">
-            <div className="w-2 h-2 rounded-full animate-bounce" style={{ animationDelay: '0ms', background: isDarkMode ? THREADS.accent : '#87A96B' }} />
-            <div className="w-2 h-2 rounded-full animate-bounce" style={{ animationDelay: '150ms', background: isDarkMode ? THREADS.accent : '#87A96B' }} />
-            <div className="w-2 h-2 rounded-full animate-bounce" style={{ animationDelay: '300ms', background: isDarkMode ? THREADS.accent : '#87A96B' }} />
-          </div>
-          <p className="text-sm" style={{ color: isDarkMode ? THREADS.textSecondary : '#6b7280' }}>
-            Loading reflections...
-          </p>
+        <div className="py-2">
+          <ListSkeleton count={5} />
         </div>
       ) : filteredReflections.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 px-4">
@@ -613,12 +608,8 @@ export default function AllDayReflectionsPage() {
 
             {/* Mood Metrics */}
             {isLoadingMood ? (
-              <div className="mb-4 flex items-center justify-center py-4">
-                <div className="flex space-x-1">
-                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ animationDelay: '0ms', background: THREADS.accent }} />
-                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ animationDelay: '150ms', background: THREADS.accent }} />
-                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ animationDelay: '300ms', background: THREADS.accent }} />
-                </div>
+              <div className="mb-4 py-2">
+                <Skeleton variant="text" className="h-3 w-32 mx-auto rounded-full" />
               </div>
             ) : moodData ? (
               <div className="mb-6 space-y-3">

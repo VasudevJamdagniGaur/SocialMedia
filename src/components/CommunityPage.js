@@ -8,6 +8,7 @@ import { collection, addDoc, query, orderBy, getDocs, serverTimestamp, doc, setD
 import { db } from '../firebase/config';
 import { userEventService } from '../services/userEventService';
 import { isAdmin } from '../utils/admin';
+import Skeleton from './skeleton/Skeleton';
 
 function PlatformButton({ label, iconText, selected, onClick, colors }) {
   return (
@@ -1354,7 +1355,11 @@ export default function CommunityPage() {
                 Your LinkedIn post performance
               </h3>
               {linkedInPostsLoading ? (
-                <p className="text-xs" style={{ color: THREADS.textSecondary }}>Loading…</p>
+                <div className="space-y-2" aria-hidden="true">
+                  <Skeleton variant="text" className="h-3 w-[92%]" />
+                  <Skeleton variant="text" className="h-3 w-[84%] opacity-90" />
+                  <Skeleton variant="text" className="h-3 w-[66%] opacity-80" />
+                </div>
               ) : (
                 <ul className="space-y-3">
                   {linkedInPosts.map((p, idx) => (
@@ -1393,7 +1398,13 @@ export default function CommunityPage() {
                           className="text-xs underline cursor-pointer disabled:opacity-50"
                           style={{ color: THREADS.accent }}
                         >
-                          {analyticsRefreshing[p.id] ? 'Refreshing…' : 'Refresh'}
+                          {analyticsRefreshing[p.id] ? (
+                            <span className="inline-flex items-center">
+                              <Skeleton variant="text" className="h-2 w-16 rounded-full" />
+                            </span>
+                          ) : (
+                            'Refresh'
+                          )}
                         </button>
                       </div>
                     </li>

@@ -9,6 +9,7 @@ import { getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
 import { recordHubNewsClick } from '../services/hubNewsService';
 import { recordHubVerticalDwell } from '../services/hubVerticalPersonalizationService';
+import CardSkeleton from './skeleton/CardSkeleton';
 
 /**
  * Tap opens share suggestions (same flow as Sports hub trending), not the raw Reddit URL.
@@ -291,7 +292,7 @@ export default function PodCurrentAffairsPage() {
             </div>
             <div className="py-3 pl-4">
               {isLoadingNews ? (
-                <p className="text-sm pr-4" style={{ color: HUB.textSecondary }}>Loading from Reddit...</p>
+                <CardSkeleton count={4} />
               ) : (
                 <>
                   <div

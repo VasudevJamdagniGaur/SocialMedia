@@ -6,6 +6,7 @@ import { getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
 import { formatDateForDisplay, getDateId } from '../utils/dateUtils';
 import CalendarPopup from './CalendarPopup';
+import ListSkeleton from './skeleton/ListSkeleton';
 
 export default function AllReflectionsPage() {
   const navigate = useNavigate();
@@ -362,15 +363,8 @@ export default function AllReflectionsPage() {
 
       {/* Reflections List */}
       {isLoading ? (
-        <div className="flex flex-col items-center justify-center py-12">
-          <div className="flex space-x-1 mb-3">
-            <div className={`w-2 h-2 rounded-full animate-bounce ${isDarkMode ? 'bg-gray-400' : 'bg-gray-500'}`} style={{ animationDelay: '0ms' }}></div>
-            <div className={`w-2 h-2 rounded-full animate-bounce ${isDarkMode ? 'bg-gray-400' : 'bg-gray-500'}`} style={{ animationDelay: '150ms' }}></div>
-            <div className={`w-2 h-2 rounded-full animate-bounce ${isDarkMode ? 'bg-gray-400' : 'bg-gray-500'}`} style={{ animationDelay: '300ms' }}></div>
-          </div>
-          <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-            Loading reflections...
-          </p>
+        <div className="max-w-sm mx-auto">
+          <ListSkeleton count={5} />
         </div>
       ) : filteredReflections.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12">

@@ -4,6 +4,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { ChevronLeft, User, Linkedin, AtSign } from 'lucide-react';
 import { getCurrentUser } from '../services/authService';
 import firestoreService from '../services/firestoreService';
+import ProfileSkeleton from './skeleton/ProfileSkeleton';
 
 export default function UserProfilePage() {
   const navigate = useNavigate();
@@ -93,21 +94,7 @@ export default function UserProfilePage() {
   const isFollowing = followingIds.includes(userId);
 
   if (loading) {
-    return (
-      <div
-        className="min-h-screen flex items-center justify-center"
-        style={{ background: isDarkMode ? '#131314' : '#B5C4AE' }}
-      >
-        <div className="flex flex-col items-center gap-3">
-          <div className="flex space-x-1">
-            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-          </div>
-          <p className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>Loading profile...</p>
-        </div>
-      </div>
-    );
+    return <ProfileSkeleton />;
   }
 
   if (!profileUser) {

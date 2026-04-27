@@ -21,6 +21,8 @@ import {
 import { recordHubVerticalDwell } from '../services/hubVerticalPersonalizationService';
 import { recordHubNewsClick } from '../services/hubNewsService';
 import { getNewsWithLiveFallback } from '../services/cachedNewsService';
+import CardSkeleton from './skeleton/CardSkeleton';
+import Skeleton from './skeleton/Skeleton';
 
 /**
  * Survives route changes (e.g. Sports → topic → back) so trending does not flash loading.
@@ -486,13 +488,18 @@ export default function PodSportsPage() {
           style={{ color: HUB.textSecondary }}
           aria-live="polite"
         >
-          {refreshing
-            ? 'Refreshing…'
-            : pullProgress > 0
-              ? pullProgress >= 0.9
-                ? 'Release to refresh'
-                : 'Pull to refresh'
-              : null}
+          {refreshing || pullProgress > 0 ? (
+            <div className="w-40">
+              <Skeleton
+                variant="text"
+                className="h-2"
+                style={{
+                  width: `${Math.max(18, Math.round((refreshing ? 1 : pullProgress) * 100))}%`,
+                  borderRadius: 9999,
+                }}
+              />
+            </div>
+          ) : null}
         </div>
 
         <div className="space-y-4">
@@ -510,9 +517,7 @@ export default function PodSportsPage() {
             </div>
             <div className="py-3 pl-4">
               {isLoadingSportsNews && sportsTrending.length === 0 ? (
-                <p className="text-sm pr-4" style={{ color: HUB.textSecondary }}>
-                  Loading cached sports headlines…
-                </p>
+                <CardSkeleton count={4} />
               ) : (
                 <>
                   <div

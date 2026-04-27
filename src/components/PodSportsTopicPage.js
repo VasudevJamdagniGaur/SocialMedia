@@ -3,6 +3,8 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { NewsFeedRow } from '../lib/podTopicNewsShared';
+import ListSkeleton from './skeleton/ListSkeleton';
+import Skeleton from './skeleton/Skeleton';
 import {
   TOPIC_META,
   browseTopicOnGoogleNews,
@@ -314,13 +316,18 @@ export default function PodSportsTopicPage() {
             style={{ color: HUB.textSecondary }}
             aria-live="polite"
           >
-            {refreshing
-              ? 'Refreshing…'
-              : pullProgress > 0
-                ? pullProgress >= 0.9
-                  ? 'Release to refresh'
-                  : 'Pull to refresh'
-                : null}
+            {refreshing || pullProgress > 0 ? (
+              <div className="w-40">
+                <Skeleton
+                  variant="text"
+                  className="h-2"
+                  style={{
+                    width: `${Math.max(18, Math.round((refreshing ? 1 : pullProgress) * 100))}%`,
+                    borderRadius: 9999,
+                  }}
+                />
+              </div>
+            ) : null}
           </div>
           <div className="px-4 py-4" style={{ borderBottom: `1px solid ${HUB.divider}` }}>
             <h2 className="text-base font-semibold" style={{ color: HUB.text }}>
@@ -335,7 +342,9 @@ export default function PodSportsTopicPage() {
           </div>
           <div className="py-0">
             {loading ? (
-              <p className="text-sm px-4 py-6" style={{ color: HUB.textSecondary }}>Loading…</p>
+              <div className="px-4 py-4">
+                <ListSkeleton count={5} />
+              </div>
             ) : items.length === 0 ? (
               <div className="px-4 py-8 text-center">
                 <p className="text-sm leading-relaxed" style={{ color: HUB.textSecondary }}>

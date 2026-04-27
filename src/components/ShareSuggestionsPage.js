@@ -17,6 +17,7 @@ import { getDateId } from '../utils/dateUtils';
 import { db } from '../firebase/config';
 import TweetShareCard from './TweetShareCard';
 import redditLogoImg from '../assets/images/reddit-logo.png';
+import Skeleton from './skeleton/Skeleton';
 
 const HUB = {
   bg: '#0F0F0F',
@@ -3225,12 +3226,10 @@ export default function ShareSuggestionsPage() {
           {isNewsShareMode ? (
             <>
               {isLoadingNewsDetails ? (
-                <p
-                  className="text-[15px] font-semibold leading-snug mt-2"
-                  style={{ color: isDarkMode ? HUB.textSecondary : '#666' }}
-                >
-                  Reading the thread and shaping a headline…
-                </p>
+                <div className="mt-3 space-y-2" aria-hidden="true">
+                  <Skeleton variant="text" className="h-4 w-[92%]" />
+                  <Skeleton variant="text" className="h-4 w-[78%]" />
+                </div>
               ) : (
                 <div
                   className="text-[15px] font-semibold leading-snug mt-2 block"
@@ -3244,9 +3243,12 @@ export default function ShareSuggestionsPage() {
                   {effectiveNewsCardText}
                 </p>
               ) : isLoadingNewsDetails ? (
-                <p className="text-[15px] leading-relaxed mt-2" style={{ color: isDarkMode ? HUB.textSecondary : '#666' }}>
-                  Loading full article text and generating a 60–80 word summary…
-                </p>
+                <div className="mt-3 space-y-2" aria-hidden="true">
+                  <Skeleton variant="text" className="h-3 w-[94%]" />
+                  <Skeleton variant="text" className="h-3 w-[90%]" />
+                  <Skeleton variant="text" className="h-3 w-[86%]" />
+                  <Skeleton variant="text" className="h-3 w-[68%]" />
+                </div>
               ) : (
                 <p className="text-[15px] leading-relaxed mt-2" style={{ color: isDarkMode ? HUB.textSecondary : '#666' }}>
                   We couldn&apos;t pull enough article text from this link to summarize it here. Tap the headline to read the full story on the publisher site.

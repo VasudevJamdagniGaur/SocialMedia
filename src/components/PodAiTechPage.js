@@ -8,6 +8,7 @@ import { prefetchExploreTopicRaw } from '../lib/podExploreTopicPrefetchCache';
 import { getNewsWithLiveFallback } from '../services/cachedNewsService';
 import { recordHubVerticalDwell } from '../services/hubVerticalPersonalizationService';
 import { fetchAiTechHubTrendingCarouselItems } from '../lib/podAiTechTopicFeed';
+import CardSkeleton from './skeleton/CardSkeleton';
 import {
   classifyExploreSlugForAiTechTrending,
   isLikelyAiTechTrendingItem,
@@ -334,7 +335,7 @@ export default function PodAiTechPage() {
             </div>
             <div className="py-3 pl-4">
               {isLoading ? (
-                <p className="text-sm pr-4" style={{ color: HUB.textSecondary }}>Loading trending tech news...</p>
+                <CardSkeleton count={4} />
               ) : (
                 <>
                   <div

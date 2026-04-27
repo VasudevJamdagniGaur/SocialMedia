@@ -5,6 +5,7 @@ import { getCurrentUser, onAuthStateChange } from '../services/authService';
 import { incrementHubNewsEngagement, recordHubNewsClick } from '../services/hubNewsService';
 import { getHubTrendingMergedFromFirestore } from '../services/cachedNewsService';
 import { resolveArticleHeroImage } from '../lib/podTopicNewsShared';
+import CardSkeleton from './skeleton/CardSkeleton';
 
 /**
  * Keeps the last successful hub merge in memory so navigating away (e.g. Sports) and back
@@ -324,7 +325,7 @@ export default function HubTrendingFeed({ isDarkMode }) {
       </div>
       <div className="py-3 pl-4">
         {loading && items.length === 0 ? (
-          <p className={`text-sm pr-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Loading your feed…</p>
+          <CardSkeleton count={4} />
         ) : error && items.length === 0 ? (
           <p className={`text-sm pr-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{error}</p>
         ) : items.length === 0 ? (

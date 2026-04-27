@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Loader2, Flame } from 'lucide-react';
+import { Flame } from 'lucide-react';
 import { filterPosts } from '../lib/redditPostFilter';
+import CardSkeleton from './skeleton/CardSkeleton';
 
 const REDDIT_HOT_URL =
   'https://www.reddit.com/r/BollyBlindsNGossip/hot.json?limit=50&raw_json=1';
@@ -351,17 +352,7 @@ export default function TrendingTea() {
       </div>
 
       <div className="py-3 pl-4">
-        {isLoading && (
-          <div
-            className="flex items-center justify-center gap-2 py-10 pr-4"
-            style={{ color: HUB.textSecondary }}
-            role="status"
-            aria-live="polite"
-          >
-            <Loader2 className="w-5 h-5 animate-spin flex-shrink-0" aria-hidden />
-            <span className="text-sm">Steeping the latest tea…</span>
-          </div>
-        )}
+        {isLoading && <CardSkeleton count={4} />}
 
         {!isLoading && error && (
           <div

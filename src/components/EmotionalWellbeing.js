@@ -23,6 +23,8 @@ import {
   Sun,
   RefreshCw
 } from "lucide-react";
+import Skeleton from './skeleton/Skeleton';
+import ListSkeleton from './skeleton/ListSkeleton';
 import {
   LineChart,
   Line,
@@ -3615,11 +3617,10 @@ Return in this JSON format:
                 </div>
                 {highlightsLoading ? (
                   <>
-                    <div className="flex items-center space-x-2 mb-2">
-                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-green-400 border-t-transparent"></div>
-                      <p className="text-sm text-gray-400">Loading...</p>
+                    <div className="space-y-2" aria-hidden="true">
+                      <Skeleton variant="text" className="h-3 w-[80%]" />
+                      <Skeleton variant="text" className="h-3 w-[60%] opacity-90" />
                     </div>
-                    <p className="text-xs text-gray-500">Loading your highlights...</p>
                   </>
                 ) : (
                   <>
@@ -3659,11 +3660,10 @@ Return in this JSON format:
                 </div>
                 {highlightsLoading ? (
                   <>
-                    <div className="flex items-center space-x-2 mb-2">
-                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-red-400 border-t-transparent"></div>
-                      <p className="text-sm text-gray-400">Loading...</p>
+                    <div className="space-y-2" aria-hidden="true">
+                      <Skeleton variant="text" className="h-3 w-[78%]" />
+                      <Skeleton variant="text" className="h-3 w-[58%] opacity-90" />
                     </div>
-                    <p className="text-xs text-gray-500">Loading your highlights...</p>
                   </>
                 ) : (
                   <>
@@ -3735,10 +3735,8 @@ Return in this JSON format:
             {patternLoading && (
               <div className="flex items-center justify-center py-8">
                 <div className="flex items-center space-x-3">
-                  <div className="animate-spin rounded-full h-6 w-6 border-2 border-purple-500 border-t-transparent"></div>
-                  <span className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                    Analyzing your patterns...
-                  </span>
+                  <Skeleton variant="avatar" className="w-6 h-6" />
+                  <Skeleton variant="text" className="h-3 w-40 rounded-full" />
                 </div>
               </div>
             )}
@@ -4008,9 +4006,7 @@ Return in this JSON format:
                     >
                       <BookOpen className="w-4 h-4" style={{ color: isDarkMode ? HUB.accent : "#87A96B" }} />
                     </div>
-                    <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                      Analyzing your patterns to generate personalized tips...
-                    </p>
+                    <Skeleton variant="text" className="h-3 w-56 rounded-full" />
                   </div>
 
                   {/* Loading Skeleton */}
@@ -4178,9 +4174,12 @@ Return in this JSON format:
             >
               <Heart className="w-8 h-8" style={{ color: isDarkMode ? HUB.accent : '#87A96B' }} />
             </div>
-            <p className="text-sm" style={{ color: isDarkMode ? HUB.textSecondary : '#5A5A5A' }}>
-              Loading Emotional Wellbeing...
-            </p>
+            <div className="w-40">
+              <Skeleton variant="text" className="h-3 w-full rounded-full" />
+            </div>
+            <div className="w-full max-w-sm px-6">
+              <ListSkeleton count={4} />
+            </div>
           </div>
         </div>
       </ErrorBoundary>
@@ -4242,9 +4241,15 @@ Return in this JSON format:
                 backgroundColor: isUpdating ? '#d1d5db' : 'rgba(134, 169, 107, 0.95)',
               }}
             >
-              <RefreshCw className={`w-4 h-4 ${(isUpdating || isLoadingFresh) ? 'animate-spin' : ''}`} />
+              <RefreshCw className="w-4 h-4" />
               <span className="text-sm font-medium hidden xs:block">
-                {isUpdating ? 'Updating...' : isLoadingFresh ? 'Refreshing...' : 'Refresh'}
+                {isUpdating || isLoadingFresh ? (
+                  <span className="inline-flex items-center">
+                    <Skeleton variant="text" className="h-2 w-14 rounded-full" />
+                  </span>
+                ) : (
+                  'Refresh'
+                )}
               </span>
             </button>
           </div>
