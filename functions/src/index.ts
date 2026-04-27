@@ -495,7 +495,7 @@ async function handleLinkedInPosts(
 
 /**
  * POST /api/linkedin/suggestions — generate platform share suggestions on the backend.
- * Body: { reflection: string, platform: 'linkedin' | 'x' | 'reddit' }.
+ * Body: { reflection: string, platform: 'linkedin' | 'x' | 'reddit', style?: string }.
  *
  * This avoids calling OpenAI directly from the mobile app (which can fail with TypeError: Failed to fetch).
  */
@@ -520,9 +520,10 @@ async function handleLinkedInSuggestions(
   }
 
   try {
-    const { reflection, platform } = (req.body || {}) as { reflection?: string; platform?: string };
+    const { reflection, platform, style } = (req.body || {}) as { reflection?: string; platform?: string; style?: string };
     const t = (reflection || '').trim();
     const p = (platform || 'linkedin').toLowerCase();
+    const styleId = String(style || '').trim().toLowerCase();
     const wantsStream =
       String((req.query as any)?.stream || '').trim() === '1' ||
       String(req.headers['accept'] || '').toLowerCase().includes('text/event-stream');
@@ -574,6 +575,24 @@ POLISH:
     };
 
     const styleGuide = platformStyleGuide[p] || platformStyleGuide.linkedin;
+    const styleInstructions: Record<string, string> = {
+      minimal:
+        'Write a very clean, short, and concise post. Avoid fluff, avoid unnecessary words. Keep it simple, direct, and easy to read. Focus only on the core message.',
+      emotional:
+        'Write an expressive and emotional post. Highlight feelings, gratitude, struggles, or excitement. Make it personal and relatable. Use a warm and human tone.',
+      bold:
+        "Write a confident and impactful post. Use strong statements and powerful language. Make it feel assertive and attention-grabbing without sounding arrogant.",
+      witty:
+        'Write a clever and slightly humorous post. Use smart phrasing, light humor, or wordplay. Keep it engaging and fun without overdoing jokes.',
+      sarcastic:
+        'Write a sarcastic and playful post. Use irony or subtle sarcasm to make the point. Keep it light and entertaining, and avoid being offensive or negative.',
+      formal:
+        'Write a polished and professional post. Use formal language, structured sentences, and a respectful tone. Avoid slang, emojis, or casual phrasing.',
+    };
+    const styleInstructionText =
+      styleId && styleInstructions[styleId]
+        ? `STYLE: ${styleId.toUpperCase()}\nInstruction: "${styleInstructions[styleId]}"`
+        : 'STYLE: NEUTRAL\nInstruction: "Use a balanced and neutral tone."';
     const linkedinReflectionExtra =
       p === 'linkedin'
         ? `
@@ -593,6 +612,7 @@ For LinkedIn posts only: one clear angle each; strong hook in the first two line
 PLATFORM: ${platformLabel}. Write EVERY post in that platform's native style so it reads like a real ${platformLabel} post.
 
 ${styleGuide}
+${styleInstructionText}
 ${linkedinReflectionExtra}
 Cover every distinct event or moment from the reflection (people, places, media, work, funny moments). Each post focuses on one event only — insightful and reflective, not a dry summary.
 ${linkedinStep2}

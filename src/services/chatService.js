@@ -1697,12 +1697,8 @@ ${text}`;
         }
       }
 
-      // In native/local: backend unreachable — return reflection as single post so user can still choose & share.
-      if (originLooksLocal && lastErr) {
-        const trimmed = (reflection || '').trim();
-        if (trimmed) return [{ eventLabel: 'Reflection', post: trimmed }];
-        throw lastErr;
-      }
+      // In native/local: backend can be unreachable due to network/CORS.
+      // Do NOT immediately fall back to echoing the reflection — try Vertex/OpenAI fallback below first.
     } catch (e) {
       const origin = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '';
       const originLooksLocal =
@@ -1711,11 +1707,6 @@ ${text}`;
         origin.startsWith('capacitor://') ||
         origin.startsWith('ionic://') ||
         origin.startsWith('file://');
-      // Graceful fallback: so "Choose a post" still works when backend is down.
-      if (originLooksLocal) {
-        const trimmed = (reflection || '').trim();
-        if (trimmed) return [{ eventLabel: 'Reflection', post: trimmed }];
-      }
       const msg = e && (e.message || String(e)) ? (e.message || String(e)) : 'unknown';
       throw new Error(`Suggestions failed: ${msg}`);
     }
@@ -1724,6 +1715,9 @@ ${text}`;
     this.openaiApiKey = (process.env.REACT_APP_OPENAI_API_KEY || process.env.OPENAI_API_KEY || this.openaiApiKey || '').trim();
     const apiKey = this.openaiApiKey;
     if (!apiKey || apiKey.trim() === '') {
+      // Last-resort fallback: return the raw reflection rather than hard-failing the UI.
+      const trimmed = (reflection || '').trim();
+      if (trimmed) return [{ eventLabel: 'Reflection', post: trimmed }];
       throw new Error(
         'OpenAI API key is not set. Add REACT_APP_OPENAI_API_KEY to .env for share suggestions, or set REACT_APP_BACKEND_URL (preferred) / REACT_APP_VERTEX_BACKEND_URL / REACT_APP_VERTEX_GEMINI_URL to use your backend instead.'
       );
@@ -1861,10 +1855,15 @@ ${text}`;
     }
 
     // Fall back to non-streaming logic if stream endpoint isn't reachable.
+    // In local/native builds, do not silently echo the draft; attempt non-streaming generators first.
     if (originLooksLocal && lastErr) {
-      const trimmed = (reflection || '').trim();
-      if (trimmed) return [{ eventLabel: 'Reflection', post: trimmed }];
-      throw lastErr;
+      try {
+        return await this.generateSocialPostSuggestions(reflection, platform);
+      } catch (_) {
+        const trimmed = (reflection || '').trim();
+        if (trimmed) return [{ eventLabel: 'Reflection', post: trimmed }];
+        throw lastErr;
+      }
     }
     return this.generateSocialPostSuggestions(reflection, platform);
   }

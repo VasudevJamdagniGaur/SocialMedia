@@ -37,6 +37,45 @@ const PLATFORM_LABELS = {
   reddit: 'Reddit',
 };
 
+const STYLE_VARIANTS = [
+  {
+    id: 'minimal',
+    label: 'Minimal 🧘',
+    instruction:
+      'Write a very clean, short, and concise post. Avoid fluff and unnecessary words. Keep it simple, direct, and easy to read. Focus only on the core message. HARD LIMIT: 1–3 short sentences total, no long paragraphs, no storytelling, and no hashtags unless absolutely essential (max 1).',
+  },
+  {
+    id: 'emotional',
+    label: 'Emotional 💔❤️',
+    instruction:
+      'Write an expressive and emotional post. Highlight feelings, gratitude, struggles, or excitement. Make it personal and relatable. Use a warm and human tone.',
+  },
+  {
+    id: 'bold',
+    label: 'Bold 🔥',
+    instruction:
+      'Write a confident and impactful post. Use strong statements and powerful language. Make it feel assertive and attention-grabbing without sounding arrogant.',
+  },
+  {
+    id: 'witty',
+    label: 'Witty 😏',
+    instruction:
+      'Write a clever and slightly humorous post. Use smart phrasing, light humor, or wordplay. Keep it engaging and fun without overdoing jokes.',
+  },
+  {
+    id: 'sarcastic',
+    label: 'Sarcastic 😄',
+    instruction:
+      'Write a sarcastic and playful post. Use irony or subtle sarcasm to make the point. Keep it light and entertaining, and avoid being offensive or negative.',
+  },
+  {
+    id: 'formal',
+    label: 'Formal 🏛️',
+    instruction:
+      'Write a polished and professional post. Use formal language, structured sentences, and a respectful tone. Avoid slang, emojis, or casual phrasing.',
+  },
+];
+
 // Local image cache key builder (must stay in sync with chatService)
 const buildImageCacheKey = (text) => {
   try {
@@ -1337,18 +1376,69 @@ export default function ShareSuggestionsPage() {
       }
     }
 
+    const buildStyledPrompt = (baseText, platform, styleInstruction) => {
+      const t = String(baseText || '').trim();
+      const style = String(styleInstruction || '').trim();
+      const platformGuidance =
+        platform === 'linkedin'
+          ? 'Platform guidance: Keep it professional and polished. Use clear structure and avoid slang.'
+          : platform === 'x'
+            ? 'Platform guidance: Keep it punchy, casual, and concise. Avoid long paragraphs.'
+            : 'Platform guidance: Keep it conversational and community-friendly. Avoid corporate tone.';
+      return [
+        'USER INPUT:',
+        t,
+        '',
+        'STYLE INSTRUCTION:',
+        style,
+        '',
+        'IMPORTANT:',
+        '- Always combine the selected style instruction with the user input.',
+        '- Keep the content platform-aware (LinkedIn = professional, X = casual).',
+        '- If no style is selected, use a balanced and neutral tone.',
+        '',
+        platformGuidance,
+      ].join('\n');
+    };
+
+    const isCreatePostFlow = !isNewsShareMode && suggestionsOnly && !!reflectionFromState;
+
     const suggestionsPromise = isNewsShareMode
       ? chatService.generateNewsArticleShareSuggestions(newsArticleForSuggestions, selectedPlatform)
-      : chatService.generateSocialPostSuggestionsStream(suggestionPromptText, selectedPlatform, {
-          onDelta: (text) => {
-            if (cancelled) return;
-            if (!text) return;
-            setSuggestionsStreamPreview((prev) => {
-              const next = `${prev || ''}${text}`;
-              return next.length > 1800 ? next.slice(-1800) : next;
-            });
-          },
-        });
+      : isCreatePostFlow
+        ? (async () => {
+            const baseText = reflectionFromState;
+            const settled = await Promise.allSettled(
+              STYLE_VARIANTS.map(async (variant) => {
+                const styledPrompt = buildStyledPrompt(baseText, selectedPlatform, variant.instruction);
+                const list = await chatService.generateSocialPostSuggestionsStream(styledPrompt, selectedPlatform);
+                const first = Array.isArray(list) && list.length ? list[0] : null;
+                const postText =
+                  first && typeof first === 'object' && first?.post != null
+                    ? String(first.post)
+                    : typeof first === 'string'
+                      ? first
+                      : String(baseText || '');
+                return { eventLabel: variant.label, post: postText };
+              })
+            );
+            const out = settled
+              .filter((r) => r.status === 'fulfilled')
+              .map((r) => r.value)
+              .filter((x) => x && typeof x.post === 'string' && x.post.trim());
+            if (out.length) return out;
+            return [{ eventLabel: 'Reflection', post: (baseText || '').trim() }];
+          })()
+        : chatService.generateSocialPostSuggestionsStream(suggestionPromptText, selectedPlatform, {
+            onDelta: (text) => {
+              if (cancelled) return;
+              if (!text) return;
+              setSuggestionsStreamPreview((prev) => {
+                const next = `${prev || ''}${text}`;
+                return next.length > 1800 ? next.slice(-1800) : next;
+              });
+            },
+          });
 
     suggestionsPromise.then(async (list) => {
         if (cancelled) return;
@@ -1649,6 +1739,8 @@ export default function ShareSuggestionsPage() {
     newsArticleForSuggestions,
     isNewsShareMode,
     newsArticleFromState?.source,
+    suggestionsOnly,
+    reflectionFromState,
   ]);
 
   const fallbackSuggestions = buildFallbackSuggestions(
