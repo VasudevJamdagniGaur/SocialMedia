@@ -3525,15 +3525,70 @@ export default function ShareSuggestionsPage() {
               {selectedPlatform === 'x' && activeSuggestionImage ? (
                 <div className="w-full flex justify-center mb-4 flex-1 min-h-0">
                   <div className="w-full max-w-[360px] mx-auto">
-                    <TweetShareCard
-                      ref={tweetCardRef}
-                      width={360}
-                      displayName={tweetDisplayName}
-                      username={tweetUsername}
-                      text={editableShareText || selectedText || ''}
-                      imageUrl={activeSuggestionImage}
-                      profileImageUrl={tweetProfileImage}
-                    />
+                    <div className="relative">
+                      <TweetShareCard
+                        ref={tweetCardRef}
+                        width={360}
+                        displayName={tweetDisplayName}
+                        username={tweetUsername}
+                        text={editableShareText || selectedText || ''}
+                        imageUrl={activeSuggestionImage}
+                        profileImageUrl={tweetProfileImage}
+                      />
+
+                      <div className="absolute top-2 right-2 flex flex-col items-end">
+                        <button
+                          type="button"
+                          onClick={handlePencilClick}
+                          className="rounded-full p-2 shadow-lg transition-opacity hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2"
+                          style={{ background: isDarkMode ? HUB.accent : '#7C3AED', color: '#FFF' }}
+                          aria-label="Edit image"
+                        >
+                          <Pencil className="w-4 h-4" strokeWidth={2} />
+                        </button>
+
+                        {imageEditMenuOpen && (
+                          <div
+                            className="mt-1 py-1 rounded-lg shadow-xl border min-w-[176px]"
+                            style={{
+                              background: isDarkMode ? HUB.bgSecondary : '#FFF',
+                              borderColor: isDarkMode ? HUB.divider : 'rgba(0,0,0,0.1)',
+                            }}
+                          >
+                            <button
+                              type="button"
+                              onClick={handleReplacePhoto}
+                              className="w-full text-left px-4 py-2.5 text-sm hover:opacity-90"
+                              style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}
+                            >
+                              Replace photo
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleEditWithAi}
+                              className="w-full text-left px-4 py-2.5 text-sm hover:opacity-90 border-t"
+                              style={{
+                                color: isDarkMode ? HUB.accentHighlight : '#7C3AED',
+                                borderColor: isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)',
+                              }}
+                            >
+                              Edit with AI
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleRemoveImage}
+                              className="w-full text-left px-4 py-2.5 text-sm hover:opacity-90 border-t"
+                              style={{
+                                color: isDarkMode ? HUB.text : '#1A1A1A',
+                                borderColor: isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)',
+                              }}
+                            >
+                              Remove image
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
               ) : (
