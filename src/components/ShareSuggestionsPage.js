@@ -3333,31 +3333,24 @@ export default function ShareSuggestionsPage() {
               Choose a post to share
             </p>
             {isLoadingSuggestions ? (
-              <div className="rounded-xl p-6 flex flex-col items-center justify-center mb-8" style={cardStyle}>
-                <div className="flex space-x-1.5 mb-3">
-                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: HUB.accent, animationDelay: '0ms' }} />
-                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: HUB.accent, animationDelay: '150ms' }} />
-                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: HUB.accent, animationDelay: '300ms' }} />
-                </div>
-                <p className="text-sm" style={{ color: isDarkMode ? HUB.textSecondary : '#666' }}>
-                  Creating {PLATFORM_LABELS[selectedPlatform]}-style suggestions...
-                </p>
-                {suggestionsStreamPreview ? (
-                  <div className="w-full mt-3 max-w-md">
-                    <div
-                      className="w-full rounded-lg border p-3 text-[12px] leading-relaxed whitespace-pre-wrap"
-                      style={{
-                        background: isDarkMode ? HUB.bg : '#F5F5F5',
-                        borderColor: isDarkMode ? HUB.divider : 'rgba(0,0,0,0.12)',
-                        color: isDarkMode ? HUB.text : '#111',
-                        maxHeight: 180,
-                        overflowY: 'auto',
-                      }}
-                    >
-                      {suggestionsStreamPreview}
+              <div className="space-y-3 mb-8" aria-label={`Creating ${PLATFORM_LABELS[selectedPlatform]}-style suggestions`}>
+                {[0, 1, 2].map((i) => (
+                  <div
+                    key={i}
+                    className="rounded-xl overflow-hidden"
+                    style={{
+                      background: isDarkMode ? HUB.bgSecondary : '#FFFFFF',
+                      border: `1px solid ${isDarkMode ? HUB.divider : 'rgba(0,0,0,0.08)'}`,
+                    }}
+                  >
+                    <div className="p-4">
+                      <Skeleton variant="text" className="h-3 w-24 mb-3" />
+                      <Skeleton variant="text" className="h-4 w-[92%]" />
+                      <Skeleton variant="text" className="h-4 w-[84%] mt-2 opacity-90" />
+                      <Skeleton variant="text" className="h-4 w-[70%] mt-2 opacity-80" />
                     </div>
                   </div>
-                ) : null}
+                ))}
               </div>
             ) : platformSuggestions.length > 0 ? (
               <div className="space-y-3 mb-8">
