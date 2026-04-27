@@ -3332,12 +3332,6 @@ export default function ShareSuggestionsPage() {
             <p className="text-sm font-medium mb-3" style={{ color: isDarkMode ? HUB.text : '#1A1A1A' }}>
               Choose a post to share
             </p>
-            {platformSuggestions.length > 0 && !isLoadingSuggestions ? (
-              <p className="text-xs mb-2" style={{ color: isDarkMode ? HUB.textSecondary : '#666' }}>
-                Showing all {platformSuggestions.length} post{platformSuggestions.length !== 1 ? 's' : ''}{' '}
-                {isNewsShareMode ? 'based on this story' : 'for events from your day'}
-              </p>
-            ) : null}
             {isLoadingSuggestions ? (
               <div className="rounded-xl p-6 flex flex-col items-center justify-center mb-8" style={cardStyle}>
                 <div className="flex space-x-1.5 mb-3">
