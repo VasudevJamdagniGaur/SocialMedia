@@ -2031,18 +2031,9 @@ export default function CommunityPage() {
                   {/* Preview cards */}
                   <div className="flex-1 overflow-x-auto no-scrollbar">
                     <div className="flex gap-3">
-                      {mediaItems.length === 0 ? (
-                        <div
-                          className="h-[110px] flex items-center justify-center px-4 rounded-2xl"
-                          style={{ border: `1px solid ${THREADS.divider}`, background: 'rgba(255,255,255,0.03)', color: THREADS.textSecondary, minWidth: 180 }}
-                        >
-                          <span className="text-[12px]">No media added yet</span>
-                        </div>
-                      ) : (
-                        mediaItems.map((m) => (
-                          <MediaCard key={m.id} src={m.src} onRemove={() => removeMediaItem(m.id)} colors={THREADS} />
-                        ))
-                      )}
+                      {mediaItems.map((m) => (
+                        <MediaCard key={m.id} src={m.src} onRemove={() => removeMediaItem(m.id)} colors={THREADS} />
+                      ))}
                     </div>
                   </div>
                 </div>
