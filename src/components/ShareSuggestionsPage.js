@@ -3317,7 +3317,12 @@ export default function ShareSuggestionsPage() {
               src={redditLogoImg}
               alt="Reddit"
               className="object-contain"
-              style={{ width: 22, height: 22 }}
+              style={{
+                width: 31,
+                height: 31,
+                opacity: 0.92,
+                filter: 'grayscale(1) brightness(1.35) contrast(1.05)',
+              }}
             />
           </button>
         </div>
