@@ -259,6 +259,16 @@ export default function TrendingTea() {
     [navigate, returnTo]
   );
 
+  /** Fullscreen vertical feed (TikTok-style snap scroll). */
+  const openTeaFeed = useCallback(() => {
+    navigate('/tea-feed', {
+      state: {
+        teaItems: teaData,
+        returnTo,
+      },
+    });
+  }, [navigate, teaData, returnTo]);
+
   const HUB = {
     bg: '#0F0F0F',
     text: '#FFFFFF',
@@ -349,6 +359,19 @@ export default function TrendingTea() {
             Tea
           </h2>
         </div>
+        <button
+          type="button"
+          onClick={openTeaFeed}
+          disabled={isLoading}
+          className="flex-shrink-0 rounded-full px-3.5 py-2 text-sm font-semibold transition hover:opacity-90 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#A855F7] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0F0F0F] disabled:cursor-not-allowed disabled:opacity-45"
+          style={{
+            color: HUB.accent,
+            border: `1px solid ${HUB.divider}`,
+            backgroundColor: `${HUB.accent}18`,
+          }}
+        >
+          See all
+        </button>
       </div>
 
       <div className="py-3 pl-4">

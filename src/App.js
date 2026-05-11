@@ -26,6 +26,7 @@ import AllReflectionsPage from './components/AllReflectionsPage';
 import AllDayReflectionsPage from './components/AllDayReflectionsPage';
 import ShareReflectionPage from './components/ShareReflectionPage';
 import ShareSuggestionsPage from './components/ShareSuggestionsPage';
+import TeaFeedPage from './components/TeaFeedPage';
 import BottomNavigation from './components/BottomNavigation';
 
 /** Remount when :section / :topicId change so stale feed state is not shown between topics. */
@@ -97,6 +98,15 @@ function AppContent() {
                   ? location.state.returnTo
                   : '/dashboard';
               console.log('📍 Navigating back from share suggestions');
+              navigate(ret, { replace: true });
+            } else if (location.pathname === '/tea-feed') {
+              const ret =
+                location.state &&
+                typeof location.state.returnTo === 'string' &&
+                location.state.returnTo.startsWith('/')
+                  ? location.state.returnTo
+                  : '/dashboard';
+              console.log('📍 Navigating back from Tea feed');
               navigate(ret, { replace: true });
             } else if (location.pathname.startsWith('/user/')) {
               console.log('📍 Navigating back from User Profile');
@@ -215,6 +225,7 @@ function AppContent() {
         <Route path="/reflections" element={<AllDayReflectionsPage />} />
         <Route path="/share-reflection" element={<ShareReflectionPage />} />
         <Route path="/share-suggestions" element={<ShareSuggestionsPage />} />
+        <Route path="/tea-feed" element={<TeaFeedPage />} />
         <Route path="/community" element={<CommunityPage />} />
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/wellbeing" element={<EmotionalWellbeing />} />
