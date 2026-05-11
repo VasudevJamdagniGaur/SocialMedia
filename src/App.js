@@ -14,6 +14,7 @@ import ProfilePage from './components/ProfilePage';
 import UserProfilePage from './components/UserProfilePage';
 import SplashScreen from './components/SplashScreen';
 import CommunityPage from './components/CommunityPage';
+import WatchlistPage from './components/WatchlistPage';
 import PodPage from './components/PodPage';
 import PodSportsPage from './components/PodSportsPage';
 import PodSportsTopicPage from './components/PodSportsTopicPage';
@@ -152,6 +153,9 @@ function AppContent() {
               // Navigate to dashboard from Pod
               console.log('📍 Navigating to dashboard from Pod');
               navigate('/dashboard', { replace: true });
+            } else if (location.pathname === '/watchlist') {
+              console.log('📍 Navigating back from Watchlist to Community');
+              navigate('/community', { replace: true });
             } else if (location.pathname === '/community') {
               // Navigate to dashboard from Community
               console.log('📍 Navigating to dashboard from Community');
@@ -227,6 +231,7 @@ function AppContent() {
         <Route path="/share-suggestions" element={<ShareSuggestionsPage />} />
         <Route path="/tea-feed" element={<TeaFeedPage />} />
         <Route path="/community" element={<CommunityPage />} />
+        <Route path="/watchlist" element={<WatchlistPage />} />
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/wellbeing" element={<EmotionalWellbeing />} />
         <Route path="/profile" element={<ProfilePage />} />

@@ -1273,18 +1273,35 @@ export default function CommunityPage() {
               className="w-full h-full object-cover rounded-full"
             />
           </div>
-          <button
-            onClick={handleProfileClick}
-            className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity overflow-hidden flex-shrink-0"
-            style={{ background: profilePicture ? 'transparent' : THREADS.bgSecondary }}
-            aria-label="Profile"
-          >
-            {profilePicture ? (
-              <img src={profilePicture} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <User className="w-5 h-5 text-white" style={{ color: THREADS.text }} strokeWidth={2} />
-            )}
-          </button>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => navigate('/watchlist')}
+              className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer transition hover:opacity-90 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#A855F7] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0F0F0F]"
+              style={{
+                background: 'rgba(255,255,255,0.08)',
+                border: `1px solid ${THREADS.divider}`,
+                backdropFilter: 'blur(10px)',
+                WebkitBackdropFilter: 'blur(10px)',
+              }}
+              aria-label="Watchlist"
+              title="Watchlist"
+            >
+              <Bookmark className="w-5 h-5" strokeWidth={2} style={{ color: THREADS.text }} />
+            </button>
+            <button
+              onClick={handleProfileClick}
+              className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity overflow-hidden flex-shrink-0"
+              style={{ background: profilePicture ? 'transparent' : THREADS.bgSecondary }}
+              aria-label="Profile"
+            >
+              {profilePicture ? (
+                <img src={profilePicture} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <User className="w-5 h-5 text-white" style={{ color: THREADS.text }} strokeWidth={2} />
+              )}
+            </button>
+          </div>
         </header>
 
         {/* Hamburger menu overlay */}
