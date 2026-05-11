@@ -639,11 +639,11 @@ export default function CommunityPage() {
 
   const tabs = admin
     ? [
-        { id: 'mySpace', label: 'My Presence' },
+        { id: 'mySpace', label: 'My Deeds' },
         { id: 'following', label: 'Following' },
         { id: 'explore', label: 'HUB' },
       ]
-    : [{ id: 'mySpace', label: 'My Presence' }];
+    : [{ id: 'mySpace', label: 'My Deeds' }];
 
   const normalizeReflectionDate = (val) => {
     if (!val) return '';
