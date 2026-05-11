@@ -42,7 +42,8 @@ export default function WatchlistPage() {
   }, [reload]);
 
   const remove = useCallback(
-    (id) => {
+    (id, e) => {
+      if (e) e.stopPropagation();
       removeTeaWatchlistById(id);
       reload();
       try {
@@ -52,6 +53,27 @@ export default function WatchlistPage() {
       }
     },
     [reload]
+  );
+
+  /** Same flow as Tea → ShareSuggestionsPage (in-app), not the raw Reddit tab. */
+  const openShareSuggestions = useCallback(
+    (row) => {
+      if (!row?.url) return;
+      navigate('/share-suggestions', {
+        state: {
+          newsArticle: {
+            title: row.title || '',
+            url: row.url,
+            description: '',
+            image: watchlistHeroUrl(row),
+            source: 'r/BollyBlindsNGossip',
+          },
+          returnTo: '/watchlist',
+          platform: 'linkedin',
+        },
+      });
+    },
+    [navigate]
   );
 
   return (
@@ -90,17 +112,30 @@ export default function WatchlistPage() {
         ) : (
           items.map((row) => {
             const img = watchlistHeroUrl(row);
+            const canOpen = Boolean(row.url);
             return (
               <div
                 key={row.id}
-                className="flex gap-3 rounded-2xl border p-3 overflow-hidden"
+                tabIndex={canOpen ? 0 : -1}
+                onClick={() => canOpen && openShareSuggestions(row)}
+                onKeyDown={(e) => {
+                  if (!canOpen) return;
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    openShareSuggestions(row);
+                  }
+                }}
+                className={`flex gap-3 rounded-2xl border p-3 overflow-hidden w-full text-left transition active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#A855F7] ${
+                  canOpen ? 'cursor-pointer hover:opacity-95' : 'cursor-not-allowed opacity-70'
+                }`}
                 style={{
                   borderColor: DIVIDER,
                   background: '#121212',
                 }}
+                aria-label={canOpen ? `Open share suggestions for ${row.title || 'Tea post'}` : 'Unavailable post'}
               >
                 <div
-                  className="w-[88px] h-[88px] rounded-xl flex-shrink-0 overflow-hidden"
+                  className="w-[88px] h-[88px] rounded-xl flex-shrink-0 overflow-hidden pointer-events-none"
                   style={{ background: '#1a1a1a' }}
                 >
                   {img ? (
@@ -112,18 +147,13 @@ export default function WatchlistPage() {
                   )}
                 </div>
                 <div className="min-w-0 flex-1 flex flex-col gap-2">
-                  <a
-                    href={row.url || '#'}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[15px] font-semibold leading-snug text-white hover:underline decoration-white/30 underline-offset-2"
-                  >
+                  <span className="text-[15px] font-semibold leading-snug text-white line-clamp-3">
                     {row.title || 'Tea post'}
-                  </a>
+                  </span>
                   {row.url ? (
                     <button
                       type="button"
-                      onClick={() => remove(row.id)}
+                      onClick={(e) => remove(row.id, e)}
                       className="self-start inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition hover:opacity-90 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#A855F7]"
                       style={{
                         color: MUTED,
