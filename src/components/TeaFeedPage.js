@@ -7,6 +7,7 @@ import {
   MessageCircle,
 } from 'lucide-react';
 import { compactCommentBody, fetchTeaThreadComments } from '../lib/redditThreadComments';
+import { getTeaWatchlist, toggleTeaWatchlistItem } from '../lib/teaWatchlistStorage';
 
 function isDirectImageUrl(postUrl) {
   if (typeof postUrl !== 'string' || !postUrl.trim()) return false;
@@ -150,6 +151,8 @@ function TeaSlide({
   commentEntry,
   onRequestComments,
   onOpenComments,
+  watchlisted,
+  onToggleWatchlist,
 }) {
   const sectionRef = useRef(null);
   const url = heroImageForItem(item);
@@ -237,10 +240,21 @@ function TeaSlide({
         </button>
         <button
           type="button"
-          className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white/10 backdrop-blur-sm transition active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#A855F7]"
-          aria-label="Bookmark"
+          onClick={() => onToggleWatchlist(item)}
+          disabled={!item.url}
+          className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white/10 backdrop-blur-sm transition active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#A855F7] disabled:cursor-not-allowed disabled:opacity-40"
+          aria-label={watchlisted ? 'Remove from watchlist' : 'Save to watchlist'}
+          aria-pressed={watchlisted}
         >
-          <Bookmark className="h-6 w-6 text-white" strokeWidth={2} />
+          <Bookmark
+            className="h-6 w-6"
+            strokeWidth={2}
+            style={{
+              color: '#fff',
+              fill: watchlisted ? 'rgba(168,85,247,0.45)' : 'transparent',
+              stroke: watchlisted ? '#C084FC' : '#fff',
+            }}
+          />
         </button>
       </div>
 
@@ -294,6 +308,9 @@ export default function TeaFeedPage() {
 
   const [tab, setTab] = useState('forYou');
   const [liked, setLiked] = useState(() => new Set());
+  const [watchlistedIds, setWatchlistedIds] = useState(
+    () => new Set(getTeaWatchlist().map((x) => String(x.id)))
+  );
   /** @type {Record<string, { status: string, comments: Array<{id:string,author:string,body:string,score:number}>, error: string|null }>} */
   const [commentsByPostId, setCommentsByPostId] = useState({});
   const feedScrollRef = useRef(null);
@@ -317,6 +334,31 @@ export default function TeaFeedPage() {
       return next;
     });
   }, []);
+
+  const refreshWatchlistIds = useCallback(() => {
+    setWatchlistedIds(new Set(getTeaWatchlist().map((x) => String(x.id))));
+  }, []);
+
+  useEffect(() => {
+    const onUpdate = () => refreshWatchlistIds();
+    window.addEventListener('teaWatchlistUpdated', onUpdate);
+    window.addEventListener('storage', onUpdate);
+    return () => {
+      window.removeEventListener('teaWatchlistUpdated', onUpdate);
+      window.removeEventListener('storage', onUpdate);
+    };
+  }, [refreshWatchlistIds]);
+
+  const toggleWatchlist = useCallback((item) => {
+    if (!item?.url) return;
+    toggleTeaWatchlistItem(item);
+    refreshWatchlistIds();
+    try {
+      window.dispatchEvent(new CustomEvent('teaWatchlistUpdated'));
+    } catch (_) {
+      /* ignore */
+    }
+  }, [refreshWatchlistIds]);
 
   const requestComments = useCallback((item) => {
     const postId = item?.id;
@@ -442,6 +484,8 @@ export default function TeaFeedPage() {
               commentEntry={commentsByPostId[item.id]}
               onRequestComments={requestComments}
               onOpenComments={openCommentsModal}
+              watchlisted={watchlistedIds.has(String(item.id))}
+              onToggleWatchlist={toggleWatchlist}
             />
           ))}
         </div>
