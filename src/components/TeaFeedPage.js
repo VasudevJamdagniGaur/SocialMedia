@@ -54,7 +54,7 @@ function TeaSlide({ item, idx, liked, onToggleLike, onShare }) {
         <img
           src={url}
           alt=""
-          className="absolute inset-0 h-full w-full object-cover"
+          className="absolute inset-0 h-full w-full object-contain object-center"
           loading={idx < 2 ? 'eager' : 'lazy'}
           decoding="async"
           onError={() => setImgFailed(true)}
