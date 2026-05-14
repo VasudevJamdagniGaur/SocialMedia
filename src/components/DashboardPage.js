@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
-import { MessageCircle, Calendar, Heart, Sparkles, User, Sun, Moon, ChevronRight, Share2, Plus } from "lucide-react";
+import { MessageCircle, Calendar, Heart, User, Sun, Moon, ChevronRight, Share2, Plus } from "lucide-react";
 import { useTheme } from '../contexts/ThemeContext';
 import CalendarPopup from './CalendarPopup';
 import reflectionService from '../services/reflectionService';
@@ -633,29 +633,53 @@ export default function DashboardPage() {
           />
         </div>
 
-          {/* Right icon - Profile */}
-          <div
-            onClick={handleProfileClick}
-            className={`w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity overflow-hidden ${
-              isDarkMode ? 'backdrop-blur-md' : 'bg-white'
-            }`}
-            style={isDarkMode ? {
-              backgroundColor: profilePicture ? "transparent" : HUB.bgSecondary,
-              boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-              border: profilePicture ? "none" : `1px solid ${HUB.divider}`,
-            } : {
-              boxShadow: "0 2px 8px rgba(177, 156, 217, 0.15)",
-            }}
-          >
-            {profilePicture ? (
-              <img 
-                src={profilePicture} 
-                alt="Profile" 
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <User className="w-5 h-5" style={{ color: HUB.accent }} strokeWidth={1.5} />
-            )}
+          {/* Right: feedback + profile */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => navigate('/help-improve-deite')}
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:opacity-90 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#A855F7] ${
+                isDarkMode ? 'backdrop-blur-md' : 'bg-white'
+              }`}
+              style={
+                isDarkMode
+                  ? {
+                      backgroundColor: HUB.bgSecondary,
+                      boxShadow: '0 4px 16px rgba(0, 0, 0, 0.15)',
+                      border: `1px solid ${HUB.divider}`,
+                    }
+                  : { boxShadow: '0 2px 8px rgba(177, 156, 217, 0.15)' }
+              }
+              aria-label="Help improve Deite"
+              title="Help improve Deite"
+            >
+              <span className="text-[17px] leading-none select-none" aria-hidden>
+                ✨
+              </span>
+            </button>
+            <div
+              onClick={handleProfileClick}
+              className={`w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity overflow-hidden ${
+                isDarkMode ? 'backdrop-blur-md' : 'bg-white'
+              }`}
+              style={isDarkMode ? {
+                backgroundColor: profilePicture ? "transparent" : HUB.bgSecondary,
+                boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
+                border: profilePicture ? "none" : `1px solid ${HUB.divider}`,
+              } : {
+                boxShadow: "0 2px 8px rgba(177, 156, 217, 0.15)",
+              }}
+            >
+              {profilePicture ? (
+                <img 
+                  src={profilePicture} 
+                  alt="Profile" 
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <User className="w-5 h-5" style={{ color: HUB.accent }} strokeWidth={1.5} />
+              )}
+            </div>
           </div>
         </div>
 

@@ -28,6 +28,7 @@ import AllDayReflectionsPage from './components/AllDayReflectionsPage';
 import ShareReflectionPage from './components/ShareReflectionPage';
 import ShareSuggestionsPage from './components/ShareSuggestionsPage';
 import TeaFeedPage from './components/TeaFeedPage';
+import HelpImproveDeitePage from './components/HelpImproveDeitePage';
 import BottomNavigation from './components/BottomNavigation';
 
 /** Remount when :section / :topicId change so stale feed state is not shown between topics. */
@@ -90,6 +91,9 @@ function AppContent() {
             } else if (location.pathname === '/profile') {
               // Navigate to dashboard from Profile
               console.log('📍 Navigating to dashboard from Profile');
+              navigate('/dashboard', { replace: true });
+            } else if (location.pathname === '/help-improve-deite') {
+              console.log('📍 Navigating back from Help Improve Deite');
               navigate('/dashboard', { replace: true });
             } else if (location.pathname === '/share-suggestions') {
               const ret =
@@ -230,6 +234,7 @@ function AppContent() {
         <Route path="/share-reflection" element={<ShareReflectionPage />} />
         <Route path="/share-suggestions" element={<ShareSuggestionsPage />} />
         <Route path="/tea-feed" element={<TeaFeedPage />} />
+        <Route path="/help-improve-deite" element={<HelpImproveDeitePage />} />
         <Route path="/community" element={<CommunityPage />} />
         <Route path="/watchlist" element={<WatchlistPage />} />
         <Route path="/chat" element={<ChatPage />} />

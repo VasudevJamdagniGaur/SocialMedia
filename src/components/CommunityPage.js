@@ -1290,6 +1290,23 @@ export default function CommunityPage() {
               <Bookmark className="w-5 h-5" strokeWidth={2} style={{ color: THREADS.text }} />
             </button>
             <button
+              type="button"
+              onClick={() => navigate('/help-improve-deite')}
+              className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer transition hover:opacity-90 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#A855F7] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0F0F0F]"
+              style={{
+                background: 'rgba(255,255,255,0.08)',
+                border: `1px solid ${THREADS.divider}`,
+                backdropFilter: 'blur(10px)',
+                WebkitBackdropFilter: 'blur(10px)',
+              }}
+              aria-label="Help improve Deite"
+              title="Help improve Deite"
+            >
+              <span className="text-[17px] leading-none select-none" aria-hidden>
+                ✨
+              </span>
+            </button>
+            <button
               onClick={handleProfileClick}
               className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity overflow-hidden flex-shrink-0"
               style={{ background: profilePicture ? 'transparent' : THREADS.bgSecondary }}

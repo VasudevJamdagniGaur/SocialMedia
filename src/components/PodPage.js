@@ -512,9 +512,32 @@ export default function PodPage() {
                 Crew <span className={`font-normal ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>(beta)</span>
               </h1>
             </div>
-            {/* Right: Profile - same as dashboard */}
-            <div
-              onClick={handleProfileClick}
+            {/* Right: Help improve + Profile - same pattern as dashboard */}
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => navigate('/help-improve-deite')}
+                className={`w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#A855F7] ${
+                  isDarkMode ? 'backdrop-blur-md' : 'bg-white'
+                }`}
+                style={
+                  isDarkMode
+                    ? {
+                        backgroundColor: '#121212',
+                        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.15)',
+                        border: '1px solid #1E1E1E',
+                      }
+                    : { boxShadow: '0 2px 8px rgba(177, 156, 217, 0.15)' }
+                }
+                aria-label="Help improve Deite"
+                title="Help improve Deite"
+              >
+                <span className="text-[17px] leading-none select-none" aria-hidden>
+                  ✨
+                </span>
+              </button>
+              <div
+                onClick={handleProfileClick}
               className={`w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity overflow-hidden flex-shrink-0 ${
                 isDarkMode ? 'backdrop-blur-md' : 'bg-white'
               }`}
@@ -535,6 +558,7 @@ export default function PodPage() {
               ) : (
                 <User className="w-5 h-5" style={{ color: "#A855F7" }} strokeWidth={1.5} />
               )}
+            </div>
             </div>
           </div>
         </div>
