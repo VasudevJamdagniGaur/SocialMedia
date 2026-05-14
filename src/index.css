@@ -314,35 +314,30 @@ button:hover {
   animation: skeletonShimmer 1.35s ease-in-out infinite;
 }
 
-/* Tea feed: comment preview chip — fadeIn 150ms, visible 2200ms, fadeOut 200ms (2.55s total) */
-@keyframes teaCommentPreviewPop {
+/* Tea feed: comment preview — fadeIn 150ms, hold 2200ms, fadeOut 200ms (2550ms); then removed in JS */
+@keyframes teaCommentPreviewCycle {
   0% {
     opacity: 0;
-    transform: translateY(12px);
   }
-  5.8823529412% {
+  5.882352941176471% {
     opacity: 1;
-    transform: translateY(0);
   }
-  92.1568627451% {
+  92.15686274509804% {
     opacity: 1;
-    transform: translateY(0);
   }
   100% {
     opacity: 0;
-    transform: translateY(10px);
   }
 }
 
-.tea-comment-preview-pop {
-  animation: teaCommentPreviewPop 2.55s ease-out backwards;
+.tea-comment-preview-cycle {
+  animation: teaCommentPreviewCycle 2550ms linear both;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tea-comment-preview-pop {
+  .tea-comment-preview-cycle {
     animation: none;
     opacity: 1;
-    transform: none;
   }
 }
 

@@ -924,6 +924,10 @@ export default function ShareSuggestionsPage() {
   const eventLabelDefault = isNewsShareMode ? newsShareEventLabel : 'Reflection';
   const shareReturnTo =
     typeof state.returnTo === 'string' && state.returnTo.startsWith('/') ? state.returnTo : '/dashboard';
+  const shareReturnState =
+    state.returnState && typeof state.returnState === 'object' && !Array.isArray(state.returnState)
+      ? state.returnState
+      : null;
   const platformFromState = state.platform; // 'linkedin' | 'x' | 'reddit' when from Dashboard icons
 
   // Selected platform: from navigation state or from tapping an icon (LinkedIn / X / Reddit)
@@ -3276,7 +3280,9 @@ export default function ShareSuggestionsPage() {
         <div className="flex items-center gap-3 pt-2 pb-4">
           <button
             type="button"
-            onClick={() => navigate(shareReturnTo)}
+            onClick={() =>
+              navigate(shareReturnTo, shareReturnState ? { state: shareReturnState } : undefined)
+            }
             className="p-2 -ml-2 rounded-full transition-opacity hover:opacity-90"
             style={{ color: isDarkMode ? HUB.textSecondary : '#666' }}
             aria-label="Go back"

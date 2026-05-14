@@ -1,4 +1,13 @@
-import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  forwardRef,
+  memo,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -47,8 +56,38 @@ const COMMENT_BODY_PRIMARY = { color: 'rgba(241,245,249,0.96)', fontSize: '15px'
 const COMMENT_BODY_FALLBACK = { color: '#e2e8f0' };
 
 const URL_IN_TEXT = /(https?:\/\/[^\s]+)/gi;
+/** Markdown-style links [label](url) — excluded from the floating comment preview. */
+const MARKDOWN_LINK_RE = /\[[^\]]*\]\([^)]+\)/;
+
+const TEA_PREVIEW_FADE_IN_MS = 150;
+const TEA_PREVIEW_VISIBLE_MS = 2200;
+const TEA_PREVIEW_FADE_OUT_MS = 200;
+const TEA_PREVIEW_CYCLE_TOTAL_MS =
+  TEA_PREVIEW_FADE_IN_MS + TEA_PREVIEW_VISIBLE_MS + TEA_PREVIEW_FADE_OUT_MS;
 
 const USERNAME_MAX = 17;
+
+function commentBodyHasLinkLikeContent(body) {
+  if (typeof body !== 'string' || !body.trim()) return false;
+  if (/https?:\/\/\S/i.test(body)) return true;
+  if (/www\.\S/i.test(body)) return true;
+  if (MARKDOWN_LINK_RE.test(body)) return true;
+  return false;
+}
+
+/** First loaded comment safe to show in the preview chip (plain text only, no URLs). */
+function firstTextOnlyCommentForPreview(comments) {
+  if (!Array.isArray(comments)) return null;
+  for (const c of comments) {
+    const body = c?.body;
+    if (typeof body !== 'string' || !body.trim()) continue;
+    if (commentBodyHasLinkLikeContent(body)) continue;
+    const compact = compactCommentBody(body, 2000).trim();
+    if (!compact) continue;
+    return c;
+  }
+  return null;
+}
 
 /** Instagram-ish cleanup: trim suffix noise, cap length. */
 function formatTeaUsername(raw) {
@@ -206,9 +245,20 @@ const TeaCommentRow = memo(function TeaCommentRow({ comment, liked, onToggleLike
   );
 });
 
-function TeaCommentsPanel({ item, entry, onClose }) {
+const TeaCommentsPanel = forwardRef(function TeaCommentsPanel({ item, entry, onClose }, ref) {
   const status = entry?.status ?? 'idle';
   const comments = entry?.comments ?? [];
+
+  const textOnlyComments = useMemo(
+    () =>
+      comments.filter((c) => {
+        const body = c?.body;
+        if (typeof body !== 'string' || !body.trim()) return false;
+        if (commentBodyHasLinkLikeContent(body)) return false;
+        return Boolean(compactCommentBody(body, 2000).trim());
+      }),
+    [comments]
+  );
 
   const panelRootRef = useRef(null);
   const listRef = useRef(null);
@@ -229,6 +279,17 @@ function TeaCommentsPanel({ item, entry, onClose }) {
     dragYRef.current = v;
     setDragY(v);
   }, []);
+
+  const beginAnimatedDismiss = useCallback(() => {
+    if (closingAnimRef.current) return;
+    const H = typeof window !== 'undefined' ? window.innerHeight : 800;
+    closingAnimRef.current = true;
+    setPanelTransition('transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)');
+    requestAnimationFrame(() => setDrag(H));
+    teaHaptic('medium');
+  }, [setDrag]);
+
+  useImperativeHandle(ref, () => ({ dismiss: beginAnimatedDismiss }), [beginAnimatedDismiss]);
 
   const onDismissPointerDown = useCallback((e) => {
     if (closingAnimRef.current) return;
@@ -253,15 +314,12 @@ function TeaCommentsPanel({ item, entry, onClose }) {
     const H = typeof window !== 'undefined' ? window.innerHeight : 800;
     const threshold = Math.max(72, H * 0.1);
     if (dragYRef.current > threshold) {
-      closingAnimRef.current = true;
-      setPanelTransition('transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)');
-      requestAnimationFrame(() => setDrag(H));
-      teaHaptic('medium');
+      beginAnimatedDismiss();
     } else {
       setPanelTransition('transform 0.22s ease-out');
       setDrag(0);
     }
-  }, [setDrag]);
+  }, [beginAnimatedDismiss, setDrag]);
 
   const onDismissPointerUp = useCallback(
     (e) => {
@@ -349,8 +407,8 @@ function TeaCommentsPanel({ item, entry, onClose }) {
         </div>
       </div>
       <p id="tea-comments-panel-hint" className="sr-only">
-        Swipe down on the handle or title bar to hide comments and return to the full feed. Press
-        Escape to close.
+        Swipe down on the handle or title bar to hide comments and return to the full feed, or tap
+        the post image. Press Escape to close.
       </p>
 
       <div
@@ -383,12 +441,17 @@ function TeaCommentsPanel({ item, entry, onClose }) {
             No comments to show.
           </p>
         ) : null}
-        {status === 'loaded' ? (
+        {status === 'loaded' && comments.length > 0 && textOnlyComments.length === 0 ? (
+          <p className="py-10 text-center text-sm font-medium" style={{ color: HUB.muted }}>
+            No plain-text comments to show here. Open Reddit for the full thread.
+          </p>
+        ) : null}
+        {status === 'loaded' && textOnlyComments.length > 0 ? (
           <div className="pb-2 pt-1">
             <p className="sr-only" aria-live="polite">
-              {comments.length} comments loaded
+              {textOnlyComments.length} text comments shown
             </p>
-            {comments.map((c) => (
+            {textOnlyComments.map((c) => (
               <TeaCommentRow
                 key={c.id}
                 comment={c}
@@ -445,7 +508,7 @@ function TeaCommentsPanel({ item, entry, onClose }) {
       </div>
     </div>
   );
-}
+});
 
 function TeaSlide({
   item,
@@ -460,11 +523,20 @@ function TeaSlide({
   onToggleWatchlist,
   splitFeed,
   commentsPanelOpen,
+  commentsModalPostId,
+  onDismissCommentsViaImage,
+  onOpenShareSuggestions,
 }) {
   const sectionRef = useRef(null);
   const url = heroImageForItem(item);
   const [imgFailed, setImgFailed] = useState(false);
   const showImg = Boolean(url) && !imgFailed;
+  const dismissCommentsOverlayActive = Boolean(
+    splitFeed && commentsModalPostId && item.id === commentsModalPostId
+  );
+  const heroOpensShareSuggestions = Boolean(
+    item.url && onOpenShareSuggestions && !dismissCommentsOverlayActive
+  );
 
   useEffect(() => {
     const el = sectionRef.current;
@@ -483,16 +555,33 @@ function TeaSlide({
 
   const commentsStatus = commentEntry?.status ?? 'idle';
   const comments = commentEntry?.comments ?? [];
-  const topPreview = comments.length > 0 ? comments[0] : null;
-  const showCommentPreview = Boolean(
-    item.url && commentsStatus === 'loaded' && topPreview && !commentsPanelOpen
-  );
-  const [commentPreviewAnimating, setCommentPreviewAnimating] = useState(true);
+  const textOnlyPreview = useMemo(() => firstTextOnlyCommentForPreview(comments), [comments]);
+  const [previewDismissed, setPreviewDismissed] = useState(false);
 
   useEffect(() => {
-    if (!showCommentPreview) return;
-    setCommentPreviewAnimating(true);
-  }, [showCommentPreview, topPreview?.id, item.id]);
+    setPreviewDismissed(false);
+  }, [item.id]);
+
+  useEffect(() => {
+    if (commentsPanelOpen) setPreviewDismissed(true);
+  }, [commentsPanelOpen]);
+
+  const showCommentPreviewButton = Boolean(
+    item.url &&
+      commentsStatus === 'loaded' &&
+      textOnlyPreview &&
+      !commentsPanelOpen &&
+      !previewDismissed
+  );
+
+  useEffect(() => {
+    if (!showCommentPreviewButton) return undefined;
+    const mq =
+      typeof window !== 'undefined' ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+    if (!mq?.matches) return undefined;
+    const id = window.setTimeout(() => setPreviewDismissed(true), TEA_PREVIEW_CYCLE_TOTAL_MS);
+    return () => window.clearTimeout(id);
+  }, [showCommentPreviewButton]);
 
   return (
     <section
@@ -506,20 +595,67 @@ function TeaSlide({
         <img
           src={url}
           alt=""
-          className="absolute inset-0 h-full w-full object-contain object-center"
+          className={`absolute inset-0 h-full w-full object-contain object-center ${
+            heroOpensShareSuggestions ? 'cursor-pointer' : ''
+          }`}
           loading={idx < 2 ? 'eager' : 'lazy'}
           decoding="async"
           onError={() => setImgFailed(true)}
+          role={heroOpensShareSuggestions ? 'button' : undefined}
+          tabIndex={heroOpensShareSuggestions ? 0 : undefined}
+          aria-label={heroOpensShareSuggestions ? 'Open share suggestions for this post' : undefined}
+          onKeyDown={
+            heroOpensShareSuggestions
+              ? (e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onOpenShareSuggestions(item);
+                  }
+                }
+              : undefined
+          }
+          onClick={
+            heroOpensShareSuggestions
+              ? () => {
+                  onOpenShareSuggestions(item);
+                }
+              : undefined
+          }
         />
       ) : (
         <div
-          className="absolute inset-0 flex items-center justify-center text-5xl select-none"
+          className={`absolute inset-0 flex items-center justify-center text-5xl select-none ${
+            heroOpensShareSuggestions ? 'cursor-pointer' : ''
+          }`}
           style={{ background: FALLBACK_GRADIENTS[idx % FALLBACK_GRADIENTS.length] }}
-          aria-hidden
+          aria-hidden={!heroOpensShareSuggestions}
+          role={heroOpensShareSuggestions ? 'button' : undefined}
+          tabIndex={heroOpensShareSuggestions ? 0 : undefined}
+          aria-label={heroOpensShareSuggestions ? 'Open share suggestions for this post' : undefined}
+          onKeyDown={
+            heroOpensShareSuggestions
+              ? (e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onOpenShareSuggestions(item);
+                  }
+                }
+              : undefined
+          }
+          onClick={heroOpensShareSuggestions ? () => onOpenShareSuggestions(item) : undefined}
         >
           ☕
         </div>
       )}
+
+      {splitFeed && commentsModalPostId && item.id === commentsModalPostId ? (
+        <button
+          type="button"
+          className="absolute inset-0 z-[2] cursor-pointer border-0 bg-transparent p-0 transition-colors hover:bg-white/[0.03] active:bg-white/[0.05]"
+          aria-label="Hide comments and show full post"
+          onClick={() => onDismissCommentsViaImage?.()}
+        />
+      ) : null}
 
       <div
         className="absolute inset-0 pointer-events-none z-[1]"
@@ -582,23 +718,19 @@ function TeaSlide({
       {!splitFeed ? (
         <div className="absolute inset-x-0 bottom-0 z-[2] px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] pt-24 pointer-events-none">
           <div className="pointer-events-auto max-w-[calc(100vw-5rem)] space-y-2.5">
-            {showCommentPreview ? (
+            {showCommentPreviewButton ? (
               <button
                 type="button"
-                key={`preview-${item.id}-${topPreview.id}`}
+                key={`preview-${item.id}-${textOnlyPreview.id}`}
                 onClick={() => onOpenComments(item)}
                 onAnimationEnd={(e) => {
-                  if (e.animationName === 'teaCommentPreviewPop') {
-                    setCommentPreviewAnimating(false);
-                  }
+                  if (e.animationName === 'teaCommentPreviewCycle') setPreviewDismissed(true);
                 }}
-                className={`${
-                  commentPreviewAnimating ? 'tea-comment-preview-pop ' : ''
-                }group relative z-[1] mb-1 w-full max-w-full rounded-full border border-white/18 bg-black/50 px-5 py-3.5 text-left shadow-[0_-8px_32px_rgba(0,0,0,0.45)] backdrop-blur-md transition-transform duration-150 active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#A855F7]`}
+                className="tea-comment-preview-cycle group relative z-[1] mb-1 w-full max-w-full rounded-full border border-white/18 bg-black/50 px-5 py-3.5 text-left shadow-[0_-8px_32px_rgba(0,0,0,0.45)] backdrop-blur-md transition-transform duration-150 active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#A855F7]"
                 aria-label="Open comments"
               >
                 <TeaCommentRichText
-                  text={compactCommentBody(topPreview.body, 160)}
+                  text={compactCommentBody(textOnlyPreview.body, 160)}
                   className="line-clamp-2 text-left text-[13px] font-medium leading-snug"
                 />
               </button>
@@ -729,6 +861,32 @@ export default function TeaFeedPage() {
     [requestComments]
   );
 
+  const openShareSuggestionsFromTea = useCallback(
+    (item) => {
+      if (!item?.url) return;
+      navigate('/share-suggestions', {
+        state: {
+          newsArticle: {
+            title: item.title || '',
+            url: item.url,
+            description: '',
+            image: heroImageForItem(item),
+            source: 'r/BollyBlindsNGossip',
+          },
+          returnTo: '/tea-feed',
+          returnState: { teaItems: rawItems, returnTo },
+          platform: 'linkedin',
+        },
+      });
+    },
+    [navigate, rawItems, returnTo]
+  );
+
+  const commentsPanelRef = useRef(null);
+  const dismissCommentsAnimated = useCallback(() => {
+    commentsPanelRef.current?.dismiss?.();
+  }, []);
+
   return (
     <div
       className="fixed inset-0 z-[100] flex min-h-0 flex-col bg-black"
@@ -813,6 +971,9 @@ export default function TeaFeedPage() {
                     idx={idx}
                     splitFeed
                     commentsPanelOpen={Boolean(commentsModalItem)}
+                    commentsModalPostId={commentsModalItem.id}
+                    onDismissCommentsViaImage={dismissCommentsAnimated}
+                    onOpenShareSuggestions={openShareSuggestionsFromTea}
                     liked={liked.has(item.id)}
                     onToggleLike={toggleLike}
                     scrollRootRef={feedScrollRef}
@@ -827,6 +988,7 @@ export default function TeaFeedPage() {
             </div>
           </div>
           <TeaCommentsPanel
+            ref={commentsPanelRef}
             key={commentsModalItem.id}
             item={commentsModalItem}
             entry={commentsByPostId[commentsModalItem.id]}
@@ -847,6 +1009,7 @@ export default function TeaFeedPage() {
               item={item}
               idx={idx}
               commentsPanelOpen={Boolean(commentsModalItem)}
+              onOpenShareSuggestions={openShareSuggestionsFromTea}
               liked={liked.has(item.id)}
               onToggleLike={toggleLike}
               scrollRootRef={feedScrollRef}
