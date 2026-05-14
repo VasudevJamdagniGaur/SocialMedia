@@ -14,7 +14,8 @@ const THREADS = {
   accentShadow: '#7E22CE',
 };
 
-const WHATSAPP_NUMBER = '9195361381320';
+/** International digits only (no +) for wa.me — +91 9536138120 */
+const WHATSAPP_NUMBER = '919536138120';
 
 const OBJECTIVE_OPTIONS = [
   { id: 'feature', label: 'Request feature' },
