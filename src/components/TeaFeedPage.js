@@ -3,7 +3,6 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft,
   Bookmark,
-  ChevronDown,
   Heart,
   MessageCircle,
 } from 'lucide-react';
@@ -211,11 +210,82 @@ function TeaCommentsPanel({ item, entry, onClose }) {
   const status = entry?.status ?? 'idle';
   const comments = entry?.comments ?? [];
 
+  const panelRootRef = useRef(null);
   const listRef = useRef(null);
   const [draft, setDraft] = useState('');
   const [likedMap, setLikedMap] = useState(() => ({}));
   const [keyboardPad, setKeyboardPad] = useState(0);
   const inputRef = useRef(null);
+
+  const dragYRef = useRef(0);
+  const [dragY, setDragY] = useState(0);
+  const [panelTransition, setPanelTransition] = useState('');
+  const dragActiveRef = useRef(false);
+  const dragOriginRef = useRef({ clientY: 0, startDrag: 0 });
+  const closingAnimRef = useRef(false);
+
+  const setDrag = useCallback((y) => {
+    const v = Math.max(0, y);
+    dragYRef.current = v;
+    setDragY(v);
+  }, []);
+
+  const onDismissPointerDown = useCallback((e) => {
+    if (closingAnimRef.current) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    dragActiveRef.current = true;
+    setPanelTransition('none');
+    dragOriginRef.current = { clientY: e.clientY, startDrag: dragYRef.current };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }, []);
+
+  const onDismissPointerMove = useCallback(
+    (e) => {
+      if (!dragActiveRef.current) return;
+      const dy = e.clientY - dragOriginRef.current.clientY;
+      setDrag(Math.max(0, dragOriginRef.current.startDrag + dy));
+    },
+    [setDrag]
+  );
+
+  const endDismissDrag = useCallback(() => {
+    dragActiveRef.current = false;
+    const H = typeof window !== 'undefined' ? window.innerHeight : 800;
+    const threshold = Math.max(72, H * 0.1);
+    if (dragYRef.current > threshold) {
+      closingAnimRef.current = true;
+      setPanelTransition('transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)');
+      requestAnimationFrame(() => setDrag(H));
+      teaHaptic('medium');
+    } else {
+      setPanelTransition('transform 0.22s ease-out');
+      setDrag(0);
+    }
+  }, [setDrag]);
+
+  const onDismissPointerUp = useCallback(
+    (e) => {
+      if (!dragActiveRef.current) return;
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch (_) {
+        /* ignore */
+      }
+      endDismissDrag();
+    },
+    [endDismissDrag]
+  );
+
+  const onPanelTransitionEnd = useCallback(
+    (e) => {
+      if (e.target !== panelRootRef.current || e.propertyName !== 'transform') return;
+      if (closingAnimRef.current) {
+        closingAnimRef.current = false;
+        onClose();
+      }
+    },
+    [onClose]
+  );
 
   const toggleCommentLike = useCallback((id) => {
     setLikedMap((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -252,32 +322,35 @@ function TeaCommentsPanel({ item, entry, onClose }) {
 
   return (
     <div
+      ref={panelRootRef}
       className="relative flex min-h-0 flex-1 flex-col border-t border-white/10 bg-[#0c0c0c]"
       role="region"
       aria-labelledby="tea-comments-title"
       aria-describedby="tea-comments-panel-hint"
+      onTransitionEnd={onPanelTransitionEnd}
+      style={{
+        transform: `translateY(${dragY}px)`,
+        transition: panelTransition,
+        willChange: panelTransition && panelTransition !== 'none' ? 'transform' : undefined,
+      }}
     >
-      <div className="relative flex shrink-0 items-center justify-center border-b border-white/[0.08] px-3 py-2.5">
+      <div
+        className="relative flex shrink-0 touch-none cursor-grab select-none flex-col items-center justify-center border-b border-white/[0.08] px-3 py-3 active:cursor-grabbing"
+        onPointerDown={onDismissPointerDown}
+        onPointerMove={onDismissPointerMove}
+        onPointerUp={onDismissPointerUp}
+        onPointerCancel={onDismissPointerUp}
+      >
         <div className="flex flex-col items-center gap-1.5">
-          <div className="h-1 w-10 shrink-0 rounded-full bg-white/25" aria-hidden />
+          <div className="h-1 w-11 shrink-0 rounded-full bg-white/28" aria-hidden />
           <h2 id="tea-comments-title" className="text-[15px] font-bold tracking-tight text-white">
             Comments
           </h2>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            teaHaptic('light');
-            onClose();
-          }}
-          className="absolute right-2 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full text-white/85 transition hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#A855F7]"
-          aria-label="Hide comments"
-        >
-          <ChevronDown className="h-6 w-6" strokeWidth={2} />
-        </button>
       </div>
       <p id="tea-comments-panel-hint" className="sr-only">
-        Comments appear below the post. Use the down control or Escape to return to the full feed.
+        Swipe down on the handle or title bar to hide comments and return to the full feed. Press
+        Escape to close.
       </p>
 
       <div
@@ -386,6 +459,7 @@ function TeaSlide({
   watchlisted,
   onToggleWatchlist,
   splitFeed,
+  commentsPanelOpen,
 }) {
   const sectionRef = useRef(null);
   const url = heroImageForItem(item);
@@ -410,6 +484,15 @@ function TeaSlide({
   const commentsStatus = commentEntry?.status ?? 'idle';
   const comments = commentEntry?.comments ?? [];
   const topPreview = comments.length > 0 ? comments[0] : null;
+  const showCommentPreview = Boolean(
+    item.url && commentsStatus === 'loaded' && topPreview && !commentsPanelOpen
+  );
+  const [commentPreviewAnimating, setCommentPreviewAnimating] = useState(true);
+
+  useEffect(() => {
+    if (!showCommentPreview) return;
+    setCommentPreviewAnimating(true);
+  }, [showCommentPreview, topPreview?.id, item.id]);
 
   return (
     <section
@@ -441,90 +524,102 @@ function TeaSlide({
       <div
         className="absolute inset-0 pointer-events-none z-[1]"
         style={{
-          background:
-            'linear-gradient(to top, rgba(0,0,0,0.94) 0%, rgba(0,0,0,0.35) 45%, transparent 72%)',
+          background: splitFeed
+            ? 'linear-gradient(to top, rgba(0,0,0,0.35) 0%, transparent 55%)'
+            : 'linear-gradient(to top, rgba(0,0,0,0.94) 0%, rgba(0,0,0,0.35) 45%, transparent 72%)',
         }}
       />
 
-      <div className="absolute right-3 bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] z-[3] flex flex-col gap-5 pointer-events-auto">
-        <button
-          type="button"
-          onClick={() => onToggleLike(item.id)}
-          className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white/10 backdrop-blur-sm transition active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#A855F7]"
-          aria-label={liked ? 'Unlike' : 'Like'}
-          aria-pressed={liked}
-        >
-          <Heart
-            className="h-6 w-6"
-            strokeWidth={2}
-            style={{
-              color: '#fff',
-              fill: liked ? 'rgba(239,68,68,0.9)' : 'transparent',
-              stroke: liked ? 'rgba(239,68,68,0.95)' : '#fff',
-            }}
-          />
-        </button>
-        <button
-          type="button"
-          onClick={() => onOpenComments(item)}
-          disabled={!item.url}
-          className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white/10 backdrop-blur-sm transition active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#A855F7] disabled:cursor-not-allowed disabled:opacity-40"
-          aria-label={`Comments${item.num_comments != null ? `, ${item.num_comments} total` : ''}`}
-        >
-          <MessageCircle className="h-6 w-6 text-white" strokeWidth={2} />
-        </button>
-        <button
-          type="button"
-          onClick={() => onToggleWatchlist(item)}
-          disabled={!item.url}
-          className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white/10 backdrop-blur-sm transition active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#A855F7] disabled:cursor-not-allowed disabled:opacity-40"
-          aria-label={watchlisted ? 'Remove from watchlist' : 'Save to watchlist'}
-          aria-pressed={watchlisted}
-        >
-          <Bookmark
-            className="h-6 w-6"
-            strokeWidth={2}
-            style={{
-              color: '#fff',
-              fill: watchlisted ? 'rgba(168,85,247,0.45)' : 'transparent',
-              stroke: watchlisted ? '#C084FC' : '#fff',
-            }}
-          />
-        </button>
-      </div>
-
-      <div className="absolute inset-x-0 bottom-0 z-[2] px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] pt-24 pointer-events-none">
-        <div className="pointer-events-auto max-w-[calc(100vw-5rem)] space-y-2.5">
-          {item.url && commentsStatus === 'loaded' && topPreview ? (
-            <button
-              type="button"
-              key={`preview-${item.id}-${topPreview.id}`}
-              onClick={() => onOpenComments(item)}
-              className="group relative z-[1] mb-1 w-full max-w-full rounded-full border border-white/18 bg-black/50 px-5 py-3.5 text-left shadow-[0_-8px_32px_rgba(0,0,0,0.45)] backdrop-blur-md transition active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#A855F7]"
-              aria-label="Open comments"
-            >
-              <TeaCommentRichText
-                text={compactCommentBody(topPreview.body, 160)}
-                className="line-clamp-2 text-left text-[13px] font-medium leading-snug"
-              />
-            </button>
-          ) : null}
-
-          <span
-            className="inline-block rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide"
-            style={{
-              color: HUB.accent,
-              backgroundColor: HUB.pillBg,
-              border: '1px solid rgba(168,85,247,0.35)',
-            }}
+      {!splitFeed ? (
+        <div className="absolute right-3 bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] z-[3] flex flex-col gap-5 pointer-events-auto">
+          <button
+            type="button"
+            onClick={() => onToggleLike(item.id)}
+            className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white/10 backdrop-blur-sm transition active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#A855F7]"
+            aria-label={liked ? 'Unlike' : 'Like'}
+            aria-pressed={liked}
           >
-            Gossip
-          </span>
-          <h1 className="text-2xl font-extrabold leading-tight tracking-tight text-white drop-shadow-md">
-            {item.title}
-          </h1>
+            <Heart
+              className="h-6 w-6"
+              strokeWidth={2}
+              style={{
+                color: '#fff',
+                fill: liked ? 'rgba(239,68,68,0.9)' : 'transparent',
+                stroke: liked ? 'rgba(239,68,68,0.95)' : '#fff',
+              }}
+            />
+          </button>
+          <button
+            type="button"
+            onClick={() => onOpenComments(item)}
+            disabled={!item.url}
+            className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white/10 backdrop-blur-sm transition active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#A855F7] disabled:cursor-not-allowed disabled:opacity-40"
+            aria-label={`Comments${item.num_comments != null ? `, ${item.num_comments} total` : ''}`}
+          >
+            <MessageCircle className="h-6 w-6 text-white" strokeWidth={2} />
+          </button>
+          <button
+            type="button"
+            onClick={() => onToggleWatchlist(item)}
+            disabled={!item.url}
+            className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white/10 backdrop-blur-sm transition active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#A855F7] disabled:cursor-not-allowed disabled:opacity-40"
+            aria-label={watchlisted ? 'Remove from watchlist' : 'Save to watchlist'}
+            aria-pressed={watchlisted}
+          >
+            <Bookmark
+              className="h-6 w-6"
+              strokeWidth={2}
+              style={{
+                color: '#fff',
+                fill: watchlisted ? 'rgba(168,85,247,0.45)' : 'transparent',
+                stroke: watchlisted ? '#C084FC' : '#fff',
+              }}
+            />
+          </button>
         </div>
-      </div>
+      ) : null}
+
+      {!splitFeed ? (
+        <div className="absolute inset-x-0 bottom-0 z-[2] px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] pt-24 pointer-events-none">
+          <div className="pointer-events-auto max-w-[calc(100vw-5rem)] space-y-2.5">
+            {showCommentPreview ? (
+              <button
+                type="button"
+                key={`preview-${item.id}-${topPreview.id}`}
+                onClick={() => onOpenComments(item)}
+                onAnimationEnd={(e) => {
+                  if (e.animationName === 'teaCommentPreviewPop') {
+                    setCommentPreviewAnimating(false);
+                  }
+                }}
+                className={`${
+                  commentPreviewAnimating ? 'tea-comment-preview-pop ' : ''
+                }group relative z-[1] mb-1 w-full max-w-full rounded-full border border-white/18 bg-black/50 px-5 py-3.5 text-left shadow-[0_-8px_32px_rgba(0,0,0,0.45)] backdrop-blur-md transition-transform duration-150 active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#A855F7]`}
+                aria-label="Open comments"
+              >
+                <TeaCommentRichText
+                  text={compactCommentBody(topPreview.body, 160)}
+                  className="line-clamp-2 text-left text-[13px] font-medium leading-snug"
+                />
+              </button>
+            ) : null}
+
+            <span
+              className="inline-block rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide"
+              style={{
+                color: HUB.accent,
+                backgroundColor: HUB.pillBg,
+                border: '1px solid rgba(168,85,247,0.35)',
+              }}
+            >
+              Gossip
+            </span>
+            <h1 className="text-2xl font-extrabold leading-tight tracking-tight text-white drop-shadow-md">
+              {item.title}
+            </h1>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -702,7 +797,7 @@ export default function TeaFeedPage() {
           </button>
         </div>
       ) : commentsModalItem ? (
-        <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="flex min-h-0 max-h-[44dvh] flex-[0_1_38%] flex-col">
             <div
               ref={feedScrollRef}
@@ -717,6 +812,7 @@ export default function TeaFeedPage() {
                     item={item}
                     idx={idx}
                     splitFeed
+                    commentsPanelOpen={Boolean(commentsModalItem)}
                     liked={liked.has(item.id)}
                     onToggleLike={toggleLike}
                     scrollRootRef={feedScrollRef}
@@ -750,6 +846,7 @@ export default function TeaFeedPage() {
               key={item.id}
               item={item}
               idx={idx}
+              commentsPanelOpen={Boolean(commentsModalItem)}
               liked={liked.has(item.id)}
               onToggleLike={toggleLike}
               scrollRootRef={feedScrollRef}

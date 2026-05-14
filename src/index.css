@@ -314,3 +314,35 @@ button:hover {
   animation: skeletonShimmer 1.35s ease-in-out infinite;
 }
 
+/* Tea feed: comment preview chip — fadeIn 150ms, visible 2200ms, fadeOut 200ms (2.55s total) */
+@keyframes teaCommentPreviewPop {
+  0% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  5.8823529412% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  92.1568627451% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+.tea-comment-preview-pop {
+  animation: teaCommentPreviewPop 2.55s ease-out backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tea-comment-preview-pop {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
