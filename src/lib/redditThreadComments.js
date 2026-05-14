@@ -63,7 +63,7 @@ export function buildRedditThreadJsonUrl(discussionUrl) {
 /**
  * @param {unknown} threadJson Reddit array [postListing, commentsListing]
  * @param {number} limit
- * @returns {{ id: string, author: string, body: string, score: number }[]}
+ * @returns {{ id: string, author: string, body: string, score: number, createdUtc: number | null }[]}
  */
 export function parseTopLevelComments(threadJson, limit = 40) {
   const listing = threadJson?.[1]?.data?.children;
@@ -79,7 +79,8 @@ export function parseTopLevelComments(threadJson, limit = 40) {
     const author = typeof d.author === 'string' && d.author.length ? d.author : 'unknown';
     const score = typeof d.score === 'number' ? d.score : 0;
     const id = typeof d.id === 'string' ? d.id : String(rows.length);
-    rows.push({ id, author, body, score });
+    const createdUtc = typeof d.created_utc === 'number' ? d.created_utc : null;
+    rows.push({ id, author, body, score, createdUtc });
   }
 
   rows.sort((a, b) => b.score - a.score);
