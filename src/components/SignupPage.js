@@ -105,38 +105,28 @@ const SignupPage = () => {
         }
       `}</style>
 
-      {/* Logo — upper half, centered */}
+      {/* Logo — same treatment as LandingPage */}
       <div className="relative z-10 flex flex-[1.1] min-h-0 items-center justify-center px-6 pb-4 pt-[max(12px,env(safe-area-inset-top))]">
         <div
-          className={`relative flex items-center justify-center transition-all duration-1000 ease-out ${
+          className={`relative transition-all duration-1000 ease-out ${
             isLoaded ? 'scale-100 opacity-100' : 'scale-90 opacity-0'
           }`}
-          style={{ width: 'min(52vw, 220px)', height: 'min(52vw, 220px)' }}
         >
-          {/* Translucent ring frame */}
           <div
-            className="absolute inset-0 rounded-full"
+            className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full backdrop-blur-lg relative"
             style={{
-              border: '1px solid rgba(255, 255, 255, 0.22)',
-              background:
-                'radial-gradient(circle at 50% 45%, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 55%, transparent 75%)',
+              backgroundColor: '#121212',
               boxShadow:
-                'inset 0 0 40px rgba(56, 189, 248, 0.08), 0 0 48px rgba(88, 28, 135, 0.12)',
+                '0 0 24px rgba(192, 132, 252, 0.35), 0 4px 20px rgba(126, 34, 206, 0.4)',
+              border: '1px solid rgba(168, 85, 247, 0.3)',
             }}
-          />
-          <div
-            className="absolute rounded-full"
-            style={{
-              inset: '8%',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
-            }}
-          />
-          <img
-            src="/DEITECIrc.webp"
-            alt="Detea"
-            className="relative z-[1] h-[72%] w-[72%] object-contain"
-            style={{ filter: 'drop-shadow(0 8px 24px rgba(0,0,0,0.35))' }}
-          />
+          >
+            <img
+              src="/DEITECIrc.webp"
+              alt="Detea"
+              className="relative z-10 h-full w-full object-cover"
+            />
+          </div>
         </div>
       </div>
 
