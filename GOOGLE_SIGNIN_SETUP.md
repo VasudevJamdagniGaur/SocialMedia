@@ -91,7 +91,12 @@ Do these in order:
 
 3. **Google Cloud: Android OAuth client** – Google Cloud Console (same project as Firebase) → **APIs & Services** → **Credentials** → **Create credentials** → **OAuth client ID** → Application type: **Android**. **Package name**: `therapist.deite.app`. **SHA-1**: same as in Firebase. Create. No Web client needed.
 
-4. **Verify SHA-1 matches google-services.json** – Your `android/app/google-services.json` has `certificate_hash`: **c465ffcb3d988222dc729c487e5fd50b3c9d9f8a**. The APK you run must be signed with a keystore whose SHA-1 (no colons, lowercase) equals this. Run `cd android && ./gradlew signingReport` and under **Variant: debug** take the SHA-1, remove colons, lower case (e.g. `A1:B2:C3` → `a1b2c3`). If it does **not** match `c465ffcb3d988222dc729c487e5fd50b3c9d9f8a`, then either: (a) add that SHA-1 in Firebase and in Google Cloud (Android OAuth client), download a new **google-services.json** and replace `android/app/google-services.json`, or (b) build the app with the keystore that has SHA-1 `c465ffcb3d988222dc729c487e5fd50b3c9d9f8a`.
+4. **Verify SHA-1 matches google-services.json** – `google-services.json` must list an Android OAuth client (`client_type: 1`) whose `certificate_hash` matches the keystore that signed the APK you install.
+   - **Debug** (Android Studio default): often `c465ffcb3d988222dc729c487e5fd50b3c9d9f8a`
+   - **Release** (`android/app/my-release-key.jks`): `e83ab9ee736239bb78b1548bdf441502223dfeb5`
+   - Error **`10:`** on the device = **DEVELOPER_ERROR** (SHA-1 / OAuth mismatch). Add the missing fingerprint in Firebase → download new `google-services.json` → rebuild.
+   - Quick check: `powershell -File scripts/check-google-signin-sha.ps1`
+   - Add fingerprint via CLI: `firebase apps:android:sha:create "1:300613626896:android:96b25a5c6549a45307ae95" <sha1_no_colons> --project deitedatabase` then `firebase apps:sdkconfig android "1:300613626896:android:96b25a5c6549a45307ae95" --project deitedatabase`
 
 5. **Rebuild and test** – After any SHA-1/OAuth change: `npx cap sync android`, rebuild APK in Android Studio, install. Tap **Continue with Google**; native account picker should appear.
 

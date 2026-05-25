@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "300613626896-dusufuk6ejnv0qjgjlsonun7kosreoac.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "therapist.deite.app",
+            "certificate_hash": "e83ab9ee736239bb78b1548bdf441502223dfeb5"
+          }
+        },
+        {
           "client_id": "300613626896-e71ih9kfbflvobebevder3o3l4umpmsh.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {

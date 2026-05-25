@@ -84,13 +84,21 @@ export const signInWithGoogle = async () => {
   } catch (e) {
     const msg = e?.message ?? (typeof e === 'string' ? e : '');
     const code = String(e?.code ?? '');
+    const numericCode = e?.code != null && typeof e.code === 'number' ? e.code : parseInt(code, 10);
     if (code === '12501' || /cancel|cancelled|user_cancel/i.test(msg)) {
       return { success: false, error: 'Sign-in was cancelled.' };
     }
-    if (code === '12500' || /12500|developer error|sign_in_failed/i.test(msg)) {
+    if (
+      code === '10' ||
+      numericCode === 10 ||
+      /^10:?\s*$/i.test(msg.trim()) ||
+      code === '12500' ||
+      /12500|developer error|sign_in_failed|DEVELOPER_ERROR/i.test(msg)
+    ) {
       return {
         success: false,
-        error: 'Google Sign-In config error. Add your app’s SHA-1 in Firebase (Project settings → Your Android app → Add fingerprint) and create an Android OAuth client in Google Cloud with the same package name (therapist.deite.app) and SHA-1. Then download a new google-services.json.',
+        error:
+          'Google Sign-In setup error (code 10). Your APK signing key must be registered in Firebase. For release builds, add the SHA-1 from android/app/my-release-key.jks, download a new google-services.json, then rebuild the app.',
       };
     }
     if (/timeout|timed out/i.test(msg)) {

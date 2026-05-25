@@ -4,4 +4,6 @@
     <string name="title_activity_main">Detea</string>
     <string name="package_name">therapist.deite.app</string>
     <string name="custom_url_scheme">therapist.deite.app</string>
+    <!-- Web OAuth client for Google Sign-In id token (must match google-services.json client_type 3) -->
+    <string name="default_web_client_id" translatable="false">300613626896-afgue1cj09n7mibt6b84t0qgjkc0avqk.apps.googleusercontent.com</string>
 </resources>
