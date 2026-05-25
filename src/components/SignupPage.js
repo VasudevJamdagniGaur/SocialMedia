@@ -1,165 +1,156 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { onAuthStateChange, signInWithGoogle } from '../services/authService';
-import LaserFlow from './LaserFlow';
+
+/** Stable star field so layout does not shift on re-render. */
+function useStarField(count = 120) {
+  return useMemo(() => {
+    return Array.from({ length: count }, (_, i) => ({
+      id: i,
+      left: `${(i * 17.3) % 100}%`,
+      top: `${(i * 23.7 + 11) % 100}%`,
+      size: (i % 5 === 0 ? 2.5 : i % 3 === 0 ? 1.5 : 1) + (i % 2) * 0.5,
+      opacity: 0.35 + (i % 7) * 0.08,
+      delay: (i % 11) * 0.4,
+      duration: 3 + (i % 5),
+    }));
+  }, [count]);
+}
 
 const SignupPage = () => {
   const navigate = useNavigate();
   const [isLoaded, setIsLoaded] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const stars = useStarField(140);
 
-  // Listen for auth state changes (e.g. after native Google Sign-In syncs to Firebase)
   useEffect(() => {
     const unsubscribe = onAuthStateChange((user) => {
       if (user) {
         navigate('/dashboard', { replace: true });
       }
     });
-
     return () => unsubscribe();
   }, [navigate]);
 
   useEffect(() => {
-    // Trigger fade-in animation on component mount
     setIsLoaded(true);
   }, []);
 
   return (
     <div
-      className={`min-h-screen flex flex-col relative overflow-hidden transition-all duration-1000 background-animated ${isLoaded ? 'opacity-100' : 'opacity-0'}`}
+      className={`relative flex min-h-[100dvh] flex-col overflow-hidden transition-opacity duration-700 ${
+        isLoaded ? 'opacity-100' : 'opacity-0'
+      }`}
       style={{
-        background: 'radial-gradient(ellipse at bottom, #1B2735 0%, #090A0F 100%)',
+        background: '#030308',
         fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       }}
     >
-      {/* Stars background */}
-      <div className="absolute inset-0 overflow-hidden" style={{ zIndex: 2 }}>
-        {[...Array(80)].map((_, i) => (
+      {/* Deep space base */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(ellipse 120% 80% at 50% 35%, #0d1228 0%, #06060f 45%, #020205 100%)',
+        }}
+      />
+
+      {/* Star field */}
+      <div className="pointer-events-none absolute inset-0" aria-hidden>
+        {stars.map((s) => (
           <div
-            key={i}
-            className="absolute rounded-full"
+            key={s.id}
+            className="absolute rounded-full bg-white"
             style={{
-              width: Math.random() * 3 + 1 + 'px',
-              height: Math.random() * 3 + 1 + 'px',
-              left: Math.random() * 100 + '%',
-              top: Math.random() * 100 + '%',
-              background: 'white',
-              boxShadow: `0 0 ${Math.random() * 10 + 2}px rgba(255, 255, 255, ${Math.random() * 0.5 + 0.3})`,
-              animation: `twinkle ${Math.random() * 5 + 3}s ease-in-out ${Math.random() * 5}s infinite`,
-              opacity: Math.random() * 0.7 + 0.3,
+              left: s.left,
+              top: s.top,
+              width: s.size,
+              height: s.size,
+              opacity: s.opacity,
+              boxShadow: `0 0 ${s.size * 2}px rgba(255,255,255,0.5)`,
+              animation: `signup-twinkle ${s.duration}s ease-in-out ${s.delay}s infinite`,
             }}
           />
         ))}
-        </div>
+      </div>
+
+      {/* Ambient nebula — cyan + purple, centered behind logo */}
+      <div
+        className="pointer-events-none absolute left-1/2 top-[38%] -translate-x-1/2 -translate-y-1/2"
+        style={{
+          width: 'min(92vw, 420px)',
+          height: 'min(92vw, 420px)',
+          background:
+            'radial-gradient(circle at 50% 50%, rgba(56, 189, 248, 0.22) 0%, rgba(88, 28, 135, 0.18) 28%, rgba(30, 10, 60, 0.12) 48%, transparent 72%)',
+          filter: 'blur(2px)',
+        }}
+        aria-hidden
+      />
+      <div
+        className="pointer-events-none absolute left-1/2 top-[38%] -translate-x-1/2 -translate-y-1/2"
+        style={{
+          width: 'min(70vw, 280px)',
+          height: 'min(70vw, 280px)',
+          background:
+            'radial-gradient(circle, rgba(147, 51, 234, 0.15) 0%, rgba(6, 182, 212, 0.08) 40%, transparent 70%)',
+          filter: 'blur(28px)',
+        }}
+        aria-hidden
+      />
 
       <style>{`
-        @keyframes twinkle {
-          0%, 100% { opacity: 0.3; }
-          50% { opacity: 1; }
+        @keyframes signup-twinkle {
+          0%, 100% { opacity: 0.25; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.15); }
         }
       `}</style>
 
-      {/* Centered glowing logo */}
-      <div className="flex-1 flex items-center justify-center mobile-container relative" style={{ zIndex: 10 }}>
-          <div className="relative">
-          {/* Outer glow ring */}
-            <div
-            className={`absolute inset-0 rounded-full animate-pulse transition-all duration-2000 ${isLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-75'}`}
-              style={{
-              background: 'radial-gradient(circle, rgba(139, 195, 74, 0.3) 0%, transparent 70%)',
-              width: '200px',
-              height: '200px',
-              filter: 'blur(20px)',
+      {/* Logo — upper half, centered */}
+      <div className="relative z-10 flex flex-[1.1] min-h-0 items-center justify-center px-6 pb-4 pt-[max(12px,env(safe-area-inset-top))]">
+        <div
+          className={`relative flex items-center justify-center transition-all duration-1000 ease-out ${
+            isLoaded ? 'scale-100 opacity-100' : 'scale-90 opacity-0'
+          }`}
+          style={{ width: 'min(52vw, 220px)', height: 'min(52vw, 220px)' }}
+        >
+          {/* Translucent ring frame */}
+          <div
+            className="absolute inset-0 rounded-full"
+            style={{
+              border: '1px solid rgba(255, 255, 255, 0.22)',
+              background:
+                'radial-gradient(circle at 50% 45%, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 55%, transparent 75%)',
+              boxShadow:
+                'inset 0 0 40px rgba(56, 189, 248, 0.08), 0 0 48px rgba(88, 28, 135, 0.12)',
             }}
           />
-
-          {/* Inner logo circle */}
           <div
-            className={`relative mobile-logo rounded-full flex items-center justify-center transition-all duration-1500 delay-300 logo-glow ${isLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-50'}`}
+            className="absolute rounded-full"
             style={{
-              width: '120px',
-              height: '120px',
-              backgroundColor: "#262626",
-              boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
-              backdropFilter: 'blur(10px)',
+              inset: '8%',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
             }}
-          >
-            <img
+          />
+          <img
             src="/DEITECIrc.webp"
-              alt="Detea"
-              className="w-full h-full object-cover"
-            />
-          </div>
-          </div>
+            alt="Detea"
+            className="relative z-[1] h-[72%] w-[72%] object-contain"
+            style={{ filter: 'drop-shadow(0 8px 24px rgba(0,0,0,0.35))' }}
+          />
         </div>
-
-      {/* LaserFlow Background - centered with tail at top */}
-      <div 
-        style={{ 
-          position: 'absolute',
-          top: 0,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          width: '100%',
-          height: '140vh',
-          overflow: 'visible',
-          zIndex: 1,
-          pointerEvents: 'none'
-        }}
-      >
-        <LaserFlow
-          horizontalBeamOffset={0.0}
-          verticalBeamOffset={0.2}
-          color="#8BC34A"
-        />
       </div>
 
-      {/* Bottom area: breathing room + subtle separation + button */}
+      {/* Auth — lower third */}
       <div
-        className={`mobile-container transition-all duration-1000 delay-700 ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}
-        style={{
-          position: 'relative',
-          width: '100%',
-          zIndex: 10,
-          paddingLeft: '1.5rem',
-          paddingRight: '1.5rem',
-          paddingTop: '1.5rem',
-          paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom, 24px))',
-        }}
+        className={`relative z-10 mx-auto flex w-full max-w-[400px] flex-col items-center gap-5 px-6 pb-[max(28px,env(safe-area-inset-bottom,24px))] transition-all duration-700 delay-150 ${
+          isLoaded ? 'translate-y-0 opacity-100' : 'translate-y-6 opacity-0'
+        }`}
+        style={{ flex: '0 0 auto', minHeight: '32vh', justifyContent: 'flex-end' }}
       >
-        {/* Faint gradient / dark overlay so button feels anchored, not floating */}
-        <div
-          style={{
-            position: 'absolute',
-            left: 0,
-            right: 0,
-            bottom: 0,
-            height: '180px',
-            background: 'linear-gradient(to top, rgba(9, 10, 15, 0.4) 0%, transparent 100%)',
-            pointerEvents: 'none',
-            borderRadius: '24px 24px 0 0',
-          }}
-        />
-        {/* Continue with Google: soft white, rounded rect, balanced layout, subtle depth */}
         <button
           type="button"
-          className="w-full flex items-center justify-center gap-3 transition-all duration-300 hover:opacity-95 active:scale-[0.99]"
-          style={{
-            height: '56px',
-            borderRadius: '14px',
-            background: '#B5C4AE',
-            color: '#1f1f1f',
-            border: '1px solid rgba(0, 0, 0, 0.06)',
-            boxShadow: '0 4px 24px rgba(0, 0, 0, 0.12), 0 0 1px rgba(255, 255, 255, 0.08)',
-            fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-            fontSize: '1rem',
-            fontWeight: 500,
-            paddingLeft: '20px',
-            paddingRight: '20px',
-            position: 'relative',
-          }}
           disabled={googleLoading}
+          className="flex h-[52px] w-[min(90vw,350px)] max-w-full items-center justify-center gap-3 rounded-full bg-white text-[15px] font-semibold text-slate-900 shadow-[0_2px_12px_rgba(0,0,0,0.25)] transition hover:bg-gray-50 active:scale-[0.99] disabled:opacity-70 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#030308]"
           onClick={async () => {
             if (googleLoading) return;
             setGoogleLoading(true);
@@ -180,29 +171,39 @@ const SignupPage = () => {
         >
           {!googleLoading ? (
             <>
-              <span style={{ display: 'flex', flexShrink: 0 }} aria-hidden>
+              <span className="flex shrink-0" aria-hidden>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                  <path
+                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                    fill="#4285F4"
+                  />
+                  <path
+                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                    fill="#34A853"
+                  />
+                  <path
+                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                    fill="#FBBC05"
+                  />
+                  <path
+                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                    fill="#EA4335"
+                  />
                 </svg>
               </span>
-              <span style={{ letterSpacing: '-0.01em' }}>Continue with Google</span>
+              <span className="tracking-tight">Continue with Google</span>
             </>
           ) : (
-            <span style={{ color: '#1f1f1f', fontWeight: 500 }}>Signing in…</span>
+            <span>Signing in…</span>
           )}
         </button>
 
-        <p className="text-center mt-4">
-          <Link
-            to="/login"
-            className="text-sm text-gray-400 hover:text-white transition-colors"
-          >
-            Log in with email and password
-          </Link>
-        </p>
+        <Link
+          to="/login"
+          className="text-[15px] font-medium text-white/95 transition-colors hover:text-white focus:outline-none focus-visible:underline"
+        >
+          Log in with email and password
+        </Link>
       </div>
     </div>
   );
