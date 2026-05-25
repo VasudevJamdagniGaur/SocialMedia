@@ -113,7 +113,7 @@ const SignupPage = () => {
           }`}
         >
           <div
-            className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full backdrop-blur-lg relative"
+            className="relative flex h-[7.8rem] w-[7.8rem] items-center justify-center overflow-hidden rounded-full backdrop-blur-lg"
             style={{
               backgroundColor: '#121212',
               boxShadow:
