@@ -1,0 +1,65 @@
+name: deite
+description: Deite — AI chat, day reflections, crew pods, and community (Flutter port).
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+  # Firebase
+  firebase_core: ^3.13.0
+  firebase_auth: ^5.5.2
+  cloud_firestore: ^5.6.6
+  firebase_storage: ^12.4.5
+  firebase_analytics: ^11.4.5
+  google_sign_in: ^6.3.0
+
+  # Navigation & state
+  go_router: ^14.8.1
+  provider: ^6.1.4
+
+  # HTTP & networking
+  http: ^1.3.0
+
+  # Storage
+  shared_preferences: ^2.5.3
+  path_provider: ^2.1.5
+
+  # UI & media
+  cached_network_image: ^3.4.1
+  flutter_svg: ^2.0.17
+  lucide_icons_flutter: ^3.1.14+2
+  fl_chart: ^0.70.2
+  shimmer: ^3.0.0
+
+  # Image handling
+  image_picker: ^1.1.2
+  image_cropper: ^11.0.0
+  flutter_image_compress: ^2.4.0
+  screenshot: ^3.0.0
+
+  # Platform
+  share_plus: ^10.1.4
+  url_launcher: ^6.3.1
+
+  # Utils
+  intl: ^0.20.2
+  uuid: ^4.5.1
+  crypto: ^3.0.6
+  collection: ^1.19.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/icons/

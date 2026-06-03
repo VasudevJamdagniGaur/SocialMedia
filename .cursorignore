@@ -1,0 +1,8 @@
+﻿# Archived legacy code (Capacitor/React client + Node/TS backends)
+legacy/
+
+# Compiled / generated
+**/node_modules/
+**/.dart_tool/
+**/build/
+.firebase/

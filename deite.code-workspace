@@ -1,0 +1,47 @@
+{
+  "folders": [
+    {
+      "name": "Deite App (Flutter)",
+      "path": "./flutter_app"
+    },
+    {
+      "name": "Deite Server (Dart)",
+      "path": "./server"
+    }
+  ],
+  "settings": {
+    "dart.analysisExcludedFolders": [
+      "legacy"
+    ],
+    "files.exclude": {
+      "**/legacy": true,
+      "**/node_modules": true,
+      "**/.dart_tool": true,
+      "**/build": true,
+      "**/.env": true,
+      "**/google-services.json": true,
+      "**/firebase_options.dart": true,
+      "**/service-account*.json": true,
+      "**/*.jks": true
+    },
+    "search.exclude": {
+      "**/legacy/**": true,
+      "**/node_modules": true,
+      "flutter_app/build": true,
+      "flutter_app/.dart_tool": true,
+      "server/.dart_tool": true
+    },
+    "files.watcherExclude": {
+      "**/legacy/**": true,
+      "**/node_modules/**": true,
+      "**/.dart_tool/**": true,
+      "**/build/**": true
+    }
+  },
+  "extensions": {
+    "recommendations": [
+      "dart-code.dart-code",
+      "dart-code.flutter"
+    ]
+  }
+}

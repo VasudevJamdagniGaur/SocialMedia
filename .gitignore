@@ -1,22 +1,50 @@
-# dependencies
-node_modules/
+# --- Secrets & credentials (never commit) ---
+.env
+.env.*
+!.env.example
+!**/.env.example
 
-# production build
+# GCP / Firebase service accounts
+**/service-account*.json
+**/*-service-account.json
+**/credentials.json
+
+# Android signing
+**/*.jks
+**/*.keystore
+**/*.p12
+**/*.pem
+!**/*.pem.example
+
+# Firebase client config (copy from .example after Firebase Console download)
+flutter_app/lib/config/firebase_options.dart
+flutter_app/android/app/google-services.json
+flutter_app/ios/Runner/GoogleService-Info.plist
+**/google-services.json
+!**/google-services.json.example
+
+# --- Dependencies ---
+node_modules/
+**/node_modules/
+
+# --- Build / generated ---
 build/
 dist/
+**/build/
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+**/coverage/
+.firebase/
 
-# local env files
-.env
-.env.local
-functions/.env
-
-# GCP service account keys (never commit)
-backend-vertex/service-account.json
-**/service-account*.json
-
-# misc
+# --- IDE / OS ---
 .DS_Store
-.vscode/
+Thumbs.db
+*.swp
+*.log
 .cursor/debug*.log
-node_modules
-node_modules
+
+# --- Legacy archive (optional local-only; uncomment to drop from git entirely) ---
+# legacy/

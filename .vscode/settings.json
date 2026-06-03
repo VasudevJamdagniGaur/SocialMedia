@@ -1,0 +1,18 @@
+{
+  "files.exclude": {
+    "legacy": true,
+    "node_modules": true,
+    "crew": true,
+    "crew-mobile": true,
+    "ml": true,
+    "build": true,
+    ".firebase": true
+  },
+  "search.exclude": {
+    "legacy/**": true,
+    "**/node_modules": true,
+    "flutter_app/build": true,
+    "flutter_app/.dart_tool": true,
+    "server/.dart_tool": true
+  }
+}

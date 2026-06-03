@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Template only — not used at build time.
+
+  To enable iOS Firebase:
+  1. Firebase Console → Project deitedatabase → Add iOS app (bundle ID therapist.deite.app)
+  2. Download GoogleService-Info.plist → copy to ios/Runner/GoogleService-Info.plist
+  3. Update lib/config/firebase_options.dart ios.appId from GOOGLE_APP_ID in that plist
+-->
+<plist version="1.0">
+<dict>
+	<key>API_KEY</key>
+	<string>AIzaSyCSqIMCtPOB-ifWC8PUpM52rpFlrP4jbhY</string>
+	<key>GCM_SENDER_ID</key>
+	<string>300613626896</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>therapist.deite.app</string>
+	<key>PROJECT_ID</key>
+	<string>deitedatabase</string>
+	<key>STORAGE_BUCKET</key>
+	<string>deitedatabase.firebasestorage.app</string>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:300613626896:ios:REPLACE_FROM_FIREBASE_CONSOLE</string>
+</dict>
+</plist>

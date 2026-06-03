@@ -1,0 +1,9 @@
+# Render — Dart backend (replaces backend-vertex Node service)
+# Set Root Directory to `server` in Render dashboard.
+services:
+  - type: web
+    name: detea-backend
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
