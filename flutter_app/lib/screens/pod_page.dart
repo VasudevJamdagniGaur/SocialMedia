@@ -128,7 +128,7 @@ class _PodHeader extends StatelessWidget {
           ),
           Expanded(
             child: Text(
-              'Crew (beta)',
+              'Tea',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: isDark ? Colors.white : const Color(0xFF1f2937),

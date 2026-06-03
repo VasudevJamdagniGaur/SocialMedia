@@ -15,7 +15,7 @@ class BottomNavigation extends StatelessWidget {
     final location = GoRouterState.of(context).uri.path;
 
     final isHomeActive = location == AppRoutes.dashboard;
-    final isPodActive = location == AppRoutes.pod;
+    final isTeaActive = location == AppRoutes.pod;
     final isCommunityActive = location == AppRoutes.community;
     final isWellbeingActive = location == AppRoutes.wellbeing;
 
@@ -56,10 +56,13 @@ class BottomNavigation extends StatelessWidget {
               _NavButton(
                 onTap: () => context.go(AppRoutes.pod),
                 child: _NavRasterIcon(
-                  asset: 'assets/icons/crew-icon.png',
-                  size: 64,
-                  active: isPodActive,
+                  asset: 'assets/icons/tea-nav-inactive.webp',
+                  activeAsset: 'assets/icons/tea-nav-active.webp',
+                  size: 48,
+                  active: isTeaActive,
                   isDarkMode: isDarkMode,
+                  frameSize: 56,
+                  activeScale: 1.08,
                 ),
               ),
               _NavButton(
@@ -137,17 +140,22 @@ class _NavRasterIcon extends StatelessWidget {
     required this.size,
     required this.active,
     required this.isDarkMode,
+    this.activeAsset,
     this.frameSize,
     this.activeScale = 1,
   });
 
   final String asset;
+  /// When set, used instead of [asset] while [active] is true (pre-rendered states).
+  final String? activeAsset;
   final double size;
   final bool active;
   final bool isDarkMode;
   /// Optional square frame (React `w-14` community wrapper).
   final double? frameSize;
   final double activeScale;
+
+  bool get _usesDualAssets => activeAsset != null;
 
   static const ColorFilter _brightnessZero = ColorFilter.matrix(<double>[
     0, 0, 0, 0, 0,
@@ -169,6 +177,9 @@ class _NavRasterIcon extends StatelessWidget {
   );
 
   Widget _applyFilters(Widget child) {
+    if (_usesDualAssets) {
+      return child;
+    }
     if (isDarkMode) {
       if (active) {
         // Selected: same artwork, forced to solid white (React active look).
@@ -188,7 +199,7 @@ class _NavRasterIcon extends StatelessWidget {
     final cachePx = (size * dpr).round().clamp(48, 256);
 
     Widget image = Image.asset(
-      asset,
+      active && activeAsset != null ? activeAsset! : asset,
       width: size,
       height: size,
       fit: BoxFit.contain,
@@ -204,7 +215,9 @@ class _NavRasterIcon extends StatelessWidget {
     );
 
     image = _applyFilters(image);
-    image = Opacity(opacity: active ? 1 : 0.4, child: image);
+    if (!_usesDualAssets) {
+      image = Opacity(opacity: active ? 1 : 0.4, child: image);
+    }
 
     if (activeScale != 1 && active) {
       image = Transform.scale(scale: activeScale, child: image);
