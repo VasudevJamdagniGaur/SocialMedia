@@ -1,6 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+
 import '../contexts/theme_context.dart';
 import '../router/app_router.dart';
 
@@ -45,32 +46,14 @@ class BottomNavigation extends StatelessWidget {
           child: Row(
             children: [
               _NavButton(
-                active: isHomeActive,
-                isDarkMode: isDarkMode,
                 onTap: () => context.go(AppRoutes.dashboard),
-                child: Icon(
-                  Icons.home_outlined,
-                  size: 28,
-                  color: isHomeActive
-                      ? (isDarkMode ? Colors.white : Colors.black)
-                      : (isDarkMode ? const Color(0xFF9CA3AF) : const Color(0xFF6B7280)),
-                ),
+                child: _HomeNavIcon(active: isHomeActive, isDarkMode: isDarkMode),
               ),
               _NavButton(
-                active: isWellbeingActive,
-                isDarkMode: isDarkMode,
                 onTap: () => context.go(AppRoutes.wellbeing),
-                child: Icon(
-                  isWellbeingActive ? Icons.favorite : Icons.favorite_border,
-                  size: 28,
-                  color: isWellbeingActive
-                      ? (isDarkMode ? Colors.white : Colors.black)
-                      : (isDarkMode ? const Color(0xFF9CA3AF) : const Color(0xFF6B7280)),
-                ),
+                child: _HeartNavIcon(active: isWellbeingActive, isDarkMode: isDarkMode),
               ),
               _NavButton(
-                active: isPodActive,
-                isDarkMode: isDarkMode,
                 onTap: () => context.go(AppRoutes.pod),
                 child: _NavRasterIcon(
                   asset: 'assets/icons/crew-icon.png',
@@ -80,8 +63,6 @@ class BottomNavigation extends StatelessWidget {
                 ),
               ),
               _NavButton(
-                active: isCommunityActive,
-                isDarkMode: isDarkMode,
                 onTap: () => context.go(AppRoutes.community),
                 child: _NavRasterIcon(
                   asset: 'assets/icons/Gemini_Generated_Image_enm22aenm22aenm2.png',
@@ -100,7 +81,56 @@ class BottomNavigation extends StatelessWidget {
   }
 }
 
-/// PNG nav icons — matches React CSS filters (brightness/invert), not [ColorFiltered] tint.
+Color _navStrokeColor(bool active, bool isDarkMode) {
+  if (active) return isDarkMode ? Colors.white : Colors.black;
+  return isDarkMode ? const Color(0xFF9CA3AF) : const Color(0xFF6B7280);
+}
+
+/// Home — outline when inactive, filled when active (React).
+class _HomeNavIcon extends StatelessWidget {
+  const _HomeNavIcon({required this.active, required this.isDarkMode});
+
+  final bool active;
+  final bool isDarkMode;
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: active ? 1 : 0.4,
+      child: Icon(
+        active ? Icons.home_rounded : Icons.home_outlined,
+        size: 28,
+        color: _navStrokeColor(active, isDarkMode),
+      ),
+    );
+  }
+}
+
+/// Heart — filled when active (React).
+class _HeartNavIcon extends StatelessWidget {
+  const _HeartNavIcon({required this.active, required this.isDarkMode});
+
+  final bool active;
+  final bool isDarkMode;
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: active ? 1 : 0.4,
+      child: Icon(
+        active ? Icons.favorite : Icons.favorite_border,
+        size: 28,
+        color: _navStrokeColor(active, isDarkMode),
+      ),
+    );
+  }
+}
+
+/// PNG nav icons — CSS filter parity:
+/// - dark inactive: none (natural colors @ 0.4 opacity)
+/// - dark active: brightness(0) + invert(1) → white
+/// - light inactive: grayscale
+/// - light active: brightness(0) → black
 class _NavRasterIcon extends StatelessWidget {
   const _NavRasterIcon({
     required this.asset,
@@ -118,7 +148,6 @@ class _NavRasterIcon extends StatelessWidget {
   final bool clipCircular;
   final double activeScale;
 
-  /// CSS brightness(0) — forces icon to black (hides light PNG backgrounds on dark bar).
   static const ColorFilter _brightnessZero = ColorFilter.matrix(<double>[
     0, 0, 0, 0, 0,
     0, 0, 0, 0, 0,
@@ -126,7 +155,13 @@ class _NavRasterIcon extends StatelessWidget {
     0, 0, 0, 1, 0,
   ]);
 
-  /// CSS brightness(0) saturate(0) — grayscale when inactive in light mode.
+  static const ColorFilter _invert = ColorFilter.matrix(<double>[
+    -1, 0, 0, 0, 255,
+    0, -1, 0, 0, 255,
+    0, 0, -1, 0, 255,
+    0, 0, 0, 1, 0,
+  ]);
+
   static const ColorFilter _grayscale = ColorFilter.matrix(<double>[
     0.2126, 0.7152, 0.0722, 0, 0,
     0.2126, 0.7152, 0.0722, 0, 0,
@@ -134,16 +169,24 @@ class _NavRasterIcon extends StatelessWidget {
     0, 0, 0, 1, 0,
   ]);
 
-  ColorFilter? _filterForState() {
-    if (!active && !isDarkMode) return _grayscale;
-    return _brightnessZero;
+  Widget _applyFilters(Widget child) {
+    if (active && isDarkMode) {
+      return ColorFiltered(
+        colorFilter: _brightnessZero,
+        child: ColorFiltered(colorFilter: _invert, child: child),
+      );
+    }
+    if (active && !isDarkMode) {
+      return ColorFiltered(colorFilter: _brightnessZero, child: child);
+    }
+    if (!active && !isDarkMode) {
+      return ColorFiltered(colorFilter: _grayscale, child: child);
+    }
+    return child;
   }
-
-  bool get _needsWhiteTint => active && isDarkMode;
 
   @override
   Widget build(BuildContext context) {
-    final filter = _filterForState();
     final frameSize = clipCircular ? 56.0 : size;
 
     Widget image = Image.asset(
@@ -151,20 +194,16 @@ class _NavRasterIcon extends StatelessWidget {
       width: size,
       height: size,
       fit: BoxFit.contain,
-      filterQuality: FilterQuality.medium,
+      filterQuality: FilterQuality.high,
       gaplessPlayback: true,
+      errorBuilder: (_, __, ___) => Icon(
+        Icons.broken_image_outlined,
+        size: size * 0.5,
+        color: isDarkMode ? const Color(0xFF9CA3AF) : const Color(0xFF6B7280),
+      ),
     );
 
-    if (filter != null) {
-      image = ColorFiltered(colorFilter: filter, child: image);
-    }
-    if (_needsWhiteTint) {
-      image = ColorFiltered(
-        colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
-        child: image,
-      );
-    }
-
+    image = _applyFilters(image);
     image = Opacity(opacity: active ? 1 : 0.4, child: image);
 
     if (activeScale != 1 && active) {
@@ -172,12 +211,10 @@ class _NavRasterIcon extends StatelessWidget {
     }
 
     if (clipCircular) {
-      image = ClipOval(
-        child: SizedBox(
-          width: frameSize,
-          height: frameSize,
-          child: Center(child: image),
-        ),
+      image = SizedBox(
+        width: frameSize,
+        height: frameSize,
+        child: Center(child: image),
       );
     }
 
@@ -190,15 +227,8 @@ class _NavRasterIcon extends StatelessWidget {
 }
 
 class _NavButton extends StatelessWidget {
-  const _NavButton({
-    required this.active,
-    required this.isDarkMode,
-    required this.onTap,
-    required this.child,
-  });
+  const _NavButton({required this.onTap, required this.child});
 
-  final bool active;
-  final bool isDarkMode;
   final VoidCallback onTap;
   final Widget child;
 

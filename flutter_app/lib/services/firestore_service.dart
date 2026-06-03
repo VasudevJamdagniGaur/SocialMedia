@@ -1200,55 +1200,72 @@ class FirestoreService {
 
   Future<Map<String, dynamic>> getMoodChartDataNew(String uid, [int days = 7]) async {
     try {
-      final moodData = <Map<String, dynamic>>[];
       final todayDateId = getDateId(DateTime.now());
       final parts = todayDateId.split('-').map(int.parse).toList();
       final todayYear = parts[0];
       final todayMonth = parts[1];
       final todayDay = parts[2];
+
+      final daySlots = <({DateTime date, String dateId})>[];
       for (var i = days - 1; i >= 0; i--) {
         final targetDate = DateTime(todayYear, todayMonth, todayDay - i);
         final dateId =
             '${targetDate.year.toString().padLeft(4, '0')}-${targetDate.month.toString().padLeft(2, '0')}-${targetDate.day.toString().padLeft(2, '0')}';
-        try {
-          final snapshot = await _db.doc('users/$uid/days/$dateId/moodChart/daily').get();
-          if (snapshot.exists) {
-            final data = snapshot.data()!;
-            moodData.add({
-              'date': dateId,
-              'day': _formatShortDay(targetDate),
-              'happiness': data['happiness'] ?? 0,
-              'anxiety': data['anxiety'] ?? 0,
-              'stress': data['stress'] ?? 0,
-              'energy': data['energy'] ?? 0,
-            });
-          } else if (days == 7) {
-            moodData.add({
-              'date': dateId,
-              'day': _formatShortDay(targetDate),
-              'happiness': 0,
-              'anxiety': 0,
-              'stress': 0,
-              'energy': 0,
-            });
-          }
-        } on FirebaseException catch (dayError) {
-          if (days == 7 &&
-              dayError.code != 'permission-denied' &&
-              dayError.code != 'unavailable') {
-            moodData.add({
-              'date': dateId,
-              'day': _formatShortDay(targetDate),
-              'happiness': 0,
-              'anxiety': 0,
-              'stress': 0,
-              'energy': 0,
-            });
-          }
-        } catch (dayError) {
-          debugPrint('âŒ Error getting mood data for $dateId: $dayError');
-        }
+        daySlots.add((date: targetDate, dateId: dateId));
       }
+
+      final results = await Future.wait(
+        daySlots.map((slot) async {
+          try {
+            final snapshot =
+                await _db.doc('users/$uid/days/${slot.dateId}/moodChart/daily').get();
+            if (snapshot.exists) {
+              final data = snapshot.data()!;
+              return {
+                'date': slot.dateId,
+                'day': _formatShortDay(slot.date),
+                'happiness': data['happiness'] ?? 0,
+                'anxiety': data['anxiety'] ?? 0,
+                'stress': data['stress'] ?? 0,
+                'energy': data['energy'] ?? 0,
+              };
+            }
+            if (days == 7) {
+              return {
+                'date': slot.dateId,
+                'day': _formatShortDay(slot.date),
+                'happiness': 0,
+                'anxiety': 0,
+                'stress': 0,
+                'energy': 0,
+              };
+            }
+          } on FirebaseException catch (dayError) {
+            if (days == 7 &&
+                dayError.code != 'permission-denied' &&
+                dayError.code != 'unavailable') {
+              return {
+                'date': slot.dateId,
+                'day': _formatShortDay(slot.date),
+                'happiness': 0,
+                'anxiety': 0,
+                'stress': 0,
+                'energy': 0,
+              };
+            }
+          } catch (dayError) {
+            debugPrint('Error getting mood data for ${slot.dateId}: $dayError');
+          }
+          return null;
+        }),
+      );
+
+      final moodData = results
+          .whereType<Map<String, dynamic>>()
+          .toList()
+        ..sort((a, b) => DateTime.parse(a['date'] as String)
+            .compareTo(DateTime.parse(b['date'] as String)));
+
       return {'success': true, 'moodData': moodData};
     } catch (error) {
       debugPrint('âŒ FIRESTORE NEW: Error getting mood chart data: $error');
