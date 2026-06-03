@@ -72,47 +72,119 @@ class BottomNavigation extends StatelessWidget {
                 active: isPodActive,
                 isDarkMode: isDarkMode,
                 onTap: () => context.go(AppRoutes.pod),
-                child: Opacity(
-                  opacity: isPodActive ? 1 : 0.4,
-                  child: ColorFiltered(
-                    colorFilter: ColorFilter.mode(
-                      isPodActive
-                          ? (isDarkMode ? Colors.white : Colors.black)
-                          : (isDarkMode ? Colors.white54 : Colors.grey),
-                      isPodActive ? BlendMode.srcIn : BlendMode.saturation,
-                    ),
-                    child: Image.asset('assets/icons/crew-icon.png', width: 64, height: 64),
-                  ),
+                child: _NavRasterIcon(
+                  asset: 'assets/icons/crew-icon.png',
+                  size: 64,
+                  active: isPodActive,
+                  isDarkMode: isDarkMode,
                 ),
               ),
               _NavButton(
                 active: isCommunityActive,
                 isDarkMode: isDarkMode,
                 onTap: () => context.go(AppRoutes.community),
-                child: Opacity(
-                  opacity: isCommunityActive ? 1 : 0.4,
-                  child: Transform.scale(
-                    scale: isCommunityActive ? 1.08 : 1,
-                    child: ColorFiltered(
-                      colorFilter: ColorFilter.mode(
-                        isCommunityActive
-                            ? (isDarkMode ? Colors.white : Colors.black)
-                            : (isDarkMode ? Colors.white54 : Colors.grey),
-                        isCommunityActive ? BlendMode.srcIn : BlendMode.saturation,
-                      ),
-                      child: Image.asset(
-                        'assets/icons/Gemini_Generated_Image_enm22aenm22aenm2.png',
-                        width: 48,
-                        height: 48,
-                      ),
-                    ),
-                  ),
+                child: _NavRasterIcon(
+                  asset: 'assets/icons/Gemini_Generated_Image_enm22aenm22aenm2.png',
+                  size: 48,
+                  active: isCommunityActive,
+                  isDarkMode: isDarkMode,
+                  clipCircular: true,
+                  activeScale: 1.08,
                 ),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+/// PNG nav icons — matches React CSS filters (brightness/invert), not [ColorFiltered] tint.
+class _NavRasterIcon extends StatelessWidget {
+  const _NavRasterIcon({
+    required this.asset,
+    required this.size,
+    required this.active,
+    required this.isDarkMode,
+    this.clipCircular = false,
+    this.activeScale = 1,
+  });
+
+  final String asset;
+  final double size;
+  final bool active;
+  final bool isDarkMode;
+  final bool clipCircular;
+  final double activeScale;
+
+  /// CSS brightness(0) — forces icon to black (hides light PNG backgrounds on dark bar).
+  static const ColorFilter _brightnessZero = ColorFilter.matrix(<double>[
+    0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0,
+    0, 0, 0, 1, 0,
+  ]);
+
+  /// CSS brightness(0) saturate(0) — grayscale when inactive in light mode.
+  static const ColorFilter _grayscale = ColorFilter.matrix(<double>[
+    0.2126, 0.7152, 0.0722, 0, 0,
+    0.2126, 0.7152, 0.0722, 0, 0,
+    0.2126, 0.7152, 0.0722, 0, 0,
+    0, 0, 0, 1, 0,
+  ]);
+
+  ColorFilter? _filterForState() {
+    if (!active && !isDarkMode) return _grayscale;
+    return _brightnessZero;
+  }
+
+  bool get _needsWhiteTint => active && isDarkMode;
+
+  @override
+  Widget build(BuildContext context) {
+    final filter = _filterForState();
+    final frameSize = clipCircular ? 56.0 : size;
+
+    Widget image = Image.asset(
+      asset,
+      width: size,
+      height: size,
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.medium,
+      gaplessPlayback: true,
+    );
+
+    if (filter != null) {
+      image = ColorFiltered(colorFilter: filter, child: image);
+    }
+    if (_needsWhiteTint) {
+      image = ColorFiltered(
+        colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+        child: image,
+      );
+    }
+
+    image = Opacity(opacity: active ? 1 : 0.4, child: image);
+
+    if (activeScale != 1 && active) {
+      image = Transform.scale(scale: activeScale, child: image);
+    }
+
+    if (clipCircular) {
+      image = ClipOval(
+        child: SizedBox(
+          width: frameSize,
+          height: frameSize,
+          child: Center(child: image),
+        ),
+      );
+    }
+
+    return SizedBox(
+      width: frameSize,
+      height: frameSize,
+      child: Center(child: image),
     );
   }
 }
@@ -133,9 +205,15 @@ class _NavButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        child: Center(child: child),
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: onTap,
+          splashColor: Colors.transparent,
+          highlightColor: Colors.transparent,
+          hoverColor: Colors.transparent,
+          child: Center(child: child),
+        ),
       ),
     );
   }
