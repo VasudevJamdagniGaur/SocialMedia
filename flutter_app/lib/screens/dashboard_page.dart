@@ -142,6 +142,14 @@ class _DashboardPageState extends State<DashboardPage> {
     final hubText = isDark ? HubTheme.text : const Color(0xFFE5E5E5);
     final hubSecondary = isDark ? HubTheme.textSecondary : const Color(0xFFB0B0B0);
     final cardBg = isDark ? HubTheme.bgSecondary : const Color(0xFF1E1E1E);
+    final cardBorder = isDark ? HubTheme.divider : const Color(0x14FFFFFF);
+    final cardShadow = [
+      BoxShadow(
+        color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.2),
+        blurRadius: isDark ? 16 : 12,
+        offset: const Offset(0, 4),
+      ),
+    ];
 
     return Scaffold(
       backgroundColor: HubTheme.scaffoldBg(isDark),
@@ -154,7 +162,7 @@ class _DashboardPageState extends State<DashboardPage> {
           children: [
             SafeArea(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 16, 24, 100),
+                padding: const EdgeInsets.fromLTRB(24, 12, 24, 100),
                 child: Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 400),
@@ -167,10 +175,11 @@ class _DashboardPageState extends State<DashboardPage> {
                           onHelp: () => context.push(AppRoutes.helpImprove),
                           onProfile: () => context.push(AppRoutes.profile),
                         ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 32),
                         _DateSelector(
-                          isDark: isDark,
                           cardBg: cardBg,
+                          cardBorder: cardBorder,
+                          cardShadow: cardShadow,
                           selectedDate: _selectedDate,
                           hubText: hubText,
                           hubSecondary: hubSecondary,
@@ -191,8 +200,15 @@ class _DashboardPageState extends State<DashboardPage> {
                         ),
                         const SizedBox(height: 24),
                         _ReflectionCard(
-                          isDark: isDark,
                           cardBg: cardBg,
+                          cardBorder: cardBorder,
+                          cardShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.3),
+                              blurRadius: 20,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
                           hubText: hubText,
                           hubSecondary: hubSecondary,
                           selectedDate: _selectedDate,
@@ -209,21 +225,19 @@ class _DashboardPageState extends State<DashboardPage> {
                           ),
                           onChat: () => _navigateChat(whisper: false),
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 8),
                         _ActionButton(
-                          isDark: isDark,
                           cardBg: cardBg,
+                          cardBorder: cardBorder,
                           hubText: hubText,
-                          icon: LucideIcons.messageCircle,
                           label: "Spill day's tea",
                           onTap: () => _navigateChat(whisper: false),
                         ),
                         const SizedBox(height: 12),
                         _ActionButton(
-                          isDark: isDark,
                           cardBg: cardBg,
+                          cardBorder: cardBorder,
                           hubText: hubText,
-                          icon: LucideIcons.messageCircle,
                           label: 'Whisper Session',
                           onTap: () => _navigateChat(whisper: true),
                         ),
@@ -236,14 +250,36 @@ class _DashboardPageState extends State<DashboardPage> {
             AnimatedPositioned(
               duration: const Duration(milliseconds: 300),
               right: 16,
-              bottom: _showFab ? 88 : 72,
+              bottom: _showFab ? 80 : 64,
               child: AnimatedOpacity(
                 duration: const Duration(milliseconds: 300),
                 opacity: _showFab ? 1 : 0,
-                child: FloatingActionButton(
-                  onPressed: () => context.push(AppRoutes.community, extra: {'openCreatePost': true}),
-                  backgroundColor: HubTheme.accent,
-                  child: const Icon(LucideIcons.plus, color: Colors.white),
+                child: IgnorePointer(
+                  ignoring: !_showFab,
+                  child: Material(
+                    elevation: 0,
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => context.push(AppRoutes.community, extra: {'openCreatePost': true}),
+                      customBorder: const CircleBorder(),
+                      child: Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: HubTheme.accent,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: HubTheme.accentShadow.withValues(alpha: 0.38),
+                              blurRadius: 20,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(LucideIcons.plus, color: Colors.white, size: 26),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -280,17 +316,37 @@ class _TopBar extends StatelessWidget {
   final VoidCallback onHelp;
   final VoidCallback onProfile;
 
+  BoxDecoration _circleDecoration({bool hasImage = false}) => BoxDecoration(
+        color: hasImage ? Colors.transparent : (isDark ? HubTheme.bgSecondary : Colors.white),
+        shape: BoxShape.circle,
+        border: hasImage ? null : Border.all(color: isDark ? HubTheme.divider : Colors.transparent),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.15 : 0.08),
+            blurRadius: isDark ? 16 : 8,
+          ),
+          if (!isDark)
+            BoxShadow(
+              color: const Color(0xFFB19CD9).withValues(alpha: 0.15),
+              blurRadius: 8,
+            ),
+        ],
+      );
+
   @override
   Widget build(BuildContext context) {
-    Widget circleBtn({required Widget child, required VoidCallback onTap}) {
+    Widget circleBtn({required Widget child, required VoidCallback onTap, bool hasImage = false}) {
       return Material(
-        color: isDark ? HubTheme.bgSecondary : Colors.white,
-        shape: const CircleBorder(),
-        elevation: 2,
+        color: Colors.transparent,
         child: InkWell(
-          customBorder: const CircleBorder(),
           onTap: onTap,
-          child: SizedBox(width: 40, height: 40, child: Center(child: child)),
+          customBorder: const CircleBorder(),
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: _circleDecoration(hasImage: hasImage),
+            child: Center(child: child),
+          ),
         ),
       );
     }
@@ -308,32 +364,61 @@ class _TopBar extends StatelessWidget {
                 child: Icon(
                   isDark ? LucideIcons.moon : LucideIcons.sun,
                   color: HubTheme.accent,
-                  size: 22,
+                  size: 20,
                 ),
               ),
               Row(
                 children: [
-                  circleBtn(onTap: onHelp, child: const Text('✨', style: TextStyle(fontSize: 17))),
+                  circleBtn(
+                    onTap: onHelp,
+                    child: const Text('✨', style: TextStyle(fontSize: 17, height: 1)),
+                  ),
                   const SizedBox(width: 8),
                   circleBtn(
                     onTap: onProfile,
+                    hasImage: profilePicture != null,
                     child: profilePicture != null
                         ? ClipOval(
-                            child: CachedNetworkImage(imageUrl: profilePicture!, width: 40, height: 40, fit: BoxFit.cover),
+                            child: CachedNetworkImage(
+                              imageUrl: profilePicture!,
+                              width: 40,
+                              height: 40,
+                              fit: BoxFit.cover,
+                            ),
                           )
-                        : const Icon(LucideIcons.user, color: HubTheme.accent, size: 22),
+                        : Icon(LucideIcons.user, color: HubTheme.accent, size: 20),
                   ),
                 ],
               ),
             ],
           ),
-          Material(
-            color: isDark ? HubTheme.bgSecondary : Colors.white,
-            shape: const CircleBorder(),
-            child: const SizedBox(
-              width: 56,
-              height: 56,
-              child: Icon(Icons.psychology, color: HubTheme.accent, size: 28),
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: isDark ? HubTheme.bgSecondary : Colors.white,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: isDark ? HubTheme.divider : const Color(0x33A855F7),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: isDark ? 0.15 : 0.1),
+                  blurRadius: isDark ? 16 : 12,
+                ),
+                if (!isDark)
+                  BoxShadow(
+                    color: HubTheme.accentShadow.withValues(alpha: 0.25),
+                    blurRadius: 12,
+                  ),
+              ],
+            ),
+            child: ClipOval(
+              child: Image.asset(
+                'assets/images/DEITECIrc-192.webp',
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Icon(Icons.psychology, color: HubTheme.accent, size: 28),
+              ),
             ),
           ),
         ],
@@ -344,8 +429,9 @@ class _TopBar extends StatelessWidget {
 
 class _DateSelector extends StatelessWidget {
   const _DateSelector({
-    required this.isDark,
     required this.cardBg,
+    required this.cardBorder,
+    required this.cardShadow,
     required this.selectedDate,
     required this.hubText,
     required this.hubSecondary,
@@ -354,8 +440,9 @@ class _DateSelector extends StatelessWidget {
     required this.onCalendar,
   });
 
-  final bool isDark;
   final Color cardBg;
+  final Color cardBorder;
+  final List<BoxShadow> cardShadow;
   final DateTime selectedDate;
   final Color hubText;
   final Color hubSecondary;
@@ -370,37 +457,55 @@ class _DateSelector extends StatelessWidget {
       decoration: BoxDecoration(
         color: cardBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isDark ? HubTheme.divider : Colors.white12),
+        border: Border.all(color: cardBorder),
+        boxShadow: cardShadow,
       ),
       child: Row(
         children: [
-          IconButton(onPressed: onPrev, icon: Text('‹', style: TextStyle(fontSize: 22, color: hubSecondary))),
+          IconButton(
+            onPressed: onPrev,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            icon: Text('‹', style: TextStyle(fontSize: 20, color: hubSecondary, height: 1)),
+          ),
           Expanded(
-            child: InkWell(
-              onTap: onCalendar,
-              borderRadius: BorderRadius.circular(12),
-              child: Padding(
-                padding: const EdgeInsets.all(8),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(LucideIcons.calendar, color: HubTheme.accent, size: 16),
-                        const SizedBox(width: 8),
-                        Text('Selected Date', style: TextStyle(color: hubSecondary, fontSize: 13)),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(formatDateForDisplay(selectedDate),
-                        style: TextStyle(color: hubText, fontWeight: FontWeight.w600)),
-                    Text('Click to open calendar', style: TextStyle(color: hubSecondary, fontSize: 11)),
-                  ],
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: onCalendar,
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(LucideIcons.calendar, color: HubTheme.accent, size: 16),
+                          const SizedBox(width: 8),
+                          Text('Selected Date', style: TextStyle(color: hubSecondary, fontSize: 14)),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        formatDateForDisplay(selectedDate),
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: hubText, fontWeight: FontWeight.w600, fontSize: 16),
+                      ),
+                      const SizedBox(height: 2),
+                      Text('Click to open calendar', style: TextStyle(color: hubSecondary, fontSize: 12)),
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
-          IconButton(onPressed: onNext, icon: Text('›', style: TextStyle(fontSize: 22, color: hubSecondary))),
+          IconButton(
+            onPressed: onNext,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            icon: Text('›', style: TextStyle(fontSize: 20, color: hubSecondary, height: 1)),
+          ),
         ],
       ),
     );
@@ -409,8 +514,9 @@ class _DateSelector extends StatelessWidget {
 
 class _ReflectionCard extends StatelessWidget {
   const _ReflectionCard({
-    required this.isDark,
     required this.cardBg,
+    required this.cardBorder,
+    required this.cardShadow,
     required this.hubText,
     required this.hubSecondary,
     required this.selectedDate,
@@ -422,8 +528,9 @@ class _ReflectionCard extends StatelessWidget {
     required this.onChat,
   });
 
-  final bool isDark;
   final Color cardBg;
+  final Color cardBorder;
+  final List<BoxShadow> cardShadow;
   final Color hubText;
   final Color hubSecondary;
   final DateTime selectedDate;
@@ -440,72 +547,90 @@ class _ReflectionCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: cardBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isDark ? HubTheme.divider : Colors.white12),
+        border: Border.all(color: cardBorder),
+        boxShadow: cardShadow,
       ),
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            InkWell(
-              onTap: reflection.isNotEmpty ? onShareSuggestions : onOpenReflections,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text("Day's Reflect", style: TextStyle(color: hubText, fontSize: 18, fontWeight: FontWeight.w600)),
-                        Text(formatDateForDisplay(selectedDate), style: const TextStyle(color: HubTheme.accent, fontSize: 14)),
-                      ],
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: reflection.isNotEmpty ? onShareSuggestions : onOpenReflections,
+                borderRadius: BorderRadius.circular(8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text("Day's Reflect", style: TextStyle(color: hubText, fontSize: 18, fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 2),
+                          Text(formatDateForDisplay(selectedDate), style: const TextStyle(color: HubTheme.accent, fontSize: 14)),
+                        ],
+                      ),
                     ),
-                  ),
-                  const Icon(LucideIcons.chevronRight, color: HubTheme.accent),
-                ],
+                    const Icon(LucideIcons.chevronRight, color: HubTheme.accent, size: 20),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
             Container(
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.06),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: isDark ? HubTheme.divider : Colors.white12),
+                border: Border.all(color: cardBorder),
               ),
               child: loading
                   ? const Padding(
-                      padding: EdgeInsets.all(32),
-                      child: Center(child: CircularProgressIndicator(color: HubTheme.accent)),
+                      padding: EdgeInsets.symmetric(vertical: 40),
+                      child: _LoadingDots(),
                     )
                   : reflection.isNotEmpty
                       ? Padding(
-                          padding: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.all(20),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               Text(reflection, style: TextStyle(color: hubText, fontSize: 15, height: 1.5)),
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 16),
                               OutlinedButton.icon(
                                 onPressed: onShareReflection,
-                                icon: const Icon(LucideIcons.share2, size: 18),
-                                label: const Text('Share to HUB'),
-                                style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: BorderSide(color: HubTheme.accent.withValues(alpha: 0.5))),
+                                icon: const Icon(LucideIcons.share2, size: 18, color: Colors.white),
+                                label: const Text('Share to HUB', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                                style: OutlinedButton.styleFrom(
+                                  backgroundColor: HubTheme.accent.withValues(alpha: 0.2),
+                                  side: BorderSide(color: HubTheme.accent.withValues(alpha: 0.5)),
+                                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
                               ),
                             ],
                           ),
                         )
                       : Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
+                          padding: const EdgeInsets.fromLTRB(24, 24, 24, 28),
                           child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               Text('A quiet moment for this day', style: TextStyle(color: hubSecondary, fontSize: 14)),
-                              const SizedBox(height: 20),
+                              const SizedBox(height: 24),
                               FilledButton(
                                 onPressed: onChat,
                                 style: FilledButton.styleFrom(
                                   backgroundColor: HubTheme.accent.withValues(alpha: 0.2),
                                   foregroundColor: hubText,
+                                  elevation: 0,
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    side: BorderSide(color: HubTheme.accent.withValues(alpha: 0.5)),
+                                  ),
                                 ),
-                                child: const Text('Look back at this day'),
+                                child: const Text('Look back at this day', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
                               ),
                             ],
                           ),
@@ -518,20 +643,73 @@ class _ReflectionCard extends StatelessWidget {
   }
 }
 
+class _LoadingDots extends StatefulWidget {
+  const _LoadingDots();
+
+  @override
+  State<_LoadingDots> createState() => _LoadingDotsState();
+}
+
+class _LoadingDotsState extends State<_LoadingDots> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(3, (i) {
+            return AnimatedBuilder(
+              animation: _controller,
+              builder: (context, child) {
+                final t = (_controller.value + i * 0.2) % 1.0;
+                final y = -4 * (t < 0.5 ? t * 2 : (1 - t) * 2);
+                return Transform.translate(
+                  offset: Offset(0, y),
+                  child: child,
+                );
+              },
+              child: Container(
+                width: 8,
+                height: 8,
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                decoration: const BoxDecoration(color: HubTheme.accent, shape: BoxShape.circle),
+              ),
+            );
+          }),
+        ),
+        const SizedBox(height: 16),
+        Text('Preparing...', style: TextStyle(color: HubTheme.textSecondary, fontSize: 14)),
+      ],
+    );
+  }
+}
+
 class _ActionButton extends StatelessWidget {
   const _ActionButton({
-    required this.isDark,
     required this.cardBg,
+    required this.cardBorder,
     required this.hubText,
-    required this.icon,
     required this.label,
     required this.onTap,
   });
 
-  final bool isDark;
   final Color cardBg;
+  final Color cardBorder;
   final Color hubText;
-  final IconData icon;
   final String label;
   final VoidCallback onTap;
 
@@ -544,17 +722,18 @@ class _ActionButton extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14),
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: isDark ? HubTheme.divider : Colors.white12),
+            border: Border.all(color: cardBorder),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: HubTheme.accent, size: 20),
+              const Icon(LucideIcons.messageCircle, color: HubTheme.accent, size: 20),
               const SizedBox(width: 12),
-              Text(label, style: TextStyle(color: hubText, fontWeight: FontWeight.w500)),
+              Text(label, style: TextStyle(color: hubText, fontWeight: FontWeight.w500, fontSize: 16)),
             ],
           ),
         ),

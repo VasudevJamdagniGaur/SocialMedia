@@ -14,7 +14,7 @@ class HubTheme {
   static const lightScaffold = Color(0xFFB5C4AE);
   static const darkScaffold = Color(0xFF131314);
 
-  static Color scaffoldBg(bool isDark) => isDark ? darkScaffold : lightScaffold;
+  static Color scaffoldBg(bool isDark) => isDark ? bg : lightScaffold;
 
   static BoxDecoration hubCard({Color? background}) => BoxDecoration(
         color: background ?? bg,

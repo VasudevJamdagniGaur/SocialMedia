@@ -1,6 +1,8 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../contexts/theme_context.dart';
+import '../services/auth_service.dart';
+import 'auth_refresh.dart';
 import '../screens/splash_screen.dart';
 import '../screens/landing_page.dart';
 import '../screens/welcome_page.dart';
@@ -61,12 +63,26 @@ class AppRoutes {
   static const userProfile = '/user/:userId';
 }
 
+GoRouter? _appRouter;
+
+String? _splashAuthRedirect(GoRouterState state) {
+  if (state.uri.path != AppRoutes.splash) return null;
+  final user = AuthService.instance.getCurrentUser();
+  return user != null ? AppRoutes.dashboard : AppRoutes.signup;
+}
+
 GoRouter createAppRouter() {
+  return _appRouter ??= _buildAppRouter();
+}
+
+GoRouter _buildAppRouter() {
   final rootKey = GlobalKey<NavigatorState>();
 
   return GoRouter(
     navigatorKey: rootKey,
     initialLocation: AppRoutes.splash,
+    refreshListenable: authRefreshListenable,
+    redirect: (context, state) => _splashAuthRedirect(state),
     routes: [
       ShellRoute(
         builder: (context, state, child) => _AppShell(child: child),
@@ -240,8 +256,12 @@ class _AppShellState extends State<_AppShell> {
       router.go(AppRoutes.dashboard);
       return;
     }
-    if (path == AppRoutes.dashboard || path == AppRoutes.landing || path == AppRoutes.splash) {
-      // Exit app â€” on Android use SystemNavigator.pop()
+    if (path == AppRoutes.splash) {
+      final user = AuthService.instance.getCurrentUser();
+      router.go(user != null ? AppRoutes.dashboard : AppRoutes.signup);
+      return;
+    }
+    if (path == AppRoutes.dashboard || path == AppRoutes.landing) {
       return;
     }
     if (path == AppRoutes.login) {

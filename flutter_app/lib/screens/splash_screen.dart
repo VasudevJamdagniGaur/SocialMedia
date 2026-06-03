@@ -6,7 +6,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../router/app_router.dart';
 import '../services/auth_service.dart';
 
-/// Mirrors src/components/SplashScreen.js
+/// Brief splash — navigation is handled by GoRouter redirect + backup below.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -16,66 +16,38 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
   StreamSubscription? _authSub;
-  Timer? _navigationTimer;
+  Timer? _fallbackTimer;
   bool _hasNavigated = false;
-  bool _authStateDetermined = false;
 
   @override
   void initState() {
     super.initState();
-    _initAuth();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _navigateOnce());
+    _authSub = AuthService.instance.onAuthStateChange().listen((_) {
+      if (mounted) _navigateOnce();
+    });
+    _fallbackTimer = Timer(const Duration(milliseconds: 1200), () {
+      if (mounted) _navigateOnce();
+    });
   }
 
-  void _initAuth() {
-    final currentUser = AuthService.instance.getCurrentUser();
-    if (currentUser != null) {
-      _navigateToDestination(hasUser: true, skipDelay: true);
+  void _navigateOnce() {
+    if (_hasNavigated || !mounted) return;
+    final location = GoRouter.of(context).state.uri.path;
+    if (location != AppRoutes.splash) {
+      _hasNavigated = true;
       return;
     }
 
-    _authSub = AuthService.instance.onAuthStateChange().listen((user) {
-      if (_authStateDetermined) return;
-      _authStateDetermined = true;
-      _navigationTimer?.cancel();
-      if (!_hasNavigated) {
-        _navigateToDestination(hasUser: user != null, skipDelay: user != null);
-      }
-    });
-
-    _navigationTimer = Timer(const Duration(milliseconds: 2500), () {
-      if (!_authStateDetermined && !_hasNavigated) {
-        _authStateDetermined = true;
-        final fallbackUser = AuthService.instance.getCurrentUser();
-        _navigateToDestination(hasUser: fallbackUser != null, skipDelay: fallbackUser != null);
-      }
-    });
-  }
-
-  void _navigateToDestination({required bool hasUser, required bool skipDelay}) {
-    if (_hasNavigated || !mounted) return;
     _hasNavigated = true;
-    _navigationTimer?.cancel();
-    _authSub?.cancel();
-
-    void performNavigation() {
-      if (!mounted) return;
-      if (hasUser) {
-        context.go(AppRoutes.dashboard);
-      } else {
-        context.go(AppRoutes.landing);
-      }
-    }
-
-    if (skipDelay) {
-      performNavigation();
-    } else {
-      _navigationTimer = Timer(const Duration(seconds: 2), performNavigation);
-    }
+    _fallbackTimer?.cancel();
+    final hasUser = AuthService.instance.getCurrentUser() != null;
+    context.go(hasUser ? AppRoutes.dashboard : AppRoutes.signup);
   }
 
   @override
   void dispose() {
-    _navigationTimer?.cancel();
+    _fallbackTimer?.cancel();
     _authSub?.cancel();
     super.dispose();
   }
@@ -106,7 +78,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                   child: ClipOval(
                     child: Image.asset(
                       'assets/images/DEITECIrc-192.webp',
-                      fit: BoxFit.contain,
+                      fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => const Icon(Icons.psychology, color: Color(0xFFA855F7), size: 48),
                     ),
                   ),
