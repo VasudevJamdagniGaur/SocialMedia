@@ -61,7 +61,7 @@ class _LandingPageState extends State<LandingPage> {
                       ],
                     ),
                     child: ClipOval(
-                      child: Image.asset('assets/images/DEITECIrc.webp', fit: BoxFit.cover,
+                      child: Image.asset('assets/images/DEITECIrc-192.webp', fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => const Icon(Icons.psychology, color: Color(0xFFA855F7), size: 48)),
                     ),
                   ),

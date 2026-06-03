@@ -62,10 +62,9 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: assets/images/icon-512.png
-  # Matches landing page circle background (landing_page.dart #121212)
+  image_path: assets/images/DEITECIrc-192.webp
   adaptive_icon_background: "#121212"
-  adaptive_icon_foreground: assets/images/icon-512.png
+  adaptive_icon_foreground: assets/images/DEITECIrc-192.webp
   min_sdk_android: 21
   remove_alpha_ios: true
 

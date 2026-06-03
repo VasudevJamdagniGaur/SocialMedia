@@ -433,7 +433,7 @@ class _CommunityPageState extends State<CommunityPage> {
             child: Center(
               child: ClipOval(
                 child: Image.asset(
-                  'assets/images/DEITECIrc.webp',
+                  'assets/images/DEITECIrc-192.webp',
                   width: 40,
                   height: 40,
                   fit: BoxFit.cover,

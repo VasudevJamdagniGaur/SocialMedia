@@ -563,7 +563,7 @@ class _ChatPageState extends State<ChatPage> {
         children: [
           _circleBtn(isDarkMode, onTap: _handleBack, child: const Icon(Icons.arrow_back, color: HubColors.accent)),
           const SizedBox(width: 12),
-          ClipOval(child: Image.asset('assets/images/DEITECIrc.webp', width: 40, height: 40, fit: BoxFit.cover)),
+          ClipOval(child: Image.asset('assets/images/DEITECIrc-192.webp', width: 40, height: 40, fit: BoxFit.cover)),
           const SizedBox(width: 10),
           Expanded(
             child: Text(

@@ -105,7 +105,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                   ),
                   child: ClipOval(
                     child: Image.asset(
-                      'assets/images/DEITECIrc.webp',
+                      'assets/images/DEITECIrc-192.webp',
                       fit: BoxFit.contain,
                       errorBuilder: (_, __, ___) => const Icon(Icons.psychology, color: Color(0xFFA855F7), size: 48),
                     ),
