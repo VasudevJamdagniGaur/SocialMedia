@@ -1,4 +1,4 @@
-package therapist.deite.app.deite
+package therapist.deite.app
 
 import io.flutter.embedding.android.FlutterActivity
 
