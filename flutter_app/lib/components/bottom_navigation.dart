@@ -67,13 +67,9 @@ class BottomNavigation extends StatelessWidget {
               ),
               _NavButton(
                 onTap: () => context.go(AppRoutes.community),
-                child: _NavRasterIcon(
-                  asset: 'assets/icons/Gemini_Generated_Image_enm22aenm22aenm2.png',
-                  size: 48,
+                child: _AccountNavIcon(
                   active: isCommunityActive,
                   isDarkMode: isDarkMode,
-                  frameSize: 56,
-                  activeScale: 1.08,
                 ),
               ),
             ],
@@ -129,7 +125,27 @@ class _HeartNavIcon extends StatelessWidget {
   }
 }
 
-/// PNG nav icons — mirrors React `BottomNavigation.js` filters.
+/// Account — filled when active (My Deeds tab).
+class _AccountNavIcon extends StatelessWidget {
+  const _AccountNavIcon({required this.active, required this.isDarkMode});
+
+  final bool active;
+  final bool isDarkMode;
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: active ? 1 : 0.4,
+      child: Icon(
+        active ? Icons.person : Icons.person_outline,
+        size: 28,
+        color: _navStrokeColor(active, isDarkMode),
+      ),
+    );
+  }
+}
+
+/// PNG / WebP nav icons — mirrors React `BottomNavigation.js` filters.
 ///
 /// Dark inactive: no filter, 40% opacity (original artwork).
 /// Dark active: tint to solid white (React `brightness(0) invert(1)` look).

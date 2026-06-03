@@ -431,13 +431,12 @@ class _CommunityPageState extends State<CommunityPage> {
           ),
           Expanded(
             child: Center(
-              child: ClipOval(
-                child: Image.asset(
-                  'assets/images/DEITECIrc-192.webp',
-                  width: 40,
-                  height: 40,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => const Icon(Icons.circle, color: HubColors.textSecondary),
+              child: Text(
+                'My Deeds',
+                style: TextStyle(
+                  color: HubColors.text,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
             ),
