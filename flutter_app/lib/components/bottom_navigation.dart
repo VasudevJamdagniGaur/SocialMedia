@@ -60,6 +60,7 @@ class BottomNavigation extends StatelessWidget {
                   size: 64,
                   active: isPodActive,
                   isDarkMode: isDarkMode,
+                  activeScale: 1.08,
                 ),
               ),
               _NavButton(
@@ -69,7 +70,7 @@ class BottomNavigation extends StatelessWidget {
                   size: 48,
                   active: isCommunityActive,
                   isDarkMode: isDarkMode,
-                  clipCircular: true,
+                  frameSize: 56,
                   activeScale: 1.08,
                 ),
               ),
@@ -126,18 +127,19 @@ class _HeartNavIcon extends StatelessWidget {
   }
 }
 
-/// PNG nav icons — CSS filter parity:
-/// - dark inactive: none (natural colors @ 0.4 opacity)
-/// - dark active: brightness(0) + invert(1) → white
-/// - light inactive: grayscale
-/// - light active: brightness(0) → black
+/// PNG nav icons (white line-art on transparent/dark).
+///
+/// Dark mode: show assets as-is (already white outlines). Do **not** apply
+/// brightness(0)+invert — that turns line-art into solid white blobs.
+///
+/// Light mode: matches React — grayscale when inactive, black when active.
 class _NavRasterIcon extends StatelessWidget {
   const _NavRasterIcon({
     required this.asset,
     required this.size,
     required this.active,
     required this.isDarkMode,
-    this.clipCircular = false,
+    this.frameSize,
     this.activeScale = 1,
   });
 
@@ -145,20 +147,14 @@ class _NavRasterIcon extends StatelessWidget {
   final double size;
   final bool active;
   final bool isDarkMode;
-  final bool clipCircular;
+  /// Optional square frame (React `w-14` community wrapper).
+  final double? frameSize;
   final double activeScale;
 
   static const ColorFilter _brightnessZero = ColorFilter.matrix(<double>[
     0, 0, 0, 0, 0,
     0, 0, 0, 0, 0,
     0, 0, 0, 0, 0,
-    0, 0, 0, 1, 0,
-  ]);
-
-  static const ColorFilter _invert = ColorFilter.matrix(<double>[
-    -1, 0, 0, 0, 255,
-    0, -1, 0, 0, 255,
-    0, 0, -1, 0, 255,
     0, 0, 0, 1, 0,
   ]);
 
@@ -170,31 +166,28 @@ class _NavRasterIcon extends StatelessWidget {
   ]);
 
   Widget _applyFilters(Widget child) {
-    if (active && isDarkMode) {
-      return ColorFiltered(
-        colorFilter: _brightnessZero,
-        child: ColorFiltered(colorFilter: _invert, child: child),
-      );
+    if (isDarkMode) {
+      return child;
     }
-    if (active && !isDarkMode) {
+    if (active) {
       return ColorFiltered(colorFilter: _brightnessZero, child: child);
     }
-    if (!active && !isDarkMode) {
-      return ColorFiltered(colorFilter: _grayscale, child: child);
-    }
-    return child;
+    return ColorFiltered(colorFilter: _grayscale, child: child);
   }
 
   @override
   Widget build(BuildContext context) {
-    final frameSize = clipCircular ? 56.0 : size;
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final cachePx = (size * dpr).round().clamp(48, 256);
 
     Widget image = Image.asset(
       asset,
       width: size,
       height: size,
       fit: BoxFit.contain,
-      filterQuality: FilterQuality.high,
+      filterQuality: FilterQuality.none,
+      cacheWidth: cachePx,
+      cacheHeight: cachePx,
       gaplessPlayback: true,
       errorBuilder: (_, __, ___) => Icon(
         Icons.broken_image_outlined,
@@ -210,17 +203,10 @@ class _NavRasterIcon extends StatelessWidget {
       image = Transform.scale(scale: activeScale, child: image);
     }
 
-    if (clipCircular) {
-      image = SizedBox(
-        width: frameSize,
-        height: frameSize,
-        child: Center(child: image),
-      );
-    }
-
+    final outer = frameSize ?? size;
     return SizedBox(
-      width: frameSize,
-      height: frameSize,
+      width: outer,
+      height: outer,
       child: Center(child: image),
     );
   }
