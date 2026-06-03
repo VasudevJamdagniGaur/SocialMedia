@@ -60,7 +60,6 @@ class BottomNavigation extends StatelessWidget {
                   size: 64,
                   active: isPodActive,
                   isDarkMode: isDarkMode,
-                  activeScale: 1.08,
                 ),
               ),
               _NavButton(
@@ -127,12 +126,11 @@ class _HeartNavIcon extends StatelessWidget {
   }
 }
 
-/// PNG nav icons (white line-art on transparent/dark).
+/// PNG nav icons — mirrors React `BottomNavigation.js` filters.
 ///
-/// Dark mode: show assets as-is (already white outlines). Do **not** apply
-/// brightness(0)+invert — that turns line-art into solid white blobs.
-///
-/// Light mode: matches React — grayscale when inactive, black when active.
+/// Dark inactive: no filter, 40% opacity (original artwork).
+/// Dark active: tint to solid white (React `brightness(0) invert(1)` look).
+/// Light inactive: grayscale. Light active: black silhouette.
 class _NavRasterIcon extends StatelessWidget {
   const _NavRasterIcon({
     required this.asset,
@@ -165,8 +163,17 @@ class _NavRasterIcon extends StatelessWidget {
     0, 0, 0, 1, 0,
   ]);
 
+  static const ColorFilter _solidWhite = ColorFilter.mode(
+    Colors.white,
+    BlendMode.srcIn,
+  );
+
   Widget _applyFilters(Widget child) {
     if (isDarkMode) {
+      if (active) {
+        // Selected: same artwork, forced to solid white (React active look).
+        return ColorFiltered(colorFilter: _solidWhite, child: child);
+      }
       return child;
     }
     if (active) {
