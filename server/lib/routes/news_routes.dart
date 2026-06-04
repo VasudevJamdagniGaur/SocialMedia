@@ -79,8 +79,14 @@ Router buildRedditProxyRouter() {
   router.get('/api/news', (Request req) async {
     if (req.method == 'OPTIONS') return Response(204, headers: apiCorsHeaders);
     try {
+      final customUrl = req.url.queryParameters['url']?.trim();
+      final target = (customUrl != null &&
+              customUrl.contains('reddit.com') &&
+              customUrl.contains('.json'))
+          ? customUrl
+          : upstream;
       final res = await http.get(
-        Uri.parse(upstream),
+        Uri.parse(target),
         headers: {
           'Accept': 'application/json',
           'User-Agent': 'DeteaLocalDev/1.0.0',

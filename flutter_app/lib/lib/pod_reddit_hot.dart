@@ -82,9 +82,14 @@ Future<List<Map<String, dynamic>>> tryRedditHotRows(
     List<dynamic> children = [];
     try {
       final jr = await fetchJsonGet(url, timeoutMs: 20000);
-      final listing = jr['data'];
-      final ch = listing is Map ? listing['children'] : null;
-      children = ch is List ? ch : [];
+      if (jr['ok'] != true) {
+        children = [];
+      } else {
+        final root = jr['data'];
+        final listing = root is Map ? root['data'] : null;
+        final ch = listing is Map ? listing['children'] : null;
+        children = ch is List ? ch : [];
+      }
     } catch (_) {
       children = [];
     }

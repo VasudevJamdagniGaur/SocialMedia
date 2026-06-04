@@ -1,18 +1,16 @@
-﻿import 'dart:convert';
+﻿import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:http/http.dart' as http;
 
 import '../router/app_router.dart';
+import '../services/cached_news_service.dart';
 import '../utils/hub_colors.dart';
 import '../utils/tea_trending_storage.dart';
 import 'package:deite/lib/pod_reddit_hot.dart';
+import 'package:deite/lib/pod_topic_news_shared.dart';
 import 'package:deite/lib/reddit_post_filter.dart';
 import 'skeleton/card_skeleton.dart';
-
-const _redditHotUrl =
-    'https://www.reddit.com/r/BollyBlindsNGossip/hot.json?limit=50&raw_json=1';
 
 class TeaItem {
   TeaItem({
@@ -53,78 +51,70 @@ bool _isDirectImageUrl(String? postUrl) {
   return RegExp(r'\.(jpe?g|png|gif|webp)$', caseSensitive: false).hasMatch(path);
 }
 
-TeaItem? _mapRedditChild(Map<String, dynamic>? child) {
-  final d = child?['data'] as Map<String, dynamic>?;
-  if (d == null) return null;
-  final url = redditPermalinkUrl(d);
-  final postUrl = d['url'] is String ? d['url'] as String : '';
-  final hero = resolveRedditPostImage(d);
-  final thumb = d['thumbnail'] is String ? d['thumbnail'] as String : '';
+TeaItem _rowToTeaItem(Map<String, dynamic> row) {
+  final url = row['url'] is String ? row['url'] as String : '';
   return TeaItem(
-    id: d['id'] as String? ?? d['name'] as String? ?? '',
-    title: d['title'] as String? ?? '',
-    score: (d['score'] as num?)?.toInt() ?? 0,
-    numComments: (d['num_comments'] as num?)?.toInt() ?? 0,
-    author: d['author'] is String && '${d['author']}'.isNotEmpty
-        ? d['author'] as String
-        : 'unknown',
+    id: url.isNotEmpty ? hubNewsDocIdFromUrl(url) : '${row['title']}'.hashCode.toString(),
+    title: row['title'] is String ? row['title'] as String : '',
     url: url,
-    postUrl: postUrl,
-    thumbnail: hero ?? (thumb.startsWith('http') ? thumb : ''),
+    postUrl: url,
+    thumbnail: '${row['image'] ?? row['thumbnail'] ?? ''}',
+    author: row['author'] is String ? row['author'] as String : 'unknown',
+    score: row['score'] is num ? (row['score'] as num).toInt() : 0,
+    numComments: row['num_comments'] is num ? (row['num_comments'] as num).toInt() : 0,
   );
 }
 
-Future<Map<String, dynamic>?> _fetchRedditJsonViaProxies(String targetUrl) async {
-  final encoded = Uri.encodeComponent(targetUrl);
-  for (final proxy in [
-    'https://api.codetabs.com/v1/proxy?quest=$encoded',
-    'https://corsproxy.io/?$encoded',
-    'https://api.allorigins.win/get?url=$encoded',
-  ]) {
-    try {
-      final res = await http
-          .get(Uri.parse(proxy), headers: {'Accept': 'application/json'})
-          .timeout(const Duration(seconds: 9));
-      if (res.statusCode != 200) continue;
-      final body = jsonDecode(res.body);
-      if (body is Map && body['contents'] is String) {
-        return jsonDecode(body['contents'] as String) as Map<String, dynamic>?;
-      }
-      if (body is Map<String, dynamic>) return body;
-    } catch (_) {}
-  }
-  return null;
-}
-
-Future<Map<String, dynamic>?> _fetchRedditJson(String targetUrl) async {
-  try {
-    final res = await http
-        .get(Uri.parse(targetUrl), headers: {'Accept': 'application/json'})
-        .timeout(const Duration(seconds: 9));
-    if (res.statusCode == 200) {
-      return jsonDecode(res.body) as Map<String, dynamic>;
-    }
-    return _fetchRedditJsonViaProxies(targetUrl);
-  } catch (_) {
-    return _fetchRedditJsonViaProxies(targetUrl);
-  }
-}
-
 Future<List<TeaItem>> fetchTrendingTea() async {
-  final json = await _fetchRedditJson(_redditHotUrl);
-  final children = json?['data']?['children'];
-  if (children is! List) throw Exception('Unexpected response from Reddit');
+  var rows = await tryRedditHotRows(
+    ['BollyBlindsNGossip'],
+    maxPerSub: 50,
+    maxKeep: 15,
+    minScore: 10,
+    filterPost: (post) => filterPosts([post]).isNotEmpty,
+  );
 
-  final rawPosts = children
-      .map((c) => c is Map ? c['data'] as Map<String, dynamic>? : null)
-      .whereType<Map<String, dynamic>>()
-      .toList();
-  final filteredPosts = filterPosts(rawPosts);
-  final items = filteredPosts
-      .map((d) => _mapRedditChild({'data': d}))
-      .whereType<TeaItem>()
-      .take(10)
-      .toList();
+  if (rows.isEmpty) {
+    rows = await tryRedditHotRows(
+      ['BollyBlindsNGossip'],
+      maxPerSub: 50,
+      maxKeep: 15,
+      minScore: 5,
+      filterPost: isValidPost,
+    );
+  }
+
+  if (rows.isEmpty) {
+    rows = await tryRedditHotRows(
+      ['BollywoodGossip', 'BollywoodHot'],
+      maxPerSub: 40,
+      maxKeep: 12,
+      minScore: 10,
+    );
+  }
+
+  if (rows.isEmpty) {
+    final rssItems = await fetchLiveFromGoogleRssByQuery('bollywood OR celebrity gossip when:3d');
+    rows = normalizeArticles(rssItems)
+        .where((a) => '${a['url'] ?? ''}'.trim().isNotEmpty)
+        .map((a) => {
+              'title': a['title'],
+              'url': a['url'],
+              'image': a['image'],
+              'thumbnail': a['image'],
+              'score': 0,
+              'num_comments': 0,
+              'author': a['source'] ?? 'News',
+              'source': a['source'] ?? 'News',
+            })
+        .toList();
+  }
+
+  if (rows.isEmpty) {
+    throw Exception('Could not load tea. Check your connection.');
+  }
+
+  final items = rows.map(_rowToTeaItem).take(10).toList();
   await writeTrendingTeaUrlsAndPruneShareCache(items.map((e) => e.url).toList());
   return items;
 }
@@ -159,7 +149,7 @@ class _TrendingTeaState extends State<TrendingTea> {
       _error = null;
     });
     try {
-      final items = await fetchTrendingTea();
+      final items = await fetchTrendingTea().timeout(const Duration(seconds: 30));
       if (!mounted) return;
       setState(() {
         _items = items;

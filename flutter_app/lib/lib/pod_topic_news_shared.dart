@@ -990,14 +990,61 @@ Future<Map<String, dynamic>> _fetchJsonMaybeNative(String url, {required int tim
   }
 }
 
+Future<Map<String, dynamic>?> _fetchRedditJsonViaProxies(
+  String targetUrl, {
+  required int timeoutMs,
+}) async {
+  final encoded = Uri.encodeComponent(targetUrl);
+  for (final proxy in [
+    'https://api.codetabs.com/v1/proxy?quest=$encoded',
+    'https://corsproxy.io/?$encoded',
+    'https://api.allorigins.win/get?url=$encoded',
+  ]) {
+    try {
+      final res = await http
+          .get(
+            Uri.parse(proxy),
+            headers: {
+              'Accept': 'application/json',
+              'User-Agent': _newsApiUserAgent,
+            },
+          )
+          .timeout(Duration(milliseconds: timeoutMs));
+      if (res.statusCode != 200) continue;
+      final body = jsonDecode(res.body);
+      if (body is Map && body['contents'] is String) {
+        return jsonDecode(body['contents'] as String) as Map<String, dynamic>?;
+      }
+      if (body is Map<String, dynamic>) return body;
+    } catch (_) {}
+  }
+  return null;
+}
+
 Future<Map<String, dynamic>> fetchJsonGet(String url, {int timeoutMs = 15000}) async {
   final raw = url.trim();
   const redditWorldnewsUpstream =
       'https://www.reddit.com/r/WorldNewsHeadlines/hot.json?limit=45&raw_json=1';
   final backendBase = _trimOrigin(Env.baseUrl);
-  final redditWorldnewsProxy = '$backendBase/api/news';
 
-  final resolvedUrl = raw == redditWorldnewsUpstream ? redditWorldnewsProxy : url;
+  if (raw.contains('reddit.com') && raw.contains('.json')) {
+    final direct = await _fetchJsonMaybeNative(raw, timeoutMs: timeoutMs);
+    if (direct['ok'] == true && direct['data'] is Map) return direct;
+
+    final backendUrl = raw == redditWorldnewsUpstream
+        ? '$backendBase/api/news'
+        : '$backendBase/api/news?${Uri(queryParameters: {'url': raw}).query}';
+    final viaBackend = await _fetchJsonMaybeNative(backendUrl, timeoutMs: timeoutMs);
+    if (viaBackend['ok'] == true && viaBackend['data'] is Map) return viaBackend;
+
+    final viaProxy = await _fetchRedditJsonViaProxies(raw, timeoutMs: timeoutMs);
+    if (viaProxy != null) {
+      return {'status': 200, 'ok': true, 'data': viaProxy, 'headers': {}};
+    }
+    return direct;
+  }
+
+  final resolvedUrl = raw == redditWorldnewsUpstream ? '$backendBase/api/news' : url;
   return _fetchJsonMaybeNative(resolvedUrl, timeoutMs: timeoutMs);
 }
 

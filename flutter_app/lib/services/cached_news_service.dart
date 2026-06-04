@@ -11,6 +11,13 @@ const Map<String, String> _liveQueries = {
   'entrepreneurship': 'startup OR business OR entrepreneurship',
 };
 
+const Map<String, String> _rssQueries = {
+  'current_affairs': 'world news when:2d',
+  'sports': 'sports headlines when:2d',
+  'ai_tech': 'technology OR AI when:2d',
+  'entrepreneurship': 'business OR startup when:2d',
+};
+
 const Map<String, String> _headlineCategory = {
   'current_affairs': 'general',
   'sports': 'sports',
@@ -190,6 +197,24 @@ class CachedNewsService {
           publishedAt: a['publishedAt'] != null ? '${a['publishedAt']}' : null,
         );
       }).toList();
+
+      if (articles.isEmpty) {
+        final rssQ = _rssQueries[id];
+        if (rssQ != null) {
+          final rssItems = await fetchLiveFromGoogleRssByQuery(rssQ);
+          for (final a in normalizeArticles(rssItems)) {
+            final img = a['image'];
+            articles.add(CachedArticle(
+              title: a['title'] as String? ?? '',
+              source: a['source'] as String? ?? 'News',
+              url: a['url'] as String? ?? '',
+              image: img is String && img.trim().startsWith('http') ? img.trim() : null,
+              description: a['description'] as String? ?? '',
+              publishedAt: a['publishedAt'] != null ? '${a['publishedAt']}' : null,
+            ));
+          }
+        }
+      }
 
       if (articles.isEmpty) {
         return CachedNewsResult(

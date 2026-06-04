@@ -1,8 +1,10 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../router/app_router.dart';
+import '../services/cached_news_service.dart';
 import '../utils/hub_colors.dart';
 import 'skeleton/card_skeleton.dart';
 
@@ -30,33 +32,29 @@ List<HubTrendingItem>? _hubCache;
 
 Future<List<HubTrendingItem>> fetchHubTrendingItems() async {
   if (_hubCache != null && _hubCache!.isNotEmpty) return _hubCache!;
-  const categories = ['general', 'technology', 'entertainment', 'sports'];
-  final db = FirebaseFirestore.instance;
+
+  final merged = await getHubTrendingMergedFromFirestore();
+  final rawItems = merged['items'];
   final seen = <String>{};
   final items = <HubTrendingItem>[];
 
-  for (final cat in categories) {
-    try {
-      final snap = await db.collection('newsCache').doc(cat).get();
-      final articles = snap.data()?['articles'];
-      if (articles is List) {
-        for (final a in articles) {
-          if (a is! Map) continue;
-          final url = '${a['url'] ?? ''}'.trim();
-          if (url.isEmpty || seen.contains(url)) continue;
-          seen.add(url);
-          items.add(HubTrendingItem(
-            id: url.hashCode.toString(),
-            title: a['title'] as String? ?? '',
-            url: url,
-            description: a['description'] as String? ?? '',
-            image: a['urlToImage'] as String? ?? a['image'] as String? ?? '',
-            source: a['source'] as String? ?? cat,
-            category: cat,
-          ));
-        }
-      }
-    } catch (_) {}
+  if (rawItems is List) {
+    for (final a in rawItems) {
+      if (a is! Map) continue;
+      final url = '${a['url'] ?? ''}'.trim();
+      if (url.isEmpty || seen.contains(url)) continue;
+      seen.add(url);
+      final img = a['image'];
+      items.add(HubTrendingItem(
+        id: '${a['id'] ?? url.hashCode}',
+        title: a['title'] as String? ?? '',
+        url: url,
+        description: a['description'] as String? ?? '',
+        image: img is String && img.trim().startsWith('http') ? img.trim() : '',
+        source: a['source'] as String? ?? '',
+        category: a['category'] as String? ?? '',
+      ));
+    }
   }
 
   _hubCache = items;
@@ -86,7 +84,7 @@ class _HubTrendingFeedState extends State<HubTrendingFeed> {
   Future<void> _load() async {
     if (_hubCache == null || _hubCache!.isEmpty) setState(() => _loading = true);
     try {
-      final items = await fetchHubTrendingItems();
+      final items = await fetchHubTrendingItems().timeout(const Duration(seconds: 35));
       if (!mounted) return;
       setState(() {
         _items = items;
