@@ -7,14 +7,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../router/app_router.dart';
 import '../services/cached_news_service.dart';
+import '../services/reddit_tea_service.dart';
 import '../utils/hub_colors.dart';
 import '../utils/tea_trending_storage.dart';
-import 'package:deite/lib/pod_reddit_hot.dart';
-import 'package:deite/lib/pod_topic_news_shared.dart';
-import 'package:deite/lib/reddit_post_filter.dart';
 import 'skeleton/card_skeleton.dart';
 
-const _teaRssQuery = 'bollywood OR "bollywood gossip" OR celebrity when:7d';
 const _teaItemsCacheKey = 'deite_tea_items_cache_v2';
 const _teaCacheMaxAge = Duration(hours: 6);
 
@@ -67,27 +64,11 @@ TeaItem _rowToTeaItem(Map<String, dynamic> row) {
     title: row['title'] is String ? row['title'] as String : '',
     url: url,
     postUrl: url,
-    thumbnail: '${row['image'] ?? row['thumbnail'] ?? ''}',
+    thumbnail: '${row['image'] ?? row['thumbnail'] ?? ''}'.replaceAll('&amp;', '&'),
     author: row['author'] is String ? row['author'] as String : 'unknown',
     score: row['score'] is num ? (row['score'] as num).toInt() : 0,
     numComments: row['num_comments'] is num ? (row['num_comments'] as num).toInt() : 0,
   );
-}
-
-List<Map<String, dynamic>> _rssArticlesToRows(List<Map<String, dynamic>> articles) {
-  return normalizeArticles(articles)
-      .where((a) => '${a['url'] ?? ''}'.trim().isNotEmpty)
-      .map((a) => {
-            'title': a['title'],
-            'url': a['url'],
-            'image': a['image'],
-            'thumbnail': a['image'],
-            'score': 0,
-            'num_comments': 0,
-            'author': a['source'] ?? 'News',
-            'source': a['source'] ?? 'News',
-          })
-      .toList();
 }
 
 Future<List<TeaItem>> _loadTeaFromDisk() async {
@@ -135,22 +116,6 @@ Future<void> _saveTeaToDisk(List<TeaItem> items) async {
   } catch (_) {}
 }
 
-Future<List<Map<String, dynamic>>> _fetchTeaRowsFromRss() async {
-  final rss = await fetchLiveFromGoogleRssByQueryFast(_teaRssQuery, timeoutMs: 12000);
-  return _rssArticlesToRows(rss);
-}
-
-Future<List<Map<String, dynamic>>> _fetchTeaRowsFromReddit() async {
-  return tryRedditHotRows(
-    ['BollyBlindsNGossip'],
-    maxPerSub: 35,
-    maxKeep: 12,
-    minScore: 8,
-    timeoutMs: 7000,
-    filterPost: (post) => filterPosts([post]).isNotEmpty || isValidPost(post),
-  );
-}
-
 Future<List<TeaItem>> fetchTrendingTea({bool allowCache = true}) async {
   if (allowCache &&
       _memoryTeaCache != null &&
@@ -160,36 +125,9 @@ Future<List<TeaItem>> fetchTrendingTea({bool allowCache = true}) async {
     return _memoryTeaCache!;
   }
 
-  List<Map<String, dynamic>> rows = [];
-
-  try {
-    final results = await Future.wait([
-      _fetchTeaRowsFromRss(),
-      _fetchTeaRowsFromReddit(),
-    ]).timeout(const Duration(seconds: 16));
-    final rss = results[0];
-    final reddit = results[1];
-    rows = reddit.length >= rss.length && reddit.isNotEmpty ? reddit : rss;
-    if (rows.isEmpty) rows = reddit.isNotEmpty ? reddit : rss;
-  } on TimeoutException {
-    rows = [];
-  } catch (_) {
-    rows = [];
-  }
-
-  if (rows.length < 4) {
-    final rss = await _fetchTeaRowsFromRss();
-    if (rss.length > rows.length) rows = rss;
-  }
-  if (rows.length < 4) {
-    try {
-      final reddit = await _fetchTeaRowsFromReddit();
-      if (reddit.length > rows.length) rows = reddit;
-    } catch (_) {}
-  }
-
+  final rows = await fetchTrendingTeaRows();
   if (rows.isEmpty) {
-    throw Exception('Could not load tea. Check your connection and try again.');
+    throw Exception('Could not load tea. Check your connection.');
   }
 
   final items = rows.map(_rowToTeaItem).take(10).toList();
@@ -268,7 +206,7 @@ class _TrendingTeaState extends State<TrendingTea> {
         'url': item.url,
         'description': '',
         'image': teaHeroImageUrl(item),
-        'source': 'r/BollyBlindsNGossip',
+        'source': item.author.startsWith('r/') ? item.author : 'r/BollyBlindsNGossip',
       },
       'returnTo': GoRouterState.of(context).uri.path,
       'platform': 'linkedin',

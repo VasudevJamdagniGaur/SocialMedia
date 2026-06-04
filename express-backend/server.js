@@ -1,0 +1,151 @@
+/**
+ * Deite Reddit proxy — Flutter (web/mobile) → Express → Reddit API
+ *
+ * Run: npm install && npm start  (default PORT=3002)
+ * Flutter web: flutter run -d chrome --dart-define=BACKEND_URL=http://localhost:3002
+ */
+const express = require('express');
+const cors = require('cors');
+
+const PORT = Number(process.env.PORT) || 3002;
+const REDDIT_UA = process.env.REDDIT_USER_AGENT ||
+  'DeteaRedditProxy/1.0 (+https://deitedatabase.web.app)';
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+function sanitizeSub(sub) {
+  return String(sub || 'BollyBlindsNGossip').replace(/[^A-Za-z0-9_]/g, '') || 'BollyBlindsNGossip';
+}
+
+function clampLimit(limit) {
+  const n = parseInt(limit, 10);
+  if (Number.isNaN(n)) return 50;
+  return Math.min(100, Math.max(1, n));
+}
+
+function redditHotUrl(sub, limit) {
+  return `https://www.reddit.com/r/${encodeURIComponent(sub)}/hot.json?limit=${limit}&raw_json=1`;
+}
+
+function isAllowedRedditJsonUrl(url) {
+  try {
+    const u = new URL(url);
+    return u.hostname.endsWith('reddit.com') && u.pathname.endsWith('.json');
+  } catch {
+    return false;
+  }
+}
+
+async function fetchReddit(targetUrl) {
+  const res = await fetch(targetUrl, {
+    headers: {
+      Accept: 'application/json',
+      'User-Agent': REDDIT_UA,
+    },
+  });
+  const body = await res.text();
+  return { status: res.status, body };
+}
+
+app.get('/health', (_req, res) => {
+  res.json({ ok: true, service: 'detea-reddit-proxy' });
+});
+
+function parseRedditHotRss(xml) {
+  const items = [];
+  const blocks = xml.match(/<entry>[\s\S]*?<\/entry>/g) || [];
+  for (const block of blocks) {
+    const titleM = block.match(/<title(?:[^>]*)>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/i);
+    const linkM = block.match(/<link[^>]+href="([^"]+)"/i);
+    const thumbM = block.match(/<media:thumbnail[^>]+url="([^"]+)"/i);
+    const title = titleM ? titleM[1].replace(/&amp;/g, '&').trim() : '';
+    const url = linkM ? linkM[1].trim() : '';
+    if (!title || !url) continue;
+    const lower = title.toLowerCase();
+    if (
+      lower.includes('fanclub-style') ||
+      lower.includes('how can members help mods') ||
+      lower.includes('why we don') ||
+      title.includes('AutoModerator')
+    ) {
+      continue;
+    }
+    items.push({
+      title,
+      url,
+      image: thumbM ? thumbM[1] : '',
+      thumbnail: thumbM ? thumbM[1] : '',
+      score: 0,
+      num_comments: 0,
+      author: 'r/BollyBlindsNGossip',
+      source: 'r/BollyBlindsNGossip',
+    });
+    if (items.length >= 15) break;
+  }
+  return items;
+}
+
+/** Fresh Tea feed via Reddit Atom RSS (works when JSON API is blocked) */
+app.get('/api/reddit/tea', async (req, res) => {
+  const sub = sanitizeSub(req.query.sub);
+  const limit = clampLimit(req.query.limit);
+  const rssUrl = `https://www.reddit.com/r/${encodeURIComponent(sub)}/hot/.rss?limit=${limit}`;
+  try {
+    const { status, body } = await fetchReddit(rssUrl);
+    if (status !== 200) {
+      return res.status(status).json({ ok: false, items: [], error: 'rss_fetch_failed' });
+    }
+    const items = parseRedditHotRss(body);
+    res.json({ ok: true, items });
+  } catch (err) {
+    res.status(502).json({
+      ok: false,
+      items: [],
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+/** Primary Tea/Pod endpoint — Flutter calls this on web */
+app.get('/api/reddit/hot', async (req, res) => {
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  const sub = sanitizeSub(req.query.sub);
+  const limit = clampLimit(req.query.limit);
+  const target = redditHotUrl(sub, limit);
+  try {
+    const { status, body } = await fetchReddit(target);
+    res.status(status).type('application/json').send(body);
+  } catch (err) {
+    res.status(502).json({
+      error: 'reddit_proxy_failed',
+      message: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+/** Legacy passthrough — ?url=https://www.reddit.com/r/.../hot.json */
+app.get('/api/news', async (req, res) => {
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  const custom = typeof req.query.url === 'string' ? req.query.url.trim() : '';
+  const target = custom && isAllowedRedditJsonUrl(custom)
+    ? custom
+    : redditHotUrl('WorldNewsHeadlines', 45);
+  try {
+    const { status, body } = await fetchReddit(target);
+    res.status(status).type('application/json').send(body);
+  } catch (err) {
+    res.status(502).json({
+      error: 'reddit_proxy_failed',
+      message: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(`Deite Reddit proxy listening on http://localhost:${PORT}`);
+  console.log('  GET /api/reddit/tea?sub=BollyBlindsNGossip&limit=20');
+  console.log('  GET /api/reddit/hot?sub=BollyBlindsNGossip&limit=50');
+  console.log('  GET /api/news?url=<reddit.json>');
+});

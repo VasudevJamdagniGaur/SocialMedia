@@ -10,7 +10,8 @@ Unified backend in **Dart** — replaces `backend-vertex/` (Node), `detea-proxy/
 | POST | `/chat`, `/reflection`, `/summary`, `/analyze-pattern` | backend-vertex |
 | POST | `/generateContent`, `/generatePost`, `/generate-news-image` | backend-vertex |
 | GET | `/api/news/everything`, `/api/news/top-headlines` | functions/newsApi.ts |
-| GET | `/api/news` | detea-proxy (Reddit) |
+| GET | `/api/reddit/hot?sub=&limit=` | Reddit hot listing (Tea, Pod) |
+| GET | `/api/news` | detea-proxy (Reddit URL passthrough) |
 | GET | `/api/linkedin/article?url=` | functions/index.ts article extract |
 | POST | `/api/linkedin/suggestions?stream=1` | SSE streaming suggestions |
 | POST | `/deleteAccountRequest` | functions/deleteAccountRequest.ts |

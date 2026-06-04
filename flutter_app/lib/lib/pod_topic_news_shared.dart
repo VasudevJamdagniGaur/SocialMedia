@@ -1030,6 +1030,42 @@ Future<Map<String, dynamic>> _fetchJsonMaybeNative(String url, {required int tim
   }
 }
 
+String? redditSubFromJsonUrl(String url) {
+  final m = RegExp(r'reddit\.com/r/([^/]+)/', caseSensitive: false).firstMatch(url.trim());
+  final sub = m?.group(1)?.trim();
+  return sub != null && sub.isNotEmpty ? sub : null;
+}
+
+int redditLimitFromJsonUrl(String url, {int fallback = 50}) {
+  try {
+    final q = Uri.parse(url).queryParameters['limit'];
+    final n = int.tryParse(q ?? '');
+    if (n != null && n > 0) return n.clamp(1, 100);
+  } catch (_) {}
+  return fallback.clamp(1, 100);
+}
+
+/// Backend proxy URL — Flutter → Express/Dart server → Reddit
+String buildRedditHotProxyUrl({required String sub, int limit = 50}) {
+  final base = _trimOrigin(Env.baseUrl);
+  return '$base/api/reddit/hot?${Uri(queryParameters: {
+    'sub': sub.replaceAll(RegExp(r'[^A-Za-z0-9_]'), ''),
+    'limit': '$limit',
+  }).query}';
+}
+
+Future<Map<String, dynamic>> _fetchRedditViaBackend({
+  required String rawUrl,
+  required int timeoutMs,
+}) async {
+  final sub = redditSubFromJsonUrl(rawUrl);
+  final limit = redditLimitFromJsonUrl(rawUrl);
+  final backendUrl = sub != null
+      ? buildRedditHotProxyUrl(sub: sub, limit: limit)
+      : '${_trimOrigin(Env.baseUrl)}/api/news?${Uri(queryParameters: {'url': rawUrl}).query}';
+  return _fetchJsonMaybeNative(backendUrl, timeoutMs: timeoutMs);
+}
+
 Future<Map<String, dynamic>?> _fetchRedditJsonViaProxies(
   String targetUrl, {
   required int timeoutMs,
@@ -1068,27 +1104,36 @@ Future<Map<String, dynamic>> fetchJsonGet(String url, {int timeoutMs = 15000}) a
   final backendBase = _trimOrigin(Env.baseUrl);
 
   if (raw.contains('reddit.com') && raw.contains('.json')) {
-    const redditAttemptMs = 5000;
-    final direct = await _fetchJsonMaybeNative(raw, timeoutMs: redditAttemptMs);
-    if (direct['ok'] == true && direct['data'] is Map) return direct;
+    const redditAttemptMs = 8000;
 
-    final backendUrl = raw == redditWorldnewsUpstream
-        ? '$backendBase/api/news'
-        : '$backendBase/api/news?${Uri(queryParameters: {'url': raw}).query}';
-    final viaBackend = await _fetchJsonMaybeNative(backendUrl, timeoutMs: redditAttemptMs);
+    // Web: browsers block Reddit (CORS). Always use backend proxy first.
+    final viaBackend = await _fetchRedditViaBackend(
+      rawUrl: raw,
+      timeoutMs: redditAttemptMs,
+    );
     if (viaBackend['ok'] == true && viaBackend['data'] is Map) return viaBackend;
 
-    final proxyBudget = timeoutMs > redditAttemptMs * 2
-        ? timeoutMs - redditAttemptMs * 2
-        : timeoutMs;
+    if (kIsWeb) {
+      return viaBackend;
+    }
+
+    final direct = await _fetchJsonMaybeNative(raw, timeoutMs: 5000);
+    if (direct['ok'] == true && direct['data'] is Map) return direct;
+
+    final legacyBackend = raw == redditWorldnewsUpstream
+        ? '$backendBase/api/news'
+        : '$backendBase/api/news?${Uri(queryParameters: {'url': raw}).query}';
+    final viaLegacy = await _fetchJsonMaybeNative(legacyBackend, timeoutMs: 5000);
+    if (viaLegacy['ok'] == true && viaLegacy['data'] is Map) return viaLegacy;
+
     final viaProxy = await _fetchRedditJsonViaProxies(
       raw,
-      timeoutMs: proxyBudget.clamp(3000, 8000),
+      timeoutMs: timeoutMs.clamp(3000, 8000),
     );
     if (viaProxy != null) {
       return {'status': 200, 'ok': true, 'data': viaProxy, 'headers': {}};
     }
-    return direct;
+    return viaBackend['ok'] == true ? viaBackend : direct;
   }
 
   final resolvedUrl = raw == redditWorldnewsUpstream ? '$backendBase/api/news' : url;

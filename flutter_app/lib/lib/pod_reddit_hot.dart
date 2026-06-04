@@ -1,3 +1,7 @@
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
+
 import 'pod_topic_news_shared.dart';
 
 bool isDirectImageUrl(String? u) {
@@ -63,6 +67,89 @@ int _num(dynamic v) => v is num ? v.toInt() : int.tryParse('$v') ?? 0;
 
 typedef RedditPostFilter = bool Function(Map<String, dynamic> post);
 
+Future<List<Map<String, dynamic>>> _pickFromPullPushSub(
+  String sub, {
+  required int maxPerSub,
+  required int maxKeep,
+  required int minScore,
+  RedditPostFilter? filterPost,
+  required Set<String> seenTitles,
+  required Set<String> seenUrls,
+}) async {
+  final uri = Uri.parse('https://api.pullpush.io/reddit/search/submission/').replace(
+    queryParameters: {
+      'subreddit': sub,
+      'size': '$maxPerSub',
+      'sort': 'desc',
+      'sort_type': 'created_utc',
+    },
+  );
+  try {
+    final res = await http
+        .get(
+          uri,
+          headers: {
+            'Accept': 'application/json',
+            'User-Agent': 'DeiteNews/1.0 (+https://deitedatabase.web.app)',
+          },
+        )
+        .timeout(const Duration(seconds: 12));
+    if (res.statusCode != 200) return [];
+    final body = jsonDecode(res.body);
+    final list = body is Map ? body['data'] : null;
+    if (list is! List) return [];
+    final picked = <Map<String, dynamic>>[];
+    for (final raw in list) {
+      if (picked.length >= maxKeep) break;
+      if (raw is! Map) continue;
+      final post = Map<String, dynamic>.from(raw);
+      if (filterPost != null && !filterPost(post)) continue;
+
+      final title = post['title'] is String ? (post['title'] as String).trim() : '';
+      if (title.isEmpty) continue;
+      final titleKey = title.toLowerCase();
+      if (seenTitles.contains(titleKey)) continue;
+
+      if (post['stickied'] == true) continue;
+      if ('${post['author'] ?? ''}' == 'AutoModerator') continue;
+      final score = _num(post['score']);
+      if (score < minScore) continue;
+
+      final link = redditPermalinkUrl(post);
+      if (!RegExp(r'^https?://', caseSensitive: false).hasMatch(link)) continue;
+      if (seenUrls.contains(link)) continue;
+
+      final thumbnail = post['thumbnail'] is String ? (post['thumbnail'] as String).trim() : '';
+      final thumb = RegExp(r'^https?://', caseSensitive: false).hasMatch(thumbnail)
+          ? thumbnail
+          : null;
+      final image = resolveRedditPostImage(post);
+
+      seenTitles.add(titleKey);
+      seenUrls.add(link);
+      picked.add({
+        'title': title,
+        'url': link,
+        'image': image,
+        'thumbnail': thumb,
+        'score': score,
+        'num_comments': _num(post['num_comments']),
+        'author': post['author'] is String && '${post['author']}'.trim().isNotEmpty
+            ? '${post['author']}'.trim()
+            : 'unknown',
+        'source': 'r/$sub',
+        'description': '',
+        'publishedAt': redditPublishedAt(post),
+        'sourceSiteUrl': 'https://www.reddit.com/r/${Uri.encodeComponent(sub)}',
+        'publisherUrl': '',
+      });
+    }
+    return picked;
+  } catch (_) {
+    return [];
+  }
+}
+
 /// Fetch hot posts from subreddits — port of tryRedditHotRows in podSportsTopicFeed.js
 Future<List<Map<String, dynamic>>> tryRedditHotRows(
   List<String> subs, {
@@ -78,6 +165,20 @@ Future<List<Map<String, dynamic>>> tryRedditHotRows(
 
   for (final sub in subs) {
     if (picked.length >= maxKeep) break;
+
+    if (picked.length < maxKeep) {
+      final pullRows = await _pickFromPullPushSub(
+        sub,
+        maxPerSub: maxPerSub,
+        maxKeep: maxKeep - picked.length,
+        minScore: minScore,
+        filterPost: filterPost,
+        seenTitles: seenTitles,
+        seenUrls: seenUrls,
+      );
+      picked.addAll(pullRows);
+    }
+
     final url =
         'https://www.reddit.com/r/${Uri.encodeComponent(sub)}/hot.json?limit=$maxPerSub&raw_json=1';
     List<dynamic> children = [];

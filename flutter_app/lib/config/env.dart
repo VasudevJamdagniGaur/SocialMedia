@@ -1,4 +1,6 @@
-﻿/// Compile-time environment configuration via `--dart-define`.
+﻿import 'package:flutter/foundation.dart';
+
+/// Compile-time environment configuration via `--dart-define`.
 class Env {
   Env._();
 
@@ -38,6 +40,16 @@ class Env {
     defaultValue: 'deitedatabase',
   );
 
-  static String get baseUrl =>
-      backendUrl.trim().isNotEmpty ? backendUrl.trim() : 'https://detea-backend.onrender.com';
+  static String get baseUrl {
+    final configured = backendUrl.trim();
+    if (configured.isNotEmpty) return configured;
+    // Local Flutter web → Express reddit proxy (see express-backend/)
+    if (kIsWeb) {
+      final host = Uri.base.host;
+      if (host == 'localhost' || host == '127.0.0.1') {
+        return 'http://localhost:3002';
+      }
+    }
+    return 'https://detea-backend.onrender.com';
+  }
 }

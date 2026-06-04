@@ -70,11 +70,54 @@ const apiCorsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
-/// Reddit dev proxy — port of detea-proxy/server.js
+String _sanitizeRedditSub(String? sub) {
+  final s = (sub ?? 'BollyBlindsNGossip').replaceAll(RegExp(r'[^A-Za-z0-9_]'), '');
+  return s.isEmpty ? 'BollyBlindsNGossip' : s;
+}
+
+int _clampRedditLimit(String? limit) {
+  final n = int.tryParse(limit ?? '') ?? 50;
+  return n.clamp(1, 100);
+}
+
+/// Reddit proxy — port of detea-proxy/server.js + express-backend/server.js
 Router buildRedditProxyRouter() {
   final router = Router();
   const upstream =
       'https://www.reddit.com/r/WorldNewsHeadlines/hot.json?limit=45&raw_json=1';
+
+  Future<Response> proxyRedditTarget(String target) async {
+    final res = await http.get(
+      Uri.parse(target),
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'DeteaRedditProxy/1.0 (+https://deitedatabase.web.app)',
+      },
+    );
+    if (res.statusCode != 200) {
+      return jsonOk({
+        'error': 'Upstream Reddit request failed',
+        'status': res.statusCode,
+      }, status: res.statusCode);
+    }
+    return Response.ok(
+      res.body,
+      headers: {...apiCorsHeaders, 'Content-Type': 'application/json'},
+    );
+  }
+
+  router.get('/api/reddit/hot', (Request req) async {
+    if (req.method == 'OPTIONS') return Response(204, headers: apiCorsHeaders);
+    final sub = _sanitizeRedditSub(req.url.queryParameters['sub']);
+    final limit = _clampRedditLimit(req.url.queryParameters['limit']);
+    final target =
+        'https://www.reddit.com/r/${Uri.encodeComponent(sub)}/hot.json?limit=$limit&raw_json=1';
+    try {
+      return await proxyRedditTarget(target);
+    } catch (e) {
+      return jsonError(500, 'Proxy server error', details: '$e');
+    }
+  });
 
   router.get('/api/news', (Request req) async {
     if (req.method == 'OPTIONS') return Response(204, headers: apiCorsHeaders);
@@ -85,23 +128,7 @@ Router buildRedditProxyRouter() {
               customUrl.contains('.json'))
           ? customUrl
           : upstream;
-      final res = await http.get(
-        Uri.parse(target),
-        headers: {
-          'Accept': 'application/json',
-          'User-Agent': 'DeteaLocalDev/1.0.0',
-        },
-      );
-      if (res.statusCode != 200) {
-        return jsonOk({
-          'error': 'Upstream Reddit request failed',
-          'status': res.statusCode,
-        }, status: res.statusCode);
-      }
-      return Response.ok(
-        res.body,
-        headers: {...apiCorsHeaders, 'Content-Type': 'application/json'},
-      );
+      return await proxyRedditTarget(target);
     } catch (e) {
       return jsonError(500, 'Proxy server error', details: '$e');
     }
