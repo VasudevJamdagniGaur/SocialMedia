@@ -148,9 +148,10 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                             child: ClipOval(
                               child: Image.asset(
-                                'assets/images/Gemini_Generated_Image_ib3dfuib3dfuib3d.png',
+                                'assets/images/DEITECIrc-192.webp',
                                 fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => const Icon(Icons.person, color: Colors.white54),
+                                errorBuilder: (_, __, ___) =>
+                                    const Icon(Icons.psychology, color: Color(0xFFA855F7), size: 36),
                               ),
                             ),
                           ),

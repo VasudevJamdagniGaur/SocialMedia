@@ -9,7 +9,7 @@ import '../contexts/theme_context.dart';
 import '../router/app_router.dart';
 import '../services/auth_service.dart';
 
-const _kDeitecLogo = 'assets/icons/Gemini_Generated_Image_enm22aenm22aenm2.png';
+const _kDeiteLogo = 'assets/images/DEITECIrc-192.webp';
 const _kSignupBackground = Color(0xFF030308);
 
 class SignupPage extends StatefulWidget {
@@ -122,10 +122,10 @@ class _SignupPageState extends State<SignupPage> with SingleTickerProviderStateM
                           ),
                           child: ClipOval(
                             child: Image.asset(
-                              _kDeitecLogo,
+                              _kDeiteLogo,
                               fit: BoxFit.cover,
                               errorBuilder: (_, __, ___) =>
-                                  const Icon(Icons.spa, color: AppColors.accentPurple, size: 56),
+                                  const Icon(Icons.psychology, color: AppColors.accentPurple, size: 56),
                             ),
                           ),
                         ),

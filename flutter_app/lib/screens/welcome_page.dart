@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 import '../contexts/theme_context.dart';
 import '../router/app_router.dart';
 
-const _kDeteaAvatar = 'assets/icons/Gemini_Generated_Image_enm22aenm22aenm2.png';
+const _kDeteaAvatar = 'assets/images/DEITECIrc-192.webp';
 
 class WelcomePage extends StatefulWidget {
   const WelcomePage({super.key});
@@ -72,7 +72,7 @@ class _WelcomePageState extends State<WelcomePage> with SingleTickerProviderStat
                           _kDeteaAvatar,
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) =>
-                              const Icon(Icons.spa, color: AppColors.accentPurple, size: 40),
+                              const Icon(Icons.psychology, color: AppColors.accentPurple, size: 40),
                         ),
                       ),
                     ),
