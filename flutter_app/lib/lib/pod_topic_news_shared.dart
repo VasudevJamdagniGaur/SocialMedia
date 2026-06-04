@@ -824,6 +824,9 @@ Future<List<Map<String, dynamic>>> _fetchItemsThroughRss2Json(String rssUrl) asy
 }
 
 Future<List<Map<String, dynamic>>> fetchLiveFromGoogleRssByQuery(String googleRssQuery) async {
+  final fast = await fetchLiveFromGoogleRssByQueryFast(googleRssQuery, timeoutMs: 12000);
+  if (fast.isNotEmpty) return fast;
+
   final q = googleRssQuery.trim();
   if (q.isEmpty) return [];
   final rssUrl = buildGoogleNewsRssUrl(q);
@@ -833,6 +836,43 @@ Future<List<Map<String, dynamic>>> fetchLiveFromGoogleRssByQuery(String googleRs
     items = _parseGoogleNewsRssXml(xml);
   }
   return items;
+}
+
+/// Fast RSS load: direct Google feed first (works on mobile), then rss2json. Skips slow CORS proxies.
+Future<List<Map<String, dynamic>>> fetchLiveFromGoogleRssByQueryFast(
+  String googleRssQuery, {
+  int timeoutMs = 10000,
+}) async {
+  final q = googleRssQuery.trim();
+  if (q.isEmpty) return [];
+  final rssUrl = buildGoogleNewsRssUrl(q);
+  final timeout = Duration(milliseconds: timeoutMs);
+
+  try {
+    final res = await http
+        .get(
+          Uri.parse(rssUrl),
+          headers: {
+            'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+            'User-Agent': _newsApiUserAgent,
+          },
+        )
+        .timeout(timeout);
+    if (res.statusCode == 200) {
+      final items = _parseGoogleNewsRssXml(res.body);
+      if (items.isNotEmpty) return items;
+    }
+  } catch (_) {}
+
+  try {
+    final items = await _fetchItemsThroughRss2Json(rssUrl).timeout(
+      timeout,
+      onTimeout: () => <Map<String, dynamic>>[],
+    );
+    if (items.isNotEmpty) return items;
+  } catch (_) {}
+
+  return [];
 }
 
 List<Map<String, dynamic>> normalizeArticles(List<dynamic> list) {
@@ -1028,16 +1068,23 @@ Future<Map<String, dynamic>> fetchJsonGet(String url, {int timeoutMs = 15000}) a
   final backendBase = _trimOrigin(Env.baseUrl);
 
   if (raw.contains('reddit.com') && raw.contains('.json')) {
-    final direct = await _fetchJsonMaybeNative(raw, timeoutMs: timeoutMs);
+    const redditAttemptMs = 5000;
+    final direct = await _fetchJsonMaybeNative(raw, timeoutMs: redditAttemptMs);
     if (direct['ok'] == true && direct['data'] is Map) return direct;
 
     final backendUrl = raw == redditWorldnewsUpstream
         ? '$backendBase/api/news'
         : '$backendBase/api/news?${Uri(queryParameters: {'url': raw}).query}';
-    final viaBackend = await _fetchJsonMaybeNative(backendUrl, timeoutMs: timeoutMs);
+    final viaBackend = await _fetchJsonMaybeNative(backendUrl, timeoutMs: redditAttemptMs);
     if (viaBackend['ok'] == true && viaBackend['data'] is Map) return viaBackend;
 
-    final viaProxy = await _fetchRedditJsonViaProxies(raw, timeoutMs: timeoutMs);
+    final proxyBudget = timeoutMs > redditAttemptMs * 2
+        ? timeoutMs - redditAttemptMs * 2
+        : timeoutMs;
+    final viaProxy = await _fetchRedditJsonViaProxies(
+      raw,
+      timeoutMs: proxyBudget.clamp(3000, 8000),
+    );
     if (viaProxy != null) {
       return {'status': 200, 'ok': true, 'data': viaProxy, 'headers': {}};
     }

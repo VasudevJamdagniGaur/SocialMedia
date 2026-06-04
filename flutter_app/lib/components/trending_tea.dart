@@ -1,7 +1,9 @@
 ﻿import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../router/app_router.dart';
 import '../services/cached_news_service.dart';
@@ -11,6 +13,13 @@ import 'package:deite/lib/pod_reddit_hot.dart';
 import 'package:deite/lib/pod_topic_news_shared.dart';
 import 'package:deite/lib/reddit_post_filter.dart';
 import 'skeleton/card_skeleton.dart';
+
+const _teaRssQuery = 'bollywood OR "bollywood gossip" OR celebrity when:7d';
+const _teaItemsCacheKey = 'deite_tea_items_cache_v2';
+const _teaCacheMaxAge = Duration(hours: 6);
+
+List<TeaItem>? _memoryTeaCache;
+DateTime? _memoryTeaCacheAt;
 
 class TeaItem {
   TeaItem({
@@ -65,57 +74,129 @@ TeaItem _rowToTeaItem(Map<String, dynamic> row) {
   );
 }
 
-Future<List<TeaItem>> fetchTrendingTea() async {
-  var rows = await tryRedditHotRows(
-    ['BollyBlindsNGossip'],
-    maxPerSub: 50,
-    maxKeep: 15,
-    minScore: 10,
-    filterPost: (post) => filterPosts([post]).isNotEmpty,
-  );
+List<Map<String, dynamic>> _rssArticlesToRows(List<Map<String, dynamic>> articles) {
+  return normalizeArticles(articles)
+      .where((a) => '${a['url'] ?? ''}'.trim().isNotEmpty)
+      .map((a) => {
+            'title': a['title'],
+            'url': a['url'],
+            'image': a['image'],
+            'thumbnail': a['image'],
+            'score': 0,
+            'num_comments': 0,
+            'author': a['source'] ?? 'News',
+            'source': a['source'] ?? 'News',
+          })
+      .toList();
+}
 
-  if (rows.isEmpty) {
-    rows = await tryRedditHotRows(
-      ['BollyBlindsNGossip'],
-      maxPerSub: 50,
-      maxKeep: 15,
-      minScore: 5,
-      filterPost: isValidPost,
-    );
-  }
-
-  if (rows.isEmpty) {
-    rows = await tryRedditHotRows(
-      ['BollywoodGossip', 'BollywoodHot'],
-      maxPerSub: 40,
-      maxKeep: 12,
-      minScore: 10,
-    );
-  }
-
-  if (rows.isEmpty) {
-    final rssItems = await fetchLiveFromGoogleRssByQuery('bollywood OR celebrity gossip when:3d');
-    rows = normalizeArticles(rssItems)
-        .where((a) => '${a['url'] ?? ''}'.trim().isNotEmpty)
-        .map((a) => {
-              'title': a['title'],
-              'url': a['url'],
-              'image': a['image'],
-              'thumbnail': a['image'],
-              'score': 0,
-              'num_comments': 0,
-              'author': a['source'] ?? 'News',
-              'source': a['source'] ?? 'News',
-            })
+Future<List<TeaItem>> _loadTeaFromDisk() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_teaItemsCacheKey);
+    if (raw == null || raw.isEmpty) return [];
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map) return [];
+    final savedAt = DateTime.tryParse('${decoded['savedAt'] ?? ''}');
+    if (savedAt == null || DateTime.now().difference(savedAt) > _teaCacheMaxAge) {
+      return [];
+    }
+    final items = decoded['items'];
+    if (items is! List) return [];
+    return items
+        .whereType<Map>()
+        .map((m) => TeaItem(
+              id: '${m['id'] ?? ''}',
+              title: '${m['title'] ?? ''}',
+              url: '${m['url'] ?? ''}',
+              postUrl: '${m['postUrl'] ?? m['url'] ?? ''}',
+              thumbnail: '${m['thumbnail'] ?? ''}',
+              author: '${m['author'] ?? 'unknown'}',
+              score: m['score'] is num ? (m['score'] as num).toInt() : 0,
+              numComments: m['num_comments'] is num ? (m['num_comments'] as num).toInt() : 0,
+            ))
+        .where((t) => t.title.isNotEmpty && t.url.isNotEmpty)
         .toList();
+  } catch (_) {
+    return [];
+  }
+}
+
+Future<void> _saveTeaToDisk(List<TeaItem> items) async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _teaItemsCacheKey,
+      jsonEncode({
+        'savedAt': DateTime.now().toIso8601String(),
+        'items': items.map((e) => e.toJson()).toList(),
+      }),
+    );
+  } catch (_) {}
+}
+
+Future<List<Map<String, dynamic>>> _fetchTeaRowsFromRss() async {
+  final rss = await fetchLiveFromGoogleRssByQueryFast(_teaRssQuery, timeoutMs: 12000);
+  return _rssArticlesToRows(rss);
+}
+
+Future<List<Map<String, dynamic>>> _fetchTeaRowsFromReddit() async {
+  return tryRedditHotRows(
+    ['BollyBlindsNGossip'],
+    maxPerSub: 35,
+    maxKeep: 12,
+    minScore: 8,
+    timeoutMs: 7000,
+    filterPost: (post) => filterPosts([post]).isNotEmpty || isValidPost(post),
+  );
+}
+
+Future<List<TeaItem>> fetchTrendingTea({bool allowCache = true}) async {
+  if (allowCache &&
+      _memoryTeaCache != null &&
+      _memoryTeaCache!.isNotEmpty &&
+      _memoryTeaCacheAt != null &&
+      DateTime.now().difference(_memoryTeaCacheAt!) < _teaCacheMaxAge) {
+    return _memoryTeaCache!;
+  }
+
+  List<Map<String, dynamic>> rows = [];
+
+  try {
+    final results = await Future.wait([
+      _fetchTeaRowsFromRss(),
+      _fetchTeaRowsFromReddit(),
+    ]).timeout(const Duration(seconds: 16));
+    final rss = results[0];
+    final reddit = results[1];
+    rows = reddit.length >= rss.length && reddit.isNotEmpty ? reddit : rss;
+    if (rows.isEmpty) rows = reddit.isNotEmpty ? reddit : rss;
+  } on TimeoutException {
+    rows = [];
+  } catch (_) {
+    rows = [];
+  }
+
+  if (rows.length < 4) {
+    final rss = await _fetchTeaRowsFromRss();
+    if (rss.length > rows.length) rows = rss;
+  }
+  if (rows.length < 4) {
+    try {
+      final reddit = await _fetchTeaRowsFromReddit();
+      if (reddit.length > rows.length) rows = reddit;
+    } catch (_) {}
   }
 
   if (rows.isEmpty) {
-    throw Exception('Could not load tea. Check your connection.');
+    throw Exception('Could not load tea. Check your connection and try again.');
   }
 
   final items = rows.map(_rowToTeaItem).take(10).toList();
+  _memoryTeaCache = items;
+  _memoryTeaCacheAt = DateTime.now();
   await writeTrendingTeaUrlsAndPruneShareCache(items.map((e) => e.url).toList());
+  unawaited(_saveTeaToDisk(items));
   return items;
 }
 
@@ -133,8 +214,8 @@ class TrendingTea extends StatefulWidget {
 }
 
 class _TrendingTeaState extends State<TrendingTea> {
-  List<TeaItem> _items = [];
-  bool _loading = true;
+  List<TeaItem> _items = _memoryTeaCache ?? [];
+  bool _loading = _memoryTeaCache == null || _memoryTeaCache!.isEmpty;
   String? _error;
 
   @override
@@ -144,23 +225,38 @@ class _TrendingTeaState extends State<TrendingTea> {
   }
 
   Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+    final cached = await _loadTeaFromDisk();
+    if (cached.isNotEmpty && mounted) {
+      setState(() {
+        _items = cached;
+        _loading = false;
+        _error = null;
+      });
+      _memoryTeaCache = cached;
+      _memoryTeaCacheAt = DateTime.now();
+    } else if (_items.isEmpty) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
+
     try {
-      final items = await fetchTrendingTea().timeout(const Duration(seconds: 30));
+      final items = await fetchTrendingTea(allowCache: false);
       if (!mounted) return;
       setState(() {
         _items = items;
         _loading = false;
+        _error = null;
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _error = e.toString();
-        _loading = false;
-      });
+      if (_items.isEmpty) {
+        setState(() {
+          _error = 'Could not load tea. Pull to refresh or check your connection.';
+          _loading = false;
+        });
+      }
     }
   }
 

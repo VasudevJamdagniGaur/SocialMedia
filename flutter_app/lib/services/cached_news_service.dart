@@ -161,6 +161,32 @@ class CachedNewsService {
       );
     }
 
+    final rssQ = _rssQueries[id];
+    if (rssQ != null) {
+      try {
+        final rssItems = await fetchLiveFromGoogleRssByQueryFast(rssQ, timeoutMs: 9000);
+        final rssArticles = normalizeArticles(rssItems).map((a) {
+          final img = a['image'];
+          return CachedArticle(
+            title: a['title'] as String? ?? '',
+            source: a['source'] as String? ?? 'News',
+            url: a['url'] as String? ?? '',
+            image: img is String && img.trim().startsWith('http') ? img.trim() : null,
+            description: a['description'] as String? ?? '',
+            publishedAt: a['publishedAt'] != null ? '${a['publishedAt']}' : null,
+          );
+        }).toList();
+        if (rssArticles.isNotEmpty) {
+          return CachedNewsResult(
+            success: true,
+            articles: rssArticles,
+            lastUpdated: base.lastUpdated,
+            fromLiveFallback: true,
+          );
+        }
+      } catch (_) {}
+    }
+
     try {
       final region = await resolveUserNewsRegionForNewsApi();
       var raw = await fetchNewsApiTopHeadlinesRaw(
@@ -201,7 +227,7 @@ class CachedNewsService {
       if (articles.isEmpty) {
         final rssQ = _rssQueries[id];
         if (rssQ != null) {
-          final rssItems = await fetchLiveFromGoogleRssByQuery(rssQ);
+          final rssItems = await fetchLiveFromGoogleRssByQueryFast(rssQ, timeoutMs: 8000);
           for (final a in normalizeArticles(rssItems)) {
             final img = a['image'];
             articles.add(CachedArticle(

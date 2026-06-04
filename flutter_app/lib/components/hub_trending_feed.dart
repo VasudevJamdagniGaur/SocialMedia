@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../router/app_router.dart';
 import '../services/cached_news_service.dart';
+import 'package:deite/lib/pod_topic_news_shared.dart';
 import '../utils/hub_colors.dart';
 import 'skeleton/card_skeleton.dart';
 
@@ -33,28 +34,52 @@ List<HubTrendingItem>? _hubCache;
 Future<List<HubTrendingItem>> fetchHubTrendingItems() async {
   if (_hubCache != null && _hubCache!.isNotEmpty) return _hubCache!;
 
-  final merged = await getHubTrendingMergedFromFirestore();
-  final rawItems = merged['items'];
   final seen = <String>{};
   final items = <HubTrendingItem>[];
 
-  if (rawItems is List) {
-    for (final a in rawItems) {
-      if (a is! Map) continue;
-      final url = '${a['url'] ?? ''}'.trim();
-      if (url.isEmpty || seen.contains(url)) continue;
-      seen.add(url);
-      final img = a['image'];
-      items.add(HubTrendingItem(
-        id: '${a['id'] ?? url.hashCode}',
-        title: a['title'] as String? ?? '',
-        url: url,
-        description: a['description'] as String? ?? '',
-        image: img is String && img.trim().startsWith('http') ? img.trim() : '',
-        source: a['source'] as String? ?? '',
-        category: a['category'] as String? ?? '',
-      ));
+  try {
+    final merged = await getHubTrendingMergedFromFirestore()
+        .timeout(const Duration(seconds: 18));
+    final rawItems = merged['items'];
+    if (rawItems is List) {
+      for (final a in rawItems) {
+        if (a is! Map) continue;
+        final url = '${a['url'] ?? ''}'.trim();
+        if (url.isEmpty || seen.contains(url)) continue;
+        seen.add(url);
+        final img = a['image'];
+        items.add(HubTrendingItem(
+          id: '${a['id'] ?? url.hashCode}',
+          title: a['title'] as String? ?? '',
+          url: url,
+          description: a['description'] as String? ?? '',
+          image: img is String && img.trim().startsWith('http') ? img.trim() : '',
+          source: a['source'] as String? ?? '',
+          category: a['category'] as String? ?? '',
+        ));
+      }
     }
+  } catch (_) {}
+
+  if (items.isEmpty) {
+    try {
+      final rss = await fetchLiveFromGoogleRssByQueryFast('world news when:2d', timeoutMs: 10000);
+      for (final a in normalizeArticles(rss)) {
+        final url = '${a['url'] ?? ''}'.trim();
+        if (url.isEmpty || seen.contains(url)) continue;
+        seen.add(url);
+        final img = a['image'];
+        items.add(HubTrendingItem(
+          id: hubNewsDocIdFromUrl(url),
+          title: a['title'] as String? ?? '',
+          url: url,
+          description: a['description'] as String? ?? '',
+          image: img is String && '$img'.trim().startsWith('http') ? '$img'.trim() : '',
+          source: a['source'] as String? ?? 'News',
+          category: 'general',
+        ));
+      }
+    } catch (_) {}
   }
 
   _hubCache = items;
@@ -84,7 +109,7 @@ class _HubTrendingFeedState extends State<HubTrendingFeed> {
   Future<void> _load() async {
     if (_hubCache == null || _hubCache!.isEmpty) setState(() => _loading = true);
     try {
-      final items = await fetchHubTrendingItems().timeout(const Duration(seconds: 35));
+      final items = await fetchHubTrendingItems();
       if (!mounted) return;
       setState(() {
         _items = items;
@@ -95,7 +120,7 @@ class _HubTrendingFeedState extends State<HubTrendingFeed> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = e.toString();
+        _error = _items.isEmpty ? 'Could not load news.' : '';
       });
     }
   }

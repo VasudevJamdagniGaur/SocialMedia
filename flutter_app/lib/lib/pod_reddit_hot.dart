@@ -69,6 +69,7 @@ Future<List<Map<String, dynamic>>> tryRedditHotRows(
   int maxPerSub = 40,
   int maxKeep = 22,
   int minScore = 15,
+  int timeoutMs = 8000,
   RedditPostFilter? filterPost,
 }) async {
   final seenTitles = <String>{};
@@ -81,7 +82,7 @@ Future<List<Map<String, dynamic>>> tryRedditHotRows(
         'https://www.reddit.com/r/${Uri.encodeComponent(sub)}/hot.json?limit=$maxPerSub&raw_json=1';
     List<dynamic> children = [];
     try {
-      final jr = await fetchJsonGet(url, timeoutMs: 20000);
+      final jr = await fetchJsonGet(url, timeoutMs: timeoutMs);
       if (jr['ok'] != true) {
         children = [];
       } else {
