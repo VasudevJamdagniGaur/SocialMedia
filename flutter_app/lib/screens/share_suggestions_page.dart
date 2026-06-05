@@ -4,11 +4,14 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
-import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../components/skeleton/list_skeleton.dart';
+import '../components/skeleton/skeleton.dart';
+import '../components/tweet_share_card.dart';
 import '../contexts/theme_context.dart';
 import '../router/app_router.dart';
 import '../services/chat_service.dart';
@@ -25,58 +28,11 @@ class ShareSuggestionsPage extends StatefulWidget {
 }
 
 class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
-  static const _redditColor = Color(0xFFFF4500);
-
   static const _platformLabels = {
     'linkedin': 'LinkedIn',
     'x': 'X',
     'reddit': 'Reddit',
   };
-
-  static const _styleVariants = <_StyleVariant>[
-    _StyleVariant(
-      id: 'minimal',
-      label: 'Minimal',
-      emoji: '🧘',
-      instruction:
-          'Write a very clean, short, and concise post. Avoid fluff and unnecessary words. Keep it simple, direct, and easy to read. Focus only on the core message. HARD LIMIT: 1–3 short sentences total, no long paragraphs, no storytelling, and no hashtags unless absolutely essential (max 1).',
-    ),
-    _StyleVariant(
-      id: 'emotional',
-      label: 'Emotional',
-      emoji: '💔',
-      instruction:
-          'Write an expressive and emotional post. Highlight feelings, gratitude, struggles, or excitement. Make it personal and relatable. Use a warm and human tone.',
-    ),
-    _StyleVariant(
-      id: 'bold',
-      label: 'Bold',
-      emoji: '🔥',
-      instruction:
-          'Write a confident and impactful post. Use strong statements and powerful language. Make it feel assertive and attention-grabbing without sounding arrogant.',
-    ),
-    _StyleVariant(
-      id: 'witty',
-      label: 'Witty',
-      emoji: '😏',
-      instruction:
-          'Write a clever and slightly humorous post. Use smart phrasing, light humor, or wordplay. Keep it engaging and fun without overdoing jokes.',
-    ),
-    _StyleVariant(
-      id: 'sarcastic',
-      label: 'Sarcastic',
-      emoji: '😄',
-      instruction:
-          'Write a sarcastic and playful post. Use irony or subtle sarcasm to make the point. Keep it light and entertaining, and avoid being offensive or negative.',
-    ),
-    _StyleVariant(
-      id: 'formal',
-      label: 'Formal',
-      emoji: '🏛️',
-      instruction:
-          'Write a polished and professional post. Use formal language, structured sentences, and a respectful tone. Avoid slang, emojis, or casual phrasing.',
-    ),
-  ];
 
   String _platform = 'linkedin';
   String _returnTo = AppRoutes.dashboard;
@@ -91,24 +47,19 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
   String _newsCardHeadline = '';
   String _newsCardSummary = '';
   Map<String, dynamic>? _newsArticleDetails;
-  bool _styleLoading = false;
   String? _error;
   int _selectedIndex = 0;
-  String? _activeStyleId;
 
   bool _routeParsed = false;
   bool _shareConfirmOpen = false;
+  bool _sharePanelOpen = false;
   String? _pendingShareText;
-
-  late final PageController _pageController;
+  String _editableShareText = '';
 
   bool get _isNewsMode => _newsArticle != null;
 
-  @override
-  void initState() {
-    super.initState();
-    _pageController = PageController();
-  }
+  bool get _isTeaArticleShare =>
+      _isNewsMode && isTeaSourceLabel(_newsArticle?['source'] as String?);
 
   @override
   void didChangeDependencies() {
@@ -286,7 +237,6 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
     setState(() {
       _loading = true;
       _error = null;
-      _activeStyleId = null;
     });
 
     try {
@@ -332,9 +282,6 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
         _selectedIndex = 0;
         _loading = false;
       });
-      if (_pageController.hasClients) {
-        _pageController.jumpToPage(0);
-      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -356,63 +303,21 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
     _loadSuggestions();
   }
 
-  void _updateSuggestionText(int index, String text) {
-    if (index < 0 || index >= _suggestions.length) return;
+  void _openSharePanel(String text) {
     setState(() {
-      _suggestions[index] = {
-        ..._suggestions[index],
-        'post': text,
-      };
+      _editableShareText = text;
+      _sharePanelOpen = true;
     });
   }
 
-  Future<void> _applyStyleVariant(_StyleVariant variant) async {
-    final current = _selectedPostText.trim();
-    if (current.isEmpty || _styleLoading) return;
-
-    setState(() {
-      _styleLoading = true;
-      _activeStyleId = variant.id;
-    });
-
-    try {
-      final edited = await ChatService.instance.editTextWithAI(current, variant.instruction);
-      if (!mounted) return;
-      _updateSuggestionText(_selectedIndex, edited);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Style update failed: $e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _styleLoading = false);
-    }
-  }
-
-  Future<void> _copyToClipboard() async {
-    final text = _selectedPostText.trim();
-    if (text.isEmpty) return;
-    await Clipboard.setData(ClipboardData(text: text));
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Copied to clipboard')),
-    );
-  }
-
-  Future<void> _shareViaSheet() async {
-    final text = _selectedPostText.trim();
-    if (text.isEmpty) return;
-    await Share.share(text, subject: _isNewsMode ? 'Share this story' : 'My reflection');
-    if (!mounted) return;
-    setState(() {
-      _pendingShareText = text;
-      _shareConfirmOpen = true;
-    });
+  String get _panelShareText {
+    final edited = _editableShareText.trim();
+    if (_sharePanelOpen && edited.isNotEmpty) return edited;
+    return _selectedPostText.trim();
   }
 
   Future<void> _openPlatformShare() async {
-    final text = _selectedPostText.trim();
+    final text = _panelShareText;
     if (text.isEmpty) return;
 
     final encoded = Uri.encodeComponent(text);
@@ -449,6 +354,7 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
     setState(() {
       _pendingShareText = text;
       _shareConfirmOpen = true;
+      _sharePanelOpen = false;
     });
   }
 
@@ -472,51 +378,21 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
     );
   }
 
-  Future<void> _showEditDialog() async {
-    final controller = TextEditingController(text: _selectedPostText);
-    final edited = await showDialog<String>(
-      context: context,
-      builder: (ctx) {
-        final isDark = context.watch<ThemeNotifier>().isDarkMode;
-        return AlertDialog(
-          backgroundColor: isDark ? HubColors.bgSecondary : Colors.white,
-          title: Text(
-            'Edit post',
-            style: TextStyle(color: isDark ? HubColors.text : Colors.black87),
-          ),
-          content: TextField(
-            controller: controller,
-            maxLines: 8,
-            style: TextStyle(color: isDark ? HubColors.text : Colors.black87),
-            decoration: InputDecoration(
-              border: const OutlineInputBorder(),
-              filled: true,
-              fillColor: isDark ? HubColors.bg : const Color(0xFFF5F5F5),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text('Cancel', style: TextStyle(color: isDark ? HubColors.textSecondary : Colors.black54)),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-              child: const Text('Save', style: TextStyle(color: HubColors.accent)),
-            ),
-          ],
-        );
-      },
-    );
-    controller.dispose();
-    if (edited != null && edited.isNotEmpty) {
-      _updateSuggestionText(_selectedIndex, edited);
+  Future<_TweetUserInfo> _loadTweetUserInfo() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      return const _TweetUserInfo(displayName: 'Detea User', username: 'detea_user');
     }
-  }
-
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
+    final prefs = await SharedPreferences.getInstance();
+    final displayName =
+        prefs.getString('user_display_name_${user.uid}') ?? user.displayName ?? 'Detea User';
+    final username = (user.email ?? '').split('@').first;
+    final profilePicture = prefs.getString('user_profile_picture_${user.uid}');
+    return _TweetUserInfo(
+      displayName: displayName,
+      username: username.isNotEmpty ? username : 'detea_user',
+      profilePicture: profilePicture,
+    );
   }
 
   @override
@@ -535,243 +411,160 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _goBack();
+        if (!didPop) {
+          if (_sharePanelOpen) {
+            setState(() => _sharePanelOpen = false);
+          } else {
+            _goBack();
+          }
+        }
       },
       child: Scaffold(
         backgroundColor: scaffoldBg,
         body: SafeArea(
           child: Stack(
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(4, 8, 16, 0),
-                    child: Row(
-                      children: [
-                        IconButton(
-                          onPressed: _goBack,
-                          icon: Icon(Icons.arrow_back, color: secondaryText),
-                        ),
-                        Expanded(
-                          child: Text(
-                            _headerTitle,
-                            style: TextStyle(
-                              color: primaryText,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
+              Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 448),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(4, 8, 16, 0),
+                        child: Row(
+                          children: [
+                            IconButton(
+                              onPressed: _goBack,
+                              icon: Icon(LucideIcons.arrowLeft, color: secondaryText, size: 20),
                             ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: ListView(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                      children: [
-                        _SourceCard(
-                          isDarkMode: isDarkMode,
-                          isNewsMode: _isNewsMode,
-                          reflection: _reflection,
-                          newsArticle: _newsArticle,
-                          newsHeadline: _displayNewsHeadline,
-                          newsSummary: _displayNewsSummary,
-                          loadingNewsDetails: _loadingNewsDetails,
-                          suggestionsOnly: _suggestionsOnly,
-                        ),
-                        const SizedBox(height: 20),
-                        _PlatformSelector(
-                          platform: _platform,
-                          isDarkMode: isDarkMode,
-                          onChanged: _onPlatformChanged,
-                        ),
-                        const SizedBox(height: 20),
-                        Text(
-                          'Choose a post to share',
-                          style: TextStyle(
-                            color: primaryText,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        if (_loading)
-                          const ListSkeleton(count: 3)
-                        else ...[
-                          if (_error != null)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
+                            Expanded(
                               child: Text(
-                                'Using fallback after: $_error',
-                                style: TextStyle(color: secondaryText, fontSize: 12),
+                                _headerTitle,
+                                style: TextStyle(
+                                  color: primaryText,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
-                          SizedBox(
-                            height: 280,
-                            child: PageView.builder(
-                              controller: _pageController,
-                              itemCount: _suggestions.length,
-                              onPageChanged: (i) => setState(() {
-                                _selectedIndex = i;
-                                _activeStyleId = null;
-                              }),
-                              itemBuilder: (_, index) {
-                                final item = _suggestions[index];
-                                final eventLabel = item['eventLabel'] ?? 'Post';
-                                final post = item['post'] ?? '';
-                                final isSelected = index == _selectedIndex;
-                                final imageUrl = _media.isNotEmpty
-                                    ? _media.first
-                                    : (_newsArticle?['image'] as String?);
-
-                                return Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                                  child: _SuggestionCard(
-                                    eventLabel: eventLabel,
-                                    post: post,
-                                    imageUrl: imageUrl,
-                                    isSelected: isSelected,
-                                    isDarkMode: isDarkMode,
-                                    cardBg: cardBg,
-                                    cardBorder: cardBorder,
-                                    onTap: () {
-                                      _pageController.animateToPage(
-                                        index,
-                                        duration: const Duration(milliseconds: 250),
-                                        curve: Curves.easeOut,
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        child: ListView(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                          children: [
+                            _SourceCard(
+                              isDarkMode: isDarkMode,
+                              isNewsMode: _isNewsMode,
+                              isTeaArticle: _isTeaArticleShare,
+                              reflection: _reflection,
+                              newsArticle: _newsArticle,
+                              newsHeadline: _displayNewsHeadline,
+                              newsSummary: _displayNewsSummary,
+                              loadingNewsDetails: _loadingNewsDetails,
+                              suggestionsOnly: _suggestionsOnly,
+                            ),
+                            const SizedBox(height: 24),
+                            _PlatformSelector(
+                              platform: _platform,
+                              isDarkMode: isDarkMode,
+                              onChanged: _onPlatformChanged,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Choose a post to share',
+                              style: TextStyle(
+                                color: primaryText,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            if (_loading)
+                              const ListSkeleton(count: 3)
+                            else ...[
+                              if (_error != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: Text(
+                                    '${_isNewsMode ? 'Using article text' : 'Using reflection'} after: $_error',
+                                    style: TextStyle(color: secondaryText, fontSize: 12),
+                                  ),
+                                ),
+                              FutureBuilder<_TweetUserInfo>(
+                                future: _loadTweetUserInfo(),
+                                builder: (context, userSnap) {
+                                  final tweetUser = userSnap.data ??
+                                      const _TweetUserInfo(
+                                        displayName: 'Detea User',
+                                        username: 'detea_user',
                                       );
-                                    },
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          _PageDots(
-                            count: _suggestions.length,
-                            index: _selectedIndex,
-                          ),
-                          const SizedBox(height: 20),
-                          Text(
-                            'Style',
-                            style: TextStyle(
-                              color: primaryText,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: Row(
-                              children: _styleVariants.map((variant) {
-                                final selected = _activeStyleId == variant.id;
-                                return Padding(
-                                  padding: const EdgeInsets.only(right: 8),
-                                  child: FilterChip(
-                                    label: Text('${variant.label} ${variant.emoji}'),
-                                    selected: selected,
-                                    onSelected: _styleLoading
-                                        ? null
-                                        : (_) => _applyStyleVariant(variant),
-                                    backgroundColor: isDarkMode
-                                        ? HubColors.bgSecondary
-                                        : Colors.white,
-                                    selectedColor: HubColors.accent.withValues(alpha: 0.25),
-                                    checkmarkColor: HubColors.accentHighlight,
-                                    labelStyle: TextStyle(
-                                      color: selected
-                                          ? HubColors.accentHighlight
-                                          : (isDarkMode ? HubColors.text : Colors.black87),
-                                      fontSize: 12,
-                                    ),
-                                    side: BorderSide(
-                                      color: selected
-                                          ? HubColors.accent
-                                          : (isDarkMode ? HubColors.divider : const Color(0x1A000000)),
-                                    ),
-                                  ),
-                                );
-                              }).toList(),
-                            ),
-                          ),
-                          if (_styleLoading)
-                            const Padding(
-                              padding: EdgeInsets.only(top: 8),
-                              child: LinearProgressIndicator(
-                                minHeight: 2,
-                                color: HubColors.accent,
-                                backgroundColor: HubColors.divider,
-                              ),
-                            ),
-                          const SizedBox(height: 20),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _ActionButton(
-                                  icon: Icons.copy,
-                                  label: 'Copy',
-                                  isDarkMode: isDarkMode,
-                                  onTap: _copyToClipboard,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: _ActionButton(
-                                  icon: Icons.share_outlined,
-                                  label: 'Share',
-                                  isDarkMode: isDarkMode,
-                                  onTap: _shareViaSheet,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: _ActionButton(
-                                  icon: Icons.edit_outlined,
-                                  label: 'Edit',
-                                  isDarkMode: isDarkMode,
-                                  onTap: _showEditDialog,
-                                ),
+                                  final imageUrl = _media.isNotEmpty
+                                      ? _media.first
+                                      : (_newsArticle?['image'] as String?);
+
+                                  return Column(
+                                    children: List.generate(_suggestions.length, (index) {
+                                      final item = _suggestions[index];
+                                      final eventLabel = item['eventLabel'] ?? 'Post';
+                                      final post = item['post'] ?? '';
+                                      final isSelected = index == _selectedIndex;
+                                      final isPosted = item['posted'] == 'true';
+
+                                      return Padding(
+                                        padding: const EdgeInsets.only(bottom: 12),
+                                        child: _SuggestionCard(
+                                          eventLabel: eventLabel,
+                                          post: post,
+                                          imageUrl: imageUrl,
+                                          platform: _platform,
+                                          isSelected: isSelected,
+                                          isPosted: isPosted,
+                                          isDarkMode: isDarkMode,
+                                          cardBg: cardBg,
+                                          cardBorder: cardBorder,
+                                          tweetUser: tweetUser,
+                                          onTap: () {
+                                            setState(() => _selectedIndex = index);
+                                            _openSharePanel(post);
+                                          },
+                                        ),
+                                      );
+                                    }),
+                                  );
+                                },
                               ),
                             ],
-                          ),
-                          const SizedBox(height: 12),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: _openPlatformShare,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: _platform == 'linkedin'
-                                    ? const Color(0xFF0A66C2)
-                                    : _platform == 'x'
-                                        ? const Color(0xFF1D9BF0)
-                                        : _redditColor,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                              ),
-                              child: Text(
-                                'Open ${_platformLabels[_platform] ?? _platform}',
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
-              if (_shareConfirmOpen) _ShareConfirmBanner(
-                platform: _platform,
-                onDismiss: () => setState(() {
-                  _shareConfirmOpen = false;
-                  _pendingShareText = null;
-                }),
-                onConfirm: _confirmShareRecorded,
-              ),
+              if (_sharePanelOpen)
+                _SharePanelOverlay(
+                  platform: _platform,
+                  isDarkMode: isDarkMode,
+                  text: _editableShareText,
+                  imageUrl: _media.isNotEmpty
+                      ? _media.first
+                      : (_newsArticle?['image'] as String?),
+                  onTextChanged: (v) => setState(() => _editableShareText = v),
+                  onClose: () => setState(() => _sharePanelOpen = false),
+                  onSharePlatform: _openPlatformShare,
+                ),
+              if (_shareConfirmOpen)
+                _ShareConfirmBanner(
+                  platform: _platform,
+                  onDismiss: () => setState(() {
+                    _shareConfirmOpen = false;
+                    _pendingShareText = null;
+                  }),
+                  onConfirm: _confirmShareRecorded,
+                ),
             ],
           ),
         ),
@@ -780,24 +573,23 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
   }
 }
 
-class _StyleVariant {
-  const _StyleVariant({
-    required this.id,
-    required this.label,
-    required this.emoji,
-    required this.instruction,
+class _TweetUserInfo {
+  const _TweetUserInfo({
+    required this.displayName,
+    required this.username,
+    this.profilePicture,
   });
 
-  final String id;
-  final String label;
-  final String emoji;
-  final String instruction;
+  final String displayName;
+  final String username;
+  final String? profilePicture;
 }
 
 class _SourceCard extends StatelessWidget {
   const _SourceCard({
     required this.isDarkMode,
     required this.isNewsMode,
+    required this.isTeaArticle,
     required this.reflection,
     required this.newsArticle,
     required this.newsHeadline,
@@ -808,6 +600,7 @@ class _SourceCard extends StatelessWidget {
 
   final bool isDarkMode;
   final bool isNewsMode;
+  final bool isTeaArticle;
   final String reflection;
   final Map<String, dynamic>? newsArticle;
   final String newsHeadline;
@@ -820,19 +613,20 @@ class _SourceCard extends StatelessWidget {
     final cardBg = isDarkMode ? HubColors.bgSecondary : Colors.white;
     final border = isDarkMode ? HubColors.divider : const Color(0x14000000);
     final primary = isDarkMode ? HubColors.text : const Color(0xFF1A1A1A);
+    final secondary = isDarkMode ? HubColors.textSecondary : const Color(0xFF666666);
     final badgeColor = isNewsMode
         ? (isDarkMode ? HubColors.accentHighlight : const Color(0xFF7C3AED))
-        : (isDarkMode ? HubColors.textSecondary : const Color(0xFF666666));
+        : secondary;
 
     final badge = isNewsMode
-        ? (suggestionsOnly ? 'Post' : 'News')
+        ? (isTeaArticle ? 'Tea' : (suggestionsOnly ? 'Post' : 'News'))
         : (suggestionsOnly ? 'Create post' : 'Your reflection');
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: cardBg,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: border),
       ),
       child: Column(
@@ -842,38 +636,45 @@ class _SourceCard extends StatelessWidget {
             badge,
             style: TextStyle(
               color: badgeColor,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
             ),
           ),
-          const SizedBox(height: 8),
           if (isNewsMode) ...[
-            if (loadingNewsDetails)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 8),
-                child: SizedBox(
-                  height: 18,
-                  width: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+            if (loadingNewsDetails) ...[
+              const SizedBox(height: 12),
+              const Skeleton(variant: SkeletonVariant.text, height: 16, width: 280),
+              const SizedBox(height: 8),
+              const Skeleton(variant: SkeletonVariant.text, height: 14, width: double.infinity),
+              const SizedBox(height: 8),
+              const Skeleton(variant: SkeletonVariant.text, height: 14, width: 240),
+            ] else ...[
+              if ((newsHeadline.isNotEmpty ? newsHeadline : (newsArticle?['title'] as String? ?? '')).isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  newsHeadline.isNotEmpty
+                      ? newsHeadline
+                      : (newsArticle?['title'] as String? ?? ''),
+                  style: TextStyle(
+                    color: primary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    height: 1.35,
+                  ),
                 ),
-              )
-            else ...[
-              Text(
-                newsHeadline.isNotEmpty
-                    ? newsHeadline
-                    : (newsArticle?['title'] as String? ?? ''),
-                style: TextStyle(
-                  color: primary,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  height: 1.35,
-                ),
-              ),
+              ],
               if (newsSummary.trim().isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Text(
                   newsSummary,
                   style: TextStyle(color: primary, fontSize: 15, height: 1.45),
+                ),
+              ] else if (!loadingNewsDetails &&
+                  (newsArticle?['description'] as String? ?? '').trim().isEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  "We couldn't pull enough article text from this link to summarize it here. Tap the headline to read the full story on the publisher site.",
+                  style: TextStyle(color: secondary, fontSize: 15, height: 1.45),
                 ),
               ] else if ((newsArticle?['description'] as String? ?? '').trim().isNotEmpty) ...[
                 const SizedBox(height: 8),
@@ -883,11 +684,13 @@ class _SourceCard extends StatelessWidget {
                 ),
               ],
             ],
-          ] else
+          ] else ...[
+            const SizedBox(height: 4),
             Text(
               reflection,
               style: TextStyle(color: primary, fontSize: 15, height: 1.45),
             ),
+          ],
         ],
       ),
     );
@@ -1063,20 +866,26 @@ class _SuggestionCard extends StatelessWidget {
     required this.eventLabel,
     required this.post,
     required this.imageUrl,
+    required this.platform,
     required this.isSelected,
+    required this.isPosted,
     required this.isDarkMode,
     required this.cardBg,
     required this.cardBorder,
+    required this.tweetUser,
     required this.onTap,
   });
 
   final String eventLabel;
   final String post;
   final String? imageUrl;
+  final String platform;
   final bool isSelected;
+  final bool isPosted;
   final bool isDarkMode;
   final Color cardBg;
   final Color cardBorder;
+  final _TweetUserInfo tweetUser;
   final VoidCallback onTap;
 
   @override
@@ -1085,68 +894,135 @@ class _SuggestionCard extends StatelessWidget {
         ? (isDarkMode ? HubColors.accentHighlight : const Color(0xFF7C3AED))
         : cardBorder;
 
-    return Material(
-      color: cardBg,
-      borderRadius: BorderRadius.circular(14),
-      elevation: isSelected ? 6 : 0,
-      shadowColor: Colors.black.withValues(alpha: 0.45),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: borderColor, width: isSelected ? 1.5 : 1),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (imageUrl != null && imageUrl!.isNotEmpty)
-                ClipRRect(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
-                  child: AspectRatio(
-                    aspectRatio: 16 / 9,
-                    child: _SuggestionImage(url: imageUrl!, isDarkMode: isDarkMode),
-                  ),
-                ),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        eventLabel,
-                        style: const TextStyle(
-                          color: HubColors.accent,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Expanded(
-                        child: SingleChildScrollView(
-                          child: Text(
-                            post,
-                            style: TextStyle(
-                              color: isDarkMode ? HubColors.text : const Color(0xFF333333),
-                              fontSize: 14,
-                              height: 1.5,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+    Widget cardContent;
+    if (platform == 'x' && imageUrl != null && imageUrl!.isNotEmpty) {
+      cardContent = Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              eventLabel,
+              style: TextStyle(
+                color: isDarkMode ? HubColors.accentHighlight : const Color(0xFF7C3AED),
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.topCenter,
+                child: TweetShareCard(
+                  width: 360,
+                  displayName: tweetUser.displayName,
+                  username: tweetUser.username,
+                  text: post,
+                  imageUrl: imageUrl,
+                  profileImageUrl: tweetUser.profilePicture,
                 ),
               ),
-            ],
+            ),
+          ],
+        ),
+      );
+    } else {
+      cardContent = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (imageUrl != null && imageUrl!.isNotEmpty)
+            AspectRatio(
+              aspectRatio: 16 / 9,
+              child: _SuggestionImage(url: imageUrl!, isDarkMode: isDarkMode),
+            ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  eventLabel,
+                  style: const TextStyle(
+                    color: HubColors.accent,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  post,
+                  style: TextStyle(
+                    color: isDarkMode ? HubColors.text : const Color(0xFF333333),
+                    fontSize: 14,
+                    height: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      transform: Matrix4.translationValues(0, isSelected ? -2 : 0, 0),
+      child: Material(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(12),
+        elevation: isSelected ? 8 : 0,
+        shadowColor: Colors.black.withValues(alpha: 0.45),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: borderColor,
+                width: isSelected ? 1.5 : 1,
+              ),
+              boxShadow: isSelected
+                  ? [
+                      BoxShadow(
+                        color: HubColors.accent.withValues(alpha: 0.5),
+                        blurRadius: 0,
+                        spreadRadius: 0.5,
+                      ),
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.6),
+                        blurRadius: 30,
+                        offset: const Offset(0, 12),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: ColorFiltered(
+              colorFilter: isPosted
+                  ? const ColorFilter.matrix([
+                      0.2126, 0.7152, 0.0722, 0, 0,
+                      0.2126, 0.7152, 0.0722, 0, 0,
+                      0.2126, 0.7152, 0.0722, 0, 0,
+                      0, 0, 0, 1, 0,
+                    ])
+                  : const ColorFilter.matrix([
+                      1, 0, 0, 0, 0,
+                      0, 1, 0, 0, 0,
+                      0, 0, 1, 0, 0,
+                      0, 0, 0, 1, 0,
+                    ]),
+              child: Opacity(
+                opacity: isPosted && !isSelected ? 0.7 : 1,
+                child: cardContent,
+              ),
+            ),
           ),
         ),
       ),
     );
   }
-
 }
 
 class _SuggestionImage extends StatelessWidget {
@@ -1182,59 +1058,152 @@ class _SuggestionImage extends StatelessWidget {
   }
 }
 
-class _PageDots extends StatelessWidget {
-  const _PageDots({required this.count, required this.index});
-
-  final int count;
-  final int index;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(count, (i) {
-        final active = i == index;
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          margin: const EdgeInsets.symmetric(horizontal: 4),
-          width: active ? 10 : 6,
-          height: 6,
-          decoration: BoxDecoration(
-            color: active ? HubColors.accent : HubColors.divider,
-            borderRadius: BorderRadius.circular(3),
-          ),
-        );
-      }),
-    );
-  }
-}
-
-class _ActionButton extends StatelessWidget {
-  const _ActionButton({
-    required this.icon,
-    required this.label,
+class _SharePanelOverlay extends StatefulWidget {
+  const _SharePanelOverlay({
+    required this.platform,
     required this.isDarkMode,
-    required this.onTap,
+    required this.text,
+    required this.imageUrl,
+    required this.onTextChanged,
+    required this.onClose,
+    required this.onSharePlatform,
   });
 
-  final IconData icon;
-  final String label;
+  final String platform;
   final bool isDarkMode;
-  final VoidCallback onTap;
+  final String text;
+  final String? imageUrl;
+  final ValueChanged<String> onTextChanged;
+  final VoidCallback onClose;
+  final VoidCallback onSharePlatform;
+
+  @override
+  State<_SharePanelOverlay> createState() => _SharePanelOverlayState();
+}
+
+class _SharePanelOverlayState extends State<_SharePanelOverlay> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.text);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Color get _shareButtonColor {
+    switch (widget.platform) {
+      case 'linkedin':
+        return const Color(0xFF0A66C2);
+      case 'x':
+        return const Color(0xFF1D9BF0);
+      case 'reddit':
+        return const Color(0xFFFF4500);
+      default:
+        return HubColors.divider;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return OutlinedButton.icon(
-      onPressed: onTap,
-      icon: Icon(icon, size: 18, color: isDarkMode ? HubColors.text : Colors.black87),
-      label: Text(
-        label,
-        style: TextStyle(color: isDarkMode ? HubColors.text : Colors.black87),
-      ),
-      style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        side: BorderSide(color: isDarkMode ? HubColors.divider : const Color(0x1A000000)),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    final bg = widget.isDarkMode ? HubColors.bgSecondary : Colors.white;
+    final primary = widget.isDarkMode ? HubColors.text : const Color(0xFF1A1A1A);
+
+    return Material(
+      color: Colors.black.withValues(alpha: 0.5),
+      child: SafeArea(
+        child: Container(
+          width: double.infinity,
+          height: double.infinity,
+          color: bg,
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  IconButton(
+                    onPressed: widget.onClose,
+                    icon: Icon(LucideIcons.arrowLeft, color: primary),
+                  ),
+                  Text(
+                    'Edit before sharing',
+                    style: TextStyle(
+                      color: primary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+              if (widget.imageUrl != null &&
+                  widget.imageUrl!.isNotEmpty &&
+                  widget.platform != 'x') ...[
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 220),
+                    child: _SuggestionImage(
+                      url: widget.imageUrl!,
+                      isDarkMode: widget.isDarkMode,
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
+              Expanded(
+                child: TextField(
+                  controller: _controller,
+                  onChanged: widget.onTextChanged,
+                  maxLines: null,
+                  expands: true,
+                  style: TextStyle(color: primary, fontSize: 15, height: 1.45),
+                  decoration: InputDecoration(
+                    hintText: 'Your post...',
+                    filled: true,
+                    fillColor: widget.isDarkMode ? HubColors.bg : const Color(0xFFF5F5F5),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                        color: widget.isDarkMode ? HubColors.divider : const Color(0x1F000000),
+                      ),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                        color: widget.isDarkMode ? HubColors.divider : const Color(0x1F000000),
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: HubColors.accent, width: 2),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: widget.onSharePlatform,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _shareButtonColor,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text('Share', style: TextStyle(fontWeight: FontWeight.w500)),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
