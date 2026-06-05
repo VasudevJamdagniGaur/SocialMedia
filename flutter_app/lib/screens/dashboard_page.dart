@@ -1,5 +1,4 @@
-﻿import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
@@ -14,6 +13,8 @@ import '../services/firestore_result.dart';
 import '../services/firestore_service.dart';
 import '../services/reflection_service.dart';
 import '../utils/date_utils.dart';
+import '../utils/profile_picture_helper.dart';
+import 'profile_page.dart';
 
 /// Mirrors src/components/DashboardPage.js
 class DashboardPage extends StatefulWidget {
@@ -43,7 +44,16 @@ class _DashboardPageState extends State<DashboardPage> {
     _loadProfilePicture();
     _loadCalendarData();
     _loadReflection();
+    ProfilePictureNotifier.instance.revision.addListener(_onProfilePictureUpdated);
   }
+
+  @override
+  void dispose() {
+    ProfilePictureNotifier.instance.revision.removeListener(_onProfilePictureUpdated);
+    super.dispose();
+  }
+
+  void _onProfilePictureUpdated() => _loadProfilePicture();
 
   Future<void> _loadSavedDate() async {
     final prefs = await SharedPreferences.getInstance();
@@ -378,13 +388,10 @@ class _TopBar extends StatelessWidget {
                     onTap: onProfile,
                     hasImage: profilePicture != null,
                     child: profilePicture != null
-                        ? ClipOval(
-                            child: CachedNetworkImage(
-                              imageUrl: profilePicture!,
-                              width: 40,
-                              height: 40,
-                              fit: BoxFit.cover,
-                            ),
+                        ? buildProfilePicture(
+                            picture: profilePicture,
+                            size: 40,
+                            backgroundColor: HubTheme.divider,
                           )
                         : Icon(LucideIcons.user, color: HubTheme.accent, size: 20),
                   ),

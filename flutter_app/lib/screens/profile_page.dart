@@ -20,6 +20,7 @@ import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../utils/hub_colors.dart';
 import '../utils/profile_bio_analysis.dart';
+import '../utils/profile_picture_helper.dart';
 import 'profile_details_page.dart';
 
 /// Global notifier so other screens refresh avatar after profile edits.
@@ -62,12 +63,12 @@ class _ProfilePageState extends State<ProfilePage> {
   final _picker = ImagePicker();
 
   static const _avatars = [
-    ('Apple', '🍎'),
-    ('Pineapple', '🍍'),
-    ('Carrot', '🥕'),
-    ('Banana', '🍌'),
-    ('Strawberry', '🍓'),
-    ('Broccoli', '🥦'),
+    ('Apple', 'assets/images/apple-avatar.png'),
+    ('Pineapple', 'assets/images/pineapple-avatar.png'),
+    ('Carrot', 'assets/images/carrot-avatar.png'),
+    ('Banana', 'assets/images/banana-avatar.png'),
+    ('Strawberry', 'assets/images/strawberry-avatar.png'),
+    ('Broccoli', 'assets/images/broccoli-avatar.png'),
   ];
 
   @override
@@ -292,18 +293,17 @@ class _ProfilePageState extends State<ProfilePage> {
     });
   }
 
-  Future<void> _handleAvatarSelect(String emoji) async {
+  Future<void> _handleAvatarSelect(String assetPath) async {
     final user = _user;
     if (user == null) return;
-    final dataUrl = 'emoji:$emoji';
     setState(() {
-      _profilePicture = dataUrl;
+      _profilePicture = assetPath;
       _showAvatarModal = false;
     });
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('user_profile_picture_${user.uid}', dataUrl);
+    await prefs.setString('user_profile_picture_${user.uid}', assetPath);
     try {
-      await FirestoreService.instance.ensureUser(user.uid, {'profilePicture': dataUrl});
+      await FirestoreService.instance.ensureUser(user.uid, {'profilePicture': assetPath});
     } catch (_) {}
     ProfilePictureNotifier.instance.notifyUpdated();
   }
@@ -414,26 +414,19 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Widget _profileAvatar({double size = 64, VoidCallback? onTap}) {
-    final pic = _profilePicture;
-    Widget child;
-    if (pic != null && pic.startsWith('data:image')) {
-      final bytes = base64Decode(pic.split(',').last);
-      child = ClipOval(child: Image.memory(bytes, width: size, height: size, fit: BoxFit.cover));
-    } else if (pic != null && pic.startsWith('emoji:')) {
-      child = CircleAvatar(
-        radius: size / 2,
+    return GestureDetector(
+      onTap: onTap,
+      child: buildProfilePicture(
+        picture: _profilePicture,
+        size: size,
+        initials: _getInitials(_editData.displayName.isNotEmpty ? _editData.displayName : _user?.displayName),
         backgroundColor: HubColors.divider,
-        child: Text(pic.replaceFirst('emoji:', ''), style: TextStyle(fontSize: size * 0.45)),
-      );
-    } else {
-      child = CircleAvatar(
-        radius: size / 2,
-        backgroundColor: HubColors.divider,
-        child: Text(_getInitials(_editData.displayName), style: TextStyle(fontWeight: FontWeight.bold, fontSize: size * 0.28)),
-      );
-    }
-    return GestureDetector(onTap: onTap, child: child);
+      ),
+    );
   }
+
+  String get _displayName =>
+      _editData.displayName.isNotEmpty ? _editData.displayName : (_user?.displayName ?? 'User');
 
   @override
   Widget build(BuildContext context) {
@@ -514,8 +507,8 @@ class _ProfilePageState extends State<ProfilePage> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  _user!.displayName ?? 'User',
-                                  style: TextStyle(fontWeight: FontWeight.w600, color: isDarkMode ? HubColors.text : Colors.black87),
+                                  _displayName,
+                                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: isDarkMode ? HubColors.text : Colors.black87),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -528,54 +521,104 @@ class _ProfilePageState extends State<ProfilePage> {
                               ],
                             ),
                           ),
-                          OutlinedButton(
+                          TextButton(
                             onPressed: () => setState(() => _isEditing = true),
-                            style: OutlinedButton.styleFrom(
+                            style: TextButton.styleFrom(
                               foregroundColor: isDarkMode ? HubColors.text : Colors.black87,
-                              side: BorderSide(color: isDarkMode ? HubColors.divider : Colors.black26),
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                side: BorderSide(color: isDarkMode ? HubColors.divider : Colors.black26),
+                              ),
                             ),
-                            child: const Text('Edit'),
+                            child: const Text('Edit', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                           ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      decoration: BoxDecoration(border: rowBorder),
-                      child: Column(
-                        children: [
-                          ListTile(
-                            leading: Icon(LucideIcons.shield, color: isDarkMode ? HubColors.text : Colors.black87),
-                            title: Text('Help & Support', style: TextStyle(color: isDarkMode ? HubColors.text : Colors.black87)),
-                            trailing: Icon(
-                              LucideIcons.chevronDown,
-                              color: HubColors.textSecondary,
-                              size: 20,
-                            ),
-                            onTap: () => setState(() => _helpExpanded = !_helpExpanded),
-                          ),
-                          if (_helpExpanded) ...[
-                            ListTile(
-                              contentPadding: const EdgeInsets.only(left: 56, right: 20),
-                              leading: const Icon(LucideIcons.phone, color: HubColors.textSecondary, size: 20),
-                              title: Text('Call Support', style: TextStyle(color: isDarkMode ? HubColors.text : Colors.black87, fontSize: 14)),
-                              onTap: () => launchUrl(Uri.parse('tel:9536138120')),
-                            ),
-                            ListTile(
-                              contentPadding: const EdgeInsets.only(left: 56, right: 20),
-                              leading: const Icon(LucideIcons.messageCircle, color: HubColors.textSecondary, size: 20),
-                              title: Text('WhatsApp Support', style: TextStyle(color: isDarkMode ? HubColors.text : Colors.black87, fontSize: 14)),
-                              onTap: () => launchUrl(Uri.parse('https://wa.me/919536138120'), mode: LaunchMode.externalApplication),
-                            ),
-                          ],
                         ],
                       ),
                     ),
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
-                      child: TextButton(
-                        onPressed: _handleSignOut,
-                        style: TextButton.styleFrom(foregroundColor: const Color(0xFF3B82F6)),
-                        child: const Text('Log out', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Container(
+                        decoration: BoxDecoration(border: rowBorder),
+                        child: Column(
+                          children: [
+                            InkWell(
+                              onTap: () => setState(() => _helpExpanded = !_helpExpanded),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                                child: Row(
+                                  children: [
+                                    Icon(LucideIcons.shield, color: isDarkMode ? HubColors.text : Colors.black87, size: 24),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Text(
+                                        'Help & Support',
+                                        style: TextStyle(fontSize: 15, color: isDarkMode ? HubColors.text : Colors.black87),
+                                      ),
+                                    ),
+                                    AnimatedRotation(
+                                      turns: _helpExpanded ? 0.5 : 0,
+                                      duration: const Duration(milliseconds: 200),
+                                      child: Icon(LucideIcons.chevronDown, color: HubColors.textSecondary, size: 20),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            if (_helpExpanded) ...[
+                              InkWell(
+                                onTap: () => launchUrl(Uri.parse('tel:9536138120')),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    border: Border(top: BorderSide(color: isDarkMode ? HubColors.divider : Colors.black.withValues(alpha: 0.04))),
+                                  ),
+                                  padding: const EdgeInsets.fromLTRB(56, 14, 20, 14),
+                                  child: Row(
+                                    children: [
+                                      const Icon(LucideIcons.phone, color: HubColors.textSecondary, size: 20),
+                                      const SizedBox(width: 16),
+                                      Text('Call Support', style: TextStyle(color: isDarkMode ? HubColors.text : Colors.black87, fontSize: 14)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              InkWell(
+                                onTap: () => launchUrl(Uri.parse('https://wa.me/919536138120'), mode: LaunchMode.externalApplication),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    border: Border(top: BorderSide(color: isDarkMode ? HubColors.divider : Colors.black.withValues(alpha: 0.04))),
+                                  ),
+                                  padding: const EdgeInsets.fromLTRB(56, 14, 20, 14),
+                                  child: Row(
+                                    children: [
+                                      const Icon(LucideIcons.messageCircle, color: HubColors.textSecondary, size: 20),
+                                      const SizedBox(width: 16),
+                                      Text('WhatsApp Support', style: TextStyle(color: isDarkMode ? HubColors.text : Colors.black87, fontSize: 14)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+                        child: TextButton(
+                          onPressed: _handleSignOut,
+                          style: TextButton.styleFrom(
+                            foregroundColor: const Color(0xFF3B82F6),
+                            padding: EdgeInsets.zero,
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Text('Log out', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                        ),
                       ),
                     ),
                     Padding(
@@ -607,10 +650,20 @@ class _ProfilePageState extends State<ProfilePage> {
                                   ),
                                 ),
                                 if (!_showFullDeleteConfirm)
-                                  OutlinedButton(
+                                  TextButton(
                                     onPressed: () => setState(() => _showFullDeleteConfirm = true),
-                                    style: OutlinedButton.styleFrom(foregroundColor: Colors.red.shade400),
-                                    child: const Text('Delete account', style: TextStyle(fontSize: 12)),
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: isDarkMode ? const Color(0xFFf87171) : const Color(0xFFdc2626),
+                                      backgroundColor: isDarkMode ? const Color(0x14EF4444) : const Color(0x0DEF4444),
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                      minimumSize: Size.zero,
+                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(6),
+                                        side: BorderSide(color: Colors.red.withValues(alpha: isDarkMode ? 0.4 : 0.35)),
+                                      ),
+                                    ),
+                                    child: const Text('Delete account', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
                                   )
                                 else
                                   Row(
@@ -825,8 +878,15 @@ class _ProfilePageState extends State<ProfilePage> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          CircleAvatar(radius: 32, backgroundColor: HubColors.divider, child: Text(a.$2, style: const TextStyle(fontSize: 28))),
-                          const SizedBox(height: 4),
+                          ClipOval(
+                            child: Image.asset(
+                              a.$2,
+                              width: 80,
+                              height: 80,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
                           Text(a.$1, style: const TextStyle(color: HubColors.textSecondary, fontSize: 11)),
                         ],
                       ),
@@ -907,9 +967,14 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
             Expanded(
               child: Center(
-                child: _profilePicture != null && _profilePicture!.startsWith('data:image')
+                child: _profilePicture != null && isProfileDataUrl(_profilePicture!)
                     ? Image.memory(base64Decode(_profilePicture!.split(',').last), fit: BoxFit.contain)
-                    : _profileAvatar(size: 200),
+                    : buildProfilePicture(
+                        picture: _profilePicture,
+                        size: 280,
+                        initials: _getInitials(_displayName),
+                        backgroundColor: HubColors.divider,
+                      ),
               ),
             ),
           ],
