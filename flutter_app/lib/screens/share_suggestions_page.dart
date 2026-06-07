@@ -1,4 +1,6 @@
-﻿import 'dart:convert';
+﻿import 'dart:async';
+
+import 'dart:convert';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -114,113 +116,154 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
 
   Future<void> _bootstrapSharePage() async {
     if (_isNewsMode) {
-      await _loadNewsCardDetails();
+      await Future.wait([
+        _loadNewsCardDetails(),
+        _loadSuggestions(),
+      ]);
+    } else {
+      await _loadSuggestions();
     }
-    if (mounted) await _loadSuggestions();
   }
+
+  String _preseededGossip() =>
+      '${_newsArticle?['gossip'] ?? _newsArticle?['description'] ?? _newsArticle?['text'] ?? ''}'
+          .trim();
 
   Future<void> _loadNewsCardDetails() async {
     final url = '${_newsArticle?['url'] ?? ''}'.trim();
     if (url.isEmpty) return;
 
+    final isTea = _isTeaArticleShare;
+    final preGossip = _preseededGossip();
+    final preTitle = '${_newsArticle?['title'] ?? ''}'.trim();
+
+    if (isTea && preGossip.length >= 20) {
+      if (mounted) {
+        setState(() {
+          _newsCardSummary = sanitizeTeaShareText(preGossip);
+          _newsCardHeadline = preTitle;
+          _loadingNewsDetails = false;
+        });
+      }
+      unawaited(_enrichNewsCardDetails(url, isTea));
+      return;
+    }
+
     setState(() => _loadingNewsDetails = true);
     try {
-      final source = _newsArticle?['source'] as String?;
-      final isTea = _isTeaArticleShare;
-      final cached = await getCachedNewsCardForUrl(url);
-
-      if (cached != null) {
-        var summary = cached['summary'] is String ? cached['summary'] as String : '';
-        final headline = cached['headline'] is String ? cached['headline'] as String : '';
-        final cacheUsable = !isTea || summary.trim().length >= 80;
-        if (cacheUsable) {
-          if (isTea) {
-            final cleaned = sanitizeTeaShareText(summary);
-            if (cleaned != summary) {
-              summary = cleaned;
-              await upsertCachedNewsCard(
-                url: url,
-                headline: headline,
-                summary: cleaned,
-                details: cached['details'] is Map
-                    ? Map<String, dynamic>.from(cached['details'] as Map)
-                    : null,
-                source: source,
-              );
-            }
-          }
-          if (!mounted) return;
-          setState(() {
-            _newsArticleDetails = cached['details'] is Map
-                ? Map<String, dynamic>.from(cached['details'] as Map)
-                : null;
-            _newsCardSummary = summary;
-            _newsCardHeadline = headline;
-          });
-          return;
-        }
-      }
-
-      final details = await ChatService.instance.fetchNewsArticleDetails(
-        _newsArticle,
-        {
-          'minTextLength': isTea ? 80 : 350,
-          'resolveGoogleNews': !isTea,
-        },
-      );
-      final looksUseful = details['title'] != null ||
-          details['description'] != null ||
-          details['text'] != null ||
-          details['image'] != null;
-      final effective = looksUseful ? details : null;
-
-      if (effective != null) {
-        final gossipFallback = buildRedditGossipSummary(effective);
-        final results = await Future.wait<String>([
-          isTea && gossipFallback.isNotEmpty
-              ? Future.value(gossipFallback)
-              : ChatService.instance.summarizeNewsArticle(
-                  effective,
-                  {'minWords': 60, 'maxWords': 80},
-                ),
-          ChatService.instance.generateNewsShareCardHeadline(effective),
-        ]);
-        if (!mounted) return;
-        final rawSummary = results[0].trim();
-        final localFallback = buildLocalNewsCardSummary(effective);
-        var finalSummary = rawSummary.isNotEmpty
-            ? rawSummary
-            : (localFallback.isNotEmpty ? localFallback : gossipFallback);
-        if (isTea) finalSummary = sanitizeTeaShareText(finalSummary);
-        var finalHeadline = results[1].trim();
-        if (finalHeadline.isEmpty) {
-          finalHeadline = (effective['title'] as String? ?? _newsArticle?['title'] as String? ?? '').trim();
-        }
-
-        setState(() {
-          _newsArticleDetails = effective;
-          _newsCardSummary = finalSummary;
-          _newsCardHeadline = finalHeadline;
-          if (effective['image'] is String && (effective['image'] as String).isNotEmpty) {
-            _newsArticle = {
-              ...Map<String, dynamic>.from(_newsArticle ?? {}),
-              'image': effective['image'],
-            };
-          }
-        });
-
-        await upsertCachedNewsCard(
-          url: url,
-          headline: finalHeadline,
-          summary: finalSummary,
-          details: effective,
-          source: source,
-        );
-      }
+      await _enrichNewsCardDetails(url, isTea).timeout(const Duration(seconds: 18));
     } catch (_) {
       // Card enrichment is optional; suggestions can still load from article stub.
     } finally {
       if (mounted) setState(() => _loadingNewsDetails = false);
+    }
+  }
+
+  Future<void> _enrichNewsCardDetails(String url, bool isTea) async {
+    final source = _newsArticle?['source'] as String?;
+    final cached = await getCachedNewsCardForUrl(url);
+
+    if (cached != null) {
+      var summary = cached['summary'] is String ? cached['summary'] as String : '';
+      final headline = cached['headline'] is String ? cached['headline'] as String : '';
+      final cacheUsable = !isTea || summary.trim().length >= 80;
+      if (cacheUsable) {
+        if (isTea) {
+          final cleaned = sanitizeTeaShareText(summary);
+          if (cleaned != summary) {
+            summary = cleaned;
+            await upsertCachedNewsCard(
+              url: url,
+              headline: headline,
+              summary: cleaned,
+              details: cached['details'] is Map
+                  ? Map<String, dynamic>.from(cached['details'] as Map)
+                  : null,
+              source: source,
+            );
+          }
+        }
+        if (!mounted) return;
+        setState(() {
+          _newsArticleDetails = cached['details'] is Map
+              ? Map<String, dynamic>.from(cached['details'] as Map)
+              : null;
+          _newsCardSummary = summary;
+          _newsCardHeadline = headline;
+        });
+        return;
+      }
+    }
+
+    final details = await ChatService.instance
+        .fetchNewsArticleDetails(
+          _newsArticle,
+          {
+            'minTextLength': isTea ? 80 : 350,
+            'resolveGoogleNews': !isTea,
+          },
+        )
+        .timeout(const Duration(seconds: 12));
+    final looksUseful = details['title'] != null ||
+        details['description'] != null ||
+        details['text'] != null ||
+        details['image'] != null;
+    final effective = looksUseful ? details : null;
+
+    if (effective == null) return;
+
+    final gossipFallback = buildRedditGossipSummary(effective);
+    final skipAi = isTea && gossipFallback.isNotEmpty;
+
+    final results = await Future.wait<String>([
+      skipAi
+          ? Future.value(gossipFallback)
+          : ChatService.instance
+              .summarizeNewsArticle(effective, {'minWords': 60, 'maxWords': 80})
+              .timeout(const Duration(seconds: 15), onTimeout: () => gossipFallback),
+      skipAi
+          ? Future.value('${effective['title'] ?? _newsArticle?['title'] ?? ''}'.trim())
+          : ChatService.instance
+              .generateNewsShareCardHeadline(effective)
+              .timeout(
+                const Duration(seconds: 12),
+                onTimeout: () => '${effective['title'] ?? _newsArticle?['title'] ?? ''}'.trim(),
+              ),
+    ]);
+    if (!mounted) return;
+
+    final rawSummary = results[0].trim();
+    final localFallback = buildLocalNewsCardSummary(effective);
+    var finalSummary = rawSummary.isNotEmpty
+        ? rawSummary
+        : (localFallback.isNotEmpty ? localFallback : gossipFallback);
+    if (isTea) finalSummary = sanitizeTeaShareText(finalSummary);
+    var finalHeadline = results[1].trim();
+    if (finalHeadline.isEmpty) {
+      finalHeadline =
+          (effective['title'] as String? ?? _newsArticle?['title'] as String? ?? '').trim();
+    }
+
+    setState(() {
+      _newsArticleDetails = effective;
+      if (finalSummary.isNotEmpty) _newsCardSummary = finalSummary;
+      if (finalHeadline.isNotEmpty) _newsCardHeadline = finalHeadline;
+      if (effective['image'] is String && (effective['image'] as String).isNotEmpty) {
+        _newsArticle = {
+          ...Map<String, dynamic>.from(_newsArticle ?? {}),
+          'image': effective['image'],
+        };
+      }
+    });
+
+    if (finalSummary.isNotEmpty) {
+      await upsertCachedNewsCard(
+        url: url,
+        headline: finalHeadline,
+        summary: finalSummary,
+        details: effective,
+        source: source,
+      );
     }
   }
 
@@ -270,7 +313,7 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
     });
 
     try {
-      final List<Map<String, String>> items;
+      List<Map<String, String>> items;
       if (_isNewsMode) {
         final url = '${_newsArticle?['url'] ?? ''}'.trim();
         final isTea = _isTeaArticleShare;
@@ -280,10 +323,26 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
         if (cached != null && cached.isNotEmpty) {
           items = cleanCachedNewsSuggestions(cached, isTea: isTea);
         } else {
-          items = await ChatService.instance.generateNewsArticleShareSuggestions(
-            _newsArticle!,
-            _platform,
-          );
+          final localFallback = isTea
+              ? buildLocalTeaShareSuggestions(_newsArticle!, _platform)
+              : <Map<String, String>>[
+                  {
+                    'eventLabel': 'News',
+                    'post': _baselineText,
+                  },
+                ];
+          try {
+            items = await ChatService.instance
+                .generateNewsArticleShareSuggestions(
+                  _newsArticle!,
+                  _platform,
+                  prefetchedDetails: _newsArticle,
+                )
+                .timeout(const Duration(seconds: 20));
+            if (items.isEmpty) items = localFallback;
+          } catch (_) {
+            items = localFallback;
+          }
           if (url.isNotEmpty && items.isNotEmpty) {
             final toCache = isTea
                 ? cleanCachedNewsSuggestions(items, isTea: true)
@@ -292,10 +351,18 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
           }
         }
       } else {
-        items = await ChatService.instance.generateSocialPostSuggestions(
-          _reflection,
-          _platform,
-        );
+        try {
+          items = await ChatService.instance
+              .generateSocialPostSuggestions(_reflection, _platform)
+              .timeout(const Duration(seconds: 25));
+        } catch (_) {
+          items = [
+            {
+              'eventLabel': 'Reflection',
+              'post': _reflection,
+            },
+          ];
+        }
       }
 
       if (!mounted) return;
@@ -670,7 +737,10 @@ class _SourceCard extends StatelessWidget {
             ),
           ),
           if (isNewsMode) ...[
-            if (loadingNewsDetails) ...[
+            if (loadingNewsDetails &&
+                newsSummary.trim().isEmpty &&
+                newsHeadline.trim().isEmpty &&
+                (newsArticle?['title'] as String? ?? '').trim().isEmpty) ...[
               const SizedBox(height: 12),
               const Skeleton(variant: SkeletonVariant.text, height: 16, width: 280),
               const SizedBox(height: 8),

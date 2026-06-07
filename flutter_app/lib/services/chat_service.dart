@@ -2323,6 +2323,18 @@ $text""";
       return {...base, 'text': maybeText};
     }
 
+    final preGossip =
+        (article?['gossip'] ?? article?['description'] ?? '').toString().trim();
+    if (_isRedditThreadUrl(url) && preGossip.length >= 20) {
+      return {
+        ...base,
+        'description': preGossip,
+        'gossip': preGossip,
+        'selftext': preGossip,
+        'text': maybeText.isNotEmpty ? maybeText : preGossip,
+      };
+    }
+
     final seed = <String, dynamic>{
       'title': title,
       'description': description,
@@ -2544,9 +2556,28 @@ Rules:
 
   Future<List<ShareSuggestion>> generateNewsArticleShareSuggestions(
     Map<String, dynamic> article,
-    String platform,
-  ) async {
-    final details = await fetchNewsArticleDetails(article);
+    String platform, {
+    Map<String, dynamic>? prefetchedDetails,
+  }) async {
+    Map<String, dynamic> details;
+    if (prefetchedDetails != null && prefetchedDetails.isNotEmpty) {
+      details = prefetchedDetails;
+    } else {
+      try {
+        details = await fetchNewsArticleDetails(article)
+            .timeout(const Duration(seconds: 12));
+      } catch (_) {
+        details = {
+          'title': (article['title'] ?? '').toString(),
+          'url': (article['url'] ?? '').toString(),
+          'description': (article['description'] ?? article['gossip'] ?? '').toString(),
+          'gossip': (article['gossip'] ?? article['description'] ?? '').toString(),
+          'text': (article['text'] ?? '').toString(),
+          'source': (article['source'] ?? '').toString(),
+          'image': article['image'],
+        };
+      }
+    }
     final title = (details['title'] ?? '').toString().trim();
     final url = (details['url'] ?? '').toString().trim();
     final description = (details['description'] ?? '').toString().trim();

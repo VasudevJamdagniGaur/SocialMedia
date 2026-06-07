@@ -38,6 +38,45 @@ bool isRedditTeaThreadUrl(String? url) {
   return RegExp(r'reddit\.com/r/[^\s/]+/comments/', caseSensitive: false).hasMatch(u);
 }
 
+/// Instant share suggestions when AI / scraping is slow or unavailable.
+List<Map<String, String>> buildLocalTeaShareSuggestions(
+  Map<String, dynamic> article,
+  String platform,
+) {
+  final title = '${article['title'] ?? ''}'.trim();
+  final gossip = sanitizeTeaShareText(
+    '${article['gossip'] ?? article['description'] ?? article['text'] ?? ''}'.trim(),
+  );
+  final url = '${article['url'] ?? ''}'.trim();
+  final body = gossip.isNotEmpty ? gossip : title;
+  final maxLen = platform == 'x' ? 220 : 500;
+
+  String clip(String s) => s.length <= maxLen ? s : '${s.substring(0, maxLen).trimRight()}…';
+
+  final posts = <Map<String, String>>[
+    {'eventLabel': 'Tea', 'post': clip(body)},
+    {
+      'eventLabel': 'Hot take',
+      'post': clip(
+        gossip.isNotEmpty
+            ? 'The tea: $title — ${gossip.length > 120 ? '${gossip.substring(0, 120).trimRight()}…' : gossip}'
+            : 'Anyone else following "$title"?',
+      ),
+    },
+    {
+      'eventLabel': 'Discussion',
+      'post': clip(
+        [
+          if (title.isNotEmpty) title,
+          if (gossip.isNotEmpty) gossip,
+          if (url.isNotEmpty) url,
+        ].join('\n\n'),
+      ),
+    },
+  ];
+  return posts.where((p) => (p['post'] ?? '').trim().isNotEmpty).toList();
+}
+
 String clampText(String? s, int maxLen) {
   final t = s?.trim() ?? '';
   if (t.isEmpty) return '';

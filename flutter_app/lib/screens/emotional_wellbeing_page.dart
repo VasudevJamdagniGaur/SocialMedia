@@ -73,10 +73,10 @@ class _EmotionalWellbeingPageState extends State<EmotionalWellbeingPage> {
   Future<void> _initialize() async {
     try {
       final user = AuthService().getCurrentUser();
-      if (user == null) {
+    if (user == null) {
         if (mounted) setState(() => _isInitializing = false);
-        return;
-      }
+      return;
+    }
 
       // Show charts ASAP — React uses cache-first; don't block on 90-day analysis.
       await _loadMoodData(_moodPeriod).timeout(
@@ -217,7 +217,7 @@ class _EmotionalWellbeingPageState extends State<EmotionalWellbeingPage> {
   Future<void> _loadMoodData(int period) async {
     try {
       final data = await _fetchMoodForPeriod(period);
-      if (!mounted) return;
+    if (!mounted) return;
       setState(() => _moodData = data);
     } catch (e) {
       debugPrint('❌ Wellbeing mood load error: $e');
@@ -257,7 +257,7 @@ class _EmotionalWellbeingPageState extends State<EmotionalWellbeingPage> {
     if (user == null) return;
 
     if (mounted) {
-      setState(() {
+    setState(() {
         _highlightsLoading = true;
         _highlightsPeak = null;
         _highlightsToughest = null;
@@ -514,7 +514,7 @@ Return JSON only:
     final bottomPad = 80 + MediaQuery.paddingOf(context).bottom;
 
     if (_isInitializing) {
-      return Scaffold(
+    return Scaffold(
         backgroundColor: HubColors.bg,
         body: const Center(
           child: CircularProgressIndicator(color: HubColors.accent),
@@ -525,7 +525,7 @@ Return JSON only:
     return Scaffold(
       backgroundColor: HubColors.bg,
       body: Stack(
-        children: [
+                  children: [
           Column(
             children: [
               _buildHeader(isDark),
@@ -566,19 +566,19 @@ Return JSON only:
         border: Border(bottom: BorderSide(color: HubColors.divider)),
       ),
       child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
               color: HubColors.bgSecondary,
-              shape: BoxShape.circle,
-              border: Border.all(color: HubColors.divider),
-            ),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: HubColors.divider),
+                          ),
             child: const Icon(LucideIcons.heart, color: HubColors.accent, size: 20),
-          ),
-          const SizedBox(width: 12),
-          const Expanded(
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
             child: Text(
               'Emotional Wellbeing',
               textAlign: TextAlign.center,
@@ -622,12 +622,12 @@ Return JSON only:
   }
 
   Widget _hubCard({required Widget child}) {
-    return Container(
+                        return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: HubColors.bgSecondary,
-        borderRadius: BorderRadius.circular(16),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: HubColors.bgSecondary,
+                            borderRadius: BorderRadius.circular(16),
         border: Border.all(color: HubColors.divider.withValues(alpha: 0.5)),
         boxShadow: const [
           BoxShadow(
@@ -656,15 +656,15 @@ Return JSON only:
           decoration: BoxDecoration(
             color: HubColors.bgSecondary,
             shape: BoxShape.circle,
-            border: Border.all(color: HubColors.divider),
-          ),
+                            border: Border.all(color: HubColors.divider),
+                          ),
           child: Icon(icon, color: HubColors.accent, size: 20),
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
               Text(
                 title,
                 style: TextStyle(
@@ -815,11 +815,11 @@ Return JSON only:
           Container(
             width: 48,
             height: 48,
-            decoration: BoxDecoration(
+        decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: HubColors.bgSecondary,
-              border: Border.all(color: HubColors.divider),
-            ),
+          color: HubColors.bgSecondary,
+          border: Border.all(color: HubColors.divider),
+        ),
             child: Icon(icon, color: HubColors.accent, size: 24),
           ),
           const SizedBox(height: 12),
@@ -869,8 +869,8 @@ Return JSON only:
             strokeWidth: 1,
           ),
         ),
-        titlesData: FlTitlesData(
-          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+      titlesData: FlTitlesData(
+        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
           topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
           leftTitles: AxisTitles(
             sideTitles: SideTitles(
@@ -904,8 +904,8 @@ Return JSON only:
               },
             ),
           ),
-        ),
-        borderData: FlBorderData(show: false),
+      ),
+      borderData: FlBorderData(show: false),
         lineTouchData: LineTouchData(
           touchCallback: (event, response) {
             if (onSpotTap == null || response?.lineBarSpots == null) return;
@@ -927,7 +927,7 @@ Return JSON only:
         lineBarsData: series.map((s) {
           return LineChartBarData(
             spots: spotsBySeries[s.$1]!,
-            isCurved: true,
+          isCurved: true,
             color: s.$2,
             barWidth: 2,
             dotData: FlDotData(
@@ -1052,8 +1052,8 @@ Return JSON only:
                 isPositive ? LucideIcons.smile : LucideIcons.triangleAlert,
                 color: accent,
                 size: 18,
-              ),
-              const SizedBox(width: 8),
+          ),
+          const SizedBox(width: 8),
               Text(
                 title,
                 style: TextStyle(
@@ -1363,7 +1363,7 @@ Return JSON only:
         'Keep engaging with Detea to build more comprehensive emotional insights and patterns.',
         () => context.go('/chat'),
       ),
-      const SizedBox(height: 12),
+        const SizedBox(height: 12),
       _fallbackGuidance(
         LucideIcons.star,
         'Reflect Daily',
@@ -1396,7 +1396,7 @@ Return JSON only:
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+          children: [
               Row(
                 children: [
                   Container(
@@ -1566,7 +1566,7 @@ Return JSON only:
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
               color: HubColors.divider,
-              borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(12),
             ),
             child: Text(category, style: const TextStyle(color: HubColors.textSecondary, fontSize: 11)),
           ),
@@ -1597,9 +1597,9 @@ Return JSON only:
                 ),
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.all(20),
-                  child: Column(
+      child: Column(
                     mainAxisSize: MainAxisSize.min,
-                    children: [
+        children: [
                       Align(
                         alignment: Alignment.topRight,
                         child: IconButton(
