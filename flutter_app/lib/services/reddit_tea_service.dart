@@ -38,8 +38,6 @@ List<String> redditProxyBaseUrls() {
   return seen.toList();
 }
 
-import '../utils/reddit_thread_comments.dart';
-
 bool isRedditTeaThreadUrl(String? url) => isRedditThreadUrl(url);
 
 /// Fill missing gossip text and hero images by scraping Reddit thread JSON.

@@ -1,5 +1,6 @@
 ﻿import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../lib/pod_reddit_hot.dart';
@@ -309,6 +310,40 @@ Future<Map<String, dynamic>?> fetchRedditThreadDetails(
   final trimmed = discussionUrl.trim();
   if (trimmed.isEmpty) return null;
 
+  final jsonUrl = buildRedditThreadJsonUrl(trimmed);
+
+  Map<String, dynamic>? fromParsed(dynamic raw) {
+    if (raw is Map && raw['gossip'] != null) {
+      return Map<String, dynamic>.from(raw);
+    }
+    return parseRedditThreadDetails(raw, seed: seed, fallbackUrl: trimmed);
+  }
+
+  // Native apps can often reach Reddit JSON directly (no CORS).
+  if (!kIsWeb && jsonUrl != null) {
+    try {
+      final res = await http
+          .get(
+            Uri.parse(jsonUrl),
+            headers: const {
+              'User-Agent': 'DeiteNews/1.0 (+https://deitedatabase.web.app)',
+              'Accept': 'application/json',
+            },
+          )
+          .timeout(const Duration(seconds: 12));
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        final parsed = fromParsed(jsonDecode(res.body));
+        if (parsed != null) return parsed;
+      }
+    } catch (_) {}
+  }
+
+  if (jsonUrl != null) {
+    final proxyRaw = await _fetchRedditJsonViaProxies(jsonUrl);
+    final fromProxy = fromParsed(proxyRaw);
+    if (fromProxy != null) return fromProxy;
+  }
+
   for (final base in redditProxyBaseUrls()) {
     try {
       final url =
@@ -321,7 +356,7 @@ Future<Map<String, dynamic>?> fetchRedditThreadDetails(
               'User-Agent': 'DeiteNews/1.0',
             },
           )
-          .timeout(const Duration(seconds: 20));
+          .timeout(const Duration(seconds: 8));
       if (res.statusCode < 200 || res.statusCode >= 300) continue;
       final body = jsonDecode(res.body);
       if (body is! Map || body['ok'] != true) continue;
@@ -330,10 +365,7 @@ Future<Map<String, dynamic>?> fetchRedditThreadDetails(
   }
 
   final raw = await fetchRedditThreadJson(trimmed);
-  if (raw is Map && raw['gossip'] != null) {
-    return Map<String, dynamic>.from(raw);
-  }
-  return parseRedditThreadDetails(raw, seed: seed, fallbackUrl: trimmed);
+  return fromParsed(raw);
 }
 
 Future<dynamic> _fetchRedditJsonViaProxies(String targetUrl) async {
@@ -345,7 +377,7 @@ Future<dynamic> _fetchRedditJsonViaProxies(String targetUrl) async {
   ];
   for (final proxyUrl in attempts) {
     try {
-      final res = await http.get(Uri.parse(proxyUrl)).timeout(const Duration(seconds: 20));
+      final res = await http.get(Uri.parse(proxyUrl)).timeout(const Duration(seconds: 12));
       if (res.statusCode < 200 || res.statusCode >= 300) continue;
       if (proxyUrl.contains('allorigins')) {
         final j = jsonDecode(res.body) as Map<String, dynamic>?;

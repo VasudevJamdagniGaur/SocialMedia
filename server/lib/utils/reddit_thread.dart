@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 /// Whether [url] is a Reddit discussion permalink (with or without /r/sub/ prefix).
 bool isRedditDiscussionUrl(String? url) {
   try {
