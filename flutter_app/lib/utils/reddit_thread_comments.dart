@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../lib/pod_reddit_hot.dart';
 import '../services/reddit_tea_service.dart';
+import 'debug_agent_log.dart';
 
 class RedditComment {
   RedditComment({
@@ -30,12 +31,298 @@ class RedditCommentsResult {
   final String? error;
 }
 
-String? buildRedditThreadJsonUrl(String discussionUrl) {
+/// Repair common corrupted Reddit URLs (e.g. reddit stripped from host).
+String? normalizeRedditDiscussionUrl(String? url) {
+  var u = (url ?? '').trim();
+  if (u.isEmpty) return null;
+  u = u.replaceAll(RegExp(r'www\.\.com', caseSensitive: false), 'www.reddit.com');
+  u = u.replaceAll(RegExp(r'https?:///+'), 'https://');
+  u = u.replaceAll('://www.reddit.com//', '://www.reddit.com/');
+  if (!u.startsWith('http')) u = 'https://$u';
   try {
-    final trimmed =
-        discussionUrl.trim().replaceAll(RegExp(r'/\?.*$'), '').replaceAll(RegExp(r'/$'), '');
-    if (trimmed.isEmpty) return null;
-    final u = Uri.parse(trimmed);
+    final parsed = Uri.parse(u);
+    final host = parsed.host.toLowerCase();
+    if (!host.contains('reddit.com')) return null;
+    if (!RegExp(r'/comments/[a-z0-9]+', caseSensitive: false).hasMatch(parsed.path)) {
+      return null;
+    }
+    return u.split('?').first.replaceAll(RegExp(r'/$'), '');
+  } catch (_) {
+    return null;
+  }
+}
+
+dynamic _safeJsonDecode(String body) {
+  final t = body.trim();
+  if (t.isEmpty) return null;
+  if (t.startsWith('<') || t.startsWith('<!')) return null;
+  try {
+    return jsonDecode(t);
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Readable thread text via Jina when Reddit `.json` is blocked (returns HTML).
+Future<Map<String, dynamic>?> fetchRedditThreadViaJina(
+  String permalink, {
+  Map<String, dynamic>? seed,
+}) async {
+  final normalized = normalizeRedditDiscussionUrl(permalink);
+  if (normalized == null) return null;
+  final path = normalized.replaceFirst(RegExp(r'^https?://', caseSensitive: false), '');
+  final seedTitle = '${seed?['title'] ?? ''}'.trim();
+  final endpoints = [
+    'https://r.jina.ai/https://$path',
+    'https://r.jina.ai/http://$path',
+  ];
+
+  for (final readerUrl in endpoints) {
+    try {
+      final res = await http
+          .get(
+            Uri.parse(readerUrl),
+            headers: const {'Accept': 'text/plain', 'User-Agent': 'DeiteNews/1.0'},
+          )
+          .timeout(const Duration(seconds: 28));
+      if (res.statusCode < 200 || res.statusCode >= 300) continue;
+      var body = res.body.trim();
+      if (body.length < 80) continue;
+      final lower = body.toLowerCase();
+      if (lower.contains('403 forbidden') || lower.contains('access denied')) continue;
+
+      var title = seedTitle;
+      final titleLine = RegExp(r'^Title:\s*(.+)$', multiLine: true).firstMatch(body);
+      if (titleLine != null) title = titleLine.group(1)!.trim();
+
+      var content = body;
+      if (title.isNotEmpty) {
+        final idx = body.indexOf(title);
+        if (idx >= 0) {
+          content = body.substring(idx + title.length).trim();
+        }
+      }
+      content = content
+          .replaceAll(RegExp(r'^URL Source:.*$', multiLine: true), '')
+          .replaceAll(RegExp(r'^Markdown Content:.*$', multiLine: true), '')
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
+      if (content.length < 40) continue;
+
+      final gossip = content.length > 1400 ? '${content.substring(0, 1400).trimRight()}…' : content;
+      return {
+        'title': title.isNotEmpty ? title : seedTitle,
+        'url': normalized,
+        'description': gossip,
+        'gossip': gossip,
+        'selftext': gossip,
+        'text': 'Title: ${title.isNotEmpty ? title : seedTitle}\n\nPost body:\n$gossip',
+        'source': '${seed?['source'] ?? 'r/BollyBlindsNGossip'}',
+        'image': seed?['image'],
+      };
+    } catch (_) {}
+  }
+  return null;
+}
+
+String? buildRedditThreadRssUrl(String discussionUrl) {
+  final normalized = normalizeRedditDiscussionUrl(discussionUrl);
+  if (normalized == null) return null;
+  final full = RegExp(
+    r'^(https?://[^/]+/r/[^/]+/comments/[a-z0-9]+)',
+    caseSensitive: false,
+  ).firstMatch(normalized);
+  if (full != null) return '${full.group(1)!}/.rss';
+  final short = RegExp(
+    r'^(https?://[^/]+/comments/[a-z0-9]+)',
+    caseSensitive: false,
+  ).firstMatch(normalized);
+  if (short != null) return '${short.group(1)!}/.rss';
+  return null;
+}
+
+/// Remove Reddit RSS/HTML footer noise from display text.
+String stripRedditDisplayBoilerplate(String? text) {
+  final rawInput = '${text ?? ''}';
+  var s = rawInput;
+  s = s.replaceAllMapped(RegExp(r'&#(\d+);'), (m) {
+    final code = int.tryParse(m.group(1)!);
+    if (code == null || code < 1 || code > 0x10FFFF) return m.group(0)!;
+    return String.fromCharCode(code);
+  });
+  s = s.replaceAllMapped(RegExp(r'&#x([0-9a-fA-F]+);', caseSensitive: false), (m) {
+    final code = int.tryParse(m.group(1)!, radix: 16);
+    if (code == null || code < 1 || code > 0x10FFFF) return m.group(0)!;
+    return String.fromCharCode(code);
+  });
+  s = s
+      .replaceAll('&nbsp;', ' ')
+      .replaceAll('&amp;', '&')
+      .replaceAll('&lt;', '<')
+      .replaceAll('&gt;', '>')
+      .replaceAll('&quot;', '"')
+      .replaceAll('&#39;', "'");
+
+  s = s.replaceAll(RegExp(r'\s+'), ' ').trim();
+  s = s.replaceAll(
+    RegExp(
+      r'\s*submitted\s+by\s+/u/[A-Za-z0-9_-]+\s*(\[link\]\s*)?(\[comments\]\s*)?',
+      caseSensitive: false,
+    ),
+    ' ',
+  );
+  s = s.replaceAll(RegExp(r'\[link\]', caseSensitive: false), '');
+  s = s.replaceAll(RegExp(r'\[comments\]', caseSensitive: false), '');
+  s = s.replaceAll(RegExp(r'\s+/u/[A-Za-z0-9_-]+\s*'), ' ');
+  s = s.replaceAll(RegExp(r'\bsubmitted\s+by\b', caseSensitive: false), '');
+  final cleaned = s.replaceAll(RegExp(r'\s+'), ' ').trim();
+
+  // #region agent log
+  final hadBoilerplate = RegExp(
+    r'submitted\s+by|\[link\]|\[comments\]|&#\d+;|/u/[A-Za-z0-9_-]+',
+    caseSensitive: false,
+  ).hasMatch(rawInput);
+  if (hadBoilerplate) {
+    agentDebugLog(
+      'reddit_thread_comments.dart:stripRedditDisplayBoilerplate',
+      'stripped reddit rss boilerplate',
+      {
+        'beforeLen': rawInput.length,
+        'afterLen': cleaned.length,
+        'beforeSnippet': rawInput.length > 140 ? '${rawInput.substring(0, 140)}…' : rawInput,
+        'afterSnippet': cleaned.length > 140 ? '${cleaned.substring(0, 140)}…' : cleaned,
+        'stillHasSubmittedBy': RegExp(r'submitted\s+by', caseSensitive: false).hasMatch(cleaned),
+        'stillHasLinkTag': cleaned.toLowerCase().contains('[link]'),
+      },
+      hypothesisId: 'C',
+      runId: 'post-fix-v3',
+    );
+  }
+  // #endregion
+
+  return cleaned;
+}
+
+String _decodeHtmlEntities(String text) {
+  return text
+      .replaceAll('&lt;', '<')
+      .replaceAll('&gt;', '>')
+      .replaceAll('&quot;', '"')
+      .replaceAll('&#39;', "'")
+      .replaceAll('&amp;', '&');
+}
+
+String _stripHtmlToText(String html) {
+  final decoded = _decodeHtmlEntities(html);
+  return stripRedditDisplayBoilerplate(
+    decoded
+        .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n')
+        .replaceAll(RegExp(r'<[^>]+>'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim(),
+  );
+}
+
+List<Map<String, String>> _parseRedditThreadRssEntries(String xml) {
+  final entries = <Map<String, String>>[];
+  final blocks = RegExp(r'<entry>[\s\S]*?</entry>', multiLine: true).allMatches(xml);
+  for (final m in blocks) {
+    final block = m.group(0) ?? '';
+    final titleM = RegExp(
+      r'<title[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?</title>',
+      caseSensitive: false,
+    ).firstMatch(block);
+    final contentM = RegExp(
+      r'<content[^>]*type="html"[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?</content>',
+      caseSensitive: false,
+    ).firstMatch(block);
+    final authorM = RegExp(
+      r'<author>\s*<name>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?</name>',
+      caseSensitive: false,
+    ).firstMatch(block);
+    var title = titleM?.group(1)?.replaceAll(RegExp(r'\s+'), ' ').trim() ?? '';
+    title = title.replaceAll('&amp;', '&');
+    final rawContent = contentM?.group(1) ?? '';
+    final body = _stripHtmlToText(rawContent);
+    final author = authorM?.group(1)?.trim() ?? 'unknown';
+    if (title.isEmpty && body.isEmpty) continue;
+    entries.add({'title': title, 'body': body, 'author': author});
+  }
+  return entries;
+}
+
+/// Fetch thread post body + comments via Reddit Atom RSS (works when `.json` is blocked).
+Future<Map<String, dynamic>?> fetchRedditThreadViaRss(
+  String permalink, {
+  Map<String, dynamic>? seed,
+}) async {
+  final rssUrl = buildRedditThreadRssUrl(permalink);
+  if (rssUrl == null) return null;
+  try {
+    final res = await http
+        .get(
+          Uri.parse(rssUrl),
+          headers: const {
+            'Accept': 'application/atom+xml, application/xml, text/xml',
+            'User-Agent': 'DeteaRedditProxy/1.0 (+https://deitedatabase.web.app)',
+          },
+        )
+        .timeout(const Duration(seconds: 20));
+    if (res.statusCode < 200 || res.statusCode >= 300) return null;
+    final xml = res.body;
+    if (!xml.contains('<entry>')) return null;
+
+    final entries = _parseRedditThreadRssEntries(xml);
+    if (entries.isEmpty) return null;
+
+    final normalized = normalizeRedditDiscussionUrl(permalink)!;
+    final seedTitle = '${seed?['title'] ?? ''}'.trim();
+    final postEntry = entries.first;
+    var title = postEntry['title'] ?? '';
+    if (title.isEmpty) title = seedTitle;
+    final selftext = stripRedditDisplayBoilerplate(postEntry['body'] ?? '');
+
+    final commentLines = <String>[];
+    final gossipParts = <String>[];
+    if (selftext.isNotEmpty && selftext.length > 30) gossipParts.add(selftext);
+    for (final e in entries.skip(1).take(10)) {
+      final author = e['author'] ?? '';
+      if (author == 'AutoModerator') continue;
+      final body = e['body'] ?? '';
+      if (body.length < 24) continue;
+      if (body.toLowerCase().contains('rules reminder')) continue;
+      gossipParts.add(body);
+      commentLines.add('Comment by u/$author: $body');
+      if (commentLines.length >= 6) break;
+    }
+    var gossip = gossipParts.join(' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (gossip.isEmpty) gossip = title;
+
+    final chunks = <String>['Title: $title'];
+    if (selftext.isNotEmpty) chunks.add('Post body:\n$selftext');
+    if (commentLines.isNotEmpty) chunks.add('Top comments:\n${commentLines.join('\n\n')}');
+    final text = chunks.join('\n\n');
+
+    return {
+      'title': title,
+      'url': normalized,
+      'description': gossip,
+      'gossip': gossip,
+      'selftext': selftext,
+      'text': text,
+      'source': '${seed?['source'] ?? 'r/BollyBlindsNGossip'}',
+      'image': seed?['image'],
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
+String? buildRedditThreadJsonUrl(String discussionUrl) {
+  final normalized = normalizeRedditDiscussionUrl(discussionUrl);
+  if (normalized == null) return null;
+  try {
+    final u = Uri.parse(normalized);
     var host = u.host.toLowerCase();
     if (host.startsWith('np.') || host.startsWith('old.')) host = 'www.reddit.com';
     if (!host.endsWith('reddit.com')) return null;
@@ -60,21 +347,7 @@ String? buildRedditThreadJsonUrl(String discussionUrl) {
   }
 }
 
-/// Reddit discussion permalink (supports `/r/sub/comments/id` and `/comments/id` short links).
-bool isRedditThreadUrl(String? url) {
-  try {
-    final u = Uri.parse((url ?? '').trim());
-    var host = u.host.toLowerCase();
-    if (host.startsWith('www.')) host = host.substring(4);
-    if (host.startsWith('np.')) host = host.substring(3);
-    if (host.startsWith('old.')) host = host.substring(4);
-    if (host.startsWith('m.')) host = host.substring(2);
-    if (host != 'reddit.com' && !host.endsWith('.reddit.com')) return false;
-    return RegExp(r'/comments/[a-z0-9]+', caseSensitive: false).hasMatch(u.path);
-  } catch (_) {
-    return false;
-  }
-}
+bool isRedditThreadUrl(String? url) => normalizeRedditDiscussionUrl(url) != null;
 
 List<RedditComment> parseTopLevelComments(dynamic threadJson, {int limit = 40}) {
   if (threadJson is! List || threadJson.length < 2) return [];
@@ -307,10 +580,24 @@ Future<Map<String, dynamic>?> fetchRedditThreadDetails(
   String discussionUrl, {
   Map<String, dynamic>? seed,
 }) async {
-  final trimmed = discussionUrl.trim();
+  final trimmed = normalizeRedditDiscussionUrl(discussionUrl) ?? discussionUrl.trim();
   if (trimmed.isEmpty) return null;
 
   final jsonUrl = buildRedditThreadJsonUrl(trimmed);
+  // #region agent log
+  agentDebugLog(
+    'reddit_thread_comments.dart:fetchRedditThreadDetails',
+    'fetch start',
+    {
+      'inputUrl': discussionUrl.trim(),
+      'normalizedUrl': trimmed,
+      'jsonUrl': jsonUrl,
+      'isRedditThread': isRedditThreadUrl(trimmed),
+    },
+    hypothesisId: 'B',
+    runId: 'post-fix-v2',
+  );
+  // #endregion
 
   Map<String, dynamic>? fromParsed(dynamic raw) {
     if (raw is Map && raw['gossip'] != null) {
@@ -319,29 +606,29 @@ Future<Map<String, dynamic>?> fetchRedditThreadDetails(
     return parseRedditThreadDetails(raw, seed: seed, fallbackUrl: trimmed);
   }
 
-  // Native apps can often reach Reddit JSON directly (no CORS).
-  if (!kIsWeb && jsonUrl != null) {
-    try {
-      final res = await http
-          .get(
-            Uri.parse(jsonUrl),
-            headers: const {
-              'User-Agent': 'DeiteNews/1.0 (+https://deitedatabase.web.app)',
-              'Accept': 'application/json',
-            },
-          )
-          .timeout(const Duration(seconds: 12));
-      if (res.statusCode >= 200 && res.statusCode < 300) {
-        final parsed = fromParsed(jsonDecode(res.body));
-        if (parsed != null) return parsed;
-      }
-    } catch (_) {}
-  }
-
-  if (jsonUrl != null) {
-    final proxyRaw = await _fetchRedditJsonViaProxies(jsonUrl);
-    final fromProxy = fromParsed(proxyRaw);
-    if (fromProxy != null) return fromProxy;
+  void logResult(String via, Map<String, dynamic>? result) {
+    // #region agent log
+    agentDebugLog(
+      'reddit_thread_comments.dart:fetchRedditThreadDetails',
+      'fetch success',
+      {
+        'via': via,
+        'gossipLen': '${result?['gossip'] ?? ''}'.length,
+        'textLen': '${result?['text'] ?? ''}'.length,
+        'selftextLen': '${result?['selftext'] ?? ''}'.length,
+        'gossipSnippet': () {
+          final g = '${result?['gossip'] ?? ''}';
+          return g.length > 120 ? '${g.substring(0, 120)}…' : g;
+        }(),
+        'hasBoilerplate': RegExp(
+          r'submitted\s+by|\[link\]|\[comments\]|&#\d+;',
+          caseSensitive: false,
+        ).hasMatch('${result?['gossip'] ?? ''}'),
+      },
+      hypothesisId: 'B',
+      runId: 'post-fix-v3',
+    );
+    // #endregion
   }
 
   for (final base in redditProxyBaseUrls()) {
@@ -356,16 +643,76 @@ Future<Map<String, dynamic>?> fetchRedditThreadDetails(
               'User-Agent': 'DeiteNews/1.0',
             },
           )
-          .timeout(const Duration(seconds: 8));
+          .timeout(const Duration(seconds: 10));
       if (res.statusCode < 200 || res.statusCode >= 300) continue;
-      final body = jsonDecode(res.body);
+      final body = _safeJsonDecode(res.body);
       if (body is! Map || body['ok'] != true) continue;
-      return Map<String, dynamic>.from(body);
+      final result = Map<String, dynamic>.from(body);
+      logResult('backend_thread', result);
+      return result;
     } catch (_) {}
   }
 
+  final rss = await fetchRedditThreadViaRss(trimmed, seed: seed);
+  if (rss != null) {
+    logResult('thread_rss', rss);
+    return rss;
+  }
+
+  if (jsonUrl != null) {
+    final proxyRaw = await _fetchRedditJsonViaProxies(jsonUrl);
+    final fromProxy = fromParsed(proxyRaw);
+    if (fromProxy != null) {
+      logResult('cors_proxy', fromProxy);
+      return fromProxy;
+    }
+  }
+
+  if (!kIsWeb && jsonUrl != null) {
+    try {
+      final res = await http
+          .get(
+            Uri.parse(jsonUrl),
+            headers: const {
+              'User-Agent':
+                  'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120.0.0.0 Mobile Safari/537.36',
+              'Accept': 'application/json',
+            },
+          )
+          .timeout(const Duration(seconds: 12));
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        final parsed = fromParsed(_safeJsonDecode(res.body));
+        if (parsed != null) {
+          logResult('direct_json', parsed);
+          return parsed;
+        }
+      }
+    } catch (_) {}
+  }
+
+  final jina = await fetchRedditThreadViaJina(trimmed, seed: seed);
+  if (jina != null) {
+    logResult('jina_reader', jina);
+    return jina;
+  }
+
   final raw = await fetchRedditThreadJson(trimmed);
-  return fromParsed(raw);
+  final result = fromParsed(raw);
+  // #region agent log
+  agentDebugLog(
+    'reddit_thread_comments.dart:fetchRedditThreadDetails',
+    'fetch end',
+    {
+      'inputUrl': trimmed,
+      'resultNull': result == null,
+      'gossipLen': '${result?['gossip'] ?? ''}'.length,
+      'textLen': '${result?['text'] ?? ''}'.length,
+    },
+    hypothesisId: 'B',
+    runId: 'post-fix-v2',
+  );
+  // #endregion
+  return result;
 }
 
 Future<dynamic> _fetchRedditJsonViaProxies(String targetUrl) async {
@@ -380,12 +727,15 @@ Future<dynamic> _fetchRedditJsonViaProxies(String targetUrl) async {
       final res = await http.get(Uri.parse(proxyUrl)).timeout(const Duration(seconds: 12));
       if (res.statusCode < 200 || res.statusCode >= 300) continue;
       if (proxyUrl.contains('allorigins')) {
-        final j = jsonDecode(res.body) as Map<String, dynamic>?;
+        final j = _safeJsonDecode(res.body) as Map<String, dynamic>?;
         final txt = j?['contents'] as String? ?? '';
         if (txt.isEmpty) continue;
-        return jsonDecode(txt);
+        final decoded = _safeJsonDecode(txt);
+        if (decoded != null) return decoded;
+        continue;
       }
-      return jsonDecode(res.body);
+      final decoded = _safeJsonDecode(res.body);
+      if (decoded != null) return decoded;
     } catch (_) {}
   }
   return null;

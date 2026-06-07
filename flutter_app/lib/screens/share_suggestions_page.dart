@@ -22,6 +22,7 @@ import '../utils/date_utils.dart';
 import '../utils/hub_colors.dart';
 import '../utils/reddit_thread_comments.dart';
 import '../utils/share_news_cache.dart';
+import '../utils/debug_agent_log.dart';
 
 class ShareSuggestionsPage extends StatefulWidget {
   const ShareSuggestionsPage({super.key});
@@ -117,13 +118,29 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
 
   Future<void> _bootstrapSharePage() async {
     if (_isNewsMode) {
-      await Future.wait([
-        _loadNewsCardDetails(),
-        _loadSuggestions(),
-      ]);
+      final url = '${_newsArticle?['url'] ?? ''}'.trim();
+      final needsRedditContent = _isTeaArticleShare || isRedditThreadUrl(url);
+      if (needsRedditContent) {
+        await _loadNewsCardDetails();
+      }
+      await _loadSuggestions();
     } else {
       await _loadSuggestions();
     }
+  }
+
+  Map<String, dynamic> _articleForSuggestions() {
+    final merged = Map<String, dynamic>.from(_newsArticle ?? {});
+    final details = _newsArticleDetails;
+    if (details != null) {
+      for (final entry in details.entries) {
+        final v = entry.value;
+        if (v == null) continue;
+        if (v is String && v.trim().isEmpty) continue;
+        merged[entry.key] = v;
+      }
+    }
+    return merged;
   }
 
   String _preseededGossip() =>
@@ -131,8 +148,12 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
           .trim();
 
   Future<void> _loadNewsCardDetails() async {
-    final url = '${_newsArticle?['url'] ?? ''}'.trim();
+    final rawUrl = '${_newsArticle?['url'] ?? ''}'.trim();
+    final url = normalizeRedditDiscussionUrl(rawUrl) ?? rawUrl;
     if (url.isEmpty) return;
+    if (url != rawUrl && _newsArticle != null) {
+      _newsArticle = {...Map<String, dynamic>.from(_newsArticle!), 'url': url};
+    }
 
     final isTea = _isTeaArticleShare;
     final preGossip = _preseededGossip();
@@ -143,16 +164,14 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
         setState(() {
           _newsCardSummary = sanitizeTeaShareText(preGossip);
           _newsCardHeadline = preTitle;
-          _loadingNewsDetails = false;
         });
       }
-      unawaited(_enrichNewsCardDetails(url, isTea));
-      return;
+    } else {
+      setState(() => _loadingNewsDetails = true);
     }
 
-    setState(() => _loadingNewsDetails = true);
     try {
-      await _enrichNewsCardDetails(url, isTea).timeout(const Duration(seconds: 28));
+      await _enrichNewsCardDetails(url, isTea).timeout(const Duration(seconds: 35));
     } catch (_) {
       // Card enrichment is optional; suggestions can still load from article stub.
     } finally {
@@ -162,6 +181,20 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
 
   Future<void> _enrichNewsCardDetails(String url, bool isTea) async {
     final source = _newsArticle?['source'] as String?;
+    // #region agent log
+    agentDebugLog(
+      'share_suggestions_page.dart:_enrichNewsCardDetails',
+      'enrich start',
+      {
+        'url': url,
+        'isTea': isTea,
+        'isRedditThread': isRedditThreadUrl(url),
+        'preGossipLen': _preseededGossip().length,
+        'title': '${_newsArticle?['title'] ?? ''}',
+      },
+      hypothesisId: 'D',
+    );
+    // #endregion
 
     if (isRedditThreadUrl(url)) {
       try {
@@ -171,26 +204,44 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
         ).timeout(const Duration(seconds: 25));
         if (reddit != null && mounted) {
           final gossip = buildRedditGossipSummary(reddit);
+          // #region agent log
+          agentDebugLog(
+            'share_suggestions_page.dart:_enrichNewsCardDetails',
+            'reddit fetch ok',
+            {
+              'url': url,
+              'rawGossipLen': '${reddit['gossip'] ?? ''}'.length,
+              'builtGossipLen': gossip.length,
+              'snippetCount': extractRedditContentSnippets(reddit).length,
+              'gossipSnippet': gossip.length > 100 ? '${gossip.substring(0, 100)}…' : gossip,
+            },
+            hypothesisId: 'C',
+            runId: 'post-fix',
+          );
+          // #endregion
           final headline = '${reddit['title'] ?? _newsArticle?['title'] ?? ''}'.trim();
-          if (gossip.isNotEmpty) {
+          if (gossip.isNotEmpty || extractRedditContentSnippets(reddit).isNotEmpty) {
+            final effectiveGossip = gossip.isNotEmpty
+                ? gossip
+                : sanitizeTeaShareText(extractRedditContentSnippets(reddit).join(' '));
             setState(() {
               _newsArticleDetails = reddit;
-              _newsCardSummary = sanitizeTeaShareText(gossip);
+              _newsCardSummary = effectiveGossip;
               if (headline.isNotEmpty) _newsCardHeadline = headline;
-              if (reddit['image'] is String && (reddit['image'] as String).isNotEmpty) {
-                _newsArticle = {
-                  ...Map<String, dynamic>.from(_newsArticle ?? {}),
+              _newsArticle = {
+                ...Map<String, dynamic>.from(_newsArticle ?? {}),
+                'description': effectiveGossip,
+                'gossip': effectiveGossip,
+                'text': reddit['text'],
+                'selftext': reddit['selftext'],
+                if (reddit['image'] is String && (reddit['image'] as String).isNotEmpty)
                   'image': reddit['image'],
-                  'description': gossip,
-                  'gossip': gossip,
-                  'text': reddit['text'],
-                };
-              }
+              };
             });
             await upsertCachedNewsCard(
               url: url,
               headline: headline,
-              summary: sanitizeTeaShareText(gossip),
+              summary: effectiveGossip,
               details: reddit,
               source: source,
             );
@@ -206,6 +257,18 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
       var summary = cached['summary'] is String ? cached['summary'] as String : '';
       final headline = cached['headline'] is String ? cached['headline'] as String : '';
       final cacheUsable = !isTea || summary.trim().length >= 80;
+      // #region agent log
+      agentDebugLog(
+        'share_suggestions_page.dart:_enrichNewsCardDetails',
+        'cache check',
+        {
+          'url': url,
+          'cacheUsable': cacheUsable,
+          'summaryLen': summary.trim().length,
+        },
+        hypothesisId: 'E',
+      );
+      // #endregion
       if (cacheUsable) {
         if (isTea) {
           final cleaned = sanitizeTeaShareText(summary);
@@ -354,33 +417,79 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
     try {
       List<Map<String, String>> items;
       if (_isNewsMode) {
-        final url = '${_newsArticle?['url'] ?? ''}'.trim();
+        var url = normalizeRedditDiscussionUrl('${_newsArticle?['url'] ?? ''}'.trim()) ??
+            '${_newsArticle?['url'] ?? ''}'.trim();
         final isTea = _isTeaArticleShare;
-        final cached = url.isNotEmpty
+        var article = _articleForSuggestions();
+
+        if (isRedditThreadUrl(url) && extractRedditContentSnippets(article).isEmpty) {
+          try {
+            final reddit = await fetchRedditThreadDetails(url, seed: article)
+                .timeout(const Duration(seconds: 30));
+            if (reddit != null && mounted) {
+              final gossip = buildRedditGossipSummary(reddit);
+              setState(() {
+                _newsArticleDetails = reddit;
+                if (gossip.isNotEmpty) _newsCardSummary = gossip;
+                _newsArticle = {
+                  ...Map<String, dynamic>.from(_newsArticle ?? {}),
+                  'url': url,
+                  'description': gossip,
+                  'gossip': gossip,
+                  'text': reddit['text'],
+                  'selftext': reddit['selftext'],
+                  if (reddit['image'] is String && (reddit['image'] as String).isNotEmpty)
+                    'image': reddit['image'],
+                };
+              });
+              article = _articleForSuggestions();
+            }
+          } catch (_) {}
+        }
+
+        final snippets = extractRedditContentSnippets(article);
+        var cached = url.isNotEmpty
             ? await getCachedShareSuggestionsForUrl(url, _platform)
             : null;
+        if (cached != null && cached.isNotEmpty && isTea && snippets.length >= 2) {
+          final title = '${article['title'] ?? ''}'.trim();
+          final lacksContent = cached.every((p) {
+            final post = '${p['post'] ?? ''}';
+            return post.length < title.length + 40 ||
+                (post.contains('Read more:') &&
+                    snippets.every((s) {
+                      final needle = s.length > 32 ? s.substring(0, 32) : s;
+                      return !post.contains(needle);
+                    }));
+          });
+          if (lacksContent) cached = null;
+        }
         if (cached != null && cached.isNotEmpty) {
           items = cleanCachedNewsSuggestions(cached, isTea: isTea);
         } else {
           final localFallback = isTea
-              ? buildLocalTeaShareSuggestions(_newsArticle!, _platform)
+              ? buildLocalTeaShareSuggestions(article, _platform)
               : <Map<String, String>>[
                   {
                     'eventLabel': 'News',
                     'post': _baselineText,
                   },
                 ];
-          try {
-            items = await ChatService.instance
-                .generateNewsArticleShareSuggestions(
-                  _newsArticle!,
-                  _platform,
-                  prefetchedDetails: _newsArticle,
-                )
-                .timeout(const Duration(seconds: 20));
-            if (items.isEmpty) items = localFallback;
-          } catch (_) {
+          if (isTea && snippets.length >= 2) {
             items = localFallback;
+          } else {
+            try {
+              items = await ChatService.instance
+                  .generateNewsArticleShareSuggestions(
+                    article,
+                    _platform,
+                    prefetchedDetails: article,
+                  )
+                  .timeout(const Duration(seconds: 20));
+              if (items.isEmpty) items = localFallback;
+            } catch (_) {
+              items = localFallback;
+            }
           }
           if (url.isNotEmpty && items.isNotEmpty) {
             final toCache = isTea
@@ -405,6 +514,20 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
       }
 
       if (!mounted) return;
+      // #region agent log
+      agentDebugLog(
+        'share_suggestions_page.dart:_loadSuggestions',
+        'suggestions ready',
+        {
+          'isTea': _isTeaArticleShare,
+          'snippetCount': extractRedditContentSnippets(_articleForSuggestions()).length,
+          'itemCount': items.length,
+          'labels': items.map((e) => e['eventLabel']).toList(),
+        },
+        hypothesisId: 'C',
+        runId: 'post-fix',
+      );
+      // #endregion
       setState(() {
         _suggestions = items.isNotEmpty
             ? items

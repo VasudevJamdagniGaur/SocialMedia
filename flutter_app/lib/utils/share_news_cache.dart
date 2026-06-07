@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'reddit_thread_comments.dart';
+import 'debug_agent_log.dart';
 import 'tea_trending_storage.dart';
 
 const shareNewsSuggestionsCacheKey = 'deite_share_news_suggestions_cache_v1';
@@ -36,43 +37,101 @@ bool isTeaSourceLabel(String? source) {
 
 bool isRedditTeaThreadUrl(String? url) => isRedditThreadUrl(url);
 
+/// Extract post body + top comment snippets for share suggestions.
+List<String> extractRedditContentSnippets(Map<String, dynamic>? article, {int maxParts = 4}) {
+  if (article == null) return [];
+  final title = '${article['title'] ?? ''}'.trim();
+  final seen = <String>{};
+  final parts = <String>[];
+
+  void add(String? raw, {int minLen = 20}) {
+    final s = stripRedditDisplayBoilerplate(raw);
+    if (s.length < minLen) return;
+    if (s == title) return;
+    final key = s.toLowerCase();
+    if (seen.contains(key)) return;
+    seen.add(key);
+    parts.add(s);
+  }
+
+  add('${article['selftext'] ?? ''}', minLen: 12);
+  add('${article['gossip'] ?? ''}');
+  add('${article['description'] ?? ''}');
+
+  final text = '${article['text'] ?? ''}'.trim();
+  final postBody = RegExp(r'Post body:\s*(.+?)(?=\n\n|\Z)', dotAll: true)
+      .firstMatch(text)
+      ?.group(1)
+      ?.replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+  add(postBody);
+
+  final re = RegExp(
+    r'Comment by u/[^:]+:\s*(.+?)(?=\n\nComment by u/|\Z)',
+    dotAll: true,
+    caseSensitive: false,
+  );
+  for (final m in re.allMatches(text)) {
+    add(m.group(1));
+    if (parts.length >= maxParts) break;
+  }
+
+  return parts.take(maxParts).toList();
+}
+
 /// Instant share suggestions when AI / scraping is slow or unavailable.
 List<Map<String, String>> buildLocalTeaShareSuggestions(
   Map<String, dynamic> article,
   String platform,
 ) {
   final title = '${article['title'] ?? ''}'.trim();
-  final gossip = sanitizeTeaShareText(
-    '${article['gossip'] ?? article['description'] ?? article['text'] ?? ''}'.trim(),
-  );
-  final url = '${article['url'] ?? ''}'.trim();
-  final body = gossip.isNotEmpty ? gossip : title;
-  final maxLen = platform == 'x' ? 220 : 500;
+  final snippets = extractRedditContentSnippets(article);
+  final body = snippets.isNotEmpty ? snippets.first : title;
+  final second = snippets.length > 1 ? snippets[1] : '';
+  final third = snippets.length > 2 ? snippets[2] : '';
+  final maxLen = platform == 'x' ? 220 : 650;
 
   String clip(String s) => s.length <= maxLen ? s : '${s.substring(0, maxLen).trimRight()}…';
 
   final posts = <Map<String, String>>[
-    {'eventLabel': 'Tea', 'post': clip(body)},
     {
       'eventLabel': 'Hot take',
       'post': clip(
-        gossip.isNotEmpty
-            ? 'The tea: $title — ${gossip.length > 120 ? '${gossip.substring(0, 120).trimRight()}…' : gossip}'
-            : 'Anyone else following "$title"?',
+        second.isNotEmpty
+            ? 'The discourse on this is wild. $body And the replies are saying: $second'
+            : 'Hot take after reading this: $body',
       ),
     },
     {
-      'eventLabel': 'Discussion',
+      'eventLabel': 'Real talk',
       'post': clip(
         [
           if (title.isNotEmpty) title,
-          if (gossip.isNotEmpty) gossip,
-          if (url.isNotEmpty) url,
+          if (body.isNotEmpty && body != title) body,
         ].join('\n\n'),
       ),
     },
+    {
+      'eventLabel': 'Question',
+      'post': clip(
+        second.isNotEmpty
+            ? '$title\n\nOne comment that stuck with me: "$second"\n\nWhere do you land on this?'
+            : '$title\n\nCurious what you all think — agree or push back?',
+      ),
+    },
+    {
+      'eventLabel': 'Different angle',
+      'post': clip(
+        third.isNotEmpty
+            ? 'Everyone\'s debating the headline, but this reply shifted how I see it: $third'
+            : second.isNotEmpty
+                ? 'Less about the headline, more about this point: $second'
+                : 'Unpopular angle on "$title" — worth a real conversation, not just a headline dunk.',
+      ),
+    },
   ];
-  return posts.where((p) => (p['post'] ?? '').trim().isNotEmpty).toList();
+
+  return posts.where((p) => (p['post'] ?? '').trim().isNotEmpty).take(4).toList();
 }
 
 String clampText(String? s, int maxLen) {
@@ -190,12 +249,24 @@ Future<void> setCachedShareSuggestionsForUrl(
 
 /// Port of sanitizeTeaShareText in ShareSuggestionsPage.js
 String sanitizeTeaShareText(String? text) {
-  var s = (text ?? '').replaceAll(RegExp(r'\s+'), ' ').trim();
+  var s = stripRedditDisplayBoilerplate(text);
+  s = s.replaceAll(RegExp(r'\s+'), ' ').trim();
   if (s.isEmpty) return '';
+
+  // #region agent log
+  final beforeSanitize = s;
+  // #endregion
+
+  final protectedUrls = <String>[];
+  s = s.replaceAllMapped(RegExp(r'https?://[^\s\])<>"{}|\\^`]+', caseSensitive: false), (m) {
+    final idx = protectedUrls.length;
+    protectedUrls.add(m.group(0)!);
+    return '<<TEA_URL_$idx>>';
+  });
 
   s = s
       .replaceAll(RegExp(r'\br/[A-Za-z0-9_]+\b'), '')
-      .replaceAll(RegExp(r'\bReddit\b', caseSensitive: false), '')
+      .replaceAll(RegExp(r'(?<![\w./])reddit(?![\w.])', caseSensitive: false), '')
       .replaceAll(RegExp(r'\bsubreddit\b', caseSensitive: false), '')
       .replaceAll(RegExp(r'\bReddit community\b', caseSensitive: false), '')
       .replaceAll(RegExp(r'\bthread\b', caseSensitive: false), 'discussion')
@@ -226,6 +297,31 @@ String sanitizeTeaShareText(String? text) {
   s = s.replaceFirst(RegExp(r'^people (?:speculated|discussed)', caseSensitive: false), 'The buzz is');
   s = s.replaceFirstMapped(RegExp(r'([.!?]\s+)people\b'), (m) => '${m[1]}People');
 
+  for (var i = 0; i < protectedUrls.length; i++) {
+    s = s.replaceAll('<<TEA_URL_$i>>', protectedUrls[i]);
+  }
+
+  // #region agent log
+  if (beforeSanitize != s &&
+      (beforeSanitize.contains('reddit.com') || beforeSanitize.contains('Reddit'))) {
+    agentDebugLog(
+      'share_news_cache.dart:sanitizeTeaShareText',
+      'sanitize changed reddit-related text',
+      {
+        'beforeLen': beforeSanitize.length,
+        'afterLen': s.length,
+        'beforeSnippet': beforeSanitize.length > 120
+            ? beforeSanitize.substring(0, 120)
+            : beforeSanitize,
+        'afterSnippet': s.length > 120 ? s.substring(0, 120) : s,
+        'hadRedditCom': beforeSanitize.contains('reddit.com'),
+        'afterHasRedditCom': s.contains('reddit.com'),
+      },
+      hypothesisId: 'A',
+    );
+  }
+  // #endregion
+
   return s;
 }
 
@@ -246,11 +342,15 @@ List<Map<String, String>> cleanCachedNewsSuggestions(
 /// Readable gossip blurb for Tea cards from Reddit thread/article details.
 String buildRedditGossipSummary(Map<String, dynamic>? details) {
   if (details == null) return '';
+  final title = '${details['title'] ?? ''}'.trim();
   final gossip = '${details['gossip'] ?? details['description'] ?? ''}'.trim();
-  if (gossip.isNotEmpty) return sanitizeTeaShareText(gossip);
+  if (gossip.isNotEmpty && gossip != title) return sanitizeTeaShareText(gossip);
 
   final selftext = '${details['selftext'] ?? ''}'.trim();
-  if (selftext.isNotEmpty) return sanitizeTeaShareText(selftext);
+  if (selftext.isNotEmpty && selftext != title) return sanitizeTeaShareText(selftext);
+
+  final snippets = extractRedditContentSnippets(details);
+  if (snippets.isNotEmpty) return sanitizeTeaShareText(snippets.join(' '));
 
   final text = '${details['text'] ?? ''}'.trim();
   if (text.isEmpty) return '';
