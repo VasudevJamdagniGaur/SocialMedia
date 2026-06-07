@@ -58,10 +58,10 @@ class BottomNavigation extends StatelessWidget {
                 child: _NavRasterIcon(
                   asset: 'assets/icons/tea-nav-inactive.webp',
                   activeAsset: 'assets/icons/tea-nav-active.webp',
-                  size: 34,
+                  size: 32.3,
                   active: isTeaActive,
                   isDarkMode: isDarkMode,
-                  frameSize: 40,
+                  frameSize: 38,
                   activeScale: 1.08,
                 ),
               ),
