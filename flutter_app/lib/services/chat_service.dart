@@ -2212,8 +2212,9 @@ $text""";
       final details = await fetchRedditThreadDetails(permalink, seed: seed);
       if (details == null) return null;
       final text = '${details['text'] ?? ''}'.trim();
-      if (text.length < 12) return null;
-      return details;
+      final gossip = '${details['gossip'] ?? details['description'] ?? ''}'.trim();
+      if (text.length >= 12 || gossip.length >= 12) return details;
+      return null;
     } catch (_) {
       return null;
     }
@@ -2325,7 +2326,7 @@ $text""";
 
     final preGossip =
         (article?['gossip'] ?? article?['description'] ?? '').toString().trim();
-    if (_isRedditThreadUrl(url) && preGossip.length >= 20) {
+    if (_isRedditThreadUrl(url) && preGossip.length >= 12) {
       return {
         ...base,
         'description': preGossip,

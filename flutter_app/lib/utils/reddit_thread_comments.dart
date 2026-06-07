@@ -30,10 +30,49 @@ class RedditCommentsResult {
 }
 
 String? buildRedditThreadJsonUrl(String discussionUrl) {
-  if (discussionUrl.trim().isEmpty) return null;
-  final u = discussionUrl.trim().replaceAll(RegExp(r'/\?.*$'), '').replaceAll(RegExp(r'/$'), '');
-  if (!RegExp(r'reddit\.com/r/', caseSensitive: false).hasMatch(u)) return null;
-  return '$u.json?raw_json=1&limit=50&depth=1&sort=top';
+  try {
+    final trimmed =
+        discussionUrl.trim().replaceAll(RegExp(r'/\?.*$'), '').replaceAll(RegExp(r'/$'), '');
+    if (trimmed.isEmpty) return null;
+    final u = Uri.parse(trimmed);
+    var host = u.host.toLowerCase();
+    if (host.startsWith('np.') || host.startsWith('old.')) host = 'www.reddit.com';
+    if (!host.endsWith('reddit.com')) return null;
+
+    var path = u.path;
+    if (!RegExp(r'/comments/[a-z0-9]+', caseSensitive: false).hasMatch(path)) return null;
+    if (!path.endsWith('.json')) path = '$path.json';
+
+    return Uri(
+      scheme: 'https',
+      host: host.startsWith('www.') ? host : 'www.reddit.com',
+      path: path,
+      queryParameters: const {
+        'raw_json': '1',
+        'limit': '120',
+        'depth': '2',
+        'sort': 'top',
+      },
+    ).toString();
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Reddit discussion permalink (supports `/r/sub/comments/id` and `/comments/id` short links).
+bool isRedditThreadUrl(String? url) {
+  try {
+    final u = Uri.parse((url ?? '').trim());
+    var host = u.host.toLowerCase();
+    if (host.startsWith('www.')) host = host.substring(4);
+    if (host.startsWith('np.')) host = host.substring(3);
+    if (host.startsWith('old.')) host = host.substring(4);
+    if (host.startsWith('m.')) host = host.substring(2);
+    if (host != 'reddit.com' && !host.endsWith('.reddit.com')) return false;
+    return RegExp(r'/comments/[a-z0-9]+', caseSensitive: false).hasMatch(u.path);
+  } catch (_) {
+    return false;
+  }
 }
 
 List<RedditComment> parseTopLevelComments(dynamic threadJson, {int limit = 40}) {
@@ -83,8 +122,9 @@ Future<dynamic> fetchRedditThreadJson(String discussionUrl) async {
           .timeout(const Duration(seconds: 18));
       if (res.statusCode >= 200 && res.statusCode < 300) {
         final body = jsonDecode(res.body);
-        if (body is Map && body['ok'] == true && body['thread'] != null) {
-          return body['thread'];
+        if (body is Map && body['ok'] == true) {
+          if (body['thread'] != null) return body['thread'];
+          if (body['gossip'] != null || body['text'] != null) return body;
         }
       }
     } catch (_) {}
@@ -290,6 +330,9 @@ Future<Map<String, dynamic>?> fetchRedditThreadDetails(
   }
 
   final raw = await fetchRedditThreadJson(trimmed);
+  if (raw is Map && raw['gossip'] != null) {
+    return Map<String, dynamic>.from(raw);
+  }
   return parseRedditThreadDetails(raw, seed: seed, fallbackUrl: trimmed);
 }
 

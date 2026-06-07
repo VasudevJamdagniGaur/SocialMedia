@@ -20,6 +20,7 @@ import '../services/chat_service.dart';
 import '../services/firestore_service.dart';
 import '../utils/date_utils.dart';
 import '../utils/hub_colors.dart';
+import '../utils/reddit_thread_comments.dart';
 import '../utils/share_news_cache.dart';
 
 class ShareSuggestionsPage extends StatefulWidget {
@@ -151,7 +152,7 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
 
     setState(() => _loadingNewsDetails = true);
     try {
-      await _enrichNewsCardDetails(url, isTea).timeout(const Duration(seconds: 18));
+      await _enrichNewsCardDetails(url, isTea).timeout(const Duration(seconds: 28));
     } catch (_) {
       // Card enrichment is optional; suggestions can still load from article stub.
     } finally {
@@ -161,6 +162,44 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
 
   Future<void> _enrichNewsCardDetails(String url, bool isTea) async {
     final source = _newsArticle?['source'] as String?;
+
+    if (isRedditThreadUrl(url)) {
+      try {
+        final reddit = await fetchRedditThreadDetails(
+          url,
+          seed: _newsArticle,
+        ).timeout(const Duration(seconds: 25));
+        if (reddit != null && mounted) {
+          final gossip = buildRedditGossipSummary(reddit);
+          final headline = '${reddit['title'] ?? _newsArticle?['title'] ?? ''}'.trim();
+          if (gossip.isNotEmpty) {
+            setState(() {
+              _newsArticleDetails = reddit;
+              _newsCardSummary = sanitizeTeaShareText(gossip);
+              if (headline.isNotEmpty) _newsCardHeadline = headline;
+              if (reddit['image'] is String && (reddit['image'] as String).isNotEmpty) {
+                _newsArticle = {
+                  ...Map<String, dynamic>.from(_newsArticle ?? {}),
+                  'image': reddit['image'],
+                  'description': gossip,
+                  'gossip': gossip,
+                  'text': reddit['text'],
+                };
+              }
+            });
+            await upsertCachedNewsCard(
+              url: url,
+              headline: headline,
+              summary: sanitizeTeaShareText(gossip),
+              details: reddit,
+              source: source,
+            );
+            return;
+          }
+        }
+      } catch (_) {}
+    }
+
     final cached = await getCachedNewsCardForUrl(url);
 
     if (cached != null) {

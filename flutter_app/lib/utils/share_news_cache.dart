@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'reddit_thread_comments.dart';
 import 'tea_trending_storage.dart';
 
 const shareNewsSuggestionsCacheKey = 'deite_share_news_suggestions_cache_v1';
@@ -33,10 +34,7 @@ bool isTeaSourceLabel(String? source) {
   return RegExp(r'^r/', caseSensitive: false).hasMatch(s);
 }
 
-bool isRedditTeaThreadUrl(String? url) {
-  final u = (url ?? '').trim();
-  return RegExp(r'reddit\.com/r/[^\s/]+/comments/', caseSensitive: false).hasMatch(u);
-}
+bool isRedditTeaThreadUrl(String? url) => isRedditThreadUrl(url);
 
 /// Instant share suggestions when AI / scraping is slow or unavailable.
 List<Map<String, String>> buildLocalTeaShareSuggestions(

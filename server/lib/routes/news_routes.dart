@@ -6,6 +6,7 @@ import 'package:shelf_router/shelf_router.dart';
 
 import '../config.dart';
 import '../utils/http_utils.dart';
+import '../utils/reddit_thread.dart';
 
 /// NewsAPI proxy — port of functions/src/newsApi.ts
 Router buildNewsRouter() {
@@ -131,6 +132,42 @@ Router buildRedditProxyRouter() {
       return await proxyRedditTarget(target);
     } catch (e) {
       return jsonError(500, 'Proxy server error', details: '$e');
+    }
+  });
+
+  router.get('/api/reddit/thread', (Request req) async {
+    if (req.method == 'OPTIONS') return Response(204, headers: apiCorsHeaders);
+    final discussionUrl = queryParam(req, 'url');
+    if (discussionUrl == null) {
+      return jsonOk({'ok': false, 'error': 'missing_url'}, status: 400);
+    }
+    final jsonUrl = buildRedditThreadJsonUrl(discussionUrl);
+    if (jsonUrl == null) {
+      return jsonOk({'ok': false, 'error': 'invalid_reddit_url'}, status: 400);
+    }
+    try {
+      final res = await http.get(
+        Uri.parse(jsonUrl),
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'DeteaRedditProxy/1.0 (+https://deitedatabase.web.app)',
+        },
+      );
+      if (res.statusCode != 200) {
+        return jsonOk({'ok': false, 'error': 'thread_fetch_failed'}, status: res.statusCode);
+      }
+      final threadJson = jsonDecode(res.body);
+      final parsed = parseRedditThreadPayload(threadJson, seedUrl: discussionUrl);
+      if (parsed == null) {
+        return jsonOk({'ok': false, 'error': 'thread_parse_failed'}, status: 502);
+      }
+      return jsonOk({'ok': true, ...parsed}, headers: apiCorsHeaders);
+    } catch (e) {
+      return jsonOk(
+        {'ok': false, 'error': e.toString()},
+        status: 502,
+        headers: apiCorsHeaders,
+      );
     }
   });
 

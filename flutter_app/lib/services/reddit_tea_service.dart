@@ -38,10 +38,9 @@ List<String> redditProxyBaseUrls() {
   return seen.toList();
 }
 
-bool isRedditTeaThreadUrl(String? url) {
-  final u = (url ?? '').trim();
-  return RegExp(r'reddit\.com/r/[^\s/]+/comments/', caseSensitive: false).hasMatch(u);
-}
+import '../utils/reddit_thread_comments.dart';
+
+bool isRedditTeaThreadUrl(String? url) => isRedditThreadUrl(url);
 
 /// Fill missing gossip text and hero images by scraping Reddit thread JSON.
 Future<List<Map<String, dynamic>>> enrichTeaRows(
