@@ -28,9 +28,15 @@ Future<void> _writeJsonMap(String key, Map<String, dynamic> value) async {
 
 String normalizeUrlKey(String? url) => url?.trim() ?? '';
 
-bool isTeaSourceLabel(String? source) =>
-    RegExp(r'^r/BollyBlindsNGossip$', caseSensitive: false)
-        .hasMatch((source ?? '').trim());
+bool isTeaSourceLabel(String? source) {
+  final s = (source ?? '').trim();
+  return RegExp(r'^r/', caseSensitive: false).hasMatch(s);
+}
+
+bool isRedditTeaThreadUrl(String? url) {
+  final u = (url ?? '').trim();
+  return RegExp(r'reddit\.com/r/[^\s/]+/comments/', caseSensitive: false).hasMatch(u);
+}
 
 String clampText(String? s, int maxLen) {
   final t = s?.trim() ?? '';
@@ -200,10 +206,53 @@ List<Map<String, String>> cleanCachedNewsSuggestions(
   }).toList();
 }
 
+/// Readable gossip blurb for Tea cards from Reddit thread/article details.
+String buildRedditGossipSummary(Map<String, dynamic>? details) {
+  if (details == null) return '';
+  final gossip = '${details['gossip'] ?? details['description'] ?? ''}'.trim();
+  if (gossip.isNotEmpty) return sanitizeTeaShareText(gossip);
+
+  final selftext = '${details['selftext'] ?? ''}'.trim();
+  if (selftext.isNotEmpty) return sanitizeTeaShareText(selftext);
+
+  final text = '${details['text'] ?? ''}'.trim();
+  if (text.isEmpty) return '';
+
+  final commentBodies = <String>[];
+  final re = RegExp(
+    r'Comment by u/[^:]+:\s*(.+?)(?=\n\nComment by u/|\Z)',
+    dotAll: true,
+    caseSensitive: false,
+  );
+  for (final m in re.allMatches(text)) {
+    final body = (m.group(1) ?? '').replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (body.length > 24) commentBodies.add(body);
+    if (commentBodies.length >= 3) break;
+  }
+
+  if (commentBodies.isNotEmpty) {
+    return sanitizeTeaShareText(commentBodies.join(' '));
+  }
+
+  final postBody = RegExp(r'Post body:\s*(.+?)(?=\n\n|\Z)', dotAll: true)
+      .firstMatch(text)
+      ?.group(1)
+      ?.replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+  if (postBody != null && postBody.length > 20) {
+    return sanitizeTeaShareText(postBody);
+  }
+
+  return '';
+}
+
 /// Local fallback when AI summary is unavailable — port of ShareSuggestionsPage.js
 String buildLocalNewsCardSummary(Map<String, dynamic>? details) {
   try {
     if (details == null) return '';
+    final redditGossip = buildRedditGossipSummary(details);
+    if (redditGossip.isNotEmpty) return redditGossip;
+
     final title = '${details['title'] ?? ''}'.trim();
     final description = '${details['description'] ?? ''}'.trim();
     final text = '${details['text'] ?? ''}'.trim();

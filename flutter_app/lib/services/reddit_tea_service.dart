@@ -7,6 +7,7 @@ import '../config/env.dart';
 import '../lib/pod_reddit_hot.dart';
 import '../lib/pod_topic_news_shared.dart';
 import '../lib/reddit_post_filter.dart';
+import '../utils/reddit_thread_comments.dart';
 
 const _pullPushBase = 'https://api.pullpush.io/reddit/search/submission/';
 const _teaSubs = ['BollyBlindsNGossip', 'BollywoodGossip'];
@@ -37,6 +38,61 @@ List<String> redditProxyBaseUrls() {
   return seen.toList();
 }
 
+bool isRedditTeaThreadUrl(String? url) {
+  final u = (url ?? '').trim();
+  return RegExp(r'reddit\.com/r/[^\s/]+/comments/', caseSensitive: false).hasMatch(u);
+}
+
+/// Fill missing gossip text and hero images by scraping Reddit thread JSON.
+Future<List<Map<String, dynamic>>> enrichTeaRows(
+  List<Map<String, dynamic>> rows, {
+  int maxEnrich = 10,
+}) async {
+  if (rows.isEmpty) return rows;
+
+  final out = rows.map((r) => Map<String, dynamic>.from(r)).toList();
+  final tasks = <Future<void>>[];
+  var queued = 0;
+
+  for (var i = 0; i < out.length && queued < maxEnrich; i++) {
+    final row = out[i];
+    final url = '${row['url'] ?? ''}'.trim();
+    if (!isRedditTeaThreadUrl(url)) continue;
+
+    final gossip = '${row['gossip'] ?? row['description'] ?? row['selftext'] ?? ''}'.trim();
+    final image = '${row['image'] ?? row['thumbnail'] ?? ''}'.trim();
+    final needsGossip = gossip.length < 40;
+    final needsImage = !RegExp(r'^https?://', caseSensitive: false).hasMatch(image);
+    if (!needsGossip && !needsImage) continue;
+
+    final idx = i;
+    queued++;
+    tasks.add(() async {
+      try {
+        final details = await fetchRedditThreadDetails(url, seed: out[idx]);
+        if (details == null) return;
+        final merged = out[idx];
+        final g = '${details['gossip'] ?? details['description'] ?? ''}'.trim();
+        if (needsGossip && g.isNotEmpty) {
+          merged['gossip'] = g;
+          merged['description'] = g;
+          merged['selftext'] = '${details['selftext'] ?? g}';
+        }
+        final img = '${details['image'] ?? ''}'.trim();
+        if (needsImage && img.startsWith('http')) {
+          merged['image'] = img;
+          merged['thumbnail'] = img;
+        }
+        final title = '${details['title'] ?? ''}'.trim();
+        if (title.isNotEmpty) merged['title'] = title;
+      } catch (_) {}
+    }());
+  }
+
+  if (tasks.isNotEmpty) await Future.wait(tasks);
+  return out;
+}
+
 bool teaPostAllowed(Map<String, dynamic> post, {int minScore = 1}) {
   if (post['stickied'] == true) return false;
   final author = '${post['author'] ?? ''}'.trim();
@@ -56,18 +112,25 @@ Map<String, dynamic>? rowFromRedditPost(Map<String, dynamic> post, String sub) {
   if (!RegExp(r'^https?://', caseSensitive: false).hasMatch(link)) return null;
   final image = resolveRedditPostImage(post);
   final thumbnail = post['thumbnail'] is String ? (post['thumbnail'] as String).trim() : '';
-  final thumb = RegExp(r'^https?://', caseSensitive: false).hasMatch(thumbnail) ? thumbnail : null;
+  final thumb = RegExp(r'^https?://', caseSensitive: false).hasMatch(thumbnail) &&
+          thumbnail != 'self' &&
+          thumbnail != 'default'
+      ? thumbnail
+      : null;
+  final gossip = redditGossipSnippetFromPost(post);
   final author = '${post['author'] ?? ''}'.trim();
   return {
     'title': title,
     'url': link,
-    'image': image,
-    'thumbnail': thumb,
+    'image': image ?? thumb,
+    'thumbnail': thumb ?? image,
     'score': post['score'] is num ? (post['score'] as num).toInt() : 0,
     'num_comments': post['num_comments'] is num ? (post['num_comments'] as num).toInt() : 0,
     'author': author.isNotEmpty && author != '[deleted]' ? author : 'unknown',
     'source': 'r/$sub',
-    'description': '',
+    'description': gossip,
+    'gossip': gossip,
+    'selftext': gossip,
   };
 }
 
@@ -331,6 +394,9 @@ Future<List<Map<String, dynamic>>> fetchTrendingTeaRows() async {
     );
     final fromRss = teaRowsFromRssArticles(rss);
     if (fromRss.length > rows.length) rows = fromRss;
+  }
+  if (rows.isNotEmpty) {
+    rows = await enrichTeaRows(rows, maxEnrich: 10);
   }
   return rows;
 }

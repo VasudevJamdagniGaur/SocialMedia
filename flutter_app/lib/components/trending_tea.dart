@@ -25,6 +25,7 @@ class TeaItem {
     required this.url,
     this.postUrl = '',
     this.thumbnail = '',
+    this.gossip = '',
     this.author = 'unknown',
     this.score = 0,
     this.numComments = 0,
@@ -35,6 +36,7 @@ class TeaItem {
   final String url;
   final String postUrl;
   final String thumbnail;
+  final String gossip;
   final String author;
   final int score;
   final int numComments;
@@ -45,6 +47,7 @@ class TeaItem {
         'url': url,
         'postUrl': postUrl,
         'thumbnail': thumbnail,
+        'gossip': gossip,
         'author': author,
         'score': score,
         'num_comments': numComments,
@@ -59,12 +62,14 @@ bool _isDirectImageUrl(String? postUrl) {
 
 TeaItem _rowToTeaItem(Map<String, dynamic> row) {
   final url = row['url'] is String ? row['url'] as String : '';
+  final gossip = '${row['gossip'] ?? row['description'] ?? row['selftext'] ?? ''}'.trim();
   return TeaItem(
     id: url.isNotEmpty ? hubNewsDocIdFromUrl(url) : '${row['title']}'.hashCode.toString(),
     title: row['title'] is String ? row['title'] as String : '',
     url: url,
     postUrl: url,
     thumbnail: '${row['image'] ?? row['thumbnail'] ?? ''}'.replaceAll('&amp;', '&'),
+    gossip: gossip,
     author: row['author'] is String ? row['author'] as String : 'unknown',
     score: row['score'] is num ? (row['score'] as num).toInt() : 0,
     numComments: row['num_comments'] is num ? (row['num_comments'] as num).toInt() : 0,
@@ -204,7 +209,8 @@ class _TrendingTeaState extends State<TrendingTea> {
       'newsArticle': {
         'title': item.title,
         'url': item.url,
-        'description': '',
+        'description': item.gossip,
+        'text': item.gossip,
         'image': teaHeroImageUrl(item),
         'source': item.author.startsWith('r/') ? item.author : 'r/BollyBlindsNGossip',
       },
@@ -280,7 +286,7 @@ class _TrendingTeaState extends State<TrendingTea> {
                     : _items.isEmpty
                         ? const Text('No tea right now.', style: TextStyle(color: hubMuted))
                         : SizedBox(
-                            height: 200,
+                            height: 220,
                             child: ListView.separated(
                               scrollDirection: Axis.horizontal,
                               itemCount: _items.length,
@@ -321,15 +327,34 @@ class _TrendingTeaState extends State<TrendingTea> {
                                                 ],
                                               ),
                                             ),
-                                            child: Text(
-                                              item.title,
-                                              maxLines: 3,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.w600,
-                                              ),
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  item.title,
+                                                  maxLines: 2,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                                if (item.gossip.isNotEmpty) ...[
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    item.gossip,
+                                                    maxLines: 2,
+                                                    overflow: TextOverflow.ellipsis,
+                                                    style: TextStyle(
+                                                      color: Colors.white.withValues(alpha: 0.82),
+                                                      fontSize: 12,
+                                                      height: 1.3,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ],
                                             ),
                                           ),
                                         ),

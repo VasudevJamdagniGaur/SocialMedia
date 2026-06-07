@@ -87,6 +87,7 @@ class _TeaFeedPageState extends State<TeaFeedPage> {
         url: m['url'] as String? ?? '',
         postUrl: m['postUrl'] as String? ?? '',
         thumbnail: m['thumbnail'] as String? ?? '',
+        gossip: '${m['gossip'] ?? m['description'] ?? ''}'.trim(),
         author: m['author'] as String? ?? 'unknown',
         score: (m['score'] as num?)?.toInt() ?? 0,
         numComments: (m['num_comments'] as num?)?.toInt() ?? 0,
@@ -162,9 +163,11 @@ class _TeaFeedPageState extends State<TeaFeedPage> {
         'newsArticle': {
           'title': item.title,
           'url': item.url,
-          'description': '',
+          'description': item.gossip,
+          'text': item.gossip,
+          'gossip': item.gossip,
           'image': teaHeroImageUrl(item),
-          'source': 'r/BollyBlindsNGossip',
+          'source': item.author.startsWith('r/') ? item.author : 'r/BollyBlindsNGossip',
         },
         'returnTo': AppRoutes.teaFeed,
         'returnState': {
@@ -521,6 +524,21 @@ class _TeaSlideState extends State<_TeaSlide> {
                   shadows: [Shadow(color: Colors.black54, blurRadius: 8)],
                 ),
               ),
+              if (item.gossip.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  item.gossip,
+                  maxLines: 4,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.88),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                    height: 1.35,
+                    shadows: const [Shadow(color: Colors.black54, blurRadius: 6)],
+                  ),
+                ),
+              ],
             ],
           ),
         ),

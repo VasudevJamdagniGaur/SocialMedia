@@ -8,8 +8,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../config/env.dart';
+import '../lib/pod_reddit_hot.dart';
 import '../utils/date_utils.dart';
 import '../utils/decode_google_news_url.dart';
+import '../utils/reddit_thread_comments.dart';
 import '../models/chat_message.dart';
 import 'auth_service.dart';
 import 'firestore_service.dart';
@@ -2206,84 +2208,12 @@ $text""";
     String permalink,
     Map<String, dynamic> seed,
   ) async {
-    final jsonUrl = _buildRedditJsonUrl(permalink);
-    if (jsonUrl == null) return null;
     try {
-      final res = await http
-          .get(
-            Uri.parse(jsonUrl),
-            headers: {'Accept': 'application/json'},
-          )
-          .timeout(const Duration(seconds: 20));
-      if (res.statusCode < 200 || res.statusCode >= 300) return null;
-
-      dynamic data;
-      try {
-        data = jsonDecode(res.body);
-      } catch (_) {
-        return null;
-      }
-      if (data is! List || data.isEmpty) return null;
-
-      final listing0 = data[0];
-      final listing0Data = (listing0 is Map && listing0['data'] is Map) ? listing0['data'] as Map : null;
-      final listing0Children = (listing0Data != null && listing0Data['children'] is List)
-          ? listing0Data['children'] as List
-          : const <dynamic>[];
-      final firstChild = listing0Children.isNotEmpty && listing0Children.first is Map ? listing0Children.first as Map : null;
-      final post = (firstChild != null && firstChild['data'] is Map) ? firstChild['data'] as Map : null;
-      if (post == null || post['title'] is! String) return null;
-
-      final title = (post['title'] as String).trim();
-      final permalinkRaw = (post['permalink'] is String) ? (post['permalink'] as String).trim() : '';
-      final canonical = permalinkRaw.isNotEmpty
-          ? 'https://www.reddit.com${permalinkRaw.startsWith('/') ? '' : '/'}$permalinkRaw'
-          : permalink.trim();
-
-      final selftext = (post['selftext'] is String) ? (post['selftext'] as String).trim() : '';
-      final subreddit = (post['subreddit_name_prefixed'] is String)
-          ? (post['subreddit_name_prefixed'] as String).trim()
-          : '';
-      final linkOut = (post['url'] is String) ? (post['url'] as String).trim() : '';
-
-      final commentObjs = <Map<String, String>>[];
-      final second = data.length > 1 ? data[1] : null;
-      final secondData = (second is Map && second['data'] is Map) ? second['data'] as Map : null;
-      final children = (secondData != null && secondData['children'] is List) ? secondData['children'] : null;
-      _collectRedditComments((children is List) ? children.cast<dynamic>() : null, commentObjs, 0, 3, 40);
-
-      final chunks = <String>[];
-      if (subreddit.isNotEmpty) chunks.add('Subreddit: $subreddit');
-      chunks.add('Title: $title');
-      if (selftext.isNotEmpty) {
-        chunks.add('Post body:\n$selftext');
-      } else if (linkOut.isNotEmpty &&
-          RegExp(r'^https?://', caseSensitive: false).hasMatch(linkOut) &&
-          !RegExp(r'/reddit\.com/', caseSensitive: false).hasMatch(linkOut)) {
-        chunks.add('Linked content URL: $linkOut');
-      }
-      if (commentObjs.isNotEmpty) {
-        final lines = commentObjs.map((c) => 'Comment by u/${c['author']}: ${c['body']}').join('\n\n');
-        chunks.add('Top comments:\n$lines');
-      }
-
-      final text = chunks.join('\n\n').replaceAll(RegExp(r'\s+\n'), '\n').trim();
-      final sliced = text.length > 16000 ? text.substring(0, 16000) : text;
-      if (sliced.length < 40) return null;
-
-      final image = _redditHeroImageFromPost(post) ?? ((seed['image'] is String) ? seed['image'] as String : '');
-      final source = subreddit.isNotEmpty
-          ? subreddit
-          : ((seed['source'] is String) ? (seed['source'] as String).trim() : 'Reddit');
-
-      return {
-        'title': title,
-        'url': canonical.isNotEmpty ? canonical : permalink.trim(),
-        'description': '',
-        'image': (image is String && image.startsWith('http')) ? image : null,
-        'source': source.isEmpty ? 'Reddit' : source,
-        'text': sliced,
-      };
+      final details = await fetchRedditThreadDetails(permalink, seed: seed);
+      if (details == null) return null;
+      final text = '${details['text'] ?? ''}'.trim();
+      if (text.length < 12) return null;
+      return details;
     } catch (_) {
       return null;
     }
@@ -2402,11 +2332,13 @@ $text""";
 
     if (_isRedditThreadUrl(url)) {
       final reddit = await _fetchRedditThreadPayload(url, seed);
-      if (reddit != null && (reddit['text'] is String) && (reddit['text'] as String).length >= 40) {
+      if (reddit != null && (reddit['text'] is String) && (reddit['text'] as String).length >= 12) {
         return {
           'title': (reddit['title'] ?? title).toString(),
           'url': (reddit['url'] ?? url).toString(),
-          'description': (reddit['description'] ?? description).toString(),
+          'description': (reddit['description'] ?? reddit['gossip'] ?? description).toString(),
+          'gossip': (reddit['gossip'] ?? reddit['description'] ?? '').toString(),
+          'selftext': (reddit['selftext'] ?? '').toString(),
           'image': reddit['image'] ?? (image.isNotEmpty ? image : null),
           'source': (reddit['source'] ?? source).toString(),
           'text': (reddit['text'] ?? '').toString(),

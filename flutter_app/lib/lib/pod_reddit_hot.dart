@@ -21,13 +21,54 @@ String? resolveRedditPostImage(Map<String, dynamic> post) {
       }
     }
   } catch (_) {}
+
+  try {
+    final gallery = post['gallery_data'];
+    final meta = post['media_metadata'];
+    if (gallery is Map && meta is Map) {
+      final items = gallery['items'];
+      if (items is List && items.isNotEmpty) {
+        final first = items.first;
+        if (first is Map) {
+          final mediaId = first['media_id'];
+          if (mediaId is String && meta[mediaId] is Map) {
+            final u = (meta[mediaId] as Map)['s']?['u'];
+            if (u is String && RegExp(r'^https?://', caseSensitive: false).hasMatch(u)) {
+              return u.replaceAll('&amp;', '&').trim();
+            }
+          }
+        }
+      }
+    }
+  } catch (_) {}
+
+  final overridden = post['url_overridden_by_dest'] is String
+      ? (post['url_overridden_by_dest'] as String).trim()
+      : '';
+  if (isDirectImageUrl(overridden)) return overridden;
+
   final url = post['url'] is String ? (post['url'] as String).trim() : '';
   if (isDirectImageUrl(url)) return url;
   final thumbnail = post['thumbnail'] is String ? (post['thumbnail'] as String).trim() : '';
-  if (RegExp(r'^https?://', caseSensitive: false).hasMatch(thumbnail)) {
+  if (RegExp(r'^https?://', caseSensitive: false).hasMatch(thumbnail) &&
+      thumbnail != 'self' &&
+      thumbnail != 'default' &&
+      thumbnail != 'nsfw' &&
+      thumbnail != 'spoiler') {
     return thumbnail;
   }
   return null;
+}
+
+/// Short gossip blurb from a Reddit post listing (selftext when present).
+String redditGossipSnippetFromPost(Map<String, dynamic> post, {int maxLen = 480}) {
+  final selftext = '${post['selftext'] ?? ''}'.trim();
+  if (selftext.isEmpty || selftext == '[removed]' || selftext == '[deleted]') {
+    return '';
+  }
+  final flat = selftext.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (flat.length <= maxLen) return flat;
+  return '${flat.substring(0, maxLen).trimRight()}…';
 }
 
 String redditPermalinkUrl(Map<String, dynamic> post) {

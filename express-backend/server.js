@@ -87,6 +87,126 @@ function parseRedditHotRss(xml) {
   return items;
 }
 
+function buildRedditThreadJsonUrl(discussionUrl) {
+  try {
+    const u = new URL(discussionUrl.trim().replace(/\/?\?.*$/, '').replace(/\/$/, ''));
+    let host = u.hostname.toLowerCase();
+    if (host.startsWith('np.') || host.startsWith('old.')) host = 'www.reddit.com';
+    if (!host.endsWith('reddit.com')) return null;
+    let path = u.pathname;
+    if (!/\/comments\/[a-z0-9]+/i.test(path)) return null;
+    if (!path.endsWith('.json')) path = `${path}.json`;
+    u.hostname = host;
+    u.pathname = path;
+    u.search = '?raw_json=1&limit=120&depth=2&sort=top';
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
+function parseRedditThreadPayload(threadJson, seedUrl) {
+  if (!Array.isArray(threadJson) || !threadJson.length) return null;
+  const listing0 = threadJson[0]?.data?.children?.[0]?.data;
+  if (!listing0?.title) return null;
+
+  const title = String(listing0.title || '').trim();
+  const permalink = listing0.permalink
+    ? `https://www.reddit.com${listing0.permalink.startsWith('/') ? '' : '/'}${listing0.permalink}`
+    : String(seedUrl || '').trim();
+  const selftext = String(listing0.selftext || '').trim();
+  const subreddit = String(listing0.subreddit_name_prefixed || '').trim();
+
+  const comments = [];
+  const children = threadJson[1]?.data?.children;
+  if (Array.isArray(children)) {
+    for (const child of children) {
+      if (comments.length >= 8) break;
+      if (child?.kind !== 't1') continue;
+      const body = String(child?.data?.body || '').trim();
+      if (!body || body === '[removed]' || body === '[deleted]') continue;
+      comments.push({
+        author: String(child.data.author || 'unknown'),
+        body,
+      });
+    }
+  }
+
+  let image = null;
+  try {
+    const src = listing0?.preview?.images?.[0]?.source?.url;
+    if (src && /^https?:/i.test(src)) image = src.replace(/&amp;/g, '&');
+  } catch (_) {}
+  const link = String(listing0.url || '').trim();
+  if (!image && /\.(jpe?g|png|gif|webp)(\?|$)/i.test(link.split('?')[0])) image = link;
+  const thumb = String(listing0.thumbnail || '').trim();
+  if (!image && /^https?:/i.test(thumb) && !['self', 'default', 'nsfw', 'spoiler'].includes(thumb)) {
+    image = thumb;
+  }
+
+  const gossipParts = [];
+  if (selftext) gossipParts.push(selftext.replace(/\s+/g, ' ').trim());
+  for (const c of comments.slice(0, 4)) {
+    const b = c.body.replace(/\s+/g, ' ').trim();
+    if (b.length > 20) gossipParts.push(b);
+  }
+  let gossip = gossipParts.join(' ').trim();
+  if (!gossip) gossip = title;
+
+  const chunks = [];
+  if (subreddit) chunks.push(`Subreddit: ${subreddit}`);
+  chunks.push(`Title: ${title}`);
+  if (selftext) chunks.push(`Post body:\n${selftext}`);
+  if (comments.length) {
+    chunks.push(
+      `Top comments:\n${comments.map((c) => `Comment by u/${c.author}: ${c.body}`).join('\n\n')}`
+    );
+  }
+  const text = chunks.join('\n\n').trim();
+  if (text.length < 12) return null;
+
+  return {
+    title,
+    url: permalink,
+    image,
+    selftext: selftext.replace(/\s+/g, ' ').trim(),
+    gossip,
+    description: gossip,
+    source: subreddit || 'Reddit',
+    text: text.length > 16000 ? text.slice(0, 16000) : text,
+    thread: threadJson,
+  };
+}
+
+/** Parsed Reddit thread — title, gossip, image, comment text */
+app.get('/api/reddit/thread', async (req, res) => {
+  const discussionUrl = typeof req.query.url === 'string' ? req.query.url.trim() : '';
+  if (!discussionUrl) {
+    return res.status(400).json({ ok: false, error: 'missing_url' });
+  }
+  const jsonUrl = buildRedditThreadJsonUrl(discussionUrl);
+  if (!jsonUrl) {
+    return res.status(400).json({ ok: false, error: 'invalid_reddit_url' });
+  }
+  try {
+    const { status, body } = await fetchReddit(jsonUrl);
+    if (status !== 200) {
+      return res.status(status).json({ ok: false, error: 'thread_fetch_failed' });
+    }
+    const threadJson = JSON.parse(body);
+    const parsed = parseRedditThreadPayload(threadJson, discussionUrl);
+    if (!parsed) {
+      return res.status(502).json({ ok: false, error: 'thread_parse_failed' });
+    }
+    res.json({ ok: true, ...parsed });
+  } catch (err) {
+    res.status(502).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
 /** Fresh Tea feed via Reddit Atom RSS (works when JSON API is blocked) */
 app.get('/api/reddit/tea', async (req, res) => {
   const sub = sanitizeSub(req.query.sub);
@@ -147,5 +267,6 @@ app.listen(PORT, () => {
   console.log(`Deite Reddit proxy listening on http://localhost:${PORT}`);
   console.log('  GET /api/reddit/tea?sub=BollyBlindsNGossip&limit=20');
   console.log('  GET /api/reddit/hot?sub=BollyBlindsNGossip&limit=50');
+  console.log('  GET /api/reddit/thread?url=<reddit permalink>');
   console.log('  GET /api/news?url=<reddit.json>');
 });

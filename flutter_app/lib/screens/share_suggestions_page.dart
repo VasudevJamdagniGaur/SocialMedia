@@ -59,7 +59,9 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
   bool get _isNewsMode => _newsArticle != null;
 
   bool get _isTeaArticleShare =>
-      _isNewsMode && isTeaSourceLabel(_newsArticle?['source'] as String?);
+      _isNewsMode &&
+      (isTeaSourceLabel(_newsArticle?['source'] as String?) ||
+          isRedditTeaThreadUrl(_newsArticle?['url'] as String?));
 
   @override
   void didChangeDependencies() {
@@ -89,6 +91,14 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
 
       if (extra['newsArticle'] is Map) {
         _newsArticle = Map<String, dynamic>.from(extra['newsArticle'] as Map);
+        final gossip =
+            '${_newsArticle?['gossip'] ?? _newsArticle?['description'] ?? _newsArticle?['text'] ?? ''}'
+                .trim();
+        if (gossip.isNotEmpty) {
+          _newsCardSummary = sanitizeTeaShareText(gossip);
+        }
+        final headline = '${_newsArticle?['title'] ?? ''}'.trim();
+        if (headline.isNotEmpty) _newsCardHeadline = headline;
       }
     }
 
@@ -116,41 +126,47 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
     setState(() => _loadingNewsDetails = true);
     try {
       final source = _newsArticle?['source'] as String?;
-      final isTea = isTeaSourceLabel(source);
+      final isTea = _isTeaArticleShare;
       final cached = await getCachedNewsCardForUrl(url);
 
       if (cached != null) {
         var summary = cached['summary'] is String ? cached['summary'] as String : '';
         final headline = cached['headline'] is String ? cached['headline'] as String : '';
-        if (isTea) {
-          final cleaned = sanitizeTeaShareText(summary);
-          if (cleaned != summary) {
-            summary = cleaned;
-            await upsertCachedNewsCard(
-              url: url,
-              headline: headline,
-              summary: cleaned,
-              details: cached['details'] is Map
-                  ? Map<String, dynamic>.from(cached['details'] as Map)
-                  : null,
-              source: source,
-            );
+        final cacheUsable = !isTea || summary.trim().length >= 80;
+        if (cacheUsable) {
+          if (isTea) {
+            final cleaned = sanitizeTeaShareText(summary);
+            if (cleaned != summary) {
+              summary = cleaned;
+              await upsertCachedNewsCard(
+                url: url,
+                headline: headline,
+                summary: cleaned,
+                details: cached['details'] is Map
+                    ? Map<String, dynamic>.from(cached['details'] as Map)
+                    : null,
+                source: source,
+              );
+            }
           }
+          if (!mounted) return;
+          setState(() {
+            _newsArticleDetails = cached['details'] is Map
+                ? Map<String, dynamic>.from(cached['details'] as Map)
+                : null;
+            _newsCardSummary = summary;
+            _newsCardHeadline = headline;
+          });
+          return;
         }
-        if (!mounted) return;
-        setState(() {
-          _newsArticleDetails = cached['details'] is Map
-              ? Map<String, dynamic>.from(cached['details'] as Map)
-              : null;
-          _newsCardSummary = summary;
-          _newsCardHeadline = headline;
-        });
-        return;
       }
 
       final details = await ChatService.instance.fetchNewsArticleDetails(
         _newsArticle,
-        {'minTextLength': 350, 'resolveGoogleNews': true},
+        {
+          'minTextLength': isTea ? 80 : 350,
+          'resolveGoogleNews': !isTea,
+        },
       );
       final looksUseful = details['title'] != null ||
           details['description'] != null ||
@@ -159,24 +175,38 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
       final effective = looksUseful ? details : null;
 
       if (effective != null) {
+        final gossipFallback = buildRedditGossipSummary(effective);
         final results = await Future.wait<String>([
-          ChatService.instance.summarizeNewsArticle(
-            effective,
-            {'minWords': 60, 'maxWords': 80},
-          ),
+          isTea && gossipFallback.isNotEmpty
+              ? Future.value(gossipFallback)
+              : ChatService.instance.summarizeNewsArticle(
+                  effective,
+                  {'minWords': 60, 'maxWords': 80},
+                ),
           ChatService.instance.generateNewsShareCardHeadline(effective),
         ]);
         if (!mounted) return;
         final rawSummary = results[0].trim();
         final localFallback = buildLocalNewsCardSummary(effective);
-        var finalSummary = rawSummary.isNotEmpty ? rawSummary : localFallback;
+        var finalSummary = rawSummary.isNotEmpty
+            ? rawSummary
+            : (localFallback.isNotEmpty ? localFallback : gossipFallback);
         if (isTea) finalSummary = sanitizeTeaShareText(finalSummary);
-        final finalHeadline = results[1].trim();
+        var finalHeadline = results[1].trim();
+        if (finalHeadline.isEmpty) {
+          finalHeadline = (effective['title'] as String? ?? _newsArticle?['title'] as String? ?? '').trim();
+        }
 
         setState(() {
           _newsArticleDetails = effective;
           _newsCardSummary = finalSummary;
           _newsCardHeadline = finalHeadline;
+          if (effective['image'] is String && (effective['image'] as String).isNotEmpty) {
+            _newsArticle = {
+              ...Map<String, dynamic>.from(_newsArticle ?? {}),
+              'image': effective['image'],
+            };
+          }
         });
 
         await upsertCachedNewsCard(
@@ -243,8 +273,7 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
       final List<Map<String, String>> items;
       if (_isNewsMode) {
         final url = '${_newsArticle?['url'] ?? ''}'.trim();
-        final source = _newsArticle?['source'] as String?;
-        final isTea = isTeaSourceLabel(source);
+        final isTea = _isTeaArticleShare;
         final cached = url.isNotEmpty
             ? await getCachedShareSuggestionsForUrl(url, _platform)
             : null;
