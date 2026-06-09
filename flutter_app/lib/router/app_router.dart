@@ -77,6 +77,7 @@ GoRouter createAppRouter() {
 
 GoRouter _buildAppRouter() {
   final rootKey = GlobalKey<NavigatorState>();
+  final shellKey = GlobalKey<NavigatorState>();
 
   return GoRouter(
     navigatorKey: rootKey,
@@ -85,6 +86,7 @@ GoRouter _buildAppRouter() {
     redirect: (context, state) => _splashAuthRedirect(state),
     routes: [
       ShellRoute(
+        navigatorKey: shellKey,
         builder: (context, state, child) => _AppShell(child: child),
         routes: [
           GoRoute(path: AppRoutes.splash, builder: (_, __) => const SplashScreen()),
@@ -114,8 +116,16 @@ GoRouter _buildAppRouter() {
           GoRoute(path: AppRoutes.podChat, builder: (_, __) => const PodGroupChatPage()),
           GoRoute(path: AppRoutes.podReflections, builder: (_, __) => const AllReflectionsPage()),
           GoRoute(path: AppRoutes.reflections, builder: (_, __) => const AllDayReflectionsPage()),
-          GoRoute(path: AppRoutes.shareReflection, builder: (_, __) => const ShareReflectionPage()),
-          GoRoute(path: AppRoutes.shareSuggestions, builder: (_, __) => const ShareSuggestionsPage()),
+          GoRoute(
+            path: AppRoutes.shareReflection,
+            parentNavigatorKey: rootKey,
+            builder: (_, __) => const ShareReflectionPage(),
+          ),
+          GoRoute(
+            path: AppRoutes.shareSuggestions,
+            parentNavigatorKey: rootKey,
+            builder: (_, __) => const ShareSuggestionsPage(),
+          ),
           GoRoute(path: AppRoutes.teaFeed, builder: (_, __) => const TeaFeedPage()),
           GoRoute(path: AppRoutes.helpImprove, builder: (_, __) => const HelpImproveDeitePage()),
           GoRoute(path: AppRoutes.community, builder: (_, __) => const CommunityPage()),
@@ -151,6 +161,23 @@ class _AppShellState extends State<_AppShell> {
         location == AppRoutes.community ||
         location == AppRoutes.wellbeing;
 
+    final instantRoute = location == AppRoutes.shareSuggestions ||
+        location == AppRoutes.teaFeed ||
+        location == AppRoutes.shareReflection;
+    final routeChild = instantRoute
+        ? widget.child
+        : AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            switchInCurve: Curves.easeInOut,
+            switchOutCurve: Curves.easeInOut,
+            transitionBuilder: (child, animation) =>
+                FadeTransition(opacity: animation, child: child),
+            child: KeyedSubtree(
+              key: ValueKey(location),
+              child: widget.child,
+            ),
+          );
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
@@ -160,17 +187,9 @@ class _AppShellState extends State<_AppShell> {
       child: ColoredBox(
         color: AppColors.scaffoldBackground,
         child: Stack(
+          fit: StackFit.expand,
           children: [
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              switchInCurve: Curves.easeInOut,
-              switchOutCurve: Curves.easeInOut,
-              transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
-              child: KeyedSubtree(
-                key: ValueKey(location),
-                child: widget.child,
-              ),
-            ),
+            Positioned.fill(child: routeChild),
             if (showBottomNav) const Positioned(left: 0, right: 0, bottom: 0, child: BottomNavigation()),
           ],
         ),

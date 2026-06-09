@@ -12,6 +12,7 @@ import '../lib/pod_reddit_hot.dart';
 import '../utils/date_utils.dart';
 import '../utils/decode_google_news_url.dart';
 import '../utils/reddit_thread_comments.dart';
+import '../utils/share_news_cache.dart';
 import '../models/chat_message.dart';
 import 'auth_service.dart';
 import 'firestore_service.dart';
@@ -2407,6 +2408,66 @@ $text""";
     return 'Other perspective: ${words[0].toUpperCase()}${words.substring(1)}';
   }
 
+  String _teaAngleTypeToEventLabel(String? type) {
+    final t = (type ?? '').trim().toLowerCase();
+    const map = {
+      'hot_take': 'Hot take',
+      'real_talk': 'Real talk',
+      'question': 'Question',
+      'different_angle': 'Different angle',
+      'insight': 'Hot take',
+      'contrarian': 'Different angle',
+    };
+    if (map.containsKey(t)) return map[t]!;
+    if (t.isEmpty) return '';
+    final words = t.replaceAll('_', ' ').trim();
+    if (words.isEmpty) return '';
+    return words[0].toUpperCase() + words.substring(1);
+  }
+
+  String _buildLinkedInTeaSuggestionsUserContent(Map<String, dynamic> ctx) {
+    final title = (ctx['title'] ?? '').toString().trim();
+    final description = (ctx['description'] ?? '').toString().trim();
+    final source = (ctx['source'] ?? '').toString().trim();
+    final articleText = (ctx['articleText'] ?? '').toString().trim();
+    final sourceLine = source.isNotEmpty ? 'From: $source\n' : '';
+    final summaryLine = description.isNotEmpty ? 'Discussion summary:\n$description\n' : '';
+    final articleSection = articleText.isNotEmpty
+        ? '\nThread highlights:\n${articleText.length > 5000 ? articleText.substring(0, 5000) : articleText}\n'
+        : '';
+    return '''You write LinkedIn posts about celebrity/gossip tea — like a real person sharing their take, NOT a news bot or scraper.
+
+GOAL: 4 distinct, human-sounding posts someone would actually publish on LinkedIn.
+
+Requirements:
+1. Generate exactly 4 posts with these angle types (use exact "type" values):
+   - hot_take — bold reaction to the drama
+   - real_talk — honest, grounded take
+   - question — invite discussion with a genuine question
+   - different_angle — a less obvious read on the story
+
+2. Each post MUST:
+   - Sound like a real human wrote it (first person, conversational, opinionated but fair)
+   - Use short paragraphs with line breaks
+   - Be 60–120 words
+   - NEVER include URLs, "Source -", "Read more", usernames like /u/..., or raw scraped metadata
+   - NEVER paste long quotes or dump comment threads — synthesize the vibe in your own words
+   - Base only on the context below; do not invent facts
+
+3. Tone: LinkedIn-appropriate gossip — curious, witty, thoughtful. Not tabloid screaming.
+
+Context (for your eyes only — do not copy verbatim into posts):
+Title: $title
+${sourceLine}${summaryLine}${articleSection}
+
+Output — return ONLY valid JSON (no markdown fences):
+{"posts":[{"type":"hot_take","content":"Full post text only"}]}
+
+Rules:
+- Exactly 4 posts, one per type listed above.
+- "content" is ONLY publishable LinkedIn text. No labels inside content.''';
+  }
+
   String _buildLinkedInNewsArticleSuggestionsUserContent(Map<String, dynamic> ctx) {
     final title = (ctx['title'] ?? '').toString().trim();
     final url = (ctx['url'] ?? '').toString().trim();
@@ -2559,10 +2620,11 @@ Rules:
     Map<String, dynamic> article,
     String platform, {
     Map<String, dynamic>? prefetchedDetails,
+    bool isTeaGossip = false,
   }) async {
     Map<String, dynamic> details;
     if (prefetchedDetails != null && prefetchedDetails.isNotEmpty) {
-      details = prefetchedDetails;
+      details = Map<String, dynamic>.from(prefetchedDetails);
     } else {
       try {
         details = await fetchNewsArticleDetails(article)
@@ -2579,20 +2641,32 @@ Rules:
         };
       }
     }
-    final title = (details['title'] ?? '').toString().trim();
     final url = (details['url'] ?? '').toString().trim();
-    final description = (details['description'] ?? '').toString().trim();
     final source = (details['source'] ?? '').toString().trim();
-    final articleText = (details['text'] ?? '').toString().trim();
+    final isTea = isTeaGossip || isTeaSourceLabel(source) || isRedditThreadUrl(url);
+    if (isTea) {
+      details = prepareTeaArticleContextForAi(details);
+    }
 
-    final fallbackPost = [title, description].where((s) => s.isNotEmpty).join('\n\n');
-    final fallback = <ShareSuggestion>[
-      {
-        'eventLabel': 'News',
-        'post': '${fallbackPost.isNotEmpty ? fallbackPost : title}\n\nRead more: $url'.trim(),
-      },
-    ];
-    if (title.isEmpty || url.isEmpty) return fallback;
+    final title = (details['title'] ?? '').toString().trim();
+    final description = stripUrlsAndSourceNoise((details['description'] ?? details['gossip'] ?? '').toString());
+    final articleText = stripUrlsAndSourceNoise((details['text'] ?? '').toString());
+
+    final localTeaFallback = isTea
+        ? buildLocalTeaShareSuggestions(details, platform)
+        : <ShareSuggestion>[];
+    final fallbackPost = stripUrlsAndSourceNoise(
+      [title, description].where((s) => s.isNotEmpty).join('\n\n'),
+    );
+    final fallback = isTea && localTeaFallback.isNotEmpty
+        ? localTeaFallback
+        : <ShareSuggestion>[
+            {
+              'eventLabel': 'News',
+              'post': fallbackPost.isNotEmpty ? fallbackPost : title,
+            },
+          ];
+    if (title.isEmpty) return fallback;
 
     final apiKey = Env.openAiApiKey.trim();
     final platformLabel = platform == 'x'
@@ -2614,7 +2688,14 @@ Rules:
 
     final isLinkedInNews = platform == 'linkedin';
     final isXNews = platform == 'x';
-    final userContent = isLinkedInNews
+    final userContent = isLinkedInNews && isTea
+        ? _buildLinkedInTeaSuggestionsUserContent({
+            'title': title,
+            'description': description,
+            'source': source,
+            'articleText': articleText,
+          })
+        : isLinkedInNews
         ? _buildLinkedInNewsArticleSuggestionsUserContent({
             'title': title,
             'url': url,
@@ -2799,14 +2880,21 @@ Return ONLY valid JSON with this exact shape (no markdown fences):
         if (platform == 'x') {
           eventLabel = _xNewsStyleTypeToEventLabel(angleType);
         } else if (platform == 'linkedin') {
-          eventLabel = _newsAngleTypeToEventLabel(angleType);
+          eventLabel = isTea
+              ? _teaAngleTypeToEventLabel(angleType)
+              : _newsAngleTypeToEventLabel(angleType);
         }
         if (eventLabel.isEmpty) eventLabel = 'News';
       }
+      if (isTea) {
+        post = sanitizeTeaSharePostForDisplay(post);
+      }
+      if (post.isEmpty || post.length < minPostLen) continue;
       out.add({'eventLabel': eventLabel, 'post': post});
     }
 
     if (out.isEmpty) return fallback;
+
     return out;
   }
 

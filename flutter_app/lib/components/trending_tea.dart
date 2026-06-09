@@ -9,6 +9,7 @@ import '../router/app_router.dart';
 import '../services/cached_news_service.dart';
 import '../services/reddit_tea_service.dart';
 import '../utils/hub_colors.dart';
+import '../utils/share_news_cache.dart';
 import '../utils/tea_trending_storage.dart';
 import 'skeleton/card_skeleton.dart';
 
@@ -203,20 +204,24 @@ class _TrendingTeaState extends State<TrendingTea> {
     }
   }
 
-  void _openShare(TeaItem item) {
+  Future<void> _openShare(TeaItem item) async {
     if (item.url.isEmpty) return;
-    context.go(AppRoutes.shareSuggestions, extra: {
+    final payload = {
       'newsArticle': {
         'title': item.title,
         'url': item.url,
         'description': item.gossip,
         'text': item.gossip,
+        'gossip': item.gossip,
         'image': teaHeroImageUrl(item),
         'source': item.author.startsWith('r/') ? item.author : 'r/BollyBlindsNGossip',
       },
       'returnTo': GoRouterState.of(context).uri.path,
       'platform': 'linkedin',
-    });
+    };
+    await prepareShareSuggestionsRoute(payload);
+    if (!mounted) return;
+    context.go(AppRoutes.shareSuggestions, extra: payload);
   }
 
   void _openTeaFeed() {

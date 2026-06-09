@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../router/app_router.dart';
 import '../utils/hub_colors.dart';
+import '../utils/share_news_cache.dart';
 import '../utils/tea_watchlist_storage.dart';
 
 class WatchlistPage extends StatefulWidget {
@@ -32,9 +33,9 @@ class _WatchlistPageState extends State<WatchlistPage> {
     await _reload();
   }
 
-  void _openShareSuggestions(TeaWatchlistItem row) {
+  Future<void> _openShareSuggestions(TeaWatchlistItem row) async {
     if (row.url.isEmpty) return;
-    context.go(AppRoutes.shareSuggestions, extra: {
+    final payload = {
       'newsArticle': {
         'title': row.title,
         'url': row.url,
@@ -44,7 +45,10 @@ class _WatchlistPageState extends State<WatchlistPage> {
       },
       'returnTo': AppRoutes.watchlist,
       'platform': 'linkedin',
-    });
+    };
+    await prepareShareSuggestionsRoute(payload);
+    if (!mounted) return;
+    context.go(AppRoutes.shareSuggestions, extra: payload);
   }
 
   @override

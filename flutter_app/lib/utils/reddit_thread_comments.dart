@@ -5,7 +5,6 @@ import 'package:http/http.dart' as http;
 
 import '../lib/pod_reddit_hot.dart';
 import '../services/reddit_tea_service.dart';
-import 'debug_agent_log.dart';
 
 class RedditComment {
   RedditComment({
@@ -175,32 +174,7 @@ String stripRedditDisplayBoilerplate(String? text) {
   s = s.replaceAll(RegExp(r'\[comments\]', caseSensitive: false), '');
   s = s.replaceAll(RegExp(r'\s+/u/[A-Za-z0-9_-]+\s*'), ' ');
   s = s.replaceAll(RegExp(r'\bsubmitted\s+by\b', caseSensitive: false), '');
-  final cleaned = s.replaceAll(RegExp(r'\s+'), ' ').trim();
-
-  // #region agent log
-  final hadBoilerplate = RegExp(
-    r'submitted\s+by|\[link\]|\[comments\]|&#\d+;|/u/[A-Za-z0-9_-]+',
-    caseSensitive: false,
-  ).hasMatch(rawInput);
-  if (hadBoilerplate) {
-    agentDebugLog(
-      'reddit_thread_comments.dart:stripRedditDisplayBoilerplate',
-      'stripped reddit rss boilerplate',
-      {
-        'beforeLen': rawInput.length,
-        'afterLen': cleaned.length,
-        'beforeSnippet': rawInput.length > 140 ? '${rawInput.substring(0, 140)}…' : rawInput,
-        'afterSnippet': cleaned.length > 140 ? '${cleaned.substring(0, 140)}…' : cleaned,
-        'stillHasSubmittedBy': RegExp(r'submitted\s+by', caseSensitive: false).hasMatch(cleaned),
-        'stillHasLinkTag': cleaned.toLowerCase().contains('[link]'),
-      },
-      hypothesisId: 'C',
-      runId: 'post-fix-v3',
-    );
-  }
-  // #endregion
-
-  return cleaned;
+  return s.replaceAll(RegExp(r'\s+'), ' ').trim();
 }
 
 String _decodeHtmlEntities(String text) {
@@ -584,51 +558,12 @@ Future<Map<String, dynamic>?> fetchRedditThreadDetails(
   if (trimmed.isEmpty) return null;
 
   final jsonUrl = buildRedditThreadJsonUrl(trimmed);
-  // #region agent log
-  agentDebugLog(
-    'reddit_thread_comments.dart:fetchRedditThreadDetails',
-    'fetch start',
-    {
-      'inputUrl': discussionUrl.trim(),
-      'normalizedUrl': trimmed,
-      'jsonUrl': jsonUrl,
-      'isRedditThread': isRedditThreadUrl(trimmed),
-    },
-    hypothesisId: 'B',
-    runId: 'post-fix-v2',
-  );
-  // #endregion
 
   Map<String, dynamic>? fromParsed(dynamic raw) {
     if (raw is Map && raw['gossip'] != null) {
       return Map<String, dynamic>.from(raw);
     }
     return parseRedditThreadDetails(raw, seed: seed, fallbackUrl: trimmed);
-  }
-
-  void logResult(String via, Map<String, dynamic>? result) {
-    // #region agent log
-    agentDebugLog(
-      'reddit_thread_comments.dart:fetchRedditThreadDetails',
-      'fetch success',
-      {
-        'via': via,
-        'gossipLen': '${result?['gossip'] ?? ''}'.length,
-        'textLen': '${result?['text'] ?? ''}'.length,
-        'selftextLen': '${result?['selftext'] ?? ''}'.length,
-        'gossipSnippet': () {
-          final g = '${result?['gossip'] ?? ''}';
-          return g.length > 120 ? '${g.substring(0, 120)}…' : g;
-        }(),
-        'hasBoilerplate': RegExp(
-          r'submitted\s+by|\[link\]|\[comments\]|&#\d+;',
-          caseSensitive: false,
-        ).hasMatch('${result?['gossip'] ?? ''}'),
-      },
-      hypothesisId: 'B',
-      runId: 'post-fix-v3',
-    );
-    // #endregion
   }
 
   for (final base in redditProxyBaseUrls()) {
@@ -647,15 +582,12 @@ Future<Map<String, dynamic>?> fetchRedditThreadDetails(
       if (res.statusCode < 200 || res.statusCode >= 300) continue;
       final body = _safeJsonDecode(res.body);
       if (body is! Map || body['ok'] != true) continue;
-      final result = Map<String, dynamic>.from(body);
-      logResult('backend_thread', result);
-      return result;
+      return Map<String, dynamic>.from(body);
     } catch (_) {}
   }
 
   final rss = await fetchRedditThreadViaRss(trimmed, seed: seed);
   if (rss != null) {
-    logResult('thread_rss', rss);
     return rss;
   }
 
@@ -663,7 +595,6 @@ Future<Map<String, dynamic>?> fetchRedditThreadDetails(
     final proxyRaw = await _fetchRedditJsonViaProxies(jsonUrl);
     final fromProxy = fromParsed(proxyRaw);
     if (fromProxy != null) {
-      logResult('cors_proxy', fromProxy);
       return fromProxy;
     }
   }
@@ -683,7 +614,6 @@ Future<Map<String, dynamic>?> fetchRedditThreadDetails(
       if (res.statusCode >= 200 && res.statusCode < 300) {
         final parsed = fromParsed(_safeJsonDecode(res.body));
         if (parsed != null) {
-          logResult('direct_json', parsed);
           return parsed;
         }
       }
@@ -692,27 +622,11 @@ Future<Map<String, dynamic>?> fetchRedditThreadDetails(
 
   final jina = await fetchRedditThreadViaJina(trimmed, seed: seed);
   if (jina != null) {
-    logResult('jina_reader', jina);
     return jina;
   }
 
   final raw = await fetchRedditThreadJson(trimmed);
-  final result = fromParsed(raw);
-  // #region agent log
-  agentDebugLog(
-    'reddit_thread_comments.dart:fetchRedditThreadDetails',
-    'fetch end',
-    {
-      'inputUrl': trimmed,
-      'resultNull': result == null,
-      'gossipLen': '${result?['gossip'] ?? ''}'.length,
-      'textLen': '${result?['text'] ?? ''}'.length,
-    },
-    hypothesisId: 'B',
-    runId: 'post-fix-v2',
-  );
-  // #endregion
-  return result;
+  return fromParsed(raw);
 }
 
 Future<dynamic> _fetchRedditJsonViaProxies(String targetUrl) async {

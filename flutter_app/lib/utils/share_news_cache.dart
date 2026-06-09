@@ -3,12 +3,51 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'reddit_thread_comments.dart';
-import 'debug_agent_log.dart';
 import 'tea_trending_storage.dart';
 
 const shareNewsSuggestionsCacheKey = 'deite_share_news_suggestions_cache_v1';
+const shareSuggestionsRouteStateKey = 'deite_share_suggestions_route_state_v1';
 const shareNewsCardCacheTtlMs = 7 * 24 * 60 * 60 * 1000;
 const shareNewsSuggestionsTtlMs = 7 * 24 * 60 * 60 * 1000;
+
+Map<String, dynamic>? _pendingShareRouteExtra;
+
+/// Synchronous in-memory staging — survives GoRouter extra loss on ShellRoute push.
+void stageShareSuggestionsRoute(Map<String, dynamic> extra) {
+  _pendingShareRouteExtra = Map<String, dynamic>.from(extra);
+}
+
+Map<String, dynamic>? takePendingShareSuggestionsRoute() {
+  final staged = _pendingShareRouteExtra;
+  _pendingShareRouteExtra = null;
+  if (staged == null) return null;
+  return Map<String, dynamic>.from(staged);
+}
+
+/// Stage in memory and prefs before navigating to share suggestions.
+Future<void> prepareShareSuggestionsRoute(Map<String, dynamic> extra) async {
+  stageShareSuggestionsRoute(extra);
+  await persistShareSuggestionsRouteState(extra);
+}
+
+/// Persist share-page route payload so hot restart / lost GoRouter extra can recover.
+Future<void> persistShareSuggestionsRouteState(Map<String, dynamic> extra) async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(shareSuggestionsRouteStateKey, jsonEncode(extra));
+  } catch (_) {}
+}
+
+Future<Map<String, dynamic>?> restoreShareSuggestionsRouteState() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(shareSuggestionsRouteStateKey);
+    if (raw == null || raw.isEmpty) return null;
+    final decoded = jsonDecode(raw);
+    if (decoded is Map) return Map<String, dynamic>.from(decoded);
+  } catch (_) {}
+  return null;
+}
 
 Future<Map<String, dynamic>> _readJsonMap(String key) async {
   try {
@@ -36,6 +75,63 @@ bool isTeaSourceLabel(String? source) {
 }
 
 bool isRedditTeaThreadUrl(String? url) => isRedditThreadUrl(url);
+
+/// Remove URLs and scrape metadata from text shown in share posts.
+String stripUrlsAndSourceNoise(String? text) {
+  var s = stripRedditDisplayBoilerplate(text);
+  s = s.replaceAll(RegExp(r'https?://[^\s\])<>"{}|\\^`]+', caseSensitive: false), ' ');
+  s = s.replaceAll(RegExp(r'\bSource\s*[-:]\s*', caseSensitive: false), '');
+  s = s.replaceAll(RegExp(r'\bRead more:\s*', caseSensitive: false), '');
+  s = s.replaceAll(RegExp(r'\s+'), ' ').trim();
+  return s;
+}
+
+/// Final polish for Tea suggestion card text — no links or scrape noise.
+String sanitizeTeaSharePostForDisplay(String? text) {
+  var s = stripUrlsAndSourceNoise(text);
+  s = sanitizeTeaShareText(s);
+  s = s.replaceAll(RegExp(r'https?://[^\s\])<>"{}|\\^`]+', caseSensitive: false), '');
+  s = s.replaceAll(RegExp(r'\bRead more:\s*', caseSensitive: false), '');
+  return s.replaceAll(RegExp(r'\s+'), ' ').trim();
+}
+
+bool teaSuggestionPostsLookLikeRawScrape(List<Map<String, String>> posts) {
+  for (final item in posts) {
+    final post = '${item['post'] ?? ''}';
+    if (RegExp(r'https?://', caseSensitive: false).hasMatch(post)) return true;
+    if (RegExp(r'\bSource\s*[-:]', caseSensitive: false).hasMatch(post)) return true;
+    if (post.contains('The discourse on this is wild')) return true;
+    if (post.contains('And the replies are saying:')) return true;
+  }
+  return false;
+}
+
+/// Clean Reddit/Tea article fields before sending to AI or local templates.
+Map<String, dynamic> prepareTeaArticleContextForAi(Map<String, dynamic> article) {
+  final title = '${article['title'] ?? ''}'.trim();
+  final snippets = extractRedditContentSnippets(article)
+      .map(stripUrlsAndSourceNoise)
+      .where((s) => s.length >= 20)
+      .toList();
+  final gossip = stripUrlsAndSourceNoise(
+    snippets.isNotEmpty
+        ? snippets.take(3).join('\n\n')
+        : '${article['gossip'] ?? article['description'] ?? ''}',
+  );
+  final articleText = snippets.isEmpty
+      ? stripUrlsAndSourceNoise('${article['text'] ?? ''}')
+      : [
+          'Thread title: $title',
+          'What people are saying:',
+          ...snippets.take(4).map((s) => '• $s'),
+        ].join('\n');
+  return {
+    ...article,
+    'description': gossip,
+    'gossip': gossip,
+    'text': articleText,
+  };
+}
 
 /// Extract post body + top comment snippets for share suggestions.
 List<String> extractRedditContentSnippets(Map<String, dynamic>? article, {int maxParts = 4}) {
@@ -85,48 +181,54 @@ List<Map<String, String>> buildLocalTeaShareSuggestions(
   String platform,
 ) {
   final title = '${article['title'] ?? ''}'.trim();
-  final snippets = extractRedditContentSnippets(article);
+  final snippets = extractRedditContentSnippets(article)
+      .map(stripUrlsAndSourceNoise)
+      .where((s) => s.length >= 12)
+      .toList();
   final body = snippets.isNotEmpty ? snippets.first : title;
   final second = snippets.length > 1 ? snippets[1] : '';
   final third = snippets.length > 2 ? snippets[2] : '';
   final maxLen = platform == 'x' ? 220 : 650;
 
-  String clip(String s) => s.length <= maxLen ? s : '${s.substring(0, maxLen).trimRight()}…';
+  String clip(String s) {
+    final clean = stripUrlsAndSourceNoise(s);
+    if (clean.isEmpty) return '';
+    return clean.length <= maxLen ? clean : '${clean.substring(0, maxLen).trimRight()}…';
+  }
 
   final posts = <Map<String, String>>[
     {
       'eventLabel': 'Hot take',
       'post': clip(
         second.isNotEmpty
-            ? 'The discourse on this is wild. $body And the replies are saying: $second'
-            : 'Hot take after reading this: $body',
+            ? 'Okay but the internet is not holding back on this one.\n\n$title\n\nThe part that got me: $second'
+            : 'Hot take: $title\n\n$body',
       ),
     },
     {
       'eventLabel': 'Real talk',
       'post': clip(
-        [
-          if (title.isNotEmpty) title,
-          if (body.isNotEmpty && body != title) body,
-        ].join('\n\n'),
+        body.isNotEmpty && body != title
+            ? '$title\n\n$body'
+            : title,
       ),
     },
     {
       'eventLabel': 'Question',
       'post': clip(
         second.isNotEmpty
-            ? '$title\n\nOne comment that stuck with me: "$second"\n\nWhere do you land on this?'
-            : '$title\n\nCurious what you all think — agree or push back?',
+            ? '$title\n\nSomeone said: "$second"\n\nGenuine question — do you agree with that read?'
+            : '$title\n\nCurious where you all land on this.',
       ),
     },
     {
       'eventLabel': 'Different angle',
       'post': clip(
         third.isNotEmpty
-            ? 'Everyone\'s debating the headline, but this reply shifted how I see it: $third'
+            ? 'Everyone is stuck on the headline, but this take changed my read:\n\n"$third"'
             : second.isNotEmpty
-                ? 'Less about the headline, more about this point: $second'
-                : 'Unpopular angle on "$title" — worth a real conversation, not just a headline dunk.',
+                ? 'Less about the drama, more about this point:\n\n"$second"'
+                : 'Unpopular angle on "$title" — worth a real conversation.',
       ),
     },
   ];
@@ -253,10 +355,6 @@ String sanitizeTeaShareText(String? text) {
   s = s.replaceAll(RegExp(r'\s+'), ' ').trim();
   if (s.isEmpty) return '';
 
-  // #region agent log
-  final beforeSanitize = s;
-  // #endregion
-
   final protectedUrls = <String>[];
   s = s.replaceAllMapped(RegExp(r'https?://[^\s\])<>"{}|\\^`]+', caseSensitive: false), (m) {
     final idx = protectedUrls.length;
@@ -301,27 +399,6 @@ String sanitizeTeaShareText(String? text) {
     s = s.replaceAll('<<TEA_URL_$i>>', protectedUrls[i]);
   }
 
-  // #region agent log
-  if (beforeSanitize != s &&
-      (beforeSanitize.contains('reddit.com') || beforeSanitize.contains('Reddit'))) {
-    agentDebugLog(
-      'share_news_cache.dart:sanitizeTeaShareText',
-      'sanitize changed reddit-related text',
-      {
-        'beforeLen': beforeSanitize.length,
-        'afterLen': s.length,
-        'beforeSnippet': beforeSanitize.length > 120
-            ? beforeSanitize.substring(0, 120)
-            : beforeSanitize,
-        'afterSnippet': s.length > 120 ? s.substring(0, 120) : s,
-        'hadRedditCom': beforeSanitize.contains('reddit.com'),
-        'afterHasRedditCom': s.contains('reddit.com'),
-      },
-      hypothesisId: 'A',
-    );
-  }
-  // #endregion
-
   return s;
 }
 
@@ -331,7 +408,7 @@ List<Map<String, String>> cleanCachedNewsSuggestions(
 }) {
   return posts.map((item) {
     var post = item['post'] ?? '';
-    if (isTea) post = sanitizeTeaShareText(post);
+    if (isTea) post = sanitizeTeaSharePostForDisplay(post);
     return {
       'eventLabel': item['eventLabel'] ?? 'News',
       'post': post,

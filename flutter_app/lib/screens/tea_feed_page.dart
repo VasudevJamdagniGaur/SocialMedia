@@ -7,6 +7,7 @@ import '../components/trending_tea.dart';
 import '../router/app_router.dart';
 import '../utils/hub_colors.dart';
 import '../utils/reddit_thread_comments.dart';
+import '../utils/share_news_cache.dart';
 import '../utils/tea_watchlist_storage.dart';
 
 const _hubMuted = Color(0x9EFFFFFF);
@@ -155,28 +156,28 @@ class _TeaFeedPageState extends State<TeaFeedPage> {
     }
   }
 
-  void _openShareSuggestions(TeaItem item) {
+  Future<void> _openShareSuggestions(TeaItem item) async {
     if (item.url.isEmpty) return;
-    context.push(
-      AppRoutes.shareSuggestions,
-      extra: {
-        'newsArticle': {
-          'title': item.title,
-          'url': item.url,
-          'description': item.gossip,
-          'text': item.gossip,
-          'gossip': item.gossip,
-          'image': teaHeroImageUrl(item),
-          'source': item.author.startsWith('r/') ? item.author : 'r/BollyBlindsNGossip',
-        },
-        'returnTo': AppRoutes.teaFeed,
-        'returnState': {
-          'teaItems': _rawItems.map((e) => e.toJson()).toList(),
-          'returnTo': _returnTo,
-        },
-        'platform': 'linkedin',
+    final payload = {
+      'newsArticle': {
+        'title': item.title,
+        'url': item.url,
+        'description': item.gossip,
+        'text': item.gossip,
+        'gossip': item.gossip,
+        'image': teaHeroImageUrl(item),
+        'source': item.author.startsWith('r/') ? item.author : 'r/BollyBlindsNGossip',
       },
-    );
+      'returnTo': AppRoutes.teaFeed,
+      'returnState': {
+        'teaItems': _rawItems.map((e) => e.toJson()).toList(),
+        'returnTo': _returnTo,
+      },
+      'platform': 'linkedin',
+    };
+    await prepareShareSuggestionsRoute(payload);
+    if (!mounted) return;
+    context.push(AppRoutes.shareSuggestions, extra: payload);
   }
 
   void _openComments(TeaItem item) {

@@ -6,6 +6,7 @@ import 'package:shimmer/shimmer.dart';
 import '../router/app_router.dart';
 import 'package:deite/lib/pod_topic_news_shared.dart';
 import '../services/hub_personalization_service.dart';
+import '../utils/share_news_cache.dart';
 import 'hub_theme.dart';
 
 /// Horizontal trending card â€” mirrors SportsTrendingCard / AiTechTrendingCard.
@@ -42,15 +43,15 @@ class HubTrendingCarouselCard extends StatefulWidget {
 class _HubTrendingCarouselCardState extends State<HubTrendingCarouselCard> {
   bool _heroFailed = false;
 
-  void _openShare() {
+  Future<void> _openShare() async {
     if (widget.item.url.isEmpty) return;
-    context.push(
-      AppRoutes.shareSuggestions,
-      extra: {
-        'newsArticle': widget.item.toMap(),
-        'returnTo': widget.returnTo,
-      },
-    );
+    final payload = {
+      'newsArticle': widget.item.toMap(),
+      'returnTo': widget.returnTo,
+    };
+    await prepareShareSuggestionsRoute(payload);
+    if (!mounted) return;
+    context.push(AppRoutes.shareSuggestions, extra: payload);
   }
 
   @override
@@ -321,13 +322,13 @@ class HubBackHeader extends StatelessWidget {
   }
 }
 
-void openNewsShare(BuildContext context, NewsArticle item, String returnTo) {
+Future<void> openNewsShare(BuildContext context, NewsArticle item, String returnTo) async {
   recordHubNewsClick('', item.exploreTopic ?? 'general');
-  context.push(
-    AppRoutes.shareSuggestions,
-    extra: {
-      'newsArticle': item.toMap(),
-      'returnTo': returnTo,
-    },
-  );
+  final payload = {
+    'newsArticle': item.toMap(),
+    'returnTo': returnTo,
+  };
+  await prepareShareSuggestionsRoute(payload);
+  if (!context.mounted) return;
+  context.push(AppRoutes.shareSuggestions, extra: payload);
 }

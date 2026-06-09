@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'dart:convert';
 
@@ -22,7 +22,6 @@ import '../utils/date_utils.dart';
 import '../utils/hub_colors.dart';
 import '../utils/reddit_thread_comments.dart';
 import '../utils/share_news_cache.dart';
-import '../utils/debug_agent_log.dart';
 
 class ShareSuggestionsPage extends StatefulWidget {
   const ShareSuggestionsPage({super.key});
@@ -55,6 +54,8 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
   int _selectedIndex = 0;
 
   bool _routeParsed = false;
+  bool _routeInitializing = true;
+  String? _routeInitError;
   bool _shareConfirmOpen = false;
   bool _sharePanelOpen = false;
   String? _pendingShareText;
@@ -68,55 +69,140 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
           isRedditTeaThreadUrl(_newsArticle?['url'] as String?));
 
   @override
+  void initState() {
+    super.initState();
+    // Safety: never leave the page blank if async route init stalls.
+    Future<void>.delayed(const Duration(seconds: 4), () {
+      if (!mounted || !_routeInitializing) return;
+      setState(() {
+        _routeInitializing = false;
+        _routeInitError ??= 'Loading timed out — tap back to return';
+      });
+      if (_reflection.isNotEmpty || _isNewsMode) {
+        if (_suggestions.isEmpty) unawaited(_bootstrapSharePage());
+      }
+    });
+  }
+
+  Map<String, dynamic>? _resolveRoutePayload() {
+    final staged = takePendingShareSuggestionsRoute();
+    if (staged != null) {
+      return staged;
+    }
+
+    final extra = GoRouterState.of(context).extra;
+    if (extra is Map) {
+      return Map<String, dynamic>.from(extra);
+    }
+
+    return null;
+  }
+
+  void _finishRouteInit(Map<String, dynamic> payload) {
+    _applyRoutePayload(payload);
+    unawaited(persistShareSuggestionsRouteState(payload));
+
+    if (_reflection.isEmpty && !_isNewsMode) {
+      setState(() {
+        _routeInitializing = false;
+        _routeInitError ??= 'No content available for sharing';
+      });
+      return;
+    }
+
+    setState(() => _routeInitializing = false);
+    unawaited(_bootstrapSharePage());
+  }
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_routeParsed) return;
     _routeParsed = true;
 
-    final extra = GoRouterState.of(context).extra;
-    if (extra is Map) {
-      _reflection = (extra['reflection'] as String? ?? '').trim();
-      _platform = extra['platform'] as String? ?? 'linkedin';
-      _returnTo = extra['returnTo'] as String? ?? AppRoutes.dashboard;
-      _suggestionsOnly = extra['suggestionsOnly'] == true;
+    final payload = _resolveRoutePayload();
+    if (payload != null) {
+      _finishRouteInit(payload);
+      return;
+    }
 
-      final mediaRaw = extra['media'];
-      if (mediaRaw is List) {
-        _media = mediaRaw
-            .whereType<String>()
-            .map((s) => s.trim())
-            .where((s) =>
-                s.startsWith('data:image') ||
-                s.startsWith('http://') ||
-                s.startsWith('https://'))
-            .take(6)
-            .toList();
-      }
+    unawaited(_initializeRouteFromPrefs());
+  }
 
-      if (extra['newsArticle'] is Map) {
-        _newsArticle = Map<String, dynamic>.from(extra['newsArticle'] as Map);
-        final gossip =
-            '${_newsArticle?['gossip'] ?? _newsArticle?['description'] ?? _newsArticle?['text'] ?? ''}'
-                .trim();
-        if (gossip.isNotEmpty) {
+  void _applyRoutePayload(Map<String, dynamic> extra) {
+    _reflection = (extra['reflection'] as String? ?? '').trim();
+    _platform = extra['platform'] as String? ?? 'linkedin';
+    _returnTo = extra['returnTo'] as String? ?? AppRoutes.dashboard;
+    _suggestionsOnly = extra['suggestionsOnly'] == true;
+
+    final mediaRaw = extra['media'];
+    if (mediaRaw is List) {
+      _media = mediaRaw
+          .whereType<String>()
+          .map((s) => s.trim())
+          .where((s) =>
+              s.startsWith('data:image') ||
+              s.startsWith('http://') ||
+              s.startsWith('https://'))
+          .take(6)
+          .toList();
+    }
+
+    if (extra['newsArticle'] is Map) {
+      _newsArticle = Map<String, dynamic>.from(extra['newsArticle'] as Map);
+      final gossip =
+          '${_newsArticle?['gossip'] ?? _newsArticle?['description'] ?? _newsArticle?['text'] ?? ''}'
+              .trim();
+      if (gossip.isNotEmpty) {
+        try {
           _newsCardSummary = sanitizeTeaShareText(gossip);
+        } catch (_) {
+          _newsCardSummary = gossip;
         }
-        final headline = '${_newsArticle?['title'] ?? ''}'.trim();
-        if (headline.isNotEmpty) _newsCardHeadline = headline;
       }
+      final headline = '${_newsArticle?['title'] ?? ''}'.trim();
+      if (headline.isNotEmpty) _newsCardHeadline = headline;
+    }
+  }
+
+  Future<void> _initializeRouteFromPrefs() async {
+    Map<String, dynamic>? payload;
+    try {
+      payload = await restoreShareSuggestionsRouteState()
+          .timeout(const Duration(seconds: 3));
+    } catch (e) {
+      _routeInitError = e.toString();
+    }
+
+    if (!mounted) return;
+
+    if (payload != null) {
+      _applyRoutePayload(payload);
     }
 
     if (_reflection.isEmpty && !_isNewsMode) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) context.go(AppRoutes.dashboard);
+      setState(() {
+        _routeInitializing = false;
+        _routeInitError ??= 'No saved share content found';
       });
       return;
     }
 
-    _bootstrapSharePage();
+    setState(() => _routeInitializing = false);
+    unawaited(_bootstrapSharePage());
   }
 
   Future<void> _bootstrapSharePage() async {
+    try {
+      await _bootstrapSharePageInner().timeout(const Duration(seconds: 90));
+    } catch (_) {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
+
+  Future<void> _bootstrapSharePageInner() async {
     if (_isNewsMode) {
       final url = '${_newsArticle?['url'] ?? ''}'.trim();
       final needsRedditContent = _isTeaArticleShare || isRedditThreadUrl(url);
@@ -181,20 +267,6 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
 
   Future<void> _enrichNewsCardDetails(String url, bool isTea) async {
     final source = _newsArticle?['source'] as String?;
-    // #region agent log
-    agentDebugLog(
-      'share_suggestions_page.dart:_enrichNewsCardDetails',
-      'enrich start',
-      {
-        'url': url,
-        'isTea': isTea,
-        'isRedditThread': isRedditThreadUrl(url),
-        'preGossipLen': _preseededGossip().length,
-        'title': '${_newsArticle?['title'] ?? ''}',
-      },
-      hypothesisId: 'D',
-    );
-    // #endregion
 
     if (isRedditThreadUrl(url)) {
       try {
@@ -204,21 +276,6 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
         ).timeout(const Duration(seconds: 25));
         if (reddit != null && mounted) {
           final gossip = buildRedditGossipSummary(reddit);
-          // #region agent log
-          agentDebugLog(
-            'share_suggestions_page.dart:_enrichNewsCardDetails',
-            'reddit fetch ok',
-            {
-              'url': url,
-              'rawGossipLen': '${reddit['gossip'] ?? ''}'.length,
-              'builtGossipLen': gossip.length,
-              'snippetCount': extractRedditContentSnippets(reddit).length,
-              'gossipSnippet': gossip.length > 100 ? '${gossip.substring(0, 100)}…' : gossip,
-            },
-            hypothesisId: 'C',
-            runId: 'post-fix',
-          );
-          // #endregion
           final headline = '${reddit['title'] ?? _newsArticle?['title'] ?? ''}'.trim();
           if (gossip.isNotEmpty || extractRedditContentSnippets(reddit).isNotEmpty) {
             final effectiveGossip = gossip.isNotEmpty
@@ -257,18 +314,6 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
       var summary = cached['summary'] is String ? cached['summary'] as String : '';
       final headline = cached['headline'] is String ? cached['headline'] as String : '';
       final cacheUsable = !isTea || summary.trim().length >= 80;
-      // #region agent log
-      agentDebugLog(
-        'share_suggestions_page.dart:_enrichNewsCardDetails',
-        'cache check',
-        {
-          'url': url,
-          'cacheUsable': cacheUsable,
-          'summaryLen': summary.trim().length,
-        },
-        hypothesisId: 'E',
-      );
-      // #endregion
       if (cacheUsable) {
         if (isTea) {
           final cleaned = sanitizeTeaShareText(summary);
@@ -404,6 +449,11 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
   }
 
   void _goBack() {
+    // Share suggestions opens on the root navigator (above the shell).
+    if (context.canPop()) {
+      context.pop();
+      return;
+    }
     final path = _returnTo.startsWith('/') ? _returnTo : AppRoutes.dashboard;
     context.go(path);
   }
@@ -447,49 +497,38 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
           } catch (_) {}
         }
 
-        final snippets = extractRedditContentSnippets(article);
         var cached = url.isNotEmpty
             ? await getCachedShareSuggestionsForUrl(url, _platform)
             : null;
-        if (cached != null && cached.isNotEmpty && isTea && snippets.length >= 2) {
-          final title = '${article['title'] ?? ''}'.trim();
-          final lacksContent = cached.every((p) {
-            final post = '${p['post'] ?? ''}';
-            return post.length < title.length + 40 ||
-                (post.contains('Read more:') &&
-                    snippets.every((s) {
-                      final needle = s.length > 32 ? s.substring(0, 32) : s;
-                      return !post.contains(needle);
-                    }));
-          });
-          if (lacksContent) cached = null;
+        if (cached != null && cached.isNotEmpty && isTea) {
+          if (teaSuggestionPostsLookLikeRawScrape(cached)) cached = null;
         }
         if (cached != null && cached.isNotEmpty) {
           items = cleanCachedNewsSuggestions(cached, isTea: isTea);
         } else {
+          final aiArticle = isTea ? prepareTeaArticleContextForAi(article) : article;
           final localFallback = isTea
-              ? buildLocalTeaShareSuggestions(article, _platform)
+              ? buildLocalTeaShareSuggestions(aiArticle, _platform)
               : <Map<String, String>>[
                   {
                     'eventLabel': 'News',
                     'post': _baselineText,
                   },
                 ];
-          if (isTea && snippets.length >= 2) {
-            items = localFallback;
-          } else {
-            try {
-              items = await ChatService.instance
-                  .generateNewsArticleShareSuggestions(
-                    article,
-                    _platform,
-                    prefetchedDetails: article,
-                  )
-                  .timeout(const Duration(seconds: 20));
-              if (items.isEmpty) items = localFallback;
-            } catch (_) {
+          try {
+            items = await ChatService.instance
+                .generateNewsArticleShareSuggestions(
+                  aiArticle,
+                  _platform,
+                  prefetchedDetails: aiArticle,
+                  isTeaGossip: isTea,
+                )
+                .timeout(const Duration(seconds: 45));
+            if (items.isEmpty) {
               items = localFallback;
             }
+          } catch (_) {
+            items = localFallback;
           }
           if (url.isNotEmpty && items.isNotEmpty) {
             final toCache = isTea
@@ -514,20 +553,6 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
       }
 
       if (!mounted) return;
-      // #region agent log
-      agentDebugLog(
-        'share_suggestions_page.dart:_loadSuggestions',
-        'suggestions ready',
-        {
-          'isTea': _isTeaArticleShare,
-          'snippetCount': extractRedditContentSnippets(_articleForSuggestions()).length,
-          'itemCount': items.length,
-          'labels': items.map((e) => e['eventLabel']).toList(),
-        },
-        hypothesisId: 'C',
-        runId: 'post-fix',
-      );
-      // #endregion
       setState(() {
         _suggestions = items.isNotEmpty
             ? items
@@ -653,13 +678,71 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
     );
   }
 
+  Widget _loadingScaffold({
+    required bool isDarkMode,
+    required String message,
+    bool showBack = true,
+    bool showSpinner = true,
+  }) {
+    final bg = isDarkMode ? HubColors.bg : const Color(0xFFF5F5F5);
+    final textColor = isDarkMode ? HubColors.textSecondary : const Color(0xFF666666);
+    return Scaffold(
+      backgroundColor: bg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            if (showBack)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: IconButton(
+                  onPressed: _goBack,
+                  icon: Icon(LucideIcons.arrowLeft, color: textColor, size: 20),
+                ),
+              ),
+            Expanded(
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (showSpinner) ...[
+                      const CircularProgressIndicator(color: HubColors.accent),
+                      const SizedBox(height: 16),
+                    ],
+                    Text(
+                      message,
+                      style: TextStyle(color: textColor, fontSize: 14),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (_reflection.isEmpty && !_isNewsMode) {
-      return const SizedBox.shrink();
+    final isDarkMode = context.watch<ThemeNotifier>().isDarkMode;
+
+    if (_routeInitializing) {
+      return _loadingScaffold(
+        isDarkMode: isDarkMode,
+        message: 'Loading suggestions…',
+      );
     }
 
-    final isDarkMode = context.watch<ThemeNotifier>().isDarkMode;
+    if (_reflection.isEmpty && !_isNewsMode) {
+      return _loadingScaffold(
+        isDarkMode: isDarkMode,
+        message: _routeInitError ?? 'No content available for sharing. Tap back to return.',
+        showBack: true,
+        showSpinner: false,
+      );
+    }
+
     final scaffoldBg = isDarkMode ? HubColors.bg : const Color(0xFFF5F5F5);
     final cardBg = isDarkMode ? HubColors.bgSecondary : Colors.white;
     final cardBorder = isDarkMode ? HubColors.divider : const Color(0x14000000);

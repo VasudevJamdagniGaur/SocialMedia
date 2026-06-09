@@ -14,6 +14,7 @@ import '../contexts/theme_context.dart';
 import '../router/app_router.dart';
 import '../services/firestore_service.dart';
 import '../utils/hub_colors.dart';
+import '../utils/share_news_cache.dart';
 
 const _adminEmail = 'cultivatorboi@gmail.com';
 const _createPostMaxChars = 500;
@@ -237,7 +238,7 @@ class _CommunityPageState extends State<CommunityPage> {
     }
   }
 
-  void _generatePost() {
+  Future<void> _generatePost() async {
     final text = _postController.text.trim();
     if (text.isEmpty && _mediaItems.isEmpty) return;
 
@@ -248,13 +249,16 @@ class _CommunityPageState extends State<CommunityPage> {
             : 'linkedin';
 
     setState(() => _showCreatePost = false);
-    context.go(AppRoutes.shareSuggestions, extra: {
+    final payload = {
       'reflection': text.isEmpty ? ' ' : text,
       'platform': platform,
       'returnTo': AppRoutes.community,
       'suggestionsOnly': true,
       'media': _mediaItems.map((m) => m.src).where((s) => s.isNotEmpty).take(6).toList(),
-    });
+    };
+    await prepareShareSuggestionsRoute(payload);
+    if (!mounted) return;
+    context.go(AppRoutes.shareSuggestions, extra: payload);
   }
 
   Widget _emptyState(String message, {String? subtitle}) {

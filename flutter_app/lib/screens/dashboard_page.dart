@@ -14,6 +14,7 @@ import '../services/firestore_service.dart';
 import '../services/reflection_service.dart';
 import '../utils/date_utils.dart';
 import '../utils/profile_picture_helper.dart';
+import '../utils/share_news_cache.dart';
 import 'profile_page.dart';
 
 /// Mirrors src/components/DashboardPage.js
@@ -225,10 +226,15 @@ class _DashboardPageState extends State<DashboardPage> {
                           reflection: _reflection,
                           loading: _isLoadingReflection,
                           onOpenReflections: () => context.push(AppRoutes.reflections),
-                          onShareSuggestions: () => context.push(
-                            AppRoutes.shareSuggestions,
-                            extra: {'reflection': _reflection, 'selectedDate': _selectedDate.toIso8601String()},
-                          ),
+                          onShareSuggestions: () async {
+                            final payload = {
+                              'reflection': _reflection,
+                              'selectedDate': _selectedDate.toIso8601String(),
+                            };
+                            await prepareShareSuggestionsRoute(payload);
+                            if (!mounted) return;
+                            context.push(AppRoutes.shareSuggestions, extra: payload);
+                          },
                           onShareReflection: () => context.push(
                             AppRoutes.shareReflection,
                             extra: {'reflection': _reflection, 'selectedDate': _selectedDate.toIso8601String()},

@@ -7,6 +7,7 @@ import '../router/app_router.dart';
 import '../services/cached_news_service.dart';
 import 'package:deite/lib/pod_topic_news_shared.dart';
 import '../utils/hub_colors.dart';
+import '../utils/share_news_cache.dart';
 import 'skeleton/card_skeleton.dart';
 
 class HubTrendingItem {
@@ -125,9 +126,9 @@ class _HubTrendingFeedState extends State<HubTrendingFeed> {
     }
   }
 
-  void _openShare(BuildContext context, HubTrendingItem item) {
+  Future<void> _openShare(BuildContext context, HubTrendingItem item) async {
     if (item.url.isEmpty) return;
-    context.go(AppRoutes.shareSuggestions, extra: {
+    final payload = {
       'newsArticle': {
         'title': item.title,
         'url': item.url,
@@ -136,7 +137,10 @@ class _HubTrendingFeedState extends State<HubTrendingFeed> {
         'source': item.source,
       },
       'returnTo': GoRouterState.of(context).uri.path,
-    });
+    };
+    await prepareShareSuggestionsRoute(payload);
+    if (!context.mounted) return;
+    context.go(AppRoutes.shareSuggestions, extra: payload);
   }
 
   @override
