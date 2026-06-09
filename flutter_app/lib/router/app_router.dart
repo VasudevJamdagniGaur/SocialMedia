@@ -65,15 +65,35 @@ class AppRoutes {
 
 GoRouter? _appRouter;
 
+bool _isSignedIn() => AuthService.instance.getCurrentUser() != null;
+
 String _initialLocation() {
-  final user = AuthService.instance.getCurrentUser();
-  return user != null ? AppRoutes.dashboard : AppRoutes.signup;
+  return _isSignedIn() ? AppRoutes.dashboard : AppRoutes.signup;
+}
+
+bool _isPublicRoute(String path) {
+  return path == AppRoutes.splash ||
+      path == AppRoutes.landing ||
+      path == AppRoutes.welcome ||
+      path == AppRoutes.signup ||
+      path == AppRoutes.login ||
+      path == AppRoutes.profileDetails;
 }
 
 String? _authRedirect(GoRouterState state) {
-  if (state.uri.path == AppRoutes.splash) return _initialLocation();
+  final path = state.uri.path;
+  if (path == AppRoutes.splash) return _initialLocation();
+
+  final signedIn = _isSignedIn();
+  if (!signedIn && !_isPublicRoute(path)) return AppRoutes.signup;
+  if (signedIn && (path == AppRoutes.signup || path == AppRoutes.login)) {
+    return AppRoutes.dashboard;
+  }
   return null;
 }
+
+String _homeForAuthState() =>
+    _isSignedIn() ? AppRoutes.dashboard : AppRoutes.signup;
 
 GoRouter createAppRouter() {
   _appRouter = _buildAppRouter();
@@ -215,12 +235,12 @@ class _AppShellState extends State<_AppShell> {
         return;
       }
       final ret = extra is Map ? extra['returnTo'] as String? : null;
-      router.go(ret != null && ret.startsWith('/') ? ret : AppRoutes.dashboard);
+      router.go(ret != null && ret.startsWith('/') ? ret : _homeForAuthState());
       return;
     }
     if (path == AppRoutes.teaFeed) {
       final ret = extra is Map ? extra['returnTo'] as String? : null;
-      router.go(ret != null && ret.startsWith('/') ? ret : AppRoutes.dashboard);
+      router.go(ret != null && ret.startsWith('/') ? ret : _homeForAuthState());
       return;
     }
     if (path.startsWith('/user/')) {
@@ -275,17 +295,25 @@ class _AppShellState extends State<_AppShell> {
       return;
     }
     if (path == AppRoutes.splash) {
-      final user = AuthService.instance.getCurrentUser();
-      router.go(user != null ? AppRoutes.dashboard : AppRoutes.signup);
+      router.go(_homeForAuthState());
+      return;
+    }
+    if (path == AppRoutes.signup ||
+        path == AppRoutes.welcome ||
+        path == AppRoutes.profileDetails) {
+      // Auth entry screens — back should not open the dashboard while logged out.
       return;
     }
     if (path == AppRoutes.dashboard || path == AppRoutes.landing) {
+      if (!_isSignedIn()) {
+        router.go(AppRoutes.signup);
+      }
       return;
     }
     if (path == AppRoutes.login) {
       router.go(AppRoutes.signup);
       return;
     }
-    router.go(AppRoutes.dashboard);
+    router.go(_homeForAuthState());
   }
 }
