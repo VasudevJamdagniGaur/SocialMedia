@@ -65,28 +65,31 @@ class AppRoutes {
 
 GoRouter? _appRouter;
 
-String? _splashAuthRedirect(GoRouterState state) {
-  if (state.uri.path != AppRoutes.splash) return null;
+String _initialLocation() {
   final user = AuthService.instance.getCurrentUser();
   return user != null ? AppRoutes.dashboard : AppRoutes.signup;
 }
 
+String? _authRedirect(GoRouterState state) {
+  if (state.uri.path == AppRoutes.splash) return _initialLocation();
+  return null;
+}
+
 GoRouter createAppRouter() {
-  return _appRouter ??= _buildAppRouter();
+  _appRouter = _buildAppRouter();
+  return _appRouter!;
 }
 
 GoRouter _buildAppRouter() {
   final rootKey = GlobalKey<NavigatorState>();
-  final shellKey = GlobalKey<NavigatorState>();
 
   return GoRouter(
     navigatorKey: rootKey,
-    initialLocation: AppRoutes.splash,
+    initialLocation: _initialLocation(),
     refreshListenable: authRefreshListenable,
-    redirect: (context, state) => _splashAuthRedirect(state),
+    redirect: (context, state) => _authRedirect(state),
     routes: [
       ShellRoute(
-        navigatorKey: shellKey,
         builder: (context, state, child) => _AppShell(child: child),
         routes: [
           GoRoute(path: AppRoutes.splash, builder: (_, __) => const SplashScreen()),
@@ -116,16 +119,8 @@ GoRouter _buildAppRouter() {
           GoRoute(path: AppRoutes.podChat, builder: (_, __) => const PodGroupChatPage()),
           GoRoute(path: AppRoutes.podReflections, builder: (_, __) => const AllReflectionsPage()),
           GoRoute(path: AppRoutes.reflections, builder: (_, __) => const AllDayReflectionsPage()),
-          GoRoute(
-            path: AppRoutes.shareReflection,
-            parentNavigatorKey: rootKey,
-            builder: (_, __) => const ShareReflectionPage(),
-          ),
-          GoRoute(
-            path: AppRoutes.shareSuggestions,
-            parentNavigatorKey: rootKey,
-            builder: (_, __) => const ShareSuggestionsPage(),
-          ),
+          GoRoute(path: AppRoutes.shareReflection, builder: (_, __) => const ShareReflectionPage()),
+          GoRoute(path: AppRoutes.shareSuggestions, builder: (_, __) => const ShareSuggestionsPage()),
           GoRoute(path: AppRoutes.teaFeed, builder: (_, __) => const TeaFeedPage()),
           GoRoute(path: AppRoutes.helpImprove, builder: (_, __) => const HelpImproveDeitePage()),
           GoRoute(path: AppRoutes.community, builder: (_, __) => const CommunityPage()),
@@ -161,8 +156,8 @@ class _AppShellState extends State<_AppShell> {
         location == AppRoutes.community ||
         location == AppRoutes.wellbeing;
 
-    final instantRoute = location == AppRoutes.shareSuggestions ||
-        location == AppRoutes.teaFeed ||
+    final instantRoute = location == AppRoutes.teaFeed ||
+        location == AppRoutes.shareSuggestions ||
         location == AppRoutes.shareReflection;
     final routeChild = instantRoute
         ? widget.child
@@ -214,7 +209,11 @@ class _AppShellState extends State<_AppShell> {
       router.go(AppRoutes.dashboard);
       return;
     }
-    if (path == AppRoutes.shareSuggestions) {
+    if (path == AppRoutes.shareSuggestions || path == AppRoutes.shareReflection) {
+      if (router.canPop()) {
+        router.pop();
+        return;
+      }
       final ret = extra is Map ? extra['returnTo'] as String? : null;
       router.go(ret != null && ret.startsWith('/') ? ret : AppRoutes.dashboard);
       return;

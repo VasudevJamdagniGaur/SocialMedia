@@ -6,11 +6,19 @@ import 'config/firebase_options.dart';
 import 'contexts/theme_context.dart';
 import 'package:go_router/go_router.dart';
 import 'router/app_router.dart';
+import 'router/auth_refresh.dart';
 import 'services/chat_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    debugPrint('FlutterError: ${details.exceptionAsString()}');
+  };
+
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  initAuthRefreshNotifier();
+
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(statusBarColor: Colors.transparent),
   );

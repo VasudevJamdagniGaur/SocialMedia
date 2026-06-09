@@ -449,7 +449,6 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
   }
 
   void _goBack() {
-    // Share suggestions opens on the root navigator (above the shell).
     if (context.canPop()) {
       context.pop();
       return;
