@@ -269,17 +269,15 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
           : null;
       final cacheUsable = !isTea ||
           (summary.trim().length >= 40 &&
-              !teaCardSummaryTooLong(summary) &&
-              !teaCardSummaryLooksLikeRawScrape(summary, cachedDetails));
+              !teaCardSummaryHasDisplayIssues(summary, cachedDetails));
       if (cacheUsable) {
         if (isTea) {
-          final cleaned = sanitizeTeaShareText(summary);
-          if (cleaned != summary) {
-            summary = cleaned;
+          summary = sanitizeTeaCardSummary(summary);
+          if (summary.isNotEmpty) {
             await upsertCachedNewsCard(
               url: url,
               headline: headline,
-              summary: cleaned,
+              summary: summary,
               details: cachedDetails,
               source: source,
             );
@@ -319,7 +317,12 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
     final articleDetails = effective;
 
     final gossipFallback = isTea ? '' : buildRedditGossipSummary(articleDetails);
-    final localTeaFallback = isTea ? buildLocalTeaCardSummary(articleDetails) : '';
+    final headlineFallback = _newsCardHeadline.isNotEmpty
+        ? _newsCardHeadline
+        : cleanTeaCardTitle('${_newsArticle?['title'] ?? ''}');
+    final localTeaFallback = isTea
+        ? buildLocalTeaCardSummary(articleDetails, headlineFallback: headlineFallback)
+        : '';
 
     final results = await Future.wait<String>([
       ChatService.instance
@@ -351,16 +354,22 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
         : (localFallback.isNotEmpty ? localFallback : gossipFallback);
     if (isTea &&
         finalSummary.isNotEmpty &&
-        teaCardSummaryLooksLikeRawScrape(finalSummary, articleDetails)) {
+        teaCardSummaryHasDisplayIssues(finalSummary, articleDetails)) {
       finalSummary = localTeaFallback;
     }
-    if (isTea) {
-      finalSummary = clampTeaCardSummaryWords(sanitizeTeaShareText(finalSummary));
+    if (isTea && finalSummary.isNotEmpty) {
+      finalSummary = sanitizeTeaCardSummary(finalSummary);
     }
     var finalHeadline = results[1].trim();
     if (finalHeadline.isEmpty) {
-      finalHeadline =
-          (articleDetails['title'] as String? ?? _newsArticle?['title'] as String? ?? '').trim();
+      finalHeadline = cleanTeaCardTitle(
+        '${articleDetails['title'] ?? _newsArticle?['title'] ?? ''}',
+      );
+    } else {
+      finalHeadline = cleanTeaCardTitle(finalHeadline);
+    }
+    if (finalHeadline.isEmpty) {
+      finalHeadline = headlineFallback;
     }
 
     setState(() {
@@ -403,18 +412,23 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
     if (_loadingNewsDetails) return '';
     if (_newsCardSummary.isNotEmpty) {
       if (_isTeaArticleShare &&
-          teaCardSummaryLooksLikeRawScrape(
+          teaCardSummaryHasDisplayIssues(
             _newsCardSummary,
             _newsArticleDetails ?? _newsArticle,
           )) {
         return '';
       }
       return _isTeaArticleShare
-          ? clampTeaCardSummaryWords(_newsCardSummary)
+          ? sanitizeTeaCardSummary(_newsCardSummary)
           : _newsCardSummary;
     }
     if (_isTeaArticleShare) {
-      return buildLocalTeaCardSummary(_newsArticleDetails ?? _newsArticle);
+      return buildLocalTeaCardSummary(
+        _newsArticleDetails ?? _newsArticle,
+        headlineFallback: _newsCardHeadline.isNotEmpty
+            ? _newsCardHeadline
+            : cleanTeaCardTitle('${_newsArticle?['title'] ?? ''}'),
+      );
     }
     return buildLocalNewsCardSummary(_newsArticleDetails ?? _newsArticle);
   }

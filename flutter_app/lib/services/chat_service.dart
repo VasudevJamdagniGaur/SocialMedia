@@ -2979,16 +2979,17 @@ Return ONLY valid JSON with this exact shape (no markdown fences):
     }
 
     final userContent = isTeaGossip
-        ? '''Summarize this celebrity/gossip Reddit discussion in at most $maxWords words (hard limit — never exceed $maxWords words).
+        ? '''Summarize this celebrity/gossip discussion in at most $maxWords words (hard limit — never exceed $maxWords words).
 
 Rules:
-- One short paragraph, plain text only — a tight explainer for someone who has not read the thread.
-- Cover the full story in compressed form: what sparked the post, who or what is involved, the main criticism or praise, and any film/show comparisons — but keep every sentence lean.
-- Synthesize post and top comments; do NOT copy sentences verbatim from the input.
-- Use neutral third person. No URLs, usernames, emojis, or filler like "iykyk".
+- One short paragraph, plain text only — a tight explainer for someone who has not seen the original post.
+- Cover the full story in compressed form: what sparked the buzz, who or what is involved, the main criticism or praise, and any film/show comparisons — but keep every sentence lean.
+- Synthesize the post and top comments; do NOT copy sentences verbatim from the input.
+- Use neutral third person. No URLs, links, usernames, emojis, or filler like "iykyk".
+- Do NOT mention Reddit, social platforms, threads, or where the discussion happened — write as plain entertainment news context.
 - Include only the most important names, titles, and plot beats stated in the input.
 - Do NOT add facts not stated or clearly implied by the input.
-- No intro like "This thread discusses". No hashtags.
+- No intro like "This post discusses". No hashtags.
 - Target $minWords-$maxWords words; if you must choose, stay under $maxWords words.
 
 Return ONLY valid JSON (no markdown) with this exact shape:

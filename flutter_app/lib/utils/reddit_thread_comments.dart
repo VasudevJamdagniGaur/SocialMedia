@@ -93,6 +93,8 @@ Future<Map<String, dynamic>?> fetchRedditThreadViaJina(
       var title = seedTitle;
       final titleLine = RegExp(r'^Title:\s*(.+)$', multiLine: true).firstMatch(body);
       if (titleLine != null) title = titleLine.group(1)!.trim();
+      title = cleanTeaCardTitle(title);
+      if (title.isEmpty && seedTitle.isNotEmpty) title = cleanTeaCardTitle(seedTitle);
 
       var content = body;
       if (title.isNotEmpty) {
@@ -174,7 +176,26 @@ String stripRedditDisplayBoilerplate(String? text) {
   s = s.replaceAll(RegExp(r'\[comments\]', caseSensitive: false), '');
   s = s.replaceAll(RegExp(r'\s+/u/[A-Za-z0-9_-]+\s*'), ' ');
   s = s.replaceAll(RegExp(r'\bsubmitted\s+by\b', caseSensitive: false), '');
+  s = s.replaceAll(RegExp(r'URL Source:\s*[^\s]+', caseSensitive: false), ' ');
+  s = s.replaceAll(RegExp(r'Markdown Content:\s*', caseSensitive: false), ' ');
   return s.replaceAll(RegExp(r'\s+'), ' ').trim();
+}
+
+/// Clean a Tea headline/title — drop URL-only scrape junk.
+String cleanTeaCardTitle(String? raw) {
+  var s = stripRedditDisplayBoilerplate(raw);
+  s = s.replaceAll(RegExp(r'https?://[^\s\])<>"{}|\\^`]+', caseSensitive: false), ' ');
+  s = s.replaceAll(RegExp(r'\bURL Source\b', caseSensitive: false), '');
+  s = s.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (s.isEmpty) return '';
+  if (RegExp(r'^URL Source\b', caseSensitive: false).hasMatch(s)) return '';
+  if (RegExp(r'^https?://', caseSensitive: false).hasMatch(s)) return '';
+  if (RegExp(r'reddit\.com', caseSensitive: false).hasMatch(s) &&
+      s.length < 160 &&
+      !RegExp(r'\|', caseSensitive: false).hasMatch(s)) {
+    return '';
+  }
+  return s;
 }
 
 String _decodeHtmlEntities(String text) {

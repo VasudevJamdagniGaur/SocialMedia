@@ -86,6 +86,40 @@ String stripUrlsAndSourceNoise(String? text) {
   return s;
 }
 
+/// Final polish for Tea card summaries — no links, no Reddit/platform mentions.
+String sanitizeTeaCardSummary(String? text) {
+  var s = stripUrlsAndSourceNoise(text);
+  if (s.isEmpty) return '';
+
+  s = s
+      .replaceAll(RegExp(r'\br/[A-Za-z0-9_]+\b'), '')
+      .replaceAll(RegExp(r'\bPeople on Reddit\b', caseSensitive: false), 'People')
+      .replaceAll(RegExp(r'\bReddit users?\b', caseSensitive: false), 'People')
+      .replaceAll(RegExp(r'\b(?:on|from|in|via)\s+Reddit\b', caseSensitive: false), '')
+      .replaceAll(RegExp(r'\bReddit\b', caseSensitive: false), '')
+      .replaceAll(RegExp(r'\bsubreddit\b', caseSensitive: false), '')
+      .replaceAll(RegExp(r'\bReddit community\b', caseSensitive: false), '')
+      .replaceAll(RegExp(r'\bonline discussion\b', caseSensitive: false), 'buzz')
+      .replaceAll(RegExp(r'\bonline discussions\b', caseSensitive: false), 'buzz')
+      .replaceAll(RegExp(r'\bURL Source\b', caseSensitive: false), '')
+      .replaceAll(RegExp(r'https?://[^\s\])<>"{}|\\^`]+', caseSensitive: false), '')
+      .replaceAll(RegExp(r'\s+,', caseSensitive: false), ',')
+      .replaceAll(RegExp(r'\s+\.', caseSensitive: false), '.')
+      .replaceAll(RegExp(r'\s{2,}'), ' ')
+      .trim();
+
+  s = s.replaceFirst(RegExp(r'^,\s*'), '');
+  s = s.replaceFirst(RegExp(r'^\.\s*'), '');
+  return clampTeaCardSummaryWords(s);
+}
+
+bool teaCardSummaryHasDisplayIssues(String summary, [Map<String, dynamic>? details]) =>
+    teaCardSummaryTooLong(summary) ||
+    teaCardSummaryLooksLikeRawScrape(summary, details) ||
+    RegExp(r'https?://', caseSensitive: false).hasMatch(summary) ||
+    RegExp(r'\bReddit\b', caseSensitive: false).hasMatch(summary) ||
+    RegExp(r'URL Source', caseSensitive: false).hasMatch(summary);
+
 /// Final polish for Tea suggestion card text — no links or scrape noise.
 String sanitizeTeaSharePostForDisplay(String? text) {
   var s = stripUrlsAndSourceNoise(text);
@@ -145,7 +179,7 @@ bool teaCardSummaryLooksLikeRawScrape(String summary, [Map<String, dynamic>? det
 
 /// Clean Reddit/Tea article fields before sending to AI or local templates.
 Map<String, dynamic> prepareTeaArticleContextForAi(Map<String, dynamic> article) {
-  final title = '${article['title'] ?? ''}'.trim();
+  final title = cleanTeaCardTitle('${article['title'] ?? ''}');
   final snippets = extractRedditContentSnippets(article)
       .map(stripUrlsAndSourceNoise)
       .where((s) => s.length >= 20)
@@ -498,21 +532,29 @@ String buildRedditGossipSummary(Map<String, dynamic>? details) {
 }
 
 /// Brief contextual explainer when AI summary is unavailable for Tea.
-String buildLocalTeaCardSummary(Map<String, dynamic>? details) {
-  final title = '${details?['title'] ?? ''}'.trim();
+String buildLocalTeaCardSummary(
+  Map<String, dynamic>? details, {
+  String? headlineFallback,
+}) {
+  var title = cleanTeaCardTitle('${details?['title'] ?? ''}');
+  if (title.isEmpty) title = cleanTeaCardTitle(headlineFallback);
+  final snippets = extractRedditContentSnippets(details)
+      .map(stripUrlsAndSourceNoise)
+      .where((s) => s.length >= 20 && cleanTeaCardTitle(s).isNotEmpty)
+      .toList();
+  if (title.isEmpty && snippets.isNotEmpty) {
+    title = cleanTeaCardTitle(snippets.first);
+  }
   if (title.isEmpty) return '';
-  final snippetCount = extractRedditContentSnippets(details).length;
-  if (snippetCount > 1) {
-    return clampTeaCardSummaryWords(
-      'Reddit is debating $title — commenters compare it to other films and question whether key scenes were borrowed.',
+
+  if (snippets.length > 1) {
+    return sanitizeTeaCardSummary(
+      'People are debating $title, comparing it to other films and questioning whether key scenes were borrowed.',
     );
   }
-  if (snippetCount == 1) {
-    return clampTeaCardSummaryWords(
-      'People on Reddit are reacting to $title and weighing in on what happened.',
-    );
-  }
-  return clampTeaCardSummaryWords('Online discussion about $title.');
+  return sanitizeTeaCardSummary(
+    'People are reacting to $title and sharing mixed takes on what stood out.',
+  );
 }
 
 /// Local fallback when AI summary is unavailable — port of ShareSuggestionsPage.js
