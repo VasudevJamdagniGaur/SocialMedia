@@ -43,7 +43,7 @@ class DeiteApp extends StatelessWidget {
       child: Consumer<ThemeNotifier>(
         builder: (context, theme, _) {
           return MaterialApp.router(
-            title: 'Deite',
+            title: 'Detea',
             debugShowCheckedModeBanner: false,
             themeMode: theme.isDarkMode ? ThemeMode.dark : ThemeMode.light,
             theme: _buildTheme(Brightness.light),

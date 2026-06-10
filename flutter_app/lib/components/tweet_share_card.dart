@@ -1,5 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 
+const _kDeteaLogo = 'assets/images/DEITECIrc-192.webp';
+
 /// Tweet-style card used only for X sharing. Rendered off-screen and converted to an image.
 class TweetShareCard extends StatelessWidget {
   const TweetShareCard({
@@ -74,7 +76,15 @@ class TweetShareCard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 6),
-                        Image.asset('assets/images/gemini-icon.png', width: 18, height: 18, errorBuilder: (_, __, ___) => const SizedBox(width: 18, height: 18)),
+                        ClipOval(
+                          child: Image.asset(
+                            _kDeteaLogo,
+                            width: 18,
+                            height: 18,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const SizedBox(width: 18, height: 18),
+                          ),
+                        ),
                       ],
                     ),
                     Text(

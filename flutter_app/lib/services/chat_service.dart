@@ -2548,6 +2548,46 @@ Rules for JSON:
     return 'Other: ${words[0].toUpperCase()}${words.substring(1)}';
   }
 
+  String _buildXTeaSuggestionsUserContent(Map<String, dynamic> ctx) {
+    final title = (ctx['title'] ?? '').toString().trim();
+    final description = (ctx['description'] ?? '').toString().trim();
+    final source = (ctx['source'] ?? '').toString().trim();
+    final articleText = (ctx['articleText'] ?? '').toString().trim();
+    final sourceLine = source.isNotEmpty ? 'From: $source\n' : '';
+    final summaryLine = description.isNotEmpty ? 'Discussion summary:\n$description\n' : '';
+    final articleSection = articleText.isNotEmpty
+        ? '\nThread highlights:\n${articleText.length > 5000 ? articleText.substring(0, 5000) : articleText}\n'
+        : '';
+    return '''You write X (Twitter) posts about celebrity/gossip tea — like a real person reacting, NOT a scraper.
+
+GOAL: 5–8 distinct, human-sounding tweets someone would actually post.
+
+Requirements:
+1. Generate 5–8 tweets with these style types (use exact "type" values, each once):
+   funny, sarcastic, supportive, critical, relatable, shock, meme, insight, question
+
+2. Each tweet MUST:
+   - Focus on ONE reaction or angle — not a full recap
+   - Be 220 characters or fewer
+   - Sound like a real human (first person, casual, opinionated)
+   - NEVER include URLs, "Source -", usernames like /u/..., or raw scraped metadata
+   - NEVER paste long quotes or dump comment threads — synthesize in your own words
+   - Base only on the context below; do not invent facts
+
+3. Tone: Internet-native gossip — witty, reactive, slightly dramatic. Not tabloid screaming.
+
+Context (for your eyes only — do not copy verbatim into tweets):
+Title: $title
+${sourceLine}${summaryLine}${articleSection}
+
+Output — return ONLY valid JSON (no markdown fences):
+{"posts":[{"type":"funny","content":"tweet text only"}]}
+
+Rules:
+- 5–8 posts; each "type" from the list above at most once.
+- "content" is ONLY publishable tweet text. Under 220 characters each.''';
+  }
+
   String _buildXNewsArticleSuggestionsUserContent(Map<String, dynamic> ctx) {
     final title = (ctx['title'] ?? '').toString().trim();
     final url = (ctx['url'] ?? '').toString().trim();
@@ -2703,6 +2743,13 @@ Rules:
             'source': source,
             'articleText': articleText,
           })
+        : isXNews && isTea
+            ? _buildXTeaSuggestionsUserContent({
+                'title': title,
+                'description': description,
+                'source': source,
+                'articleText': articleText,
+              })
         : isXNews
             ? _buildXNewsArticleSuggestionsUserContent({
                 'title': title,
@@ -2907,6 +2954,7 @@ Return ONLY valid JSON with this exact shape (no markdown fences):
     final text = (details?['text'] ?? '').toString().trim();
     final minWords = options['minWords'] is num ? (options['minWords'] as num).toInt() : 60;
     final maxWords = options['maxWords'] is num ? (options['maxWords'] as num).toInt() : 80;
+    final isTeaGossip = options['isTeaGossip'] == true;
     if (title.isEmpty) return '';
 
     final titleNorm = title.replaceAll(RegExp(r'\s+'), ' ').trim().toLowerCase();
@@ -2930,7 +2978,27 @@ Return ONLY valid JSON with this exact shape (no markdown fences):
       return '';
     }
 
-    final userContent = '''Summarize this news event in $minWords-$maxWords words.
+    final userContent = isTeaGossip
+        ? '''Summarize this celebrity/gossip Reddit discussion in at most $maxWords words (hard limit — never exceed $maxWords words).
+
+Rules:
+- One short paragraph, plain text only — a tight explainer for someone who has not read the thread.
+- Cover the full story in compressed form: what sparked the post, who or what is involved, the main criticism or praise, and any film/show comparisons — but keep every sentence lean.
+- Synthesize post and top comments; do NOT copy sentences verbatim from the input.
+- Use neutral third person. No URLs, usernames, emojis, or filler like "iykyk".
+- Include only the most important names, titles, and plot beats stated in the input.
+- Do NOT add facts not stated or clearly implied by the input.
+- No intro like "This thread discusses". No hashtags.
+- Target $minWords-$maxWords words; if you must choose, stay under $maxWords words.
+
+Return ONLY valid JSON (no markdown) with this exact shape:
+{"summary":"..."}
+
+Input:
+Title: $title
+${description.isNotEmpty && !descIsMostlyHeadline ? 'Description: $description\n' : ''}${bodyForModel.isNotEmpty ? 'Thread text:\n$bodyForModel\n' : ''}'''
+            .trim()
+        : '''Summarize this news event in $minWords-$maxWords words.
 
 Rules:
 - One paragraph, plain text only.
@@ -2948,7 +3016,7 @@ Return ONLY valid JSON (no markdown) with this exact shape:
 Input:
 Title: $title
 ${description.isNotEmpty && !descIsMostlyHeadline ? 'Description: $description\n' : ''}${bodyForModel.isNotEmpty ? 'Article text:\n$bodyForModel\n' : ''}'''
-        .trim();
+            .trim();
 
     String parseJsonSummary(String raw) {
       var s = raw.trim();

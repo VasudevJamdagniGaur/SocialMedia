@@ -106,6 +106,43 @@ bool teaSuggestionPostsLookLikeRawScrape(List<Map<String, String>> posts) {
   return false;
 }
 
+const int teaCardSummaryMaxWords = 60;
+
+int teaCardSummaryWordCount(String text) =>
+    text.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
+
+bool teaCardSummaryTooLong(String summary, [int maxWords = teaCardSummaryMaxWords]) =>
+    teaCardSummaryWordCount(summary) > maxWords;
+
+String clampTeaCardSummaryWords(String? text, [int maxWords = teaCardSummaryMaxWords]) {
+  final words = '${text ?? ''}'.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+  if (words.isEmpty) return '';
+  if (words.length <= maxWords) return words.join(' ');
+  return '${words.take(maxWords).join(' ').trimRight()}…';
+}
+
+/// True when a Tea card summary looks like a pasted post/comment, not an AI explainer.
+bool teaCardSummaryLooksLikeRawScrape(String summary, [Map<String, dynamic>? details]) {
+  final s = summary.trim();
+  if (s.isEmpty) return false;
+  if (RegExp(r'https?://', caseSensitive: false).hasMatch(s)) return true;
+  if (RegExp(r'\bSource\s*[-:]', caseSensitive: false).hasMatch(s)) return true;
+  if (RegExp(r'Comment by u/', caseSensitive: false).hasMatch(s)) return true;
+  if (RegExp(r'\bSubreddit:\s*r/', caseSensitive: false).hasMatch(s)) return true;
+  if (details != null) {
+    final snippets = extractRedditContentSnippets(details);
+    final sumNorm = s.replaceAll(RegExp(r'\s+'), ' ').trim().toLowerCase();
+    for (final snippet in snippets) {
+      final norm = snippet.replaceAll(RegExp(r'\s+'), ' ').trim().toLowerCase();
+      if (norm.length < 36) continue;
+      final probeLen = norm.length > 96 ? 96 : norm.length;
+      final probe = norm.substring(0, probeLen);
+      if (sumNorm.contains(probe)) return true;
+    }
+  }
+  return false;
+}
+
 /// Clean Reddit/Tea article fields before sending to AI or local templates.
 Map<String, dynamic> prepareTeaArticleContextForAi(Map<String, dynamic> article) {
   final title = '${article['title'] ?? ''}'.trim();
@@ -208,9 +245,9 @@ List<Map<String, String>> buildLocalTeaShareSuggestions(
     {
       'eventLabel': 'Real talk',
       'post': clip(
-        body.isNotEmpty && body != title
-            ? '$title\n\n$body'
-            : title,
+        second.isNotEmpty
+            ? 'Real talk on "$title" — the conversation keeps circling one point: people think the setup does not quite add up, and the replies are split on whether it is sloppy writing or intentional.'
+            : 'Real talk: "$title" is getting a lot of traction — worth reading the thread before you pick a side.',
       ),
     },
     {
@@ -460,21 +497,40 @@ String buildRedditGossipSummary(Map<String, dynamic>? details) {
   return '';
 }
 
+/// Brief contextual explainer when AI summary is unavailable for Tea.
+String buildLocalTeaCardSummary(Map<String, dynamic>? details) {
+  final title = '${details?['title'] ?? ''}'.trim();
+  if (title.isEmpty) return '';
+  final snippetCount = extractRedditContentSnippets(details).length;
+  if (snippetCount > 1) {
+    return clampTeaCardSummaryWords(
+      'Reddit is debating $title — commenters compare it to other films and question whether key scenes were borrowed.',
+    );
+  }
+  if (snippetCount == 1) {
+    return clampTeaCardSummaryWords(
+      'People on Reddit are reacting to $title and weighing in on what happened.',
+    );
+  }
+  return clampTeaCardSummaryWords('Online discussion about $title.');
+}
+
 /// Local fallback when AI summary is unavailable — port of ShareSuggestionsPage.js
 String buildLocalNewsCardSummary(Map<String, dynamic>? details) {
   try {
     if (details == null) return '';
+    final title = '${details['title'] ?? ''}'.trim();
+    final text = '${details['text'] ?? ''}'.trim();
+    final isRedditThread = RegExp(
+      r'Subreddit:\s*r/|Top comments:|Comment by u/',
+      caseSensitive: false,
+    ).hasMatch(text);
+    if (isRedditThread) return buildLocalTeaCardSummary(details);
+
     final redditGossip = buildRedditGossipSummary(details);
     if (redditGossip.isNotEmpty) return redditGossip;
 
-    final title = '${details['title'] ?? ''}'.trim();
     final description = '${details['description'] ?? ''}'.trim();
-    final text = '${details['text'] ?? ''}'.trim();
-
-    if (RegExp(r'Subreddit:\s*r/|Top comments:|Comment by u/', caseSensitive: false)
-        .hasMatch(text)) {
-      return '';
-    }
 
     const maxWords = 78;
     final titleNorm = title.replaceAll(RegExp(r'\s+'), ' ').trim().toLowerCase();

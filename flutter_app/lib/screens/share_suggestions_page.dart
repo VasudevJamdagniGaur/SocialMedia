@@ -150,16 +150,6 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
 
     if (extra['newsArticle'] is Map) {
       _newsArticle = Map<String, dynamic>.from(extra['newsArticle'] as Map);
-      final gossip =
-          '${_newsArticle?['gossip'] ?? _newsArticle?['description'] ?? _newsArticle?['text'] ?? ''}'
-              .trim();
-      if (gossip.isNotEmpty) {
-        try {
-          _newsCardSummary = sanitizeTeaShareText(gossip);
-        } catch (_) {
-          _newsCardSummary = gossip;
-        }
-      }
       final headline = '${_newsArticle?['title'] ?? ''}'.trim();
       if (headline.isNotEmpty) _newsCardHeadline = headline;
     }
@@ -229,10 +219,6 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
     return merged;
   }
 
-  String _preseededGossip() =>
-      '${_newsArticle?['gossip'] ?? _newsArticle?['description'] ?? _newsArticle?['text'] ?? ''}'
-          .trim();
-
   Future<void> _loadNewsCardDetails() async {
     final rawUrl = '${_newsArticle?['url'] ?? ''}'.trim();
     final url = normalizeRedditDiscussionUrl(rawUrl) ?? rawUrl;
@@ -242,18 +228,13 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
     }
 
     final isTea = _isTeaArticleShare;
-    final preGossip = _preseededGossip();
     final preTitle = '${_newsArticle?['title'] ?? ''}'.trim();
 
-    if (isTea && preGossip.length >= 20) {
-      if (mounted) {
-        setState(() {
-          _newsCardSummary = sanitizeTeaShareText(preGossip);
-          _newsCardHeadline = preTitle;
-        });
-      }
-    } else {
-      setState(() => _loadingNewsDetails = true);
+    if (mounted) {
+      setState(() {
+        _loadingNewsDetails = true;
+        if (preTitle.isNotEmpty) _newsCardHeadline = preTitle;
+      });
     }
 
     try {
@@ -267,44 +248,14 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
 
   Future<void> _enrichNewsCardDetails(String url, bool isTea) async {
     final source = _newsArticle?['source'] as String?;
+    Map<String, dynamic>? redditDetails;
 
     if (isRedditThreadUrl(url)) {
       try {
-        final reddit = await fetchRedditThreadDetails(
+        redditDetails = await fetchRedditThreadDetails(
           url,
           seed: _newsArticle,
         ).timeout(const Duration(seconds: 25));
-        if (reddit != null && mounted) {
-          final gossip = buildRedditGossipSummary(reddit);
-          final headline = '${reddit['title'] ?? _newsArticle?['title'] ?? ''}'.trim();
-          if (gossip.isNotEmpty || extractRedditContentSnippets(reddit).isNotEmpty) {
-            final effectiveGossip = gossip.isNotEmpty
-                ? gossip
-                : sanitizeTeaShareText(extractRedditContentSnippets(reddit).join(' '));
-            setState(() {
-              _newsArticleDetails = reddit;
-              _newsCardSummary = effectiveGossip;
-              if (headline.isNotEmpty) _newsCardHeadline = headline;
-              _newsArticle = {
-                ...Map<String, dynamic>.from(_newsArticle ?? {}),
-                'description': effectiveGossip,
-                'gossip': effectiveGossip,
-                'text': reddit['text'],
-                'selftext': reddit['selftext'],
-                if (reddit['image'] is String && (reddit['image'] as String).isNotEmpty)
-                  'image': reddit['image'],
-              };
-            });
-            await upsertCachedNewsCard(
-              url: url,
-              headline: headline,
-              summary: effectiveGossip,
-              details: reddit,
-              source: source,
-            );
-            return;
-          }
-        }
       } catch (_) {}
     }
 
@@ -313,7 +264,13 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
     if (cached != null) {
       var summary = cached['summary'] is String ? cached['summary'] as String : '';
       final headline = cached['headline'] is String ? cached['headline'] as String : '';
-      final cacheUsable = !isTea || summary.trim().length >= 80;
+      final cachedDetails = cached['details'] is Map
+          ? Map<String, dynamic>.from(cached['details'] as Map)
+          : null;
+      final cacheUsable = !isTea ||
+          (summary.trim().length >= 40 &&
+              !teaCardSummaryTooLong(summary) &&
+              !teaCardSummaryLooksLikeRawScrape(summary, cachedDetails));
       if (cacheUsable) {
         if (isTea) {
           final cleaned = sanitizeTeaShareText(summary);
@@ -323,18 +280,14 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
               url: url,
               headline: headline,
               summary: cleaned,
-              details: cached['details'] is Map
-                  ? Map<String, dynamic>.from(cached['details'] as Map)
-                  : null,
+              details: cachedDetails,
               source: source,
             );
           }
         }
         if (!mounted) return;
         setState(() {
-          _newsArticleDetails = cached['details'] is Map
-              ? Map<String, dynamic>.from(cached['details'] as Map)
-              : null;
+          _newsArticleDetails = cachedDetails;
           _newsCardSummary = summary;
           _newsCardHeadline = headline;
         });
@@ -342,65 +295,89 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
       }
     }
 
-    final details = await ChatService.instance
-        .fetchNewsArticleDetails(
-          _newsArticle,
-          {
-            'minTextLength': isTea ? 80 : 350,
-            'resolveGoogleNews': !isTea,
-          },
-        )
-        .timeout(const Duration(seconds: 12));
-    final looksUseful = details['title'] != null ||
-        details['description'] != null ||
-        details['text'] != null ||
-        details['image'] != null;
-    final effective = looksUseful ? details : null;
+    Map<String, dynamic>? effective;
+    if (redditDetails != null) {
+      effective = redditDetails;
+    } else {
+      final details = await ChatService.instance
+          .fetchNewsArticleDetails(
+            _newsArticle,
+            {
+              'minTextLength': isTea ? 80 : 350,
+              'resolveGoogleNews': !isTea,
+            },
+          )
+          .timeout(const Duration(seconds: 12));
+      final looksUseful = details['title'] != null ||
+          details['description'] != null ||
+          details['text'] != null ||
+          details['image'] != null;
+      effective = looksUseful ? details : null;
+    }
 
     if (effective == null) return;
+    final articleDetails = effective;
 
-    final gossipFallback = buildRedditGossipSummary(effective);
-    final skipAi = isTea && gossipFallback.isNotEmpty;
+    final gossipFallback = isTea ? '' : buildRedditGossipSummary(articleDetails);
+    final localTeaFallback = isTea ? buildLocalTeaCardSummary(articleDetails) : '';
 
     final results = await Future.wait<String>([
-      skipAi
-          ? Future.value(gossipFallback)
-          : ChatService.instance
-              .summarizeNewsArticle(effective, {'minWords': 60, 'maxWords': 80})
-              .timeout(const Duration(seconds: 15), onTimeout: () => gossipFallback),
-      skipAi
-          ? Future.value('${effective['title'] ?? _newsArticle?['title'] ?? ''}'.trim())
-          : ChatService.instance
-              .generateNewsShareCardHeadline(effective)
-              .timeout(
-                const Duration(seconds: 12),
-                onTimeout: () => '${effective['title'] ?? _newsArticle?['title'] ?? ''}'.trim(),
-              ),
+      ChatService.instance
+          .summarizeNewsArticle(
+            articleDetails,
+            {
+              'minWords': isTea ? 35 : 60,
+              'maxWords': isTea ? teaCardSummaryMaxWords : 80,
+              'isTeaGossip': isTea,
+            },
+          )
+          .timeout(
+            const Duration(seconds: 20),
+            onTimeout: () => localTeaFallback.isNotEmpty ? localTeaFallback : gossipFallback,
+          ),
+      ChatService.instance
+          .generateNewsShareCardHeadline(articleDetails)
+          .timeout(
+            const Duration(seconds: 12),
+            onTimeout: () => '${articleDetails['title'] ?? _newsArticle?['title'] ?? ''}'.trim(),
+          ),
     ]);
     if (!mounted) return;
 
     final rawSummary = results[0].trim();
-    final localFallback = buildLocalNewsCardSummary(effective);
+    final localFallback = isTea ? localTeaFallback : buildLocalNewsCardSummary(articleDetails);
     var finalSummary = rawSummary.isNotEmpty
         ? rawSummary
         : (localFallback.isNotEmpty ? localFallback : gossipFallback);
-    if (isTea) finalSummary = sanitizeTeaShareText(finalSummary);
+    if (isTea &&
+        finalSummary.isNotEmpty &&
+        teaCardSummaryLooksLikeRawScrape(finalSummary, articleDetails)) {
+      finalSummary = localTeaFallback;
+    }
+    if (isTea) {
+      finalSummary = clampTeaCardSummaryWords(sanitizeTeaShareText(finalSummary));
+    }
     var finalHeadline = results[1].trim();
     if (finalHeadline.isEmpty) {
       finalHeadline =
-          (effective['title'] as String? ?? _newsArticle?['title'] as String? ?? '').trim();
+          (articleDetails['title'] as String? ?? _newsArticle?['title'] as String? ?? '').trim();
     }
 
     setState(() {
-      _newsArticleDetails = effective;
+      _newsArticleDetails = articleDetails;
       if (finalSummary.isNotEmpty) _newsCardSummary = finalSummary;
       if (finalHeadline.isNotEmpty) _newsCardHeadline = finalHeadline;
-      if (effective['image'] is String && (effective['image'] as String).isNotEmpty) {
-        _newsArticle = {
-          ...Map<String, dynamic>.from(_newsArticle ?? {}),
-          'image': effective['image'],
-        };
-      }
+      _newsArticle = {
+        ...Map<String, dynamic>.from(_newsArticle ?? {}),
+        if (articleDetails['text'] != null) 'text': articleDetails['text'],
+        if (articleDetails['selftext'] != null) 'selftext': articleDetails['selftext'],
+        if (finalSummary.isNotEmpty) ...{
+          'description': finalSummary,
+          'gossip': finalSummary,
+        },
+        if (articleDetails['image'] is String && (articleDetails['image'] as String).isNotEmpty)
+          'image': articleDetails['image'],
+      };
     });
 
     if (finalSummary.isNotEmpty) {
@@ -408,7 +385,7 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
         url: url,
         headline: finalHeadline,
         summary: finalSummary,
-        details: effective,
+        details: articleDetails,
         source: source,
       );
     }
@@ -424,7 +401,21 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
   String get _displayNewsSummary {
     if (!_isNewsMode) return '';
     if (_loadingNewsDetails) return '';
-    if (_newsCardSummary.isNotEmpty) return _newsCardSummary;
+    if (_newsCardSummary.isNotEmpty) {
+      if (_isTeaArticleShare &&
+          teaCardSummaryLooksLikeRawScrape(
+            _newsCardSummary,
+            _newsArticleDetails ?? _newsArticle,
+          )) {
+        return '';
+      }
+      return _isTeaArticleShare
+          ? clampTeaCardSummaryWords(_newsCardSummary)
+          : _newsCardSummary;
+    }
+    if (_isTeaArticleShare) {
+      return buildLocalTeaCardSummary(_newsArticleDetails ?? _newsArticle);
+    }
     return buildLocalNewsCardSummary(_newsArticleDetails ?? _newsArticle);
   }
 
@@ -476,15 +467,11 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
             final reddit = await fetchRedditThreadDetails(url, seed: article)
                 .timeout(const Duration(seconds: 30));
             if (reddit != null && mounted) {
-              final gossip = buildRedditGossipSummary(reddit);
               setState(() {
                 _newsArticleDetails = reddit;
-                if (gossip.isNotEmpty) _newsCardSummary = gossip;
                 _newsArticle = {
                   ...Map<String, dynamic>.from(_newsArticle ?? {}),
                   'url': url,
-                  'description': gossip,
-                  'gossip': gossip,
                   'text': reddit['text'],
                   'selftext': reddit['selftext'],
                   if (reddit['image'] is String && (reddit['image'] as String).isNotEmpty)
@@ -1006,7 +993,14 @@ class _SourceCard extends StatelessWidget {
                   ),
                 ),
               ],
-              if (newsSummary.trim().isNotEmpty) ...[
+              if (loadingNewsDetails && newsSummary.trim().isEmpty) ...[
+                const SizedBox(height: 8),
+                const Skeleton(variant: SkeletonVariant.text, height: 14, width: double.infinity),
+                const SizedBox(height: 8),
+                const Skeleton(variant: SkeletonVariant.text, height: 14, width: double.infinity),
+                const SizedBox(height: 8),
+                const Skeleton(variant: SkeletonVariant.text, height: 14, width: 220),
+              ] else if (newsSummary.trim().isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Text(
                   newsSummary,
@@ -1016,10 +1010,13 @@ class _SourceCard extends StatelessWidget {
                   (newsArticle?['description'] as String? ?? '').trim().isEmpty) ...[
                 const SizedBox(height: 8),
                 Text(
-                  "We couldn't pull enough article text from this link to summarize it here. Tap the headline to read the full story on the publisher site.",
+                  isTeaArticle
+                      ? "We're putting together a quick summary of this thread. Hang tight — or tap the headline to read the full post."
+                      : "We couldn't pull enough article text from this link to summarize it here. Tap the headline to read the full story on the publisher site.",
                   style: TextStyle(color: secondary, fontSize: 15, height: 1.45),
                 ),
-              ] else if ((newsArticle?['description'] as String? ?? '').trim().isNotEmpty) ...[
+              ] else if (!isTeaArticle &&
+                  (newsArticle?['description'] as String? ?? '').trim().isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Text(
                   newsArticle!['description'] as String,
