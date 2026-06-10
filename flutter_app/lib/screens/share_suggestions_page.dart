@@ -20,6 +20,7 @@ import '../services/chat_service.dart';
 import '../services/firestore_service.dart';
 import '../utils/date_utils.dart';
 import '../utils/hub_colors.dart';
+import '../utils/hub_carousel_ai_image.dart';
 import '../utils/reddit_thread_comments.dart';
 import '../utils/share_news_cache.dart';
 
@@ -60,8 +61,20 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
   bool _sharePanelOpen = false;
   String? _pendingShareText;
   String _editableShareText = '';
+  String? _generatedShareImageUrl;
+  bool _loadingShareImage = false;
 
   bool get _isNewsMode => _newsArticle != null;
+
+  String? get _shareSuggestionImageUrl {
+    if (_media.isNotEmpty) return _media.first;
+    if (isHubCarouselDisplayImage(_generatedShareImageUrl)) {
+      return _generatedShareImageUrl;
+    }
+    final fromArticle = _newsArticle?['image'] as String?;
+    if (isHubCarouselDisplayImage(fromArticle)) return fromArticle!.trim();
+    return _generatedShareImageUrl;
+  }
 
   bool get _isTeaArticleShare =>
       _isNewsMode &&
@@ -150,8 +163,20 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
 
     if (extra['newsArticle'] is Map) {
       _newsArticle = Map<String, dynamic>.from(extra['newsArticle'] as Map);
+      _sanitizeNewsArticleFields();
       final headline = '${_newsArticle?['title'] ?? ''}'.trim();
       if (headline.isNotEmpty) _newsCardHeadline = headline;
+    }
+  }
+
+  void _sanitizeNewsArticleFields() {
+    if (_newsArticle == null) return;
+    final cleanedDesc = stripHtmlBoilerplate('${_newsArticle!['description'] ?? ''}');
+    if (cleanedDesc != '${_newsArticle!['description'] ?? ''}') {
+      _newsArticle = {
+        ...Map<String, dynamic>.from(_newsArticle!),
+        'description': cleanedDesc,
+      };
     }
   }
 
@@ -194,14 +219,75 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
 
   Future<void> _bootstrapSharePageInner() async {
     if (_isNewsMode) {
-      final url = '${_newsArticle?['url'] ?? ''}'.trim();
-      final needsRedditContent = _isTeaArticleShare || isRedditThreadUrl(url);
-      if (needsRedditContent) {
-        await _loadNewsCardDetails();
-      }
-      await _loadSuggestions();
+      await Future.wait([
+        _loadNewsCardDetails(),
+        _loadSuggestions(),
+      ]);
+      await _ensureNewsShareImage();
     } else {
       await _loadSuggestions();
+    }
+  }
+
+  Future<void> _ensureNewsShareImage() async {
+    if (!_isNewsMode || _media.isNotEmpty) return;
+    if (isHubCarouselDisplayImage(_shareSuggestionImageUrl)) return;
+
+    if (mounted) setState(() => _loadingShareImage = true);
+
+    try {
+      final url = '${_newsArticle?['url'] ?? ''}'.trim();
+      final headline = _displayNewsHeadline.trim().isNotEmpty
+          ? _displayNewsHeadline.trim()
+          : '${_newsArticle?['title'] ?? ''}'.trim();
+      if (headline.isEmpty) return;
+
+      final storyParts = <String>[
+        if (_displayNewsSummary.trim().isNotEmpty) _displayNewsSummary.trim(),
+        stripHtmlBoilerplate('${_newsArticle?['description'] ?? ''}'),
+      ].where((s) => s.isNotEmpty).toList();
+      final storyText = storyParts.join('\n\n');
+
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null && url.isNotEmpty) {
+        final cached = await FirestoreService.instance.getNewsShareImageUrl(uid, url);
+        if (cached != null && isHubCarouselDisplayImage(cached)) {
+          if (!mounted) return;
+          setState(() {
+            _generatedShareImageUrl = cached;
+            _newsArticle = {
+              ...Map<String, dynamic>.from(_newsArticle ?? {}),
+              'image': cached,
+            };
+          });
+          return;
+        }
+      }
+
+      final generated = await getOrGenerateHubCarouselImage(
+        cacheKey: url.isNotEmpty ? url : headline,
+        headline: headline,
+        storyText: storyText,
+      );
+      if (generated == null || !mounted) return;
+
+      setState(() {
+        _generatedShareImageUrl = generated;
+        _newsArticle = {
+          ...Map<String, dynamic>.from(_newsArticle ?? {}),
+          'image': generated,
+        };
+      });
+
+      if (uid != null &&
+          url.isNotEmpty &&
+          generated.startsWith('http')) {
+        unawaited(
+          FirestoreService.instance.saveNewsShareImageUrl(uid, url, generated),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loadingShareImage = false);
     }
   }
 
@@ -836,7 +922,16 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
                             const SizedBox(height: 12),
                             if (_loading)
                               const ListSkeleton(count: 3)
-                            else ...[
+                            else if (_isNewsMode &&
+                                _loadingShareImage &&
+                                !isHubCarouselDisplayImage(_shareSuggestionImageUrl)) ...[
+                              const AspectRatio(
+                                aspectRatio: 16 / 9,
+                                child: Skeleton(variant: SkeletonVariant.image),
+                              ),
+                              const SizedBox(height: 12),
+                              const ListSkeleton(count: 2),
+                            ] else ...[
                               if (_error != null)
                                 Padding(
                                   padding: const EdgeInsets.only(bottom: 8),
@@ -853,9 +948,7 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
                                         displayName: 'Detea User',
                                         username: 'detea_user',
                                       );
-                                  final imageUrl = _media.isNotEmpty
-                                      ? _media.first
-                                      : (_newsArticle?['image'] as String?);
+                                  final imageUrl = _shareSuggestionImageUrl;
 
                                   return Column(
                                     children: List.generate(_suggestions.length, (index) {
@@ -901,9 +994,7 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
                   platform: _platform,
                   isDarkMode: isDarkMode,
                   text: _editableShareText,
-                  imageUrl: _media.isNotEmpty
-                      ? _media.first
-                      : (_newsArticle?['image'] as String?),
+                  imageUrl: _shareSuggestionImageUrl,
                   onTextChanged: (v) => setState(() => _editableShareText = v),
                   onClose: () => setState(() => _sharePanelOpen = false),
                   onSharePlatform: _openPlatformShare,
@@ -1041,10 +1132,10 @@ class _SourceCard extends StatelessWidget {
                   style: TextStyle(color: secondary, fontSize: 15, height: 1.45),
                 ),
               ] else if (!isTeaArticle &&
-                  (newsArticle?['description'] as String? ?? '').trim().isNotEmpty) ...[
+                  stripHtmlBoilerplate(newsArticle?['description'] as String?).isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Text(
-                  newsArticle!['description'] as String,
+                  stripHtmlBoilerplate(newsArticle?['description'] as String?),
                   style: TextStyle(color: primary, fontSize: 15, height: 1.45),
                 ),
               ],

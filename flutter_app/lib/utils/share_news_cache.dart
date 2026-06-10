@@ -69,6 +69,20 @@ Future<void> _writeJsonMap(String key, Map<String, dynamic> value) async {
 
 String normalizeUrlKey(String? url) => url?.trim() ?? '';
 
+/// Strip HTML tags from RSS / scrape descriptions for display and AI prompts.
+String stripHtmlBoilerplate(String? text) {
+  var s = '${text ?? ''}';
+  if (s.isEmpty) return '';
+  s = s.replaceAll(RegExp(r'<[^>]+>'), ' ');
+  s = s.replaceAll(RegExp(r'&nbsp;', caseSensitive: false), ' ');
+  s = s.replaceAll(RegExp(r'&amp;', caseSensitive: false), '&');
+  s = s.replaceAll(RegExp(r'&lt;', caseSensitive: false), '<');
+  s = s.replaceAll(RegExp(r'&gt;', caseSensitive: false), '>');
+  s = s.replaceAll(RegExp(r'&quot;', caseSensitive: false), '"');
+  s = s.replaceAll(RegExp(r'&#39;', caseSensitive: false), "'");
+  return s.replaceAll(RegExp(r'\s+'), ' ').trim();
+}
+
 bool isTeaSourceLabel(String? source) {
   final s = (source ?? '').trim();
   return RegExp(r'^r/', caseSensitive: false).hasMatch(s);
