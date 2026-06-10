@@ -2425,12 +2425,17 @@ $text""";
     return words[0].toUpperCase() + words.substring(1);
   }
 
+  String _teaPromptSourceLine(String source) {
+    if (isTeaSourceLabel(source) || source.trim().toLowerCase() == 'reddit') return '';
+    return source.isNotEmpty ? 'From: $source\n' : '';
+  }
+
   String _buildLinkedInTeaSuggestionsUserContent(Map<String, dynamic> ctx) {
     final title = (ctx['title'] ?? '').toString().trim();
     final description = (ctx['description'] ?? '').toString().trim();
     final source = (ctx['source'] ?? '').toString().trim();
     final articleText = (ctx['articleText'] ?? '').toString().trim();
-    final sourceLine = source.isNotEmpty ? 'From: $source\n' : '';
+    final sourceLine = _teaPromptSourceLine(source);
     final summaryLine = description.isNotEmpty ? 'Discussion summary:\n$description\n' : '';
     final articleSection = articleText.isNotEmpty
         ? '\nThread highlights:\n${articleText.length > 5000 ? articleText.substring(0, 5000) : articleText}\n'
@@ -2450,7 +2455,7 @@ Requirements:
    - Sound like a real human wrote it (first person, conversational, opinionated but fair)
    - Use short paragraphs with line breaks
    - Be 60–120 words
-   - NEVER include URLs, "Source -", "Read more", usernames like /u/..., or raw scraped metadata
+   - NEVER include URLs, "Source -", "Read more", usernames like /u/..., subreddit names (r/...), or raw scraped metadata
    - NEVER paste long quotes or dump comment threads — synthesize the vibe in your own words
    - Base only on the context below; do not invent facts
 
@@ -2553,7 +2558,7 @@ Rules for JSON:
     final description = (ctx['description'] ?? '').toString().trim();
     final source = (ctx['source'] ?? '').toString().trim();
     final articleText = (ctx['articleText'] ?? '').toString().trim();
-    final sourceLine = source.isNotEmpty ? 'From: $source\n' : '';
+    final sourceLine = _teaPromptSourceLine(source);
     final summaryLine = description.isNotEmpty ? 'Discussion summary:\n$description\n' : '';
     final articleSection = articleText.isNotEmpty
         ? '\nThread highlights:\n${articleText.length > 5000 ? articleText.substring(0, 5000) : articleText}\n'
@@ -2570,7 +2575,7 @@ Requirements:
    - Focus on ONE reaction or angle — not a full recap
    - Be 220 characters or fewer
    - Sound like a real human (first person, casual, opinionated)
-   - NEVER include URLs, "Source -", usernames like /u/..., or raw scraped metadata
+   - NEVER include URLs, "Source -", usernames like /u/..., subreddit names (r/...), or raw scraped metadata
    - NEVER paste long quotes or dump comment threads — synthesize in your own words
    - Base only on the context below; do not invent facts
 
@@ -2979,14 +2984,16 @@ Return ONLY valid JSON with this exact shape (no markdown fences):
     }
 
     final userContent = isTeaGossip
-        ? '''Summarize this celebrity/gossip discussion in at most $maxWords words (hard limit — never exceed $maxWords words).
+        ? '''Write a news-style brief about this entertainment story in at most $maxWords words (hard limit — never exceed $maxWords words).
 
 Rules:
-- One short paragraph, plain text only — a tight explainer for someone who has not seen the original post.
-- Cover the full story in compressed form: what sparked the buzz, who or what is involved, the main criticism or praise, and any film/show comparisons — but keep every sentence lean.
+- One short paragraph, plain text only — explain the subject like a news recap, not a headline repost.
+- The headline is context only; do NOT repeat, paraphrase, or wrap the headline. Explain what actually happened and why people care.
+- Cover: the controversy or announcement, who is involved, the specific criticism/praise/comparison, and the main takeaway.
 - Synthesize the post and top comments; do NOT copy sentences verbatim from the input.
 - Use neutral third person. No URLs, links, usernames, emojis, or filler like "iykyk".
-- Do NOT mention Reddit, social platforms, threads, or where the discussion happened — write as plain entertainment news context.
+- Do NOT mention Reddit, subreddit names (r/...), social platforms, threads, or where the discussion happened.
+- Do NOT write filler like "people are reacting" without substantive detail.
 - Include only the most important names, titles, and plot beats stated in the input.
 - Do NOT add facts not stated or clearly implied by the input.
 - No intro like "This post discusses". No hashtags.
@@ -3045,6 +3052,10 @@ ${description.isNotEmpty && !descIsMostlyHeadline ? 'Description: $description\n
       final words = cleaned.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
       final limited = words.take(maxWords).join(' ');
       final out = limited.replaceAll(RegExp(r'\s+'), ' ').trim();
+      if (isTeaGossip) {
+        if (teaCardSummaryLooksLikeTitleOnly(out, title)) return '';
+        return out;
+      }
       final outNorm = out.replaceAll(RegExp(r'\s+'), ' ').trim().toLowerCase();
       final tit = title.replaceAll(RegExp(r'\s+'), ' ').trim().toLowerCase();
       if (outNorm == tit ||

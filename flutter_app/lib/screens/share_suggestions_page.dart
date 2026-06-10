@@ -269,7 +269,11 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
           : null;
       final cacheUsable = !isTea ||
           (summary.trim().length >= 40 &&
-              !teaCardSummaryHasDisplayIssues(summary, cachedDetails));
+              !teaCardSummaryHasDisplayIssues(
+                summary,
+                cachedDetails,
+                headline.isNotEmpty ? headline : cleanTeaCardTitle('${_newsArticle?['title'] ?? ''}'),
+              ));
       if (cacheUsable) {
         if (isTea) {
           summary = sanitizeTeaCardSummary(summary);
@@ -323,11 +327,14 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
     final localTeaFallback = isTea
         ? buildLocalTeaCardSummary(articleDetails, headlineFallback: headlineFallback)
         : '';
+    final aiArticleDetails = isTea
+        ? prepareTeaArticleContextForAi(articleDetails)
+        : articleDetails;
 
     final results = await Future.wait<String>([
       ChatService.instance
           .summarizeNewsArticle(
-            articleDetails,
+            aiArticleDetails,
             {
               'minWords': isTea ? 35 : 60,
               'maxWords': isTea ? teaCardSummaryMaxWords : 80,
@@ -335,7 +342,7 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
             },
           )
           .timeout(
-            const Duration(seconds: 20),
+            const Duration(seconds: 30),
             onTimeout: () => localTeaFallback.isNotEmpty ? localTeaFallback : gossipFallback,
           ),
       ChatService.instance
@@ -354,7 +361,8 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
         : (localFallback.isNotEmpty ? localFallback : gossipFallback);
     if (isTea &&
         finalSummary.isNotEmpty &&
-        teaCardSummaryHasDisplayIssues(finalSummary, articleDetails)) {
+        (teaCardSummaryHasDisplayIssues(finalSummary, articleDetails, headlineFallback) ||
+            teaCardSummaryLooksLikeTitleOnly(finalSummary, headlineFallback))) {
       finalSummary = localTeaFallback;
     }
     if (isTea && finalSummary.isNotEmpty) {
@@ -415,6 +423,9 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
           teaCardSummaryHasDisplayIssues(
             _newsCardSummary,
             _newsArticleDetails ?? _newsArticle,
+            _newsCardHeadline.isNotEmpty
+                ? _newsCardHeadline
+                : cleanTeaCardTitle('${_newsArticle?['title'] ?? ''}'),
           )) {
         return '';
       }

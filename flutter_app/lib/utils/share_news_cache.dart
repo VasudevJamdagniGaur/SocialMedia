@@ -74,6 +74,23 @@ bool isTeaSourceLabel(String? source) {
   return RegExp(r'^r/', caseSensitive: false).hasMatch(s);
 }
 
+/// Neutral source label for share payloads — keeps Tea mode via URL, hides subreddit names.
+String publicTeaSourceLabel([String? source]) {
+  if (isTeaSourceLabel(source) || '${source ?? ''}'.trim().toLowerCase() == 'reddit') {
+    return 'Tea';
+  }
+  final s = '${source ?? ''}'.trim();
+  return s.isEmpty ? 'Tea' : s;
+}
+
+String stripSubredditMentionsFromText(String? text) {
+  var s = '${text ?? ''}';
+  s = s.replaceAll(RegExp(r'\bSubreddit:\s*r/[A-Za-z0-9_]+\b', caseSensitive: false), '');
+  s = s.replaceAll(RegExp(r'\br/[A-Za-z0-9_]+\b'), '');
+  s = s.replaceAll(RegExp(r'\bsubreddit\b', caseSensitive: false), '');
+  return s.replaceAll(RegExp(r'\s+'), ' ').trim();
+}
+
 bool isRedditTeaThreadUrl(String? url) => isRedditThreadUrl(url);
 
 /// Remove URLs and scrape metadata from text shown in share posts.
@@ -113,12 +130,57 @@ String sanitizeTeaCardSummary(String? text) {
   return clampTeaCardSummaryWords(s);
 }
 
-bool teaCardSummaryHasDisplayIssues(String summary, [Map<String, dynamic>? details]) =>
-    teaCardSummaryTooLong(summary) ||
-    teaCardSummaryLooksLikeRawScrape(summary, details) ||
-    RegExp(r'https?://', caseSensitive: false).hasMatch(summary) ||
-    RegExp(r'\bReddit\b', caseSensitive: false).hasMatch(summary) ||
-    RegExp(r'URL Source', caseSensitive: false).hasMatch(summary);
+bool teaTextLooksLikeTitleEcho(String text, String title) {
+  final n = text.replaceAll(RegExp(r'\s+'), ' ').trim().toLowerCase();
+  final t = title.replaceAll(RegExp(r'\s+'), ' ').trim().toLowerCase();
+  if (t.isEmpty || n.isEmpty) return false;
+  if (n == t) return true;
+  if (t.length >= 20 && n.contains(t)) return true;
+  if (n.length <= t.length + 24 && t.contains(n)) return true;
+  return false;
+}
+
+/// True when the summary only repeats the headline with filler, not real substance.
+bool teaCardSummaryLooksLikeTitleOnly(String summary, [String? headline]) {
+  final head = cleanTeaCardTitle(headline);
+  if (head.isEmpty) return false;
+  final sum = summary.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (sum.isEmpty) return false;
+  if (teaTextLooksLikeTitleEcho(sum, head)) return true;
+  final sumLower = sum.toLowerCase();
+  final headLower = head.toLowerCase();
+  if (!sumLower.contains(headLower)) return false;
+  if (RegExp(
+    r'^people are (reacting|debating)\b',
+    caseSensitive: false,
+  ).hasMatch(sum)) {
+    return teaCardSummaryWordCount(sum) <= 45;
+  }
+  final stripped = sumLower
+      .replaceAll(headLower, '')
+      .replaceAll(RegExp(r'people are reacting to\s*'), '')
+      .replaceAll(RegExp(r'people are debating\s*'), '')
+      .replaceAll(RegExp(r'and sharing mixed takes on what stood out\.?'), '')
+      .replaceAll(RegExp(r', comparing it to other films and questioning whether key scenes were borrowed\.?'), '')
+      .trim();
+  return stripped.length < 28;
+}
+
+bool teaCardSummaryHasDisplayIssues(
+  String summary, [
+  Map<String, dynamic>? details,
+  String? headline,
+]) {
+  final head = headline ?? cleanTeaCardTitle('${details?['title'] ?? ''}');
+  return teaCardSummaryTooLong(summary) ||
+      teaCardSummaryLooksLikeRawScrape(summary, details) ||
+      teaCardSummaryLooksLikeTitleOnly(summary, head) ||
+      RegExp(r'https?://', caseSensitive: false).hasMatch(summary) ||
+      RegExp(r'\bReddit\b', caseSensitive: false).hasMatch(summary) ||
+      RegExp(r'\br/[A-Za-z0-9_]+\b', caseSensitive: false).hasMatch(summary) ||
+      RegExp(r'\bSubreddit\b', caseSensitive: false).hasMatch(summary) ||
+      RegExp(r'URL Source', caseSensitive: false).hasMatch(summary);
+}
 
 /// Final polish for Tea suggestion card text — no links or scrape noise.
 String sanitizeTeaSharePostForDisplay(String? text) {
@@ -184,13 +246,15 @@ Map<String, dynamic> prepareTeaArticleContextForAi(Map<String, dynamic> article)
       .map(stripUrlsAndSourceNoise)
       .where((s) => s.length >= 20)
       .toList();
-  final gossip = stripUrlsAndSourceNoise(
-    snippets.isNotEmpty
-        ? snippets.take(3).join('\n\n')
-        : '${article['gossip'] ?? article['description'] ?? ''}',
+  final gossip = stripSubredditMentionsFromText(
+    stripUrlsAndSourceNoise(
+      snippets.isNotEmpty
+          ? snippets.take(3).join('\n\n')
+          : '${article['gossip'] ?? article['description'] ?? ''}',
+    ),
   );
   final articleText = snippets.isEmpty
-      ? stripUrlsAndSourceNoise('${article['text'] ?? ''}')
+      ? stripSubredditMentionsFromText(stripUrlsAndSourceNoise('${article['text'] ?? ''}'))
       : [
           'Thread title: $title',
           'What people are saying:',
@@ -531,30 +595,58 @@ String buildRedditGossipSummary(Map<String, dynamic>? details) {
   return '';
 }
 
-/// Brief contextual explainer when AI summary is unavailable for Tea.
+/// Compress thread snippets into a short news-style Tea card summary.
 String buildLocalTeaCardSummary(
   Map<String, dynamic>? details, {
   String? headlineFallback,
 }) {
   var title = cleanTeaCardTitle('${details?['title'] ?? ''}');
   if (title.isEmpty) title = cleanTeaCardTitle(headlineFallback);
-  final snippets = extractRedditContentSnippets(details)
-      .map(stripUrlsAndSourceNoise)
-      .where((s) => s.length >= 20 && cleanTeaCardTitle(s).isNotEmpty)
-      .toList();
-  if (title.isEmpty && snippets.isNotEmpty) {
-    title = cleanTeaCardTitle(snippets.first);
-  }
-  if (title.isEmpty) return '';
 
-  if (snippets.length > 1) {
-    return sanitizeTeaCardSummary(
-      'People are debating $title, comparing it to other films and questioning whether key scenes were borrowed.',
-    );
+  final snippets = extractRedditContentSnippets(details, maxParts: 5)
+      .map(stripUrlsAndSourceNoise)
+      .where((s) => s.length >= 24 && !teaTextLooksLikeTitleEcho(s, title))
+      .toList();
+
+  var source = snippets.take(3).join(' ');
+  if (source.isEmpty) {
+    source = stripUrlsAndSourceNoise(
+      [
+        details?['selftext'],
+        details?['gossip'],
+        details?['description'],
+      ].whereType<String>().join(' '),
+    ).trim();
+    if (teaTextLooksLikeTitleEcho(source, title)) source = '';
   }
-  return sanitizeTeaCardSummary(
-    'People are reacting to $title and sharing mixed takes on what stood out.',
-  );
+  if (source.isEmpty) return '';
+
+  final sentences = source
+      .split(RegExp(r'(?<=[.!?])\s+'))
+      .map((s) => s.replaceAll(RegExp(r'\s+'), ' ').trim())
+      .where((s) => s.length >= 16 && !teaTextLooksLikeTitleEcho(s, title))
+      .toList();
+
+  final buffer = StringBuffer();
+  var wordCount = 0;
+  for (final sentence in sentences) {
+    final w = teaCardSummaryWordCount(sentence);
+    if (wordCount > 0 && wordCount + w > teaCardSummaryMaxWords) break;
+    if (buffer.isNotEmpty) buffer.write(' ');
+    buffer.write(sentence);
+    wordCount += w;
+    if (wordCount >= 28) break;
+  }
+
+  var out = buffer.toString().trim();
+  if (out.isEmpty) {
+    final words = source.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+    out = words.take(teaCardSummaryMaxWords).join(' ');
+  }
+
+  final cleaned = sanitizeTeaCardSummary(out);
+  if (cleaned.isEmpty || teaCardSummaryLooksLikeTitleOnly(cleaned, title)) return '';
+  return cleaned;
 }
 
 /// Local fallback when AI summary is unavailable — port of ShareSuggestionsPage.js

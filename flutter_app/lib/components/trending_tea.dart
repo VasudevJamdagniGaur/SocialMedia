@@ -214,7 +214,7 @@ class _TrendingTeaState extends State<TrendingTea> {
         'text': item.gossip,
         'gossip': item.gossip,
         'image': teaHeroImageUrl(item),
-        'source': item.author.startsWith('r/') ? item.author : 'r/BollyBlindsNGossip',
+        'source': publicTeaSourceLabel(item.author),
       },
       'returnTo': GoRouterState.of(context).uri.path,
       'platform': 'linkedin',

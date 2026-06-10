@@ -6,6 +6,7 @@ import 'package:shimmer/shimmer.dart';
 import '../router/app_router.dart';
 import 'package:deite/lib/pod_topic_news_shared.dart';
 import '../services/hub_personalization_service.dart';
+import '../utils/reddit_thread_comments.dart';
 import '../utils/share_news_cache.dart';
 import 'hub_theme.dart';
 
@@ -126,7 +127,9 @@ class _HubTrendingCarouselCardState extends State<HubTrendingCarouselCard> {
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        if (widget.showSource && widget.item.source.isNotEmpty)
+                        if (widget.showSource &&
+                            widget.item.source.isNotEmpty &&
+                            !isTeaSourceLabel(widget.item.source))
                           Padding(
                             padding: const EdgeInsets.only(top: 6),
                             child: Text(
@@ -193,7 +196,7 @@ class NewsFeedRow extends StatelessWidget {
                     item.title,
                     style: const TextStyle(color: HubTheme.text, fontSize: 15, fontWeight: FontWeight.w500),
                   ),
-                  if (item.source.isNotEmpty)
+                  if (item.source.isNotEmpty && !isTeaSourceLabel(item.source))
                     Padding(
                       padding: const EdgeInsets.only(top: 4),
                       child: Text(
@@ -324,8 +327,13 @@ class HubBackHeader extends StatelessWidget {
 
 Future<void> openNewsShare(BuildContext context, NewsArticle item, String returnTo) async {
   recordHubNewsClick('', item.exploreTopic ?? 'general');
+  final article = Map<String, dynamic>.from(item.toMap());
+  if (isTeaSourceLabel(article['source'] as String?) ||
+      isRedditThreadUrl(article['url'] as String?)) {
+    article['source'] = 'Tea';
+  }
   final payload = {
-    'newsArticle': item.toMap(),
+    'newsArticle': article,
     'returnTo': returnTo,
   };
   await prepareShareSuggestionsRoute(payload);

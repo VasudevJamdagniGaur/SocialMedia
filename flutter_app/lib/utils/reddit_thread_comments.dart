@@ -532,7 +532,6 @@ Map<String, dynamic>? parseRedditThreadDetails(
   if (gossip.isEmpty && title.isNotEmpty) gossip = title;
 
   final chunks = <String>[];
-  if (subreddit.isNotEmpty) chunks.add('Subreddit: $subreddit');
   chunks.add('Title: $title');
   if (selftext.isNotEmpty) {
     chunks.add('Post body:\n$selftext');

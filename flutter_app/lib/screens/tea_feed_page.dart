@@ -166,7 +166,7 @@ class _TeaFeedPageState extends State<TeaFeedPage> {
         'text': item.gossip,
         'gossip': item.gossip,
         'image': teaHeroImageUrl(item),
-        'source': item.author.startsWith('r/') ? item.author : 'r/BollyBlindsNGossip',
+        'source': publicTeaSourceLabel(item.author),
       },
       'returnTo': AppRoutes.teaFeed,
       'returnState': {
