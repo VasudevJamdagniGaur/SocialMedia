@@ -1,10 +1,13 @@
-﻿import 'package:cached_network_image/cached_network_image.dart';
+﻿import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../components/trending_tea.dart';
 import '../router/app_router.dart';
+import '../utils/hub_carousel_ai_image.dart';
+import '../utils/hub_carousel_image_store.dart';
 import '../utils/hub_colors.dart';
 import '../utils/reddit_thread_comments.dart';
 import '../utils/share_news_cache.dart';
@@ -52,6 +55,7 @@ class _TeaFeedPageState extends State<TeaFeedPage> {
   final Set<String> _watchlisted = {};
   final Map<String, _CommentEntry> _commentsByPostId = {};
   final PageController _pageController = PageController();
+  int _imageHydrateGen = 0;
 
   List<TeaItem> get _displayItems {
     final items = List<TeaItem>.from(_rawItems);
@@ -76,6 +80,83 @@ class _TeaFeedPageState extends State<TeaFeedPage> {
       }
     }
     _refreshWatchlistIds();
+    unawaited(_hydrateTeaFeedImages());
+  }
+
+  @override
+  void activate() {
+    super.activate();
+    unawaited(_hydrateTeaFeedImages());
+  }
+
+  Future<void> _hydrateTeaFeedImages() async {
+    if (_rawItems.isEmpty) return;
+    final token = ++_imageHydrateGen;
+    var changed = false;
+    final updated = <TeaItem>[];
+
+    for (final item in _rawItems) {
+      if (teaHeroImageUrl(item) != null) {
+        updated.add(item);
+        continue;
+      }
+      final cached = await resolveHubCarouselImageFast(
+        url: item.url,
+        title: item.title,
+        fallbackId: item.id,
+        kind: HubCarouselImageKind.tea,
+      );
+      if (cached != null) {
+        updated.add(_copyTeaItem(item, thumbnail: cached));
+        changed = true;
+      } else {
+        updated.add(item);
+      }
+    }
+
+    if (changed && mounted && token == _imageHydrateGen) {
+      setState(() => _rawItems = updated);
+    }
+
+    if (!mounted || token != _imageHydrateGen) return;
+    unawaited(_enrichMissingTeaFeedImages(token));
+  }
+
+  Future<void> _enrichMissingTeaFeedImages(int token) async {
+    for (var i = 0; i < _rawItems.length; i++) {
+      if (!mounted || token != _imageHydrateGen) return;
+      final item = _rawItems[i];
+      if (teaHeroImageUrl(item) != null) continue;
+
+      final generated = await getOrGenerateHubCarouselImage(
+        cacheKey: hubCarouselImageCacheKey(item.url, item.id),
+        headline: item.title,
+        storyText: item.gossip,
+        articleUrl: item.url,
+        kind: HubCarouselImageKind.tea,
+      );
+      if (generated == null || !mounted || token != _imageHydrateGen) continue;
+
+      setState(() {
+        final next = [..._rawItems];
+        next[i] = _copyTeaItem(item, thumbnail: generated);
+        _rawItems = next;
+      });
+    }
+  }
+
+  TeaItem _copyTeaItem(TeaItem item, {String? thumbnail}) {
+    return TeaItem(
+      id: item.id,
+      title: item.title,
+      url: item.url,
+      postUrl: item.postUrl,
+      thumbnail: thumbnail ?? item.thumbnail,
+      gossip: item.gossip,
+      author: item.author,
+      score: item.score,
+      numComments: item.numComments,
+    );
   }
 
   TeaItem? _parseTeaItem(dynamic e) {
@@ -165,7 +246,7 @@ class _TeaFeedPageState extends State<TeaFeedPage> {
         'description': item.gossip,
         'text': item.gossip,
         'gossip': item.gossip,
-        'image': teaHeroImageUrl(item),
+        'image': teaHeroImageUrl(item) ?? item.thumbnail,
         'source': publicTeaSourceLabel(item.author),
       },
       'returnTo': AppRoutes.teaFeed,
@@ -408,19 +489,11 @@ class _TeaSlide extends StatefulWidget {
 }
 
 class _TeaSlideState extends State<_TeaSlide> {
-  bool _imgFailed = false;
-
-  @override
-  void didUpdateWidget(covariant _TeaSlide oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.item.id != widget.item.id) _imgFailed = false;
-  }
-
   @override
   Widget build(BuildContext context) {
     final item = widget.item;
     final heroUrl = teaHeroImageUrl(item);
-    final showImg = heroUrl != null && !_imgFailed;
+    final showImg = heroUrl != null;
     final canShare = item.url.isNotEmpty;
     final bottomPad = MediaQuery.paddingOf(context).bottom;
 
@@ -430,16 +503,10 @@ class _TeaSlideState extends State<_TeaSlide> {
         GestureDetector(
           onTap: canShare ? widget.onOpenShare : null,
           child: showImg
-              ? CachedNetworkImage(
+              ? HubCarouselHeroImage(
                   imageUrl: heroUrl,
-                  fit: BoxFit.contain,
-                  fadeInDuration: Duration(milliseconds: widget.index < 2 ? 0 : 200),
-                  errorWidget: (_, __, ___) {
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (mounted) setState(() => _imgFailed = true);
-                    });
-                    return _FallbackHero(index: widget.index);
-                  },
+                  fit: BoxFit.cover,
+                  errorWidget: _FallbackHero(index: widget.index),
                 )
               : _FallbackHero(index: widget.index),
         ),
