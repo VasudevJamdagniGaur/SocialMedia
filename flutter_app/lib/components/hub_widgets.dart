@@ -6,6 +6,7 @@ import 'package:shimmer/shimmer.dart';
 import '../router/app_router.dart';
 import 'package:deite/lib/pod_topic_news_shared.dart';
 import '../services/hub_personalization_service.dart';
+import '../utils/hub_carousel_ai_image.dart';
 import '../utils/reddit_thread_comments.dart';
 import '../utils/share_news_cache.dart';
 import 'hub_theme.dart';
@@ -59,7 +60,7 @@ class _HubTrendingCarouselCardState extends State<HubTrendingCarouselCard> {
   Widget build(BuildContext context) {
     final w = MediaQuery.sizeOf(context).width * 0.78;
     final src = widget.item.image?.trim() ?? '';
-    final showImg = src.startsWith('http') && !_heroFailed;
+    final showImg = isHubCarouselDisplayImage(src) && !_heroFailed;
     final g = HubTrendingCarouselCard._gradients[widget.index % HubTrendingCarouselCard._gradients.length];
 
     return SizedBox(
@@ -88,15 +89,10 @@ class _HubTrendingCarouselCardState extends State<HubTrendingCarouselCard> {
                 if (showImg)
                   ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: CachedNetworkImage(
+                    child: HubCarouselHeroImage(
                       imageUrl: src,
                       fit: BoxFit.cover,
-                      errorWidget: (_, __, ___) {
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          if (mounted) setState(() => _heroFailed = true);
-                        });
-                        return const SizedBox.shrink();
-                      },
+                      errorWidget: const SizedBox.shrink(),
                     ),
                   ),
                 Positioned(

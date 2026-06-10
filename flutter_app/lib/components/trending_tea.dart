@@ -9,6 +9,7 @@ import '../router/app_router.dart';
 import '../services/cached_news_service.dart';
 import '../services/reddit_tea_service.dart';
 import '../lib/hub_trending_algorithms.dart';
+import '../utils/hub_carousel_ai_image.dart';
 import '../utils/hub_colors.dart';
 import '../utils/share_news_cache.dart';
 import '../utils/tea_trending_storage.dart';
@@ -153,7 +154,8 @@ Future<List<TeaItem>> fetchTrendingTea({bool allowCache = true}) async {
 
 String? teaHeroImageUrl(TeaItem item) {
   if (_isDirectImageUrl(item.postUrl)) return item.postUrl.trim();
-  if (item.thumbnail.trim().startsWith('http')) return item.thumbnail.trim();
+  final thumb = item.thumbnail.trim();
+  if (isHubCarouselDisplayImage(thumb)) return thumb;
   return null;
 }
 
@@ -168,6 +170,7 @@ class _TrendingTeaState extends State<TrendingTea> {
   List<TeaItem> _items = _memoryTeaCache ?? [];
   bool _loading = _memoryTeaCache == null || _memoryTeaCache!.isEmpty;
   String? _error;
+  int _aiImageGen = 0;
 
   @override
   void initState() {
@@ -188,6 +191,7 @@ class _TrendingTeaState extends State<TrendingTea> {
       });
       _memoryTeaCache = cached;
       _memoryTeaCacheAt = DateTime.now();
+      unawaited(_enrichMissingAiImages());
     } else if (_items.isEmpty) {
       setState(() {
         _loading = true;
@@ -203,6 +207,7 @@ class _TrendingTeaState extends State<TrendingTea> {
         _loading = false;
         _error = null;
       });
+      unawaited(_enrichMissingAiImages());
     } catch (e) {
       if (!mounted) return;
       if (_items.isEmpty) {
@@ -223,7 +228,7 @@ class _TrendingTeaState extends State<TrendingTea> {
         'description': item.gossip,
         'text': item.gossip,
         'gossip': item.gossip,
-        'image': teaHeroImageUrl(item),
+        'image': teaHeroImageUrl(item) ?? item.thumbnail,
         'source': publicTeaSourceLabel(item.author),
       },
       'returnTo': GoRouterState.of(context).uri.path,
@@ -232,6 +237,43 @@ class _TrendingTeaState extends State<TrendingTea> {
     await prepareShareSuggestionsRoute(payload);
     if (!mounted) return;
     context.go(AppRoutes.shareSuggestions, extra: payload);
+  }
+
+  Future<void> _enrichMissingAiImages() async {
+    final token = ++_aiImageGen;
+    await enrichCarouselSlotsWithAiImages(
+      slotCount: _items.length,
+      needsImage: (i) => teaHeroImageUrl(_items[i]) == null,
+      generateForIndex: (i) {
+        final item = _items[i];
+        return getOrGenerateHubCarouselImage(
+          cacheKey: item.url.isNotEmpty ? item.url : item.id,
+          headline: item.title,
+          storyText: item.gossip,
+        );
+      },
+      applyImage: (i, imageUrl) {
+        if (!mounted || token != _aiImageGen) return;
+        setState(() {
+          final item = _items[i];
+          final updated = [..._items];
+          updated[i] = TeaItem(
+            id: item.id,
+            title: item.title,
+            url: item.url,
+            postUrl: item.postUrl,
+            thumbnail: imageUrl,
+            gossip: item.gossip,
+            author: item.author,
+            score: item.score,
+            numComments: item.numComments,
+          );
+          _items = updated;
+          _memoryTeaCache = updated;
+        });
+        unawaited(_saveTeaToDisk(_items));
+      },
+    );
   }
 
   void _openTeaFeed() {
@@ -322,8 +364,11 @@ class _TrendingTeaState extends State<TrendingTea> {
                                       fit: StackFit.expand,
                                       children: [
                                         if (hero != null)
-                                          Image.network(hero, fit: BoxFit.cover,
-                                              errorBuilder: (_, __, ___) => _gradientFallback(idx))
+                                          HubCarouselHeroImage(
+                                            imageUrl: hero,
+                                            fit: BoxFit.cover,
+                                            errorWidget: _gradientFallback(idx),
+                                          )
                                         else
                                           _gradientFallback(idx),
                                         Positioned(

@@ -1,4 +1,6 @@
-﻿import 'package:flutter/material.dart';
+﻿import 'dart:async';
+
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
@@ -14,6 +16,7 @@ import '../services/cached_news_service.dart';
 import '../services/firestore_service.dart';
 import '../services/hub_personalization_service.dart';
 import '../services/pod_news_service.dart';
+import '../utils/hub_carousel_ai_image.dart';
 
 /// Mirrors src/components/PodSportsPage.js
 class PodSportsPage extends StatefulWidget {
@@ -38,6 +41,7 @@ class _PodSportsPageState extends State<PodSportsPage> {
   bool _loading = true;
   String _error = '';
   int _loadToken = 0;
+  int _aiImageGen = 0;
 
   @override
   void initState() {
@@ -112,6 +116,7 @@ class _PodSportsPageState extends State<PodSportsPage> {
         _error = merged.isEmpty ? (news.error ?? news.fallbackError ?? '') : '';
         _loading = false;
       });
+      unawaited(_enrichMissingAiImages());
     } catch (e) {
       if (token != _loadToken) return;
       _cache = fallback;
@@ -121,6 +126,44 @@ class _PodSportsPageState extends State<PodSportsPage> {
         _loading = false;
       });
     }
+  }
+
+  Future<void> _enrichMissingAiImages() async {
+    final token = ++_aiImageGen;
+    await enrichCarouselSlotsWithAiImages(
+      slotCount: _trending.length,
+      needsImage: (i) => !hasUsableHubImage(_trending[i].image),
+      generateForIndex: (i) {
+        final item = _trending[i];
+        return getOrGenerateHubCarouselImage(
+          cacheKey: item.url.isNotEmpty ? item.url : item.title,
+          headline: item.title,
+          storyText: item.description,
+        );
+      },
+      applyImage: (i, imageUrl) {
+        if (!mounted || token != _aiImageGen) return;
+        final item = _trending[i];
+        setState(() {
+          final updated = [..._trending];
+          updated[i] = NewsArticle(
+            title: item.title,
+            source: item.source,
+            url: item.url,
+            image: imageUrl,
+            description: item.description,
+            publishedAt: item.publishedAt,
+            sourceSiteUrl: item.sourceSiteUrl,
+            publisherUrl: item.publisherUrl,
+            trendingScore: item.trendingScore,
+            exploreTopic: item.exploreTopic,
+            firestoreId: item.firestoreId,
+          );
+          _trending = updated;
+          _cache = updated;
+        });
+      },
+    );
   }
 
   @override

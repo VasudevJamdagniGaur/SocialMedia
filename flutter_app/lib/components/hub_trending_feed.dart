@@ -7,6 +7,7 @@ import '../router/app_router.dart';
 import '../services/cached_news_service.dart';
 import 'package:deite/lib/pod_topic_news_shared.dart';
 import '../lib/hub_trending_algorithms.dart';
+import '../utils/hub_carousel_ai_image.dart';
 import '../utils/hub_colors.dart';
 import '../utils/share_news_cache.dart';
 import 'skeleton/card_skeleton.dart';
@@ -110,6 +111,7 @@ class _HubTrendingFeedState extends State<HubTrendingFeed> {
   List<HubTrendingItem> _items = _hubCache ?? [];
   bool _loading = _hubCache == null || _hubCache!.isEmpty;
   String _error = '';
+  int _aiImageGen = 0;
 
   @override
   void initState() {
@@ -127,6 +129,7 @@ class _HubTrendingFeedState extends State<HubTrendingFeed> {
         _loading = false;
         _error = items.isEmpty ? 'No headlines yet.' : '';
       });
+      unawaited(_enrichMissingAiImages());
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -134,6 +137,40 @@ class _HubTrendingFeedState extends State<HubTrendingFeed> {
         _error = _items.isEmpty ? 'Could not load news.' : '';
       });
     }
+  }
+
+  Future<void> _enrichMissingAiImages() async {
+    final token = ++_aiImageGen;
+    await enrichCarouselSlotsWithAiImages(
+      slotCount: _items.length,
+      needsImage: (i) => !hasUsableHubImage(_items[i].image),
+      generateForIndex: (i) {
+        final item = _items[i];
+        return getOrGenerateHubCarouselImage(
+          cacheKey: item.url.isNotEmpty ? item.url : item.id,
+          headline: item.title,
+          storyText: item.description,
+        );
+      },
+      applyImage: (i, imageUrl) {
+        if (!mounted || token != _aiImageGen) return;
+        setState(() {
+          final item = _items[i];
+          final updated = [..._items];
+          updated[i] = HubTrendingItem(
+            id: item.id,
+            title: item.title,
+            url: item.url,
+            description: item.description,
+            image: imageUrl,
+            source: item.source,
+            category: item.category,
+          );
+          _items = updated;
+          _hubCache = updated;
+        });
+      },
+    );
   }
 
   Future<void> _openShare(BuildContext context, HubTrendingItem item) async {
@@ -238,7 +275,7 @@ class _HubTrendingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final g = _gradients[idx % _gradients.length];
-    final hasImg = item.image.startsWith('http');
+    final hasImg = isHubCarouselDisplayImage(item.image);
     return GestureDetector(
       onTap: item.url.isEmpty ? null : onTap,
       child: Container(
@@ -252,7 +289,11 @@ class _HubTrendingCard extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             if (hasImg)
-              Image.network(item.image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _gradient(g))
+              HubCarouselHeroImage(
+                imageUrl: item.image,
+                fit: BoxFit.cover,
+                errorWidget: _gradient(g),
+              )
             else
               _gradient(g),
             Container(

@@ -190,7 +190,9 @@ List<Map<String, dynamic>> mixHubFeedSegments(
 
 bool hasUsableHubImage(String? url) {
   final s = '${url ?? ''}'.trim();
-  return s.startsWith('http://') || s.startsWith('https://');
+  return s.startsWith('http://') ||
+      s.startsWith('https://') ||
+      s.startsWith('data:image');
 }
 
 bool hubMapRowHasImage(Map<String, dynamic> row) {
