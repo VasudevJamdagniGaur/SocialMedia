@@ -21,6 +21,7 @@ import '../services/firestore_service.dart';
 import '../utils/date_utils.dart';
 import '../utils/hub_colors.dart';
 import '../utils/hub_carousel_ai_image.dart';
+import '../utils/hub_carousel_image_store.dart';
 import '../utils/reddit_thread_comments.dart';
 import '../utils/share_news_cache.dart';
 
@@ -242,6 +243,25 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
           : '${_newsArticle?['title'] ?? ''}'.trim();
       if (headline.isEmpty) return;
 
+      final kind = _isTeaArticleShare ? HubCarouselImageKind.tea : HubCarouselImageKind.news;
+      final cachedFast = await resolveHubCarouselImageFast(
+        url: url,
+        title: headline,
+        fallbackId: hubCarouselImageCacheKey(url, headline),
+        kind: kind,
+      );
+      if (cachedFast != null && isHubCarouselDisplayImage(cachedFast)) {
+        if (!mounted) return;
+        setState(() {
+          _generatedShareImageUrl = cachedFast;
+          _newsArticle = {
+            ...Map<String, dynamic>.from(_newsArticle ?? {}),
+            'image': cachedFast,
+          };
+        });
+        return;
+      }
+
       final storyParts = <String>[
         if (_displayNewsSummary.trim().isNotEmpty) _displayNewsSummary.trim(),
         stripHtmlBoilerplate('${_newsArticle?['description'] ?? ''}'),
@@ -252,6 +272,12 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
       if (uid != null && url.isNotEmpty) {
         final cached = await FirestoreService.instance.getNewsShareImageUrl(uid, url);
         if (cached != null && isHubCarouselDisplayImage(cached)) {
+          await persistHubCarouselImage(
+            url: url,
+            title: headline,
+            imageUrl: cached,
+            kind: _isTeaArticleShare ? HubCarouselImageKind.tea : HubCarouselImageKind.news,
+          );
           if (!mounted) return;
           setState(() {
             _generatedShareImageUrl = cached;
@@ -265,9 +291,11 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
       }
 
       final generated = await getOrGenerateHubCarouselImage(
-        cacheKey: url.isNotEmpty ? url : headline,
+        cacheKey: hubCarouselImageCacheKey(url, headline),
         headline: headline,
         storyText: storyText,
+        articleUrl: url,
+        kind: _isTeaArticleShare ? HubCarouselImageKind.tea : HubCarouselImageKind.news,
       );
       if (generated == null || !mounted) return;
 

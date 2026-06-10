@@ -1,13 +1,21 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/chat_service.dart';
 import '../services/vertex_api_client.dart';
+import 'hub_carousel_image_store.dart';
+import 'share_news_cache.dart';
 
-const _hubCarouselAiCachePrefix = 'hub_carousel_ai_img_v1::';
-const _maxCarouselAiGenerationsPerPass = 4;
+const maxHubCarouselAiGenerationsPerPass = 10;
+
+final Map<String, String> _memoryAiImageCache = {};
+
+String hubCarouselImageCacheKey(String url, [String fallback = '']) {
+  final normalized = normalizeUrlKey(url);
+  if (normalized.isNotEmpty) return normalized;
+  return fallback.trim();
+}
 
 /// True for http(s) hero URLs and locally cached/generated data URLs.
 bool isHubCarouselDisplayImage(String? url) {
@@ -17,36 +25,86 @@ bool isHubCarouselDisplayImage(String? url) {
       s.startsWith('data:image');
 }
 
+String? peekHubCarouselMemory(String cacheKey) {
+  final key = hubCarouselImageCacheKey(cacheKey);
+  if (key.isEmpty) return null;
+  final hit = _memoryAiImageCache[key];
+  if (hit != null && isHubCarouselDisplayImage(hit)) return hit;
+  return null;
+}
+
+Future<String?> readCachedHubCarouselImage(String cacheKey) async {
+  final key = hubCarouselImageCacheKey(cacheKey);
+  if (key.isEmpty) return null;
+  final mem = peekHubCarouselMemory(key);
+  if (mem != null) return mem;
+  final index = await readHubCarouselImageIndex();
+  final hit = index[key];
+  if (hit != null && isHubCarouselDisplayImage(hit)) {
+    rememberHubCarouselImageInMemory(key, hit);
+    return hit;
+  }
+  return null;
+}
+
+void rememberHubCarouselImageInMemory(String cacheKey, String imageUrl) {
+  final key = hubCarouselImageCacheKey(cacheKey);
+  if (key.isEmpty || !isHubCarouselDisplayImage(imageUrl)) return;
+  _memoryAiImageCache[key] = imageUrl.trim();
+}
+
+/// Resolve a carousel image from memory/disk/server using url, id, or headline keys.
+Future<String?> resolveCachedHubCarouselImage({
+  required String url,
+  required String title,
+  String fallbackId = '',
+  HubCarouselImageKind kind = HubCarouselImageKind.news,
+}) {
+  return resolveHubCarouselImageFast(
+    url: url,
+    title: title,
+    fallbackId: fallbackId,
+    kind: kind,
+  );
+}
+
 Future<String?> getOrGenerateHubCarouselImage({
   required String cacheKey,
   required String headline,
   String storyText = '',
+  String articleUrl = '',
+  HubCarouselImageKind kind = HubCarouselImageKind.news,
 }) async {
-  final key = cacheKey.trim();
+  final key = hubCarouselImageCacheKey(cacheKey, headline);
   final title = headline.trim();
   if (key.isEmpty || title.isEmpty) return null;
-  if (!isVertexBackendConfigured()) return null;
 
-  final prefsKey = '$_hubCarouselAiCachePrefix${key.hashCode.abs()}';
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    final cached = prefs.getString(prefsKey);
-    if (cached != null && cached.startsWith('data:image')) return cached;
-  } catch (_) {}
+  final url = articleUrl.trim().isNotEmpty ? articleUrl.trim() : key;
+
+  final cached = await resolveHubCarouselImageFast(
+    url: url,
+    title: title,
+    fallbackId: key,
+    kind: kind,
+  );
+  if (cached != null) return cached;
+
+  if (!isVertexBackendConfigured()) return null;
 
   try {
     final generated = await ChatService.instance.fetchSingleNewsShareIllustrationImage({
       'headline': title,
-      if (storyText.trim().isNotEmpty) 'storyText': storyText.trim(),
+      if (storyText.trim().isNotEmpty) 'storyText': stripHtmlBoilerplate(storyText),
     });
     if (generated == null || !generated.startsWith('data:image')) return null;
 
-    if (generated.length <= 900000) {
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString(prefsKey, generated);
-      } catch (_) {}
-    }
+    await persistHubCarouselImage(
+      url: url,
+      title: title,
+      imageUrl: generated,
+      kind: kind,
+      fallbackId: key,
+    );
     return generated;
   } catch (e) {
     debugPrint('[HubCarouselAI] image generation failed: $e');
@@ -60,15 +118,20 @@ Future<void> enrichCarouselSlotsWithAiImages({
   required bool Function(int index) needsImage,
   required Future<String?> Function(int index) generateForIndex,
   required void Function(int index, String imageUrl) applyImage,
-  int maxGenerate = _maxCarouselAiGenerationsPerPass,
+  int maxGenerate = maxHubCarouselAiGenerationsPerPass,
 }) async {
-  var generated = 0;
-  for (var i = 0; i < slotCount && generated < maxGenerate; i++) {
-    if (!needsImage(i)) continue;
-    final img = await generateForIndex(i);
-    if (img == null || img.isEmpty) continue;
-    applyImage(i, img);
-    generated++;
+  final indices = <int>[];
+  for (var i = 0; i < slotCount; i++) {
+    if (needsImage(i)) indices.add(i);
+  }
+  final todo = indices.take(maxGenerate).toList();
+  const batchSize = 2;
+  for (var start = 0; start < todo.length; start += batchSize) {
+    final batch = todo.skip(start).take(batchSize).toList();
+    await Future.wait(batch.map((i) async {
+      final img = await generateForIndex(i);
+      if (img != null && img.isNotEmpty) applyImage(i, img);
+    }));
   }
 }
 

@@ -91,6 +91,16 @@ service cloud.firestore {
       allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
     }
 
+    // Hub Tea/News carousel AI images — global cache keyed by article URL
+    match /hubCarouselImageCache/{docId} {
+      allow read: if true;
+      allow create, update: if request.auth != null
+        && request.resource.data.articleUrl is string
+        && request.resource.data.imageUrl is string
+        && request.resource.data.kind is string;
+      allow delete: if request.auth != null;
+    }
+
     // COMMUNITY POSTS
     match /communityPosts/{postId} {
       allow read: if request.auth != null;

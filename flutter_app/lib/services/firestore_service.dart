@@ -500,6 +500,104 @@ class FirestoreService {
     }
   }
 
+  /// Global hub carousel image (Tea + News) — shared across users on Deitea server.
+  Future<String?> getHubCarouselImageUrl(String? articleUrl) async {
+    final url = (articleUrl ?? '').trim();
+    if (url.isEmpty) return null;
+    try {
+      final key = hashForNewsUrlCache(url);
+      if (key.isEmpty) return null;
+      final snap = await _db.doc('hubCarouselImageCache/$key').get();
+      return snap.data()?['imageUrl'] as String?;
+    } catch (error) {
+      debugPrint('getHubCarouselImageUrl failed: $error');
+      return null;
+    }
+  }
+
+  Future<String?> saveHubCarouselImage({
+    required String articleUrl,
+    required String imageUrl,
+    required String kind,
+    String headline = '',
+    String storagePath = '',
+  }) async {
+    final url = articleUrl.trim();
+    if (url.isEmpty || imageUrl.isEmpty) return null;
+    try {
+      final key = hashForNewsUrlCache(url);
+      if (key.isEmpty) return null;
+
+      var finalUrl = imageUrl.trim();
+      var finalPath = storagePath.trim();
+
+      if (finalUrl.startsWith('data:image')) {
+        final uploaded = await _uploadHubCarouselDataUrl(key, finalUrl);
+        if (uploaded == null) return null;
+        finalUrl = uploaded['imageUrl'] ?? '';
+        finalPath = uploaded['storagePath'] ?? '';
+        if (finalUrl.isEmpty) return null;
+      }
+
+      await _db.doc('hubCarouselImageCache/$key').set({
+        'articleUrl': url.length > 1200 ? url.substring(0, 1200) : url,
+        'imageUrl': finalUrl,
+        'kind': kind,
+        if (headline.trim().isNotEmpty) 'headline': headline.trim(),
+        if (finalPath.isNotEmpty) 'storagePath': finalPath,
+        'lastSeenAt': DateTime.now().millisecondsSinceEpoch,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      return finalUrl;
+    } catch (error) {
+      debugPrint('saveHubCarouselImage failed: $error');
+      return null;
+    }
+  }
+
+  Future<void> deleteHubCarouselImage(String articleUrl) async {
+    final url = articleUrl.trim();
+    if (url.isEmpty) return;
+    try {
+      final key = hashForNewsUrlCache(url);
+      if (key.isEmpty) return;
+      final ref = _db.doc('hubCarouselImageCache/$key');
+      final snap = await ref.get();
+      if (!snap.exists) return;
+      final data = snap.data() ?? {};
+      final storagePath = (data['storagePath'] ?? '').toString().trim();
+      if (storagePath.isNotEmpty) {
+        try {
+          await _storage.ref(storagePath).delete();
+        } catch (_) {}
+      }
+      await ref.delete();
+    } catch (error) {
+      debugPrint('deleteHubCarouselImage failed: $error');
+    }
+  }
+
+  Future<Map<String, String>?> _uploadHubCarouselDataUrl(String key, String dataUrl) async {
+    if (!dataUrl.startsWith('data:image')) return null;
+    try {
+      final commaIndex = dataUrl.indexOf(',');
+      if (commaIndex == -1) return null;
+      final storagePath = 'hubCarouselCache/$key.png';
+      final storageRef = _storage.ref(storagePath);
+      await storageRef.putData(
+        base64Decode(dataUrl.substring(commaIndex + 1)),
+        SettableMetadata(contentType: 'image/png'),
+      );
+      return {
+        'imageUrl': await storageRef.getDownloadURL(),
+        'storagePath': storagePath,
+      };
+    } catch (error) {
+      debugPrint('_uploadHubCarouselDataUrl failed: $error');
+      return null;
+    }
+  }
+
   Future<void> cleanupNewsShareImages(
     String uid,
     List<dynamic>? activeUrls, {

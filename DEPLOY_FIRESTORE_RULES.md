@@ -25,9 +25,9 @@
    - Use existing `firestore.rules` file: Yes
    - Use existing `firebase.json` file: Yes
 
-3. Deploy the rules:
+3. Deploy Firestore and Storage rules (hub carousel images use both):
    ```
-   firebase deploy --only firestore:rules
+   firebase deploy --only firestore:rules,storage
    ```
 
 ## What the Rules Do

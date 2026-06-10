@@ -1,6 +1,8 @@
 ﻿import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart';
 
 import '../router/app_router.dart';
@@ -8,7 +10,9 @@ import '../services/cached_news_service.dart';
 import 'package:deite/lib/pod_topic_news_shared.dart';
 import '../lib/hub_trending_algorithms.dart';
 import '../utils/hub_carousel_ai_image.dart';
+import '../utils/hub_carousel_image_store.dart';
 import '../utils/hub_colors.dart';
+import '../utils/hub_news_trending_storage.dart';
 import '../utils/share_news_cache.dart';
 import 'skeleton/card_skeleton.dart';
 
@@ -34,12 +38,97 @@ class HubTrendingItem {
 
 List<HubTrendingItem>? _hubCache;
 
+const _hubNewsItemsCacheKey = 'deite_hub_news_items_cache_v1';
+const _hubNewsCacheMaxAge = Duration(hours: 6);
+
+Future<List<HubTrendingItem>> _loadHubNewsFromDisk() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_hubNewsItemsCacheKey);
+    if (raw == null || raw.isEmpty) return [];
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map) return [];
+    final savedAt = DateTime.tryParse('${decoded['savedAt'] ?? ''}');
+    if (savedAt == null || DateTime.now().difference(savedAt) > _hubNewsCacheMaxAge) {
+      return [];
+    }
+    final items = decoded['items'];
+    if (items is! List) return [];
+    return items
+        .whereType<Map>()
+        .map((m) => HubTrendingItem(
+              id: '${m['id'] ?? ''}',
+              title: '${m['title'] ?? ''}',
+              url: '${m['url'] ?? ''}',
+              description: '${m['description'] ?? ''}',
+              image: '${m['image'] ?? ''}',
+              source: '${m['source'] ?? ''}',
+              category: '${m['category'] ?? ''}',
+            ))
+        .where((t) => t.title.isNotEmpty && t.url.isNotEmpty)
+        .toList();
+  } catch (_) {
+    return [];
+  }
+}
+
+Future<void> _saveHubNewsToDisk(List<HubTrendingItem> items) async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _hubNewsItemsCacheKey,
+      jsonEncode({
+        'savedAt': DateTime.now().toIso8601String(),
+        'items': items
+            .map((e) => {
+                  'id': e.id,
+                  'title': e.title,
+                  'url': e.url,
+                  'description': e.description,
+                  'image': e.image,
+                  'source': e.source,
+                  'category': e.category,
+                })
+            .toList(),
+      }),
+    );
+  } catch (_) {}
+}
+
 Future<List<HubTrendingItem>> fetchHubTrendingItems() async {
   if (_hubCache != null && _hubCache!.isNotEmpty) {
-    return prioritizeWithImagesFirst(
-      _hubCache!,
+    final hydrated = <HubTrendingItem>[];
+    for (final item in _hubCache!) {
+      if (hasUsableHubImage(item.image)) {
+        hydrated.add(item);
+        continue;
+      }
+      final cached = await resolveCachedHubCarouselImage(
+        url: item.url,
+        title: item.title,
+        fallbackId: item.id,
+        kind: HubCarouselImageKind.news,
+      );
+      if (cached != null) {
+        hydrated.add(HubTrendingItem(
+          id: item.id,
+          title: item.title,
+          url: item.url,
+          description: item.description,
+          image: cached,
+          source: item.source,
+          category: item.category,
+        ));
+      } else {
+        hydrated.add(item);
+      }
+    }
+    final sorted = prioritizeWithImagesFirst(
+      hydrated,
       (item) => hasUsableHubImage(item.image),
     );
+    _hubCache = sorted;
+    return sorted;
   }
 
   final seen = <String>{};
@@ -90,11 +179,42 @@ Future<List<HubTrendingItem>> fetchHubTrendingItems() async {
     } catch (_) {}
   }
 
-  final sorted = prioritizeWithImagesFirst(
+  var sorted = prioritizeWithImagesFirst(
     items,
     (item) => hasUsableHubImage(item.image),
   );
+  final hydrated = <HubTrendingItem>[];
+  for (final item in sorted) {
+    if (hasUsableHubImage(item.image)) {
+      hydrated.add(item);
+      continue;
+    }
+    final cached = await resolveCachedHubCarouselImage(
+      url: item.url,
+      title: item.title,
+      fallbackId: item.id,
+    );
+    if (cached != null) {
+      hydrated.add(HubTrendingItem(
+        id: item.id,
+        title: item.title,
+        url: item.url,
+        description: item.description,
+        image: cached,
+        source: item.source,
+        category: item.category,
+      ));
+    } else {
+      hydrated.add(item);
+    }
+  }
+  sorted = prioritizeWithImagesFirst(
+    hydrated,
+    (item) => hasUsableHubImage(item.image),
+  );
   _hubCache = sorted;
+  await writeHubNewsUrlsAndPruneImageCache(sorted.map((e) => e.url).toList());
+  unawaited(_saveHubNewsToDisk(sorted));
   return sorted;
 }
 
@@ -119,8 +239,29 @@ class _HubTrendingFeedState extends State<HubTrendingFeed> {
     _load();
   }
 
+  @override
+  void activate() {
+    super.activate();
+    unawaited(_syncCachedAiImages());
+  }
+
   Future<void> _load() async {
-    if (_hubCache == null || _hubCache!.isEmpty) setState(() => _loading = true);
+    final disk = await _loadHubNewsFromDisk();
+    if (disk.isNotEmpty && mounted) {
+      setState(() {
+        _items = prioritizeWithImagesFirst(
+          disk,
+          (item) => hasUsableHubImage(item.image),
+        );
+        _loading = false;
+        _error = '';
+      });
+      _hubCache = _items;
+      await _syncCachedAiImages();
+      unawaited(_enrichMissingAiImages());
+    } else if (_hubCache == null || _hubCache!.isEmpty) {
+      setState(() => _loading = true);
+    }
     try {
       final items = await fetchHubTrendingItems();
       if (!mounted) return;
@@ -129,6 +270,7 @@ class _HubTrendingFeedState extends State<HubTrendingFeed> {
         _loading = false;
         _error = items.isEmpty ? 'No headlines yet.' : '';
       });
+      await _syncCachedAiImages();
       unawaited(_enrichMissingAiImages());
     } catch (e) {
       if (!mounted) return;
@@ -136,6 +278,48 @@ class _HubTrendingFeedState extends State<HubTrendingFeed> {
         _loading = false;
         _error = _items.isEmpty ? 'Could not load news.' : '';
       });
+    }
+  }
+
+  Future<void> _syncCachedAiImages() async {
+    if (_items.isEmpty) return;
+    var changed = false;
+    final updated = <HubTrendingItem>[];
+    for (final item in _items) {
+      if (hasUsableHubImage(item.image)) {
+        updated.add(item);
+        continue;
+      }
+      final cached = await resolveCachedHubCarouselImage(
+        url: item.url,
+        title: item.title,
+        fallbackId: item.id,
+        kind: HubCarouselImageKind.news,
+      );
+      if (cached != null) {
+        updated.add(HubTrendingItem(
+          id: item.id,
+          title: item.title,
+          url: item.url,
+          description: item.description,
+          image: cached,
+          source: item.source,
+          category: item.category,
+        ));
+        changed = true;
+      } else {
+        updated.add(item);
+      }
+    }
+    if (changed && mounted) {
+      setState(() {
+        _items = prioritizeWithImagesFirst(
+          updated,
+          (item) => hasUsableHubImage(item.image),
+        );
+        _hubCache = _items;
+      });
+      unawaited(_saveHubNewsToDisk(_items));
     }
   }
 
@@ -147,9 +331,11 @@ class _HubTrendingFeedState extends State<HubTrendingFeed> {
       generateForIndex: (i) {
         final item = _items[i];
         return getOrGenerateHubCarouselImage(
-          cacheKey: item.url.isNotEmpty ? item.url : item.id,
+          cacheKey: hubCarouselImageCacheKey(item.url, item.id),
           headline: item.title,
-          storyText: item.description,
+          storyText: stripHtmlBoilerplate(item.description),
+          articleUrl: item.url,
+          kind: HubCarouselImageKind.news,
         );
       },
       applyImage: (i, imageUrl) {
@@ -169,6 +355,7 @@ class _HubTrendingFeedState extends State<HubTrendingFeed> {
           _items = updated;
           _hubCache = updated;
         });
+        unawaited(_saveHubNewsToDisk(_items));
       },
     );
   }

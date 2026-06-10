@@ -17,6 +17,8 @@ import '../services/firestore_service.dart';
 import '../services/hub_personalization_service.dart';
 import '../services/pod_news_service.dart';
 import '../utils/hub_carousel_ai_image.dart';
+import '../utils/hub_carousel_image_store.dart';
+import '../utils/share_news_cache.dart';
 
 /// Mirrors src/components/PodSportsPage.js
 class PodSportsPage extends StatefulWidget {
@@ -136,9 +138,11 @@ class _PodSportsPageState extends State<PodSportsPage> {
       generateForIndex: (i) {
         final item = _trending[i];
         return getOrGenerateHubCarouselImage(
-          cacheKey: item.url.isNotEmpty ? item.url : item.title,
+          cacheKey: hubCarouselImageCacheKey(item.url, item.title),
           headline: item.title,
-          storyText: item.description,
+          storyText: stripHtmlBoilerplate(item.description),
+          articleUrl: item.url,
+          kind: HubCarouselImageKind.news,
         );
       },
       applyImage: (i, imageUrl) {
