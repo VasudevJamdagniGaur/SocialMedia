@@ -215,10 +215,23 @@ Future<List<TeaItem>> fetchTrendingTea({bool allowCache = true}) async {
 }
 
 String? teaHeroImageUrl(TeaItem item) {
-  if (_isDirectImageUrl(item.postUrl)) return item.postUrl.trim();
+  if (_isDirectImageUrl(item.postUrl)) {
+    final u = item.postUrl.trim();
+    return isValidHubCarouselImageUrl(u) ? u : null;
+  }
   final thumb = item.thumbnail.trim();
-  if (isHubCarouselDisplayImage(thumb)) return thumb;
+  if (isValidHubCarouselImageUrl(thumb)) return thumb;
   return null;
+}
+
+/// Lightweight payload for Tea feed navigation (omit huge inline data URLs).
+Map<String, dynamic> teaItemFeedPayload(TeaItem item) {
+  final json = item.toJson();
+  final thumb = '${json['thumbnail'] ?? ''}';
+  if (thumb.startsWith('data:image')) {
+    json.remove('thumbnail');
+  }
+  return json;
 }
 
 class TrendingTea extends StatefulWidget {
@@ -394,7 +407,7 @@ class _TrendingTeaState extends State<TrendingTea> {
 
   void _openTeaFeed() {
     context.go(AppRoutes.teaFeed, extra: {
-      'teaItems': _items.map((e) => e.toJson()).toList(),
+      'teaItems': _items.map(teaItemFeedPayload).toList(),
       'returnTo': GoRouterState.of(context).uri.path,
     });
   }

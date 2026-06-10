@@ -70,6 +70,10 @@ class _TeaFeedPageState extends State<TeaFeedPage> {
     super.didChangeDependencies();
     if (_parsedExtra) return;
     _parsedExtra = true;
+    unawaited(_bootstrapTeaFeed());
+  }
+
+  Future<void> _bootstrapTeaFeed() async {
     final extra = GoRouterState.of(context).extra;
     if (extra is Map) {
       _returnTo = extra['returnTo'] as String? ?? AppRoutes.dashboard;
@@ -79,8 +83,15 @@ class _TeaFeedPageState extends State<TeaFeedPage> {
         _rawItems = raw.map(_parseTeaItem).whereType<TeaItem>().toList();
       }
     }
-    _refreshWatchlistIds();
-    unawaited(_hydrateTeaFeedImages());
+    if (_rawItems.isEmpty) {
+      try {
+        _rawItems = await fetchTrendingTea();
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    setState(() {});
+    await _refreshWatchlistIds();
+    await _hydrateTeaFeedImages();
   }
 
   @override
@@ -168,7 +179,7 @@ class _TeaFeedPageState extends State<TeaFeedPage> {
         title: m['title'] as String? ?? '',
         url: m['url'] as String? ?? '',
         postUrl: m['postUrl'] as String? ?? '',
-        thumbnail: m['thumbnail'] as String? ?? '',
+        thumbnail: '${m['thumbnail'] ?? m['image'] ?? ''}',
         gossip: '${m['gossip'] ?? m['description'] ?? ''}'.trim(),
         author: m['author'] as String? ?? 'unknown',
         score: (m['score'] as num?)?.toInt() ?? 0,
@@ -489,27 +500,89 @@ class _TeaSlide extends StatefulWidget {
 }
 
 class _TeaSlideState extends State<_TeaSlide> {
+  String? _heroUrl;
+  int _resolveGen = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _heroUrl = teaHeroImageUrl(widget.item);
+    unawaited(_resolveHeroImage());
+  }
+
+  @override
+  void didUpdateWidget(covariant _TeaSlide oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.item.id != widget.item.id ||
+        oldWidget.item.thumbnail != widget.item.thumbnail) {
+      _heroUrl = teaHeroImageUrl(widget.item);
+      unawaited(_resolveHeroImage());
+    }
+  }
+
+  Future<void> _resolveHeroImage() async {
+    final item = widget.item;
+    final token = ++_resolveGen;
+
+    final existing = teaHeroImageUrl(item);
+    if (existing != null) {
+      if (mounted && token == _resolveGen) setState(() => _heroUrl = existing);
+      return;
+    }
+
+    final cached = await resolveHubCarouselImageFast(
+      url: item.url,
+      title: item.title,
+      fallbackId: item.id,
+      kind: HubCarouselImageKind.tea,
+    );
+    if (cached != null && isValidHubCarouselImageUrl(cached)) {
+      if (mounted && token == _resolveGen) setState(() => _heroUrl = cached);
+      return;
+    }
+
+    final generated = await getOrGenerateHubCarouselImage(
+      cacheKey: hubCarouselImageCacheKey(item.url, item.id),
+      headline: item.title,
+      storyText: item.gossip,
+      articleUrl: item.url,
+      kind: HubCarouselImageKind.tea,
+    );
+    if (!mounted || token != _resolveGen) return;
+    if (generated != null && isValidHubCarouselImageUrl(generated)) {
+      setState(() => _heroUrl = generated);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final item = widget.item;
-    final heroUrl = teaHeroImageUrl(item);
-    final showImg = heroUrl != null;
+    final heroUrl = _heroUrl != null && isValidHubCarouselImageUrl(_heroUrl) ? _heroUrl : null;
     final canShare = item.url.isNotEmpty;
     final bottomPad = MediaQuery.paddingOf(context).bottom;
 
     return Stack(
       fit: StackFit.expand,
       children: [
-        GestureDetector(
-          onTap: canShare ? widget.onOpenShare : null,
-          child: showImg
-              ? HubCarouselHeroImage(
-                  imageUrl: heroUrl,
-                  fit: BoxFit.cover,
-                  errorWidget: _FallbackHero(index: widget.index),
-                )
-              : _FallbackHero(index: widget.index),
-        ),
+        Positioned.fill(child: _FallbackHero(index: widget.index)),
+        if (heroUrl != null)
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: canShare ? widget.onOpenShare : null,
+              child: HubCarouselHeroImage(
+                imageUrl: heroUrl,
+                fit: BoxFit.cover,
+                errorWidget: const SizedBox.shrink(),
+              ),
+            ),
+          )
+        else
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: canShare ? widget.onOpenShare : null,
+              child: const SizedBox.expand(),
+            ),
+          ),
         IgnorePointer(
           child: DecoratedBox(
             decoration: BoxDecoration(

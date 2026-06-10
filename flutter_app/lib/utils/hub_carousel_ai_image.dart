@@ -25,6 +25,23 @@ bool isHubCarouselDisplayImage(String? url) {
       s.startsWith('data:image');
 }
 
+/// Rejects truncated or corrupt data URLs that would render as a black frame.
+bool isValidHubCarouselImageUrl(String? url) {
+  final s = '${url ?? ''}'.trim();
+  if (!isHubCarouselDisplayImage(s)) return false;
+  if (!s.startsWith('data:image')) return true;
+  try {
+    final comma = s.indexOf(',');
+    if (comma == -1) return false;
+    final base64 = s.substring(comma + 1).trim();
+    if (base64.length < 48) return false;
+    base64Decode(base64);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 String? peekHubCarouselMemory(String cacheKey) {
   final key = hubCarouselImageCacheKey(cacheKey);
   if (key.isEmpty) return null;
@@ -166,6 +183,11 @@ class HubCarouselHeroImage extends StatelessWidget {
     return Image.network(
       url,
       fit: fit,
+      gaplessPlayback: true,
+      loadingBuilder: (context, child, progress) {
+        if (progress == null) return child;
+        return errorWidget ?? const SizedBox.shrink();
+      },
       errorBuilder: (_, __, ___) => errorWidget ?? const SizedBox.shrink(),
     );
   }
