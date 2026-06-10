@@ -768,7 +768,12 @@ Future<Map<String, dynamic>> fetchHubPersonalizedFeed(
           (verticalWeights[va] ?? 0) * 5;
       final sb = effectiveHubRankScore(b, profile?['city'] as String?, interestsLower) +
           (verticalWeights[vb] ?? 0) * 5;
-      return sb.compareTo(sa);
+      final scoreCmp = sb.compareTo(sa);
+      if (scoreCmp != 0) return scoreCmp;
+      final ai = hasUsableHubImage('${a['image']}');
+      final bi = hasUsableHubImage('${b['image']}');
+      if (ai != bi) return ai ? -1 : 1;
+      return 0;
     });
 
   final items = mixHubFeedSegments(trending, latest, targetSize);

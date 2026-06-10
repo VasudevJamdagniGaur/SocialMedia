@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../router/app_router.dart';
 import '../services/cached_news_service.dart';
 import '../services/reddit_tea_service.dart';
+import '../lib/hub_trending_algorithms.dart';
 import '../utils/hub_colors.dart';
 import '../utils/share_news_cache.dart';
 import '../utils/tea_trending_storage.dart';
@@ -128,7 +129,10 @@ Future<List<TeaItem>> fetchTrendingTea({bool allowCache = true}) async {
       _memoryTeaCache!.isNotEmpty &&
       _memoryTeaCacheAt != null &&
       DateTime.now().difference(_memoryTeaCacheAt!) < _teaCacheMaxAge) {
-    return _memoryTeaCache!;
+    return prioritizeWithImagesFirst(
+      _memoryTeaCache!,
+      (item) => teaHeroImageUrl(item) != null,
+    );
   }
 
   final rows = await fetchTrendingTeaRows();
@@ -136,7 +140,10 @@ Future<List<TeaItem>> fetchTrendingTea({bool allowCache = true}) async {
     throw Exception('Could not load tea. Check your connection.');
   }
 
-  final items = rows.map(_rowToTeaItem).take(10).toList();
+  final items = prioritizeWithImagesFirst(
+    rows.map(_rowToTeaItem).toList(),
+    (item) => teaHeroImageUrl(item) != null,
+  ).take(10).toList();
   _memoryTeaCache = items;
   _memoryTeaCacheAt = DateTime.now();
   await writeTrendingTeaUrlsAndPruneShareCache(items.map((e) => e.url).toList());
@@ -172,7 +179,10 @@ class _TrendingTeaState extends State<TrendingTea> {
     final cached = await _loadTeaFromDisk();
     if (cached.isNotEmpty && mounted) {
       setState(() {
-        _items = cached;
+        _items = prioritizeWithImagesFirst(
+          cached,
+          (item) => teaHeroImageUrl(item) != null,
+        );
         _loading = false;
         _error = null;
       });

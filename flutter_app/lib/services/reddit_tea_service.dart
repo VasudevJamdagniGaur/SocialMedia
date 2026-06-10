@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../config/env.dart';
+import '../lib/hub_trending_algorithms.dart';
 import '../lib/pod_reddit_hot.dart';
 import '../lib/pod_topic_news_shared.dart';
 import '../lib/reddit_post_filter.dart';
@@ -394,6 +395,10 @@ Future<List<Map<String, dynamic>>> fetchTrendingTeaRows() async {
   }
   if (rows.isNotEmpty) {
     rows = await enrichTeaRows(rows, maxEnrich: 10);
+    sortHubMapRowsImageFirst(
+      rows,
+      compare: (a, b) => hubMapRowScore(b).compareTo(hubMapRowScore(a)),
+    );
   }
   return rows;
 }

@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../router/app_router.dart';
 import '../services/cached_news_service.dart';
 import 'package:deite/lib/pod_topic_news_shared.dart';
+import '../lib/hub_trending_algorithms.dart';
 import '../utils/hub_colors.dart';
 import '../utils/share_news_cache.dart';
 import 'skeleton/card_skeleton.dart';
@@ -33,7 +34,12 @@ class HubTrendingItem {
 List<HubTrendingItem>? _hubCache;
 
 Future<List<HubTrendingItem>> fetchHubTrendingItems() async {
-  if (_hubCache != null && _hubCache!.isNotEmpty) return _hubCache!;
+  if (_hubCache != null && _hubCache!.isNotEmpty) {
+    return prioritizeWithImagesFirst(
+      _hubCache!,
+      (item) => hasUsableHubImage(item.image),
+    );
+  }
 
   final seen = <String>{};
   final items = <HubTrendingItem>[];
@@ -83,8 +89,12 @@ Future<List<HubTrendingItem>> fetchHubTrendingItems() async {
     } catch (_) {}
   }
 
-  _hubCache = items;
-  return items;
+  final sorted = prioritizeWithImagesFirst(
+    items,
+    (item) => hasUsableHubImage(item.image),
+  );
+  _hubCache = sorted;
+  return sorted;
 }
 
 class HubTrendingFeed extends StatefulWidget {

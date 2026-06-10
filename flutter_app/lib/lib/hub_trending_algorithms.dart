@@ -187,3 +187,41 @@ List<Map<String, dynamic>> mixHubFeedSegments(
     return {...x, 'mixBucket': mixBucket, 'feedTag': tag};
   }).toList();
 }
+
+bool hasUsableHubImage(String? url) {
+  final s = '${url ?? ''}'.trim();
+  return s.startsWith('http://') || s.startsWith('https://');
+}
+
+bool hubMapRowHasImage(Map<String, dynamic> row) {
+  return hasUsableHubImage('${row['image'] ?? ''}') ||
+      hasUsableHubImage('${row['thumbnail'] ?? ''}');
+}
+
+/// Stable partition — items with images first, original order kept within each group.
+List<T> prioritizeWithImagesFirst<T>(
+  List<T> items,
+  bool Function(T item) hasImage,
+) {
+  final withImg = <T>[];
+  final without = <T>[];
+  for (final item in items) {
+    (hasImage(item) ? withImg : without).add(item);
+  }
+  return [...withImg, ...without];
+}
+
+void sortHubMapRowsImageFirst(
+  List<Map<String, dynamic>> rows, {
+  int Function(Map<String, dynamic> a, Map<String, dynamic> b)? compare,
+}) {
+  rows.sort((a, b) {
+    final ai = hubMapRowHasImage(a);
+    final bi = hubMapRowHasImage(b);
+    if (ai != bi) return ai ? -1 : 1;
+    return compare?.call(a, b) ?? 0;
+  });
+}
+
+int hubMapRowScore(Map<String, dynamic> row) =>
+    row['score'] is num ? (row['score'] as num).toInt() : int.tryParse('${row['score']}') ?? 0;

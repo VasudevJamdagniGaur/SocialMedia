@@ -8,6 +8,7 @@ import '../components/hub_widgets.dart';
 import '../contexts/theme_context.dart';
 import '../router/app_router.dart';
 import '../services/auth_service.dart';
+import 'package:deite/lib/hub_trending_algorithms.dart';
 import 'package:deite/lib/pod_topic_news_shared.dart';
 import '../services/cached_news_service.dart';
 import '../services/firestore_service.dart';
@@ -99,7 +100,12 @@ class _PodSportsPageState extends State<PodSportsPage> {
       }
 
       if (token != _loadToken) return;
-      final rows = merged.isNotEmpty ? merged.take(10).toList() : fallback;
+      final rows = merged.isNotEmpty
+          ? prioritizeWithImagesFirst(
+              merged.take(10).toList(),
+              (item) => hasUsableHubImage(item.image),
+            )
+          : fallback;
       _cache = rows;
       setState(() {
         _trending = rows;

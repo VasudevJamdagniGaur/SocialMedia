@@ -1,5 +1,6 @@
 import 'package:deite/services/sports_personalization_service.dart';
 
+import 'hub_trending_algorithms.dart';
 import 'pod_reddit_hot.dart';
 import 'pod_topic_news_shared.dart';
 
@@ -236,7 +237,10 @@ Future<List<NewsArticle>> fetchSportsHubTrendingCarouselItems() async {
       );
     }
   }
-  return ordered;
+  return prioritizeWithImagesFirst(
+    ordered,
+    (item) => hasUsableHubImage(item.image),
+  );
 }
 
 Future<List<Map<String, dynamic>>> _trySportsRowsFromGoogleRss(String topicId) async {
@@ -418,6 +422,10 @@ Future<SportsTopicFeedResult> fetchSportsTopicRawItemsResult(
       minScore: 18,
     );
     if (redditRows.isNotEmpty) {
+      sortHubMapRowsImageFirst(
+        redditRows,
+        compare: (a, b) => hubMapRowScore(b).compareTo(hubMapRowScore(a)),
+      );
       return SportsTopicFeedResult(items: mapsToNewsArticles(redditRows));
     }
     return SportsTopicFeedResult(
@@ -434,6 +442,10 @@ Future<SportsTopicFeedResult> fetchSportsTopicRawItemsResult(
       minScore: 16,
     );
     if (redditRows.isNotEmpty) {
+      sortHubMapRowsImageFirst(
+        redditRows,
+        compare: (a, b) => hubMapRowScore(b).compareTo(hubMapRowScore(a)),
+      );
       return SportsTopicFeedResult(items: mapsToNewsArticles(redditRows));
     }
   }
@@ -446,6 +458,10 @@ Future<SportsTopicFeedResult> fetchSportsTopicRawItemsResult(
       minScore: 14,
     );
     if (redditRows.isNotEmpty) {
+      sortHubMapRowsImageFirst(
+        redditRows,
+        compare: (a, b) => hubMapRowScore(b).compareTo(hubMapRowScore(a)),
+      );
       return SportsTopicFeedResult(items: mapsToNewsArticles(redditRows));
     }
   }
@@ -458,6 +474,10 @@ Future<SportsTopicFeedResult> fetchSportsTopicRawItemsResult(
       minScore: 12,
     );
     if (redditRows.isNotEmpty) {
+      sortHubMapRowsImageFirst(
+        redditRows,
+        compare: (a, b) => hubMapRowScore(b).compareTo(hubMapRowScore(a)),
+      );
       return SportsTopicFeedResult(items: mapsToNewsArticles(redditRows));
     }
   }
@@ -475,6 +495,10 @@ Future<SportsTopicFeedResult> fetchSportsTopicRawItemsResult(
       },
     );
     if (redditRows.isNotEmpty) {
+      sortHubMapRowsImageFirst(
+        redditRows,
+        compare: (a, b) => hubMapRowScore(b).compareTo(hubMapRowScore(a)),
+      );
       return SportsTopicFeedResult(items: mapsToNewsArticles(redditRows));
     }
   }
@@ -518,9 +542,13 @@ Future<SportsTopicFeedResult> fetchSportsTopicRawItemsResult(
     concurrency: rssOnlyPrefetch ? 1 : 2,
   );
   final deduped = _dedupeByTitleJaccard(enriched);
+  final finalRows = List<Map<String, dynamic>>.from(
+    deduped.isNotEmpty ? deduped : enriched,
+  );
+  sortHubMapRowsImageFirst(finalRows);
   final rssOnlyMerged = apiLen == 0 && rssLen > 0;
   return SportsTopicFeedResult(
-    items: mapsToNewsArticles(deduped.isNotEmpty ? deduped : enriched),
+    items: mapsToNewsArticles(finalRows),
     allowRewrite: !rssOnlyMerged,
   );
 }
