@@ -1,4 +1,5 @@
-﻿import 'package:firebase_core/firebase_core.dart';
+﻿import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -17,6 +18,7 @@ Future<void> main() async {
   };
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await FirebaseAnalytics.instance.setAnalyticsCollectionEnabled(true);
   initAuthRefreshNotifier();
 
   SystemChrome.setSystemUIOverlayStyle(

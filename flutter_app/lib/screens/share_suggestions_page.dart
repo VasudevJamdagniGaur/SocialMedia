@@ -144,26 +144,26 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
   }
 
   void _applyRoutePayload(Map<String, dynamic> extra) {
-    _reflection = (extra['reflection'] as String? ?? '').trim();
-    _platform = extra['platform'] as String? ?? 'linkedin';
-    _returnTo = extra['returnTo'] as String? ?? AppRoutes.dashboard;
-    _suggestionsOnly = extra['suggestionsOnly'] == true;
+      _reflection = (extra['reflection'] as String? ?? '').trim();
+      _platform = extra['platform'] as String? ?? 'linkedin';
+      _returnTo = extra['returnTo'] as String? ?? AppRoutes.dashboard;
+      _suggestionsOnly = extra['suggestionsOnly'] == true;
 
-    final mediaRaw = extra['media'];
-    if (mediaRaw is List) {
-      _media = mediaRaw
-          .whereType<String>()
-          .map((s) => s.trim())
-          .where((s) =>
-              s.startsWith('data:image') ||
-              s.startsWith('http://') ||
-              s.startsWith('https://'))
-          .take(6)
-          .toList();
-    }
+      final mediaRaw = extra['media'];
+      if (mediaRaw is List) {
+        _media = mediaRaw
+            .whereType<String>()
+            .map((s) => s.trim())
+            .where((s) =>
+                s.startsWith('data:image') ||
+                s.startsWith('http://') ||
+                s.startsWith('https://'))
+            .take(6)
+            .toList();
+      }
 
-    if (extra['newsArticle'] is Map) {
-      _newsArticle = Map<String, dynamic>.from(extra['newsArticle'] as Map);
+      if (extra['newsArticle'] is Map) {
+        _newsArticle = Map<String, dynamic>.from(extra['newsArticle'] as Map);
       _sanitizeNewsArticleFields();
       final headline = '${_newsArticle?['title'] ?? ''}'.trim();
       if (headline.isNotEmpty) _newsCardHeadline = headline;
@@ -630,7 +630,7 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
         }
         if (cached != null && cached.isNotEmpty) {
           items = cleanCachedNewsSuggestions(cached, isTea: isTea);
-        } else {
+      } else {
           final aiArticle = isTea ? prepareTeaArticleContextForAi(article) : article;
           final localFallback = isTea
               ? buildLocalTeaShareSuggestions(aiArticle, _platform)
@@ -644,7 +644,7 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
             items = await ChatService.instance
                 .generateNewsArticleShareSuggestions(
                   aiArticle,
-                  _platform,
+          _platform,
                   prefetchedDetails: aiArticle,
                   isTeaGossip: isTea,
                 )
@@ -894,62 +894,62 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 448),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(4, 8, 16, 0),
-                        child: Row(
-                          children: [
-                            IconButton(
-                              onPressed: _goBack,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(4, 8, 16, 0),
+                    child: Row(
+                      children: [
+                        IconButton(
+                          onPressed: _goBack,
                               icon: Icon(LucideIcons.arrowLeft, color: secondaryText, size: 20),
-                            ),
-                            Expanded(
-                              child: Text(
-                                _headerTitle,
-                                style: TextStyle(
-                                  color: primaryText,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ],
                         ),
-                      ),
-                      Expanded(
-                        child: ListView(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                          children: [
-                            _SourceCard(
-                              isDarkMode: isDarkMode,
-                              isNewsMode: _isNewsMode,
+                        Expanded(
+                          child: Text(
+                            _headerTitle,
+                            style: TextStyle(
+                              color: primaryText,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                      children: [
+                        _SourceCard(
+                          isDarkMode: isDarkMode,
+                          isNewsMode: _isNewsMode,
                               isTeaArticle: _isTeaArticleShare,
-                              reflection: _reflection,
-                              newsArticle: _newsArticle,
+                          reflection: _reflection,
+                          newsArticle: _newsArticle,
                               newsHeadline: _displayNewsHeadline,
                               newsSummary: _displayNewsSummary,
                               loadingNewsDetails: _loadingNewsDetails,
-                              suggestionsOnly: _suggestionsOnly,
-                            ),
+                          suggestionsOnly: _suggestionsOnly,
+                        ),
                             const SizedBox(height: 24),
-                            _PlatformSelector(
-                              platform: _platform,
-                              isDarkMode: isDarkMode,
-                              onChanged: _onPlatformChanged,
-                            ),
+                        _PlatformSelector(
+                          platform: _platform,
+                          isDarkMode: isDarkMode,
+                          onChanged: _onPlatformChanged,
+                        ),
                             const SizedBox(height: 12),
-                            Text(
-                              'Choose a post to share',
-                              style: TextStyle(
-                                color: primaryText,
-                                fontSize: 14,
+                        Text(
+                          'Choose a post to share',
+                          style: TextStyle(
+                            color: primaryText,
+                            fontSize: 14,
                                 fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            if (_loading)
-                              const ListSkeleton(count: 3)
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        if (_loading)
+                          const ListSkeleton(count: 3)
                             else if (_isNewsMode &&
                                 _loadingShareImage &&
                                 !isHubCarouselDisplayImage(_shareSuggestionImageUrl)) ...[
@@ -960,14 +960,14 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
                               const SizedBox(height: 12),
                               const ListSkeleton(count: 2),
                             ] else ...[
-                              if (_error != null)
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: 8),
-                                  child: Text(
+                          if (_error != null)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Text(
                                     '${_isNewsMode ? 'Using article text' : 'Using reflection'} after: $_error',
-                                    style: TextStyle(color: secondaryText, fontSize: 12),
-                                  ),
-                                ),
+                                style: TextStyle(color: secondaryText, fontSize: 12),
+                              ),
+                            ),
                               FutureBuilder<_TweetUserInfo>(
                                 future: _loadTweetUserInfo(),
                                 builder: (context, userSnap) {
@@ -980,26 +980,26 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
 
                                   return Column(
                                     children: List.generate(_suggestions.length, (index) {
-                                      final item = _suggestions[index];
-                                      final eventLabel = item['eventLabel'] ?? 'Post';
-                                      final post = item['post'] ?? '';
-                                      final isSelected = index == _selectedIndex;
+                                final item = _suggestions[index];
+                                final eventLabel = item['eventLabel'] ?? 'Post';
+                                final post = item['post'] ?? '';
+                                final isSelected = index == _selectedIndex;
                                       final isPosted = item['posted'] == 'true';
 
-                                      return Padding(
+                                return Padding(
                                         padding: const EdgeInsets.only(bottom: 12),
-                                        child: _SuggestionCard(
-                                          eventLabel: eventLabel,
-                                          post: post,
-                                          imageUrl: imageUrl,
+                                  child: _SuggestionCard(
+                                    eventLabel: eventLabel,
+                                    post: post,
+                                    imageUrl: imageUrl,
                                           platform: _platform,
-                                          isSelected: isSelected,
+                                    isSelected: isSelected,
                                           isPosted: isPosted,
-                                          isDarkMode: isDarkMode,
-                                          cardBg: cardBg,
-                                          cardBorder: cardBorder,
+                                    isDarkMode: isDarkMode,
+                                    cardBg: cardBg,
+                                    cardBorder: cardBorder,
                                           tweetUser: tweetUser,
-                                          onTap: () {
+                                    onTap: () {
                                             setState(() => _selectedIndex = index);
                                             _openSharePanel(post);
                                           },
@@ -1013,9 +1013,9 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
                           ],
                         ),
                       ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
               ),
               if (_sharePanelOpen)
                 _SharePanelOverlay(
@@ -1029,13 +1029,13 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
                 ),
               if (_shareConfirmOpen)
                 _ShareConfirmBanner(
-                  platform: _platform,
-                  onDismiss: () => setState(() {
-                    _shareConfirmOpen = false;
-                    _pendingShareText = null;
-                  }),
-                  onConfirm: _confirmShareRecorded,
-                ),
+                platform: _platform,
+                onDismiss: () => setState(() {
+                  _shareConfirmOpen = false;
+                  _pendingShareText = null;
+                }),
+                onConfirm: _confirmShareRecorded,
+              ),
             ],
           ),
         ),
@@ -1125,17 +1125,17 @@ class _SourceCard extends StatelessWidget {
             ] else ...[
               if ((newsHeadline.isNotEmpty ? newsHeadline : (newsArticle?['title'] as String? ?? '')).isNotEmpty) ...[
                 const SizedBox(height: 8),
-                Text(
+            Text(
                   newsHeadline.isNotEmpty
                       ? newsHeadline
                       : (newsArticle?['title'] as String? ?? ''),
-                  style: TextStyle(
-                    color: primary,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    height: 1.35,
-                  ),
-                ),
+              style: TextStyle(
+                color: primary,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                height: 1.35,
+              ),
+            ),
               ],
               if (loadingNewsDetails && newsSummary.trim().isEmpty) ...[
                 const SizedBox(height: 8),
@@ -1145,8 +1145,8 @@ class _SourceCard extends StatelessWidget {
                 const SizedBox(height: 8),
                 const Skeleton(variant: SkeletonVariant.text, height: 14, width: 220),
               ] else if (newsSummary.trim().isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
+              const SizedBox(height: 8),
+              Text(
                   newsSummary,
                   style: TextStyle(color: primary, fontSize: 15, height: 1.45),
                 ),
@@ -1164,9 +1164,9 @@ class _SourceCard extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   stripHtmlBoilerplate(newsArticle?['description'] as String?),
-                  style: TextStyle(color: primary, fontSize: 15, height: 1.45),
-                ),
-              ],
+                style: TextStyle(color: primary, fontSize: 15, height: 1.45),
+              ),
+            ],
             ],
           ] else ...[
             const SizedBox(height: 4),
@@ -1382,7 +1382,7 @@ class _SuggestionCard extends StatelessWidget {
     if (platform == 'x' && imageUrl != null && imageUrl!.isNotEmpty) {
       cardContent = Padding(
         padding: const EdgeInsets.all(12),
-        child: Column(
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
@@ -1414,39 +1414,39 @@ class _SuggestionCard extends StatelessWidget {
       );
     } else {
       cardContent = Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (imageUrl != null && imageUrl!.isNotEmpty)
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (imageUrl != null && imageUrl!.isNotEmpty)
             AspectRatio(
-              aspectRatio: 16 / 9,
-              child: _SuggestionImage(url: imageUrl!, isDarkMode: isDarkMode),
-            ),
+                    aspectRatio: 16 / 9,
+                    child: _SuggestionImage(url: imageUrl!, isDarkMode: isDarkMode),
+                  ),
           Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  eventLabel,
-                  style: const TextStyle(
-                    color: HubColors.accent,
-                    fontSize: 12,
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        eventLabel,
+                        style: const TextStyle(
+                          color: HubColors.accent,
+                          fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  post,
-                  style: TextStyle(
-                    color: isDarkMode ? HubColors.text : const Color(0xFF333333),
-                    fontSize: 14,
-                    height: 1.5,
-                  ),
-                ),
+                            post,
+                            style: TextStyle(
+                              color: isDarkMode ? HubColors.text : const Color(0xFF333333),
+                              fontSize: 14,
+                              height: 1.5,
+                            ),
+                          ),
               ],
-            ),
-          ),
-        ],
+                        ),
+                      ),
+                    ],
       );
     }
 
@@ -1680,7 +1680,7 @@ class _SharePanelOverlayState extends State<_SharePanelOverlay> {
                     backgroundColor: _shareButtonColor,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   child: const Text('Share', style: TextStyle(fontWeight: FontWeight.w500)),
                 ),
