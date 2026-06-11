@@ -3,11 +3,27 @@ import 'dart:convert';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+const _legacyAvatarFiles = <String, String>{
+  'apple-avatar.png': 'apple-avatar.webp',
+  'pineapple-avatar.png': 'pineapple-avatar.webp',
+  'carrot-avatar.png': 'carrot-avatar.webp',
+  'banana-avatar.png': 'banana-avatar.webp',
+  'strawberry-avatar.png': 'strawberry-avatar.webp',
+  'broccoli-avatar.png': 'broccoli-avatar.webp',
+};
+
+String _mapLegacyAvatarName(String fileName) => _legacyAvatarFiles[fileName] ?? fileName;
+
 /// Normalizes React web paths (`/apple-avatar.png`) to Flutter asset paths.
 String? normalizeProfilePicturePath(String? pic) {
   if (pic == null || pic.isEmpty) return null;
   if (pic.startsWith('/')) {
-    return 'assets/images/${pic.replaceFirst('/', '')}';
+    return 'assets/images/${_mapLegacyAvatarName(pic.replaceFirst('/', ''))}';
+  }
+  for (final entry in _legacyAvatarFiles.entries) {
+    if (pic.endsWith(entry.key)) {
+      return pic.replaceAll(entry.key, entry.value);
+    }
   }
   return pic;
 }

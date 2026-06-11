@@ -63,12 +63,12 @@ class _ProfilePageState extends State<ProfilePage> {
   final _picker = ImagePicker();
 
   static const _avatars = [
-    ('Apple', 'assets/images/apple-avatar.png'),
-    ('Pineapple', 'assets/images/pineapple-avatar.png'),
-    ('Carrot', 'assets/images/carrot-avatar.png'),
-    ('Banana', 'assets/images/banana-avatar.png'),
-    ('Strawberry', 'assets/images/strawberry-avatar.png'),
-    ('Broccoli', 'assets/images/broccoli-avatar.png'),
+    ('Apple', 'assets/images/apple-avatar.webp'),
+    ('Pineapple', 'assets/images/pineapple-avatar.webp'),
+    ('Carrot', 'assets/images/carrot-avatar.webp'),
+    ('Banana', 'assets/images/banana-avatar.webp'),
+    ('Strawberry', 'assets/images/strawberry-avatar.webp'),
+    ('Broccoli', 'assets/images/broccoli-avatar.webp'),
   ];
 
   @override

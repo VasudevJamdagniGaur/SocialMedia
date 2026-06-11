@@ -1237,7 +1237,7 @@ class _PlatformSelector extends StatelessWidget {
               0, 0, 0, 0.92, 0,
             ]),
             child: Image.asset(
-              'assets/images/reddit-logo-mono.png',
+              'assets/images/reddit-logo-mono.webp',
               width: 31,
               height: 31,
               fit: BoxFit.contain,

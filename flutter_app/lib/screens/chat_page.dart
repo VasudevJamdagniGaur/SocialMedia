@@ -519,11 +519,11 @@ class _ChatPageState extends State<ChatPage> {
   String _providerAsset() {
     switch (_apiProvider) {
       case 'gemini':
-        return 'assets/images/gemini-icon.png';
+        return 'assets/images/gemini-icon.webp';
       case 'grok':
-        return 'assets/images/grok-icon.png';
+        return 'assets/images/grok-icon.webp';
       default:
-        return 'assets/images/openai-icon.png';
+        return 'assets/images/openai-icon.webp';
     }
   }
 

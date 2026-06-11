@@ -62,6 +62,10 @@ class _CommunityPageState extends State<CommunityPage> {
     final extra = GoRouterState.of(context).extra;
     if (extra is Map && extra['openCreatePost'] == true && !_openedCreateFromExtra) {
       _openedCreateFromExtra = true;
+      final draft = '${extra['postDraft'] ?? ''}'.trim();
+      if (draft.isNotEmpty) {
+        _postController.text = draft;
+      }
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         setState(() {
@@ -788,7 +792,7 @@ class _CommunityPageState extends State<CommunityPage> {
               painter: _XLogoPainter(),
             ),
           _ => Image.asset(
-              'assets/images/reddit-logo-mono.png',
+              'assets/images/reddit-logo-mono.webp',
               width: 28,
               height: 28,
               errorBuilder: (_, __, ___) => const Icon(Icons.forum, color: HubColors.text, size: 20),

@@ -156,9 +156,10 @@ DELIVER + CLOSE:
 POLISH:
 - First person where natural. 0â€“3 relevant hashtags (e.g. #Learning). No meta ("hereâ€™s my LinkedIn post"). Emoji only if light and natural.''',
       'x': '''X (TWITTER) STYLE (strict):
-- Very concise. Each post MUST be under 280 characters (count them).
-- Punchy, direct. Line breaks for emphasis. One clear idea per post.
-- Can be witty, candid, or reflective. 1â€“2 hashtags max. Emoji sparingly if at all.''',
+- Very concise. Each post MUST be under 220 characters (count them).
+- Punchy, direct. Use 2–4 short lines with real line breaks between them.
+- End with 0–2 hashtags on the last line when natural.
+- Can be witty, candid, or reflective. Emoji sparingly if at all.''',
       'reddit': '''REDDIT STYLE (strict):
 - Casual, conversational, like r/CasualConversation or a personal story sub.
 - First-person, relatable, authentic. Can be self-deprecating or funny.
@@ -1796,24 +1797,54 @@ $text""";
     return edited.trim();
   }
 
+  /// Prefer Deitea Render backend, then Firebase Hosting rewrites, then web origin.
+  List<String> _shareSuggestionsApiBases() {
+    final seen = <String>{};
+    final bases = <String>[];
+
+    void add(String? raw) {
+      final b = (raw ?? '').trim().replaceAll(RegExp(r'/$'), '');
+      if (b.isEmpty || !seen.add(b)) return;
+      bases.add(b);
+    }
+
+    add(getVertexBackendBaseUrl());
+    add(Env.baseUrl);
+
+    var origin = '';
+    if (kIsWeb) {
+      try {
+        origin = Uri.base.origin;
+      } catch (_) {
+        origin = Uri.base.toString();
+      }
+    }
+    final originLooksLocal = origin.isEmpty ||
+        origin.contains('localhost') ||
+        origin.startsWith('capacitor://') ||
+        origin.startsWith('ionic://') ||
+        origin.startsWith('file://');
+    if (!originLooksLocal) add(origin);
+    add('https://deitedatabase.web.app');
+    add('https://deitedatabase.firebaseapp.com');
+    return bases;
+  }
+
   Future<List<Map<String, String>>> generateSocialPostSuggestions(String reflection, String platform) async {
     try {
-      var origin = '';
-      if (kIsWeb) {
-        try {
-          origin = Uri.base.origin;
-        } catch (_) {
-          origin = Uri.base.toString();
-        }
+      final trimmed = reflection.trim();
+      if (trimmed.isEmpty) return [];
+
+      if (platform == 'x') {
+        return _generateXContentSuggestions(
+          userContent: _buildXReflectionSuggestionsUserContent(trimmed),
+          fallback: [
+            {'eventLabel': 'Reflection', 'post': trimmed},
+          ],
+        );
       }
-      final originLooksLocal = origin.isEmpty ||
-          origin.contains('localhost') ||
-          origin.startsWith('capacitor://') ||
-          origin.startsWith('ionic://') ||
-          origin.startsWith('file://');
-      final candidates = originLooksLocal
-          ? <String>['https://deitedatabase.web.app', 'https://deitedatabase.firebaseapp.com']
-          : <String>[origin, 'https://deitedatabase.web.app', 'https://deitedatabase.firebaseapp.com'];
+
+      final candidates = _shareSuggestionsApiBases();
 
       Exception? lastErr;
       for (final apiBase in candidates) {
@@ -1965,6 +1996,11 @@ $text""";
     String platform, {
     void Function(String text)? onDelta,
   }) async {
+    if (platform == 'x') {
+      return generateSocialPostSuggestions(reflection, platform);
+    }
+
+    final candidates = _shareSuggestionsApiBases();
     var origin = '';
     if (kIsWeb) {
       try {
@@ -1978,9 +2014,6 @@ $text""";
         origin.startsWith('capacitor://') ||
         origin.startsWith('ionic://') ||
         origin.startsWith('file://');
-    final candidates = originLooksLocal
-        ? <String>['https://deitedatabase.web.app', 'https://deitedatabase.firebaseapp.com']
-        : <String>[origin, 'https://deitedatabase.web.app', 'https://deitedatabase.firebaseapp.com'];
 
     Exception? lastErr;
     for (final apiBase in candidates) {
@@ -2573,7 +2606,9 @@ Requirements:
 
 2. Each tweet MUST:
    - Focus on ONE reaction or angle — not a full recap
-   - Be 220 characters or fewer
+   - Be 220 characters or fewer (including line breaks and hashtags)
+   - Use 2–4 SHORT lines separated by real line breaks (\\n), not a single block of text
+   - End with 0–2 hashtags on the last line when natural
    - Sound like a real human (first person, casual, opinionated)
    - NEVER include URLs, "Source -", usernames like /u/..., subreddit names (r/...), or raw scraped metadata
    - NEVER paste long quotes or dump comment threads — synthesize in your own words
@@ -2586,11 +2621,58 @@ Title: $title
 ${sourceLine}${summaryLine}${articleSection}
 
 Output — return ONLY valid JSON (no markdown fences):
-{"posts":[{"type":"funny","content":"tweet text only"}]}
+{"posts":[{"eventLabel":"3-6 word hook","type":"funny","content":"line1\\nline2\\n#Tag"}]}
 
 Rules:
 - 5–8 posts; each "type" from the list above at most once.
-- "content" is ONLY publishable tweet text. Under 220 characters each.''';
+- "eventLabel": short card title (3–6 words) for the angle
+- "content": ONLY publishable tweet text with \\n line breaks. Under 220 characters each.''';
+  }
+
+  String _buildXReflectionSuggestionsUserContent(String reflection) {
+    final text = reflection.trim();
+    return '''You are generating X (Twitter) posts from someone's personal reflection.
+
+GOAL:
+Create short, punchy, personality-driven tweets — same format as our news X suggestions.
+
+CORE RULE:
+Each tweet = ONE thought, ONE reaction, ONE moment. Do NOT dump the whole reflection into one tweet.
+
+---
+
+Requirements:
+
+1. Generate between 3 and 6 tweets (one per distinct moment or angle in the reflection).
+
+2. Each tweet MUST use a DIFFERENT style/tone. Use these exact "type" values (each at most once):
+   funny, sarcastic, supportive, critical, relatable, shock, meme, insight, question
+
+3. Each tweet MUST:
+   - Focus on ONE small slice of the reflection
+   - Be 220 characters or fewer (including line breaks and hashtags)
+   - Use 2–4 SHORT lines separated by real line breaks (\\n), not a single block of text
+   - End with 0–2 hashtags on the last line when natural (e.g. #Cricket #CricketTwitter)
+   - Sound natural and human — first person, internet-native, reactive
+   - Start with a strong hook on line 1
+
+4. Example CONTENT shape (not the topic — match this structure):
+That Arjun Tendulkar 50 was just incredible!
+Pure class under pressure.
+What a knock!
+#Cricket #ArjunTendulkar
+
+5. Ground truth — only what the reflection supports; do not invent facts.
+
+Reflection:
+$text
+
+Output — return ONLY valid JSON (no markdown fences):
+{"posts":[{"eventLabel":"3-6 word hook title","type":"insight","content":"line1\\nline2\\nline3\\n#Tag"}]}
+
+Rules:
+- "eventLabel": short purple-card title (3–6 words) naming the moment, e.g. "Arjun Tendulkar's 50"
+- "content": ONLY publishable tweet text with \\n line breaks. Under 220 characters each.''';
   }
 
   String _buildXNewsArticleSuggestionsUserContent(Map<String, dynamic> ctx) {
@@ -2635,17 +2717,25 @@ Requirements:
 3. Each tweet MUST:
    - Focus on ONE small slice of the news (not a summary of the whole piece)
    - Be 220 characters or fewer (count characters including line breaks; stay under the limit)
-   - Start with a strong hook
+   - Use 2–4 SHORT lines separated by real line breaks (\\n), not a single block of text
+   - End with 0–2 hashtags on the last line when natural (e.g. #Cricket #ArjunTendulkar)
+   - Start with a strong hook on line 1
    - Feel natural and human (not AI-generated)
-   - Avoid repeating the same idea across tweets (different angles, different peopleâ€™s vibes)
+   - Avoid repeating the same idea across tweets (different angles, different people's vibes)
 
-4. Tone: Casual, internet-native, slightly edgy but not offensive, hateful, or targeting protected groups.
+4. Example CONTENT shape (match this structure, not the topic):
+That Arjun Tendulkar 50 was just incredible!
+Pure class under pressure.
+What a knock!
+#Cricket #ArjunTendulkar
 
-5. Style: Short sentences; line breaks when they add punch; emojis optional and sparse; at most 1 hashtag per tweet (optional â€” many tweets should have zero); rhetorical questions allowed.
+5. Tone: Casual, internet-native, slightly edgy but not offensive, hateful, or targeting protected groups.
+
+6. Style: Short sentences; emojis optional and sparse; rhetorical questions allowed.
 
 6. Good moves: react to one detail only; joke; question one decision; highlight irony; meme-like observation â€” never a thread that explains the article.
 
-7. Ground truth â€” only what the story supports; do not invent facts, quotes, or numbers.
+7. Ground truth — only what the story supports; do not invent facts, quotes, or numbers.
 
 8. Do not summarize the news. Do not open with "In the news" or "According to reports."
 
@@ -2654,11 +2744,211 @@ Title: $title
 ${sourceLine}${summaryLine}${urlLine}${articleSection}
 
 Output â€” return ONLY valid JSON (no markdown code fences). Root must be an object with this exact shape:
-{"posts":[{"type":"funny","content":"tweet text only"}]}
+{"posts":[{"eventLabel":"3-6 word hook","type":"funny","content":"line1\\nline2\\n#Tag"}]}
 
 Rules:
 - "posts": 5â€“10 objects; each "type" is one of the allowed slugs; each "type" appears at most once.
-- "content" is ONLY publishable tweet text (no "Tweet 1:" prefix). Under 220 characters each.''';
+- "eventLabel": short card title (3–6 words) for the angle, e.g. "Arjun Tendulkar's 50"
+- "content": ONLY publishable tweet text with real line breaks (\\n). Under 220 characters each.''';
+  }
+
+  Future<String> _fetchSuggestionContentRaw(
+    String userContent, {
+    bool isXNews = false,
+    bool isLinkedInNews = false,
+  }) async {
+    var raw = '';
+    if (getVertexGeminiUrl().trim().isNotEmpty) {
+      try {
+        raw = await callVertexGenerateContent(
+          prompt: userContent,
+          temperature: isLinkedInNews
+              ? 0.68
+              : isXNews
+                  ? 0.78
+                  : 0.62,
+          maxOutputTokens: isLinkedInNews
+              ? 8192
+              : isXNews
+                  ? 6144
+                  : 4096,
+        ).timeout(const Duration(seconds: 45));
+      } catch (e) {
+        debugPrint('Vertex suggestions failed: $e');
+        raw = '';
+      }
+    }
+
+    final apiKey = Env.openAiApiKey.trim();
+    if (raw.trim().isEmpty && apiKey.isNotEmpty) {
+      try {
+        final response = await http
+            .post(
+              Uri.parse('$openaiBaseURL/chat/completions'),
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer $apiKey',
+              },
+              body: jsonEncode({
+                'model': openaiModelName,
+                'messages': [
+                  {'role': 'user', 'content': userContent},
+                ],
+                'temperature': isLinkedInNews
+                    ? 0.68
+                    : isXNews
+                        ? 0.78
+                        : 0.62,
+                'max_tokens': isLinkedInNews
+                    ? 4500
+                    : isXNews
+                        ? 3500
+                        : 2000,
+                if (isXNews) 'response_format': {'type': 'json_object'},
+              }),
+            )
+            .timeout(const Duration(seconds: 45));
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          dynamic data;
+          try {
+            data = jsonDecode(response.body);
+          } catch (_) {
+            data = null;
+          }
+          raw = (data is Map &&
+                  data['choices'] is List &&
+                  (data['choices'] as List).isNotEmpty &&
+                  ((data['choices'] as List).first is Map))
+              ? ((((data['choices'] as List).first as Map)['message'] as Map?)?['content'] ?? '')
+                  .toString()
+              : '';
+        }
+      } catch (_) {
+        raw = '';
+      }
+    }
+    return raw.trim();
+  }
+
+  List<ShareSuggestion> _parseXContentSuggestionsJson(
+    String raw,
+    String platform, {
+    required List<ShareSuggestion> fallback,
+    bool isTea = false,
+  }) {
+    if (raw.isEmpty) return fallback;
+
+    dynamic parsed;
+    final rawTrim = raw.trim();
+    try {
+      parsed = jsonDecode(rawTrim);
+    } catch (_) {
+      final fence = RegExp(r'```(?:json)?\s*([\s\S]*?)```', caseSensitive: false).firstMatch(rawTrim);
+      final inner = (fence?.group(1) ?? rawTrim).trim();
+      final objectMatch =
+          RegExp(r'\{[\s\S]*"posts"[\s\S]*\}', caseSensitive: false, dotAll: true).firstMatch(inner);
+      final arrayMatch = RegExp(
+        r'\[[\s\S]*\{[\s\S]*"type"[\s\S]*"content"[\s\S]*\}[\s\S]*\]',
+        caseSensitive: false,
+        dotAll: true,
+      ).firstMatch(inner);
+      final candidate = objectMatch?.group(0) ?? arrayMatch?.group(0);
+      if (candidate == null) return fallback;
+      try {
+        parsed = jsonDecode(candidate);
+      } catch (_) {
+        return fallback;
+      }
+    }
+
+    List<dynamic> list = <dynamic>[];
+    if (parsed is List) {
+      list = parsed;
+    } else if (parsed is Map && parsed['posts'] is List) {
+      list = (parsed['posts'] as List).cast<dynamic>();
+    }
+
+    bool looksLikeInternalPrompt(String text) {
+      final t = text;
+      return RegExp(r'The user wants social posts based on this NEWS ARTICLE', caseSensitive: false).hasMatch(t) ||
+          RegExp(r'Ground posts only in the headline and summary', caseSensitive: false).hasMatch(t) ||
+          RegExp(r'Your job is to turn news into a tweet', caseSensitive: false).hasMatch(t) ||
+          RegExp(r'\bCRITICAL RULES\b', caseSensitive: false).hasMatch(t) ||
+          RegExp(r'\bHUMAN STYLE\b', caseSensitive: false).hasMatch(t) ||
+          RegExp(r'\bCONTENT STYLE\b', caseSensitive: false).hasMatch(t) ||
+          RegExp(r'\bIMPORTANT\b', caseSensitive: false).hasMatch(t) ||
+          RegExp(r'Create high-quality, diverse, thought-provoking LinkedIn posts', caseSensitive: false)
+              .hasMatch(t) ||
+          RegExp(r'You are generating X \(Twitter\) posts', caseSensitive: false).hasMatch(t);
+    }
+
+    String stripPromptLeak(String text) {
+      final t = text.trim();
+      if (t.isEmpty) return '';
+      const cutMarkers = <String>[
+        '\n\nYour job is to turn news into a tweet',
+        '\nYour job is to turn news into a tweet',
+        '\n\nCRITICAL RULES:',
+        '\nCRITICAL RULES:',
+        '\n\nHUMAN STYLE:',
+        '\nHUMAN STYLE:',
+        '\n\nCONTENT STYLE',
+        '\nCONTENT STYLE',
+      ];
+      var cutAt = -1;
+      final lower = t.toLowerCase();
+      for (final marker in cutMarkers) {
+        final idx = lower.indexOf(marker.toLowerCase());
+        if (idx >= 0 && (cutAt < 0 || idx < cutAt)) cutAt = idx;
+      }
+      return (cutAt >= 0 ? t.substring(0, cutAt) : t).trim();
+    }
+
+    final out = <ShareSuggestion>[];
+    for (final row in list) {
+      if (row is! Map) continue;
+      final postFromContent = row['content'] is String ? (row['content'] as String).trim() : '';
+      final postFromLegacy = row['post'] is String ? (row['post'] as String).trim() : '';
+      var post = stripPromptLeak(postFromContent.isNotEmpty ? postFromContent : postFromLegacy);
+      if (post.contains(r'\n')) {
+        post = post.replaceAll(r'\n', '\n');
+      }
+      if (platform == 'x' && post.length > 220) {
+        post = post.substring(0, 220).trimRight();
+      }
+      final minPostLen = platform == 'x' ? 5 : 8;
+      if (post.isEmpty || post.length < minPostLen || looksLikeInternalPrompt(post)) continue;
+
+      final angleType = row['type'] is String ? (row['type'] as String).trim() : '';
+      var eventLabel = row['eventLabel'] is String ? (row['eventLabel'] as String).trim() : '';
+      if (eventLabel.isEmpty) {
+        if (platform == 'x') {
+          eventLabel = _xNewsStyleTypeToEventLabel(angleType);
+        } else if (platform == 'linkedin') {
+          eventLabel = isTea
+              ? _teaAngleTypeToEventLabel(angleType)
+              : _newsAngleTypeToEventLabel(angleType);
+        }
+        if (eventLabel.isEmpty) eventLabel = 'News';
+      }
+      if (isTea) {
+        post = sanitizeTeaSharePostForDisplay(post);
+      }
+      if (post.isEmpty || post.length < minPostLen) continue;
+      out.add({'eventLabel': eventLabel, 'post': post});
+    }
+
+    if (out.isEmpty) return fallback;
+    return out;
+  }
+
+  Future<List<ShareSuggestion>> _generateXContentSuggestions({
+    required String userContent,
+    required List<ShareSuggestion> fallback,
+    bool isTea = false,
+  }) async {
+    final raw = await _fetchSuggestionContentRaw(userContent, isXNews: true);
+    return _parseXContentSuggestionsJson(raw, 'x', fallback: fallback, isTea: isTea);
   }
 
   Future<List<ShareSuggestion>> generateNewsArticleShareSuggestions(
@@ -2781,173 +3071,25 @@ Rules:
 Return ONLY valid JSON with this exact shape (no markdown fences):
 {"posts":[{"eventLabel":"News","post":"..."}]}''';
 
-    var raw = '';
-    if (getVertexGeminiUrl().trim().isNotEmpty) {
-      try {
-        raw = await callVertexGenerateContent(
-          prompt: userContent,
-          temperature: isLinkedInNews
-              ? 0.68
-              : isXNews
-                  ? 0.78
-                  : 0.62,
-          maxOutputTokens: isLinkedInNews
-              ? 8192
-              : isXNews
-                  ? 6144
-                  : 4096,
-        ).timeout(const Duration(seconds: 45));
-      } catch (e) {
-        debugPrint('Vertex news article suggestions failed: $e');
-        raw = '';
-      }
+    if (isXNews) {
+      return _generateXContentSuggestions(
+        userContent: userContent,
+        fallback: fallback,
+        isTea: isTea,
+      );
     }
 
-    if (raw.trim().isEmpty && apiKey.isNotEmpty) {
-      try {
-        final response = await http
-            .post(
-              Uri.parse('$openaiBaseURL/chat/completions'),
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer $apiKey',
-              },
-              body: jsonEncode({
-                'model': openaiModelName,
-                'messages': [
-                  {'role': 'user', 'content': userContent},
-                ],
-                'temperature': isLinkedInNews
-                    ? 0.68
-                    : isXNews
-                        ? 0.78
-                        : 0.62,
-                'max_tokens': isLinkedInNews
-                    ? 4500
-                    : isXNews
-                        ? 3500
-                        : 2000,
-                'response_format': {'type': 'json_object'},
-              }),
-            )
-            .timeout(const Duration(seconds: 45));
-        if (response.statusCode < 200 || response.statusCode >= 300) return fallback;
-        dynamic data;
-        try {
-          data = jsonDecode(response.body);
-        } catch (_) {
-          return fallback;
-        }
-        raw = (data is Map &&
-                data['choices'] is List &&
-                (data['choices'] as List).isNotEmpty &&
-                ((data['choices'] as List).first is Map))
-            ? ((((data['choices'] as List).first as Map)['message'] as Map?)?['content'] ?? '').toString()
-            : '';
-      } catch (_) {
-        return fallback;
-      }
-    }
-
-    if (raw.trim().isEmpty) return fallback;
-
-    dynamic parsed;
-    final rawTrim = raw.trim();
-    try {
-      parsed = jsonDecode(rawTrim);
-    } catch (_) {
-      final fence = RegExp(r'```(?:json)?\s*([\s\S]*?)```', caseSensitive: false).firstMatch(rawTrim);
-      final inner = (fence?.group(1) ?? rawTrim).trim();
-      final objectMatch = RegExp(r'\{[\s\S]*"posts"[\s\S]*\}', caseSensitive: false, dotAll: true).firstMatch(inner);
-      final arrayMatch =
-          RegExp(r'\[[\s\S]*\{[\s\S]*"type"[\s\S]*"content"[\s\S]*\}[\s\S]*\]', caseSensitive: false, dotAll: true)
-              .firstMatch(inner);
-      final candidate = objectMatch?.group(0) ?? arrayMatch?.group(0);
-      if (candidate == null) return fallback;
-      try {
-        parsed = jsonDecode(candidate);
-      } catch (_) {
-        return fallback;
-      }
-    }
-
-    List<dynamic> list = <dynamic>[];
-    if (parsed is List) {
-      list = parsed;
-    } else if (parsed is Map && parsed['posts'] is List) {
-      list = (parsed['posts'] as List).cast<dynamic>();
-    }
-
-    bool looksLikeInternalPrompt(String text) {
-      final t = text;
-      return RegExp(r'The user wants social posts based on this NEWS ARTICLE', caseSensitive: false).hasMatch(t) ||
-          RegExp(r'Ground posts only in the headline and summary', caseSensitive: false).hasMatch(t) ||
-          RegExp(r'Your job is to turn news into a tweet', caseSensitive: false).hasMatch(t) ||
-          RegExp(r'\bCRITICAL RULES\b', caseSensitive: false).hasMatch(t) ||
-          RegExp(r'\bHUMAN STYLE\b', caseSensitive: false).hasMatch(t) ||
-          RegExp(r'\bCONTENT STYLE\b', caseSensitive: false).hasMatch(t) ||
-          RegExp(r'\bIMPORTANT\b', caseSensitive: false).hasMatch(t) ||
-          RegExp(r'Create high-quality, diverse, thought-provoking LinkedIn posts', caseSensitive: false)
-              .hasMatch(t) ||
-          RegExp(r'You are generating X \(Twitter\) posts from a news story', caseSensitive: false).hasMatch(t);
-    }
-
-    String stripPromptLeak(String text) {
-      final t = text.trim();
-      if (t.isEmpty) return '';
-      const cutMarkers = <String>[
-        '\n\nYour job is to turn news into a tweet',
-        '\nYour job is to turn news into a tweet',
-        '\n\nCRITICAL RULES:',
-        '\nCRITICAL RULES:',
-        '\n\nHUMAN STYLE:',
-        '\nHUMAN STYLE:',
-        '\n\nCONTENT STYLE',
-        '\nCONTENT STYLE',
-      ];
-      var cutAt = -1;
-      final lower = t.toLowerCase();
-      for (final marker in cutMarkers) {
-        final idx = lower.indexOf(marker.toLowerCase());
-        if (idx >= 0 && (cutAt < 0 || idx < cutAt)) cutAt = idx;
-      }
-      return (cutAt >= 0 ? t.substring(0, cutAt) : t).trim();
-    }
-
-    final out = <ShareSuggestion>[];
-    for (final row in list) {
-      if (row is! Map) continue;
-      final postFromContent = row['content'] is String ? (row['content'] as String).trim() : '';
-      final postFromLegacy = row['post'] is String ? (row['post'] as String).trim() : '';
-      var post = stripPromptLeak(postFromContent.isNotEmpty ? postFromContent : postFromLegacy);
-      if (platform == 'x' && post.length > 220) {
-        post = post.substring(0, 220).trimRight();
-      }
-      final minPostLen = platform == 'x' ? 5 : 8;
-      if (post.isEmpty || post.length < minPostLen || looksLikeInternalPrompt(post)) continue;
-
-      final angleType = row['type'] is String ? (row['type'] as String).trim() : '';
-      var eventLabel = row['eventLabel'] is String ? (row['eventLabel'] as String).trim() : '';
-      if (eventLabel.isEmpty) {
-        if (platform == 'x') {
-          eventLabel = _xNewsStyleTypeToEventLabel(angleType);
-        } else if (platform == 'linkedin') {
-          eventLabel = isTea
-              ? _teaAngleTypeToEventLabel(angleType)
-              : _newsAngleTypeToEventLabel(angleType);
-        }
-        if (eventLabel.isEmpty) eventLabel = 'News';
-      }
-      if (isTea) {
-        post = sanitizeTeaSharePostForDisplay(post);
-      }
-      if (post.isEmpty || post.length < minPostLen) continue;
-      out.add({'eventLabel': eventLabel, 'post': post});
-    }
-
-    if (out.isEmpty) return fallback;
-
-    return out;
+    final raw = await _fetchSuggestionContentRaw(
+      userContent,
+      isLinkedInNews: isLinkedInNews,
+    );
+    if (raw.isEmpty) return fallback;
+    return _parseXContentSuggestionsJson(
+      raw,
+      platform,
+      fallback: fallback,
+      isTea: isTea,
+    );
   }
 
   Future<String> summarizeNewsArticle(

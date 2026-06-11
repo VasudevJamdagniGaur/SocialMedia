@@ -24,6 +24,43 @@ Router buildSuggestionsRouter() {
 }
 
 String _buildSuggestionsPrompt(String reflection, String platform) {
+  if (platform == 'x') {
+    return '''You are generating X (Twitter) posts from someone's personal reflection.
+
+GOAL:
+Create short, punchy, personality-driven tweets — same format as our news X suggestions.
+
+CORE RULE:
+Each tweet = ONE thought, ONE reaction, ONE moment. Do NOT dump the whole reflection into one tweet.
+
+Requirements:
+
+1. Generate between 3 and 6 tweets (one per distinct moment or angle in the reflection).
+
+2. Each tweet MUST use a DIFFERENT style/tone. Use these exact "type" values (each at most once):
+   funny, sarcastic, supportive, critical, relatable, shock, meme, insight, question
+
+3. Each tweet MUST:
+   - Focus on ONE small slice of the reflection
+   - Be 220 characters or fewer (including line breaks and hashtags)
+   - Use 2–4 SHORT lines separated by real line breaks (\\n), not a single block of text
+   - End with 0–2 hashtags on the last line when natural
+   - Sound natural and human — first person, internet-native, reactive
+   - Start with a strong hook on line 1
+
+4. Ground truth — only what the reflection supports; do not invent facts.
+
+Reflection:
+$reflection
+
+Output — return ONLY valid JSON (no markdown fences):
+{"posts":[{"eventLabel":"3-6 word hook title","type":"insight","content":"line1\\nline2\\nline3\\n#Tag"}]}
+
+Rules:
+- "eventLabel": short purple-card title (3–6 words) naming the moment
+- "content": ONLY publishable tweet text with \\n line breaks. Under 220 characters each.''';
+  }
+
   final platformLabel =
       platform == 'x' ? 'X (Twitter)' : platform[0].toUpperCase() + platform.substring(1);
   return '''You are turning a day's reflection into separate social posts. You MUST create one standalone post for EACH distinct event or moment mentioned in the reflection.
@@ -39,6 +76,64 @@ Output format (strict):
 
 Reflection:
 $reflection''';
+}
+
+List<Map<String, String>> _parseXContentSuggestionsJson(String raw, String reflection) {
+  if (raw.trim().isEmpty) {
+    return [
+      {'eventLabel': 'Reflection', 'post': reflection},
+    ];
+  }
+
+  dynamic parsed;
+  final rawTrim = raw.trim();
+  try {
+    parsed = jsonDecode(rawTrim);
+  } catch (_) {
+    final fence = RegExp(r'```(?:json)?\s*([\s\S]*?)```', caseSensitive: false).firstMatch(rawTrim);
+    final inner = (fence?.group(1) ?? rawTrim).trim();
+    final objectMatch =
+        RegExp(r'\{[\s\S]*"posts"[\s\S]*\}', caseSensitive: false, dotAll: true).firstMatch(inner);
+    if (objectMatch == null) {
+      return _parseSuggestionPosts(raw, reflection);
+    }
+    try {
+      parsed = jsonDecode(objectMatch.group(0)!);
+    } catch (_) {
+      return _parseSuggestionPosts(raw, reflection);
+    }
+  }
+
+  final list = parsed is List
+      ? parsed
+      : (parsed is Map && parsed['posts'] is List)
+          ? parsed['posts'] as List
+          : <dynamic>[];
+
+  final posts = <Map<String, String>>[];
+  for (final row in list) {
+    if (row is! Map) continue;
+    final content = row['content'] is String ? (row['content'] as String).trim() : '';
+    final legacy = row['post'] is String ? (row['post'] as String).trim() : '';
+    var post = content.isNotEmpty ? content : legacy;
+    if (post.contains(r'\n')) {
+      post = post.replaceAll(r'\n', '\n');
+    }
+    if (post.length > 220) {
+      post = post.substring(0, 220).trimRight();
+    }
+    if (post.length < 5) continue;
+
+    var eventLabel = row['eventLabel'] is String ? (row['eventLabel'] as String).trim() : '';
+    if (eventLabel.isEmpty) eventLabel = 'Moment';
+    posts.add({'eventLabel': eventLabel, 'post': post});
+  }
+
+  return posts.isNotEmpty
+      ? posts
+      : [
+          {'eventLabel': 'Reflection', 'post': reflection},
+        ];
 }
 
 List<Map<String, String>> _parseSuggestionPosts(String raw, String reflection) {
@@ -98,8 +193,9 @@ Future<Response> _handleSuggestions(Request req) async {
 
   final wantsStream = req.url.queryParameters['stream'] == '1';
   final prompt = _buildSuggestionsPrompt(reflection, platform);
+  final isX = platform == 'x';
 
-  if (wantsStream) {
+  if (wantsStream && !isX) {
     return _streamSuggestions(apiKey, prompt);
   }
 
@@ -115,8 +211,9 @@ Future<Response> _handleSuggestions(Request req) async {
         'messages': [
           {'role': 'user', 'content': prompt},
         ],
-        'temperature': 0.5,
-        'max_tokens': 2400,
+        'temperature': isX ? 0.78 : 0.5,
+        'max_tokens': isX ? 3500 : 2400,
+        if (isX) 'response_format': {'type': 'json_object'},
       }),
     );
     if (res.statusCode < 200 || res.statusCode >= 300) {
@@ -129,7 +226,10 @@ Future<Response> _handleSuggestions(Request req) async {
     final data = jsonDecode(res.body) as Map<String, dynamic>;
     final raw =
         ((data['choices'] as List?)?.first as Map?)?['message']?['content'] as String? ?? '';
-    return jsonOk({'posts': _parseSuggestionPosts(raw, reflection)});
+    final posts = isX
+        ? _parseXContentSuggestionsJson(raw, reflection)
+        : _parseSuggestionPosts(raw, reflection);
+    return jsonOk({'posts': posts});
   } catch (e) {
     return jsonError(500, 'Suggestions failed', details: '$e');
   }
