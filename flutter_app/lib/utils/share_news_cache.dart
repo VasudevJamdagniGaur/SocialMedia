@@ -200,8 +200,10 @@ String sanitizeSocialPostText(String? text) {
     (m) => '${m.group(1)}• ',
   );
 
-  s = s.replaceAll(RegExp(r'\s--\s'), ' — ');
-  s = s.replaceAll('--', '—');
+  s = s.replaceAll(RegExp(r'\s--\s'), ' - ');
+  s = s.replaceAll('--', '-');
+  s = s.replaceAll('—', '-');
+  s = s.replaceAll('–', '-');
 
   s = s.replaceAll(RegExp(r'^\s*---+\s*$', multiLine: true), '');
   s = s.replaceAll(RegExp(r'\n{3,}'), '\n\n');
