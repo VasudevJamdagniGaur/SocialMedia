@@ -9,6 +9,7 @@ import '../services/hub_personalization_service.dart';
 import '../utils/hub_carousel_ai_image.dart';
 import '../utils/reddit_thread_comments.dart';
 import '../utils/share_news_cache.dart';
+import '../services/youtube_tea_service.dart';
 import 'hub_theme.dart';
 
 /// Horizontal trending card â€” mirrors SportsTrendingCard / AiTechTrendingCard.
@@ -325,8 +326,9 @@ Future<void> openNewsShare(BuildContext context, NewsArticle item, String return
   recordHubNewsClick('', item.exploreTopic ?? 'general');
   final article = Map<String, dynamic>.from(item.toMap());
   if (isTeaSourceLabel(article['source'] as String?) ||
-      isRedditThreadUrl(article['url'] as String?)) {
-    article['source'] = 'Tea';
+      isRedditThreadUrl(article['url'] as String?) ||
+      isYouTubeTeaUrl(article['url'] as String?)) {
+    article['source'] = isYouTubeTeaUrl(article['url'] as String?) ? 'YouTube' : 'Tea';
   }
   final payload = {
     'newsArticle': article,

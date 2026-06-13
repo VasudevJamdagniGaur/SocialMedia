@@ -10,6 +10,7 @@ import 'routes/api_routes.dart';
 import 'routes/article_routes.dart';
 import 'routes/news_routes.dart';
 import 'routes/vertex_routes.dart';
+import 'routes/youtube_routes.dart';
 import 'vertex/vertex_client.dart';
 
 /// Unified Deite Dart backend — replaces backend-vertex, detea-proxy, and HTTP functions.
@@ -19,6 +20,7 @@ Future<void> runServer() async {
     ..mount('/', buildVertexRouter(vertex).call)
     ..mount('/', buildNewsRouter().call)
     ..mount('/', buildRedditProxyRouter().call)
+    ..mount('/', buildYouTubeRouter().call)
     ..mount('/', buildSuggestionsRouter().call)
     ..mount('/', buildArticleRouter().call)
     ..mount('/', buildAccountRouter().call);

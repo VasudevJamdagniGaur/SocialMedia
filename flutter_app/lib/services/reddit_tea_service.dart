@@ -9,6 +9,7 @@ import '../lib/pod_reddit_hot.dart';
 import '../lib/pod_topic_news_shared.dart';
 import '../lib/reddit_post_filter.dart';
 import '../utils/reddit_thread_comments.dart';
+import 'youtube_tea_service.dart';
 
 const _pullPushBase = 'https://api.pullpush.io/reddit/search/submission/';
 const _teaSubs = ['BollyBlindsNGossip', 'BollywoodGossip'];
@@ -362,29 +363,9 @@ List<Map<String, dynamic>> teaRowsFromRssArticles(List<Map<String, dynamic>> rss
       .toList();
 }
 
-/// Best-effort Tea rows: backend RSS → direct RSS → PullPush → JSON proxy → Google RSS.
+/// Trending Tea rows via YouTube Data API (replaces Reddit scraping).
 Future<List<Map<String, dynamic>>> fetchTrendingTeaRows() async {
-  var rows = await fetchTeaRowsFromBackendTeaRss();
-  if (rows.length < 4) {
-    final corsRss = await fetchTeaRowsFromRedditRssCors();
-    if (corsRss.length > rows.length) rows = corsRss;
-  }
-  if (rows.length < 4) {
-    final directRss = await fetchTeaRowsFromRedditRssDirect();
-    if (directRss.length > rows.length) rows = directRss;
-  }
-  if (rows.length < 4) {
-    final pull = await fetchTeaRowsFromPullPush();
-    if (pull.length > rows.length) rows = pull;
-  }
-  if (rows.length < 4) {
-    final proxy = await fetchTeaRowsFromBackendProxy();
-    if (proxy.length > rows.length) rows = proxy;
-  }
-  if (rows.length < 4) {
-    final classic = await fetchTeaRowsFromClassicReddit();
-    if (classic.length > rows.length) rows = classic;
-  }
+  var rows = await fetchTeaRowsFromYouTube();
   if (rows.length < 4) {
     final rss = await fetchLiveFromGoogleRssByQueryFast(
       'bollywood OR "bollywood gossip" OR celebrity when:7d',

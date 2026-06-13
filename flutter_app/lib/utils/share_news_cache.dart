@@ -106,12 +106,15 @@ String stripHtmlBoilerplate(String? text) {
 
 bool isTeaSourceLabel(String? source) {
   final s = (source ?? '').trim();
-  return RegExp(r'^r/', caseSensitive: false).hasMatch(s);
+  if (RegExp(r'^r/', caseSensitive: false).hasMatch(s)) return true;
+  final lower = s.toLowerCase();
+  return lower == 'youtube' || lower == 'tea';
 }
 
 /// Neutral source label for share payloads — keeps Tea mode via URL, hides subreddit names.
 String publicTeaSourceLabel([String? source]) {
-  if (isTeaSourceLabel(source) || '${source ?? ''}'.trim().toLowerCase() == 'reddit') {
+  final lower = '${source ?? ''}'.trim().toLowerCase();
+  if (isTeaSourceLabel(source) || lower == 'reddit' || lower == 'youtube') {
     return 'Tea';
   }
   final s = '${source ?? ''}'.trim();

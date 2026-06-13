@@ -39,6 +39,7 @@ class Env {
     'FIREBASE_PROJECT_ID',
     defaultValue: 'deitedatabase',
   );
+  static const String youtubeApiKey = String.fromEnvironment('YOUTUBE_API_KEY');
 
   static String get baseUrl {
     final configured = backendUrl.trim();

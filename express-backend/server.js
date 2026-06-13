@@ -207,6 +207,121 @@ app.get('/api/reddit/thread', async (req, res) => {
   }
 });
 
+/** Fresh Tea feed via YouTube Data API */
+const TEA_YT_QUERIES = [
+  'bollywood gossip celebrity tea',
+  'bollywood controversy drama',
+  'celebrity news india entertainment',
+];
+
+function bestYouTubeThumb(thumbnails) {
+  if (!thumbnails || typeof thumbnails !== 'object') return '';
+  for (const key of ['maxres', 'high', 'medium', 'default']) {
+    const url = thumbnails[key]?.url;
+    if (url && /^https?:/i.test(url)) return url;
+  }
+  return '';
+}
+
+async function fetchYouTubeTeaItems(apiKey, maxKeep) {
+  const seen = new Set();
+  const rows = [];
+
+  for (const query of TEA_YT_QUERIES) {
+    if (rows.length >= maxKeep) break;
+    const searchParams = new URLSearchParams({
+      part: 'snippet',
+      type: 'video',
+      order: 'viewCount',
+      q: query,
+      maxResults: String(maxKeep),
+      regionCode: 'IN',
+      relevanceLanguage: 'en',
+      key: apiKey,
+    });
+    const searchRes = await fetch(
+      `https://www.googleapis.com/youtube/v3/search?${searchParams}`,
+      { headers: { Accept: 'application/json' } },
+    );
+    if (!searchRes.ok) continue;
+    const searchBody = await searchRes.json();
+    const items = Array.isArray(searchBody.items) ? searchBody.items : [];
+    const videoIds = [];
+    for (const item of items) {
+      const vid = item?.id?.videoId;
+      if (!vid || seen.has(vid)) continue;
+      videoIds.push(vid);
+    }
+    if (!videoIds.length) continue;
+
+    const statsParams = new URLSearchParams({
+      part: 'statistics,snippet',
+      id: videoIds.join(','),
+      key: apiKey,
+    });
+    const statsRes = await fetch(
+      `https://www.googleapis.com/youtube/v3/videos?${statsParams}`,
+      { headers: { Accept: 'application/json' } },
+    );
+    if (!statsRes.ok) continue;
+    const statsBody = await statsRes.json();
+    const statItems = Array.isArray(statsBody.items) ? statsBody.items : [];
+
+    for (const statItem of statItems) {
+      if (rows.length >= maxKeep) break;
+      const vid = statItem?.id;
+      if (!vid || seen.has(vid)) continue;
+      const snippet = statItem.snippet || {};
+      const title = String(snippet.title || '').trim();
+      if (!title) continue;
+      const description = String(snippet.description || '').trim();
+      const gossip = description.length > 320
+        ? `${description.slice(0, 320).trimEnd()}…`
+        : (description || title);
+      const channel = String(snippet.channelTitle || 'YouTube').trim();
+      const image = bestYouTubeThumb(snippet.thumbnails);
+      const views = parseInt(statItem.statistics?.viewCount || '0', 10) || 0;
+      const comments = parseInt(statItem.statistics?.commentCount || '0', 10) || 0;
+      seen.add(vid);
+      rows.push({
+        title,
+        url: `https://www.youtube.com/watch?v=${vid}`,
+        image,
+        thumbnail: image,
+        score: views,
+        num_comments: comments,
+        author: channel || 'YouTube',
+        source: 'YouTube',
+        description: gossip,
+        gossip,
+        selftext: description || title,
+        videoId: vid,
+      });
+    }
+  }
+
+  rows.sort((a, b) => (b.score || 0) - (a.score || 0));
+  return rows.slice(0, maxKeep);
+}
+
+app.get('/api/youtube/tea', async (req, res) => {
+  const apiKey = process.env.YOUTUBE_API_KEY || '';
+  if (!apiKey) {
+    return res.status(503).json({ ok: false, items: [], error: 'youtube_not_configured' });
+  }
+  const maxKeep = clampLimit(req.query.limit || 12);
+  try {
+    const items = await fetchYouTubeTeaItems(apiKey, maxKeep);
+    res.json({ ok: true, items });
+  } catch (err) {
+    res.status(502).json({
+      ok: false,
+      items: [],
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
 /** Fresh Tea feed via Reddit Atom RSS (works when JSON API is blocked) */
 app.get('/api/reddit/tea', async (req, res) => {
   const sub = sanitizeSub(req.query.sub);

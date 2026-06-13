@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../router/app_router.dart';
 import '../services/cached_news_service.dart';
 import '../services/reddit_tea_service.dart';
+import '../services/youtube_tea_service.dart';
 import '../lib/hub_trending_algorithms.dart';
 import '../utils/hub_carousel_ai_image.dart';
 import '../utils/hub_carousel_image_store.dart';
@@ -16,7 +17,7 @@ import '../utils/share_news_cache.dart';
 import '../utils/tea_trending_storage.dart';
 import 'skeleton/card_skeleton.dart';
 
-const _teaItemsCacheKey = 'deite_tea_items_cache_v2';
+const _teaItemsCacheKey = 'deite_tea_items_cache_v3';
 const _teaCacheMaxAge = Duration(hours: 6);
 
 List<TeaItem>? _memoryTeaCache;
@@ -312,7 +313,7 @@ class _TrendingTeaState extends State<TrendingTea> {
         'text': item.gossip,
         'gossip': item.gossip,
         'image': teaHeroImageUrl(item) ?? item.thumbnail,
-        'source': publicTeaSourceLabel(item.author),
+        'source': isYouTubeTeaUrl(item.url) ? 'YouTube' : publicTeaSourceLabel(item.author),
       },
       'returnTo': GoRouterState.of(context).uri.path,
       'platform': 'linkedin',

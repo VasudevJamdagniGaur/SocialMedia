@@ -58,6 +58,14 @@ class ServerConfig {
     return null;
   }
 
+  static String? get youtubeApiKey {
+    for (final k in ['YOUTUBE_API_KEY', 'REACT_APP_YOUTUBE_API_KEY']) {
+      final v = Platform.environment[k]?.trim();
+      if (v != null && v.isNotEmpty) return v;
+    }
+    return null;
+  }
+
   static String? get openAiApiKey {
     final v = Platform.environment['OPENAI_API_KEY']?.trim();
     if (v != null && v.isNotEmpty) return v;

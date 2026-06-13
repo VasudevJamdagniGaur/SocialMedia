@@ -16,6 +16,7 @@ import '../contexts/theme_context.dart';
 import '../router/app_router.dart';
 import '../services/chat_service.dart';
 import '../services/firestore_service.dart';
+import '../services/youtube_tea_service.dart';
 import '../utils/date_utils.dart';
 import '../utils/hub_colors.dart';
 import '../utils/hub_carousel_ai_image.dart';
@@ -78,7 +79,8 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
   bool get _isTeaArticleShare =>
       _isNewsMode &&
       (isTeaSourceLabel(_newsArticle?['source'] as String?) ||
-          isRedditTeaThreadUrl(_newsArticle?['url'] as String?));
+          isRedditTeaThreadUrl(_newsArticle?['url'] as String?) ||
+          isYouTubeTeaUrl(_newsArticle?['url'] as String?));
 
   @override
   void initState() {
@@ -1147,6 +1149,11 @@ class _SourceCard extends StatelessWidget {
           description: newsArticle?['description'] as String?,
           bodyText: '${newsArticle?['text'] ?? newsArticle?['selftext'] ?? ''}',
         );
+    final showYouTubeSourceFallback = isTeaArticle &&
+        isYouTubeTeaUrl(discussionUrl) &&
+        !loadingNewsDetails &&
+        newsSummary.trim().isEmpty &&
+        stripHtmlBoilerplate(newsArticle?['description'] as String?).trim().isEmpty;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1207,6 +1214,31 @@ class _SourceCard extends StatelessWidget {
                   },
                   child: Text(
                     'Tap to view the original discussion →',
+                    style: TextStyle(
+                      color: isDarkMode ? HubColors.accentHighlight : const Color(0xFF7C3AED),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      height: 1.45,
+                    ),
+                  ),
+                ),
+              ] else if (showYouTubeSourceFallback) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Source: YouTube',
+                  style: TextStyle(color: secondary, fontSize: 14, height: 1.45),
+                ),
+                const SizedBox(height: 4),
+                InkWell(
+                  onTap: () async {
+                    final uri = Uri.tryParse(discussionUrl);
+                    if (uri == null) return;
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri, mode: LaunchMode.externalApplication);
+                    }
+                  },
+                  child: Text(
+                    'Tap to watch the original video →',
                     style: TextStyle(
                       color: isDarkMode ? HubColors.accentHighlight : const Color(0xFF7C3AED),
                       fontSize: 14,
