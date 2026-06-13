@@ -370,11 +370,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 momentsSaved: _momentsSaved,
               ),
               const SizedBox(height: 28),
-              _SectionHeader(
-                title: 'Continue your journey',
-                actionLabel: 'View all',
-                onAction: () => context.push(AppRoutes.reflections),
-              ),
+              const _SectionHeader(title: 'Continue your journey'),
               const SizedBox(height: 12),
               _JourneyTile(
                 icon: LucideIcons.bookOpen,
