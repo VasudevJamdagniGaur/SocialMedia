@@ -13,7 +13,12 @@ const _legacyHubCarouselAiCachePrefix = 'hub_carousel_ai_img_v1::';
 
 enum HubCarouselImageKind { tea, news }
 
-/// Read the local URL → image map (https preferred; data URLs for offline).
+bool _isPersistableDiskImageUrl(String url) {
+  final s = url.trim();
+  return s.startsWith('http://') || s.startsWith('https://');
+}
+
+/// Read the local URL → image map (https only on disk; data URLs are memory-only).
 Future<Map<String, String>> readHubCarouselImageIndex() async {
   try {
     final prefs = await SharedPreferences.getInstance();
@@ -21,7 +26,20 @@ Future<Map<String, String>> readHubCarouselImageIndex() async {
     if (raw == null || raw.isEmpty) return {};
     final decoded = jsonDecode(raw);
     if (decoded is! Map) return {};
-    return decoded.map((k, v) => MapEntry('$k', '$v'));
+    final out = <String, String>{};
+    var stripped = false;
+    for (final entry in decoded.entries) {
+      final value = '${entry.value ?? ''}'.trim();
+      if (value.startsWith('http://') || value.startsWith('https://')) {
+        out['${entry.key}'] = value;
+      } else if (value.startsWith('data:image')) {
+        stripped = true;
+      }
+    }
+    if (stripped) {
+      unawaited(_writeHubCarouselImageIndex(out));
+    }
+    return out;
   } catch (_) {
     return {};
   }
@@ -29,8 +47,23 @@ Future<Map<String, String>> readHubCarouselImageIndex() async {
 
 Future<void> _writeHubCarouselImageIndex(Map<String, String> index) async {
   try {
+    final diskSafe = <String, String>{};
+    for (final entry in index.entries) {
+      final value = entry.value.trim();
+      if (value.startsWith('http://') || value.startsWith('https://')) {
+        diskSafe[entry.key] = value;
+      }
+    }
+    if (diskSafe.length > 120) {
+      final keys = diskSafe.keys.toList()..sort();
+      for (var i = 0; i < keys.length - 120; i++) {
+        diskSafe.remove(keys[i]);
+      }
+    }
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(hubCarouselImageIndexKey, jsonEncode(index));
+    final encoded = jsonEncode(diskSafe);
+    if (encoded.length > 256 * 1024) return;
+    await prefs.setString(hubCarouselImageIndexKey, encoded);
   } catch (_) {}
 }
 
@@ -58,6 +91,7 @@ Future<void> persistHubCarouselImage({
   final index = await readHubCarouselImageIndex();
   var changed = false;
   for (final key in keys) {
+    if (!_isPersistableDiskImageUrl(trimmed)) continue;
     if (index[key] != trimmed) {
       index[key] = trimmed;
       changed = true;
@@ -152,8 +186,9 @@ Future<String?> _readLegacyPrefsImage(String key) async {
   try {
     final prefs = await SharedPreferences.getInstance();
     final prefsKey = '$_legacyHubCarouselAiCachePrefix${key.hashCode.abs()}';
-    final cached = prefs.getString(prefsKey);
-    if (cached != null && cached.startsWith('data:image')) return cached;
+    if (prefs.containsKey(prefsKey)) {
+      await prefs.remove(prefsKey);
+    }
   } catch (_) {}
   return null;
 }

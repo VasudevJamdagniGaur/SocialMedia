@@ -454,13 +454,18 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
               'resolveGoogleNews': !isTea,
             },
           )
-          .timeout(const Duration(seconds: 12));
+          .timeout(const Duration(seconds: 22));
       final looksUseful = details['title'] != null ||
           details['description'] != null ||
           details['text'] != null ||
           details['image'] != null;
       effective = looksUseful ? details : null;
     }
+
+    effective ??= _newsArticle != null &&
+            '${_newsArticle?['title'] ?? ''}'.trim().isNotEmpty
+        ? Map<String, dynamic>.from(_newsArticle!)
+        : null;
 
     if (effective == null) return;
     final articleDetails = effective;
@@ -529,6 +534,12 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
     }
     if (isScrapeBlockedBoilerplate(finalHeadline)) {
       finalHeadline = headlineFallback;
+    }
+    if (!isTea && finalSummary.isEmpty && finalHeadline.isNotEmpty) {
+      finalSummary = (await ChatService.instance
+              .summarizeNewsFromHeadline(finalHeadline)
+              .timeout(const Duration(seconds: 22)))
+          .trim();
     }
 
     setState(() {
@@ -1154,6 +1165,15 @@ class _SourceCard extends StatelessWidget {
         !loadingNewsDetails &&
         newsSummary.trim().isEmpty &&
         stripHtmlBoilerplate(newsArticle?['description'] as String?).trim().isEmpty;
+    final showNewsSourceFallback = !isTeaArticle &&
+        isNewsMode &&
+        !loadingNewsDetails &&
+        newsSummary.trim().isEmpty &&
+        stripHtmlBoilerplate(newsArticle?['description'] as String?).trim().isEmpty &&
+        discussionUrl.isNotEmpty;
+    final publisherLabel = '${newsArticle?['source'] ?? ''}'.trim().isNotEmpty
+        ? '${newsArticle?['source']}'.trim()
+        : 'Publisher';
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1247,6 +1267,31 @@ class _SourceCard extends StatelessWidget {
                     ),
                   ),
                 ),
+              ] else if (showNewsSourceFallback) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Source: $publisherLabel',
+                  style: TextStyle(color: secondary, fontSize: 14, height: 1.45),
+                ),
+                const SizedBox(height: 4),
+                InkWell(
+                  onTap: () async {
+                    final uri = Uri.tryParse(discussionUrl);
+                    if (uri == null) return;
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri, mode: LaunchMode.externalApplication);
+                    }
+                  },
+                  child: Text(
+                    'Tap to read the full story →',
+                    style: TextStyle(
+                      color: isDarkMode ? HubColors.accentHighlight : const Color(0xFF7C3AED),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      height: 1.45,
+                    ),
+                  ),
+                ),
               ] else if (loadingNewsDetails && newsSummary.trim().isEmpty) ...[
                 const SizedBox(height: 8),
                 const Skeleton(variant: SkeletonVariant.text, height: 14, width: double.infinity),
@@ -1259,15 +1304,6 @@ class _SourceCard extends StatelessWidget {
               Text(
                   newsSummary,
                   style: TextStyle(color: primary, fontSize: 15, height: 1.45),
-                ),
-              ] else if (!loadingNewsDetails &&
-                  (newsArticle?['description'] as String? ?? '').trim().isEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
-                  isTeaArticle
-                      ? "We're putting together a quick summary of this thread. Hang tight — or tap the headline to read the full post."
-                      : "We couldn't pull enough article text from this link to summarize it here. Tap the headline to read the full story on the publisher site.",
-                  style: TextStyle(color: secondary, fontSize: 15, height: 1.45),
                 ),
               ] else if (!isTeaArticle &&
                   stripHtmlBoilerplate(newsArticle?['description'] as String?).isNotEmpty) ...[

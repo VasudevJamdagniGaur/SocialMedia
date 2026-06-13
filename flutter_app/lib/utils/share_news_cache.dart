@@ -12,6 +12,42 @@ const shareNewsSuggestionsTtlMs = 7 * 24 * 60 * 60 * 1000;
 
 Map<String, dynamic>? _pendingShareRouteExtra;
 
+Map<String, dynamic> sanitizeShareRoutePayloadForPrefs(Map<String, dynamic> extra) {
+  dynamic scrub(dynamic value) {
+    if (value is String) {
+      if (value.startsWith('data:image') && value.length > 512) return '';
+      return value;
+    }
+    if (value is List) return value.map(scrub).toList();
+    if (value is Map) return value.map((k, v) => MapEntry('$k', scrub(v)));
+    return value;
+  }
+
+  final cleaned = scrub(Map<String, dynamic>.from(extra));
+  if (cleaned is! Map<String, dynamic>) return extra;
+
+  final media = cleaned['media'];
+  if (media is List) {
+    cleaned['media'] = media
+        .whereType<String>()
+        .where((s) => !s.startsWith('data:image'))
+        .take(6)
+        .toList();
+  }
+
+  final article = cleaned['newsArticle'];
+  if (article is Map) {
+    final m = Map<String, dynamic>.from(article);
+    for (final field in ['image', 'thumbnail']) {
+      final v = '${m[field] ?? ''}'.trim();
+      if (v.startsWith('data:image')) m.remove(field);
+    }
+    cleaned['newsArticle'] = m;
+  }
+
+  return cleaned;
+}
+
 /// Synchronous in-memory staging — survives GoRouter extra loss on ShellRoute push.
 void stageShareSuggestionsRoute(Map<String, dynamic> extra) {
   _pendingShareRouteExtra = Map<String, dynamic>.from(extra);
@@ -34,7 +70,10 @@ Future<void> prepareShareSuggestionsRoute(Map<String, dynamic> extra) async {
 Future<void> persistShareSuggestionsRouteState(Map<String, dynamic> extra) async {
   try {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(shareSuggestionsRouteStateKey, jsonEncode(extra));
+    final sanitized = sanitizeShareRoutePayloadForPrefs(extra);
+    final encoded = jsonEncode(sanitized);
+    if (encoded.length > 256 * 1024) return;
+    await prefs.setString(shareSuggestionsRouteStateKey, encoded);
   } catch (_) {}
 }
 
@@ -714,7 +753,13 @@ String buildLocalNewsCardSummary(Map<String, dynamic>? details) {
             (titleNorm.contains(descNorm) || descNorm.contains(titleNorm)));
 
     if (title.isEmpty) return '';
-    if (text.length < 280) return '';
+    if (text.length < 280) {
+      if (description.isNotEmpty && !descIsHeadline) {
+        final words = description.replaceAll(RegExp(r'\s+'), ' ').trim().split(RegExp(r'\s+'));
+        return words.take(maxWords).join(' ').trim();
+      }
+      return '';
+    }
 
     final body = text.replaceAll(RegExp(r'\s+'), ' ').trim();
     final extra = !descIsHeadline && description.isNotEmpty ? ' $description' : '';

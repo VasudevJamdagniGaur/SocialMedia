@@ -455,7 +455,10 @@ class _CommunityPageState extends State<CommunityPage> {
             tooltip: 'Watchlist',
           ),
           IconButton(
-            onPressed: () => context.go(AppRoutes.helpImprove),
+            onPressed: () => context.push(
+              AppRoutes.helpImprove,
+              extra: {'returnTo': AppRoutes.community},
+            ),
             tooltip: 'Help improve Deite',
             icon: const Text('✨', style: TextStyle(fontSize: 18)),
           ),

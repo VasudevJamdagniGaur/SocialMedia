@@ -13,6 +13,7 @@ import '../utils/date_utils.dart';
 import '../utils/decode_google_news_url.dart';
 import '../utils/reddit_thread_comments.dart';
 import '../utils/share_news_cache.dart';
+import '../utils/prefs_maintenance.dart';
 import '../models/chat_message.dart';
 import 'auth_service.dart';
 import 'firestore_service.dart';
@@ -3126,6 +3127,51 @@ Return ONLY valid JSON with this exact shape (no markdown fences):
     );
   }
 
+  Future<String> summarizeNewsFromHeadline(String title) async {
+    final t = title.trim();
+    if (t.isEmpty) return '';
+
+    final prompt = '''Write a short news-style preview (45-65 words) for the headline below.
+
+Rules:
+- One paragraph, plain text, neutral tone.
+- Explain what kind of story this is and why readers might care, using ONLY what the headline reasonably implies.
+- Do NOT invent specific quotes, dates, scores, or outcomes not clearly suggested by the headline.
+- Do NOT repeat the headline verbatim.
+
+Return ONLY valid JSON (no markdown): {"summary":"..."}
+
+Headline: $t''';
+
+    String parseSummary(String raw) {
+      var s = raw.trim();
+      final fence = RegExp(r'```(?:json)?\s*([\s\S]*?)```', caseSensitive: false).firstMatch(s);
+      if (fence != null && fence.group(1) != null) s = fence.group(1)!.trim();
+      try {
+        final parsed = jsonDecode(s);
+        if (parsed is Map && parsed['summary'] is String) {
+          return (parsed['summary'] as String).replaceAll(RegExp(r'\s+'), ' ').trim();
+        }
+      } catch (_) {}
+      return '';
+    }
+
+    if (isVertexBackendConfigured()) {
+      try {
+        final raw = await vertexGenerateContent(
+          prompt: prompt,
+          temperature: 0.4,
+          maxOutputTokens: 220,
+        ).timeout(const Duration(seconds: 20));
+        final summary = parseSummary(raw);
+        if (summary.isNotEmpty) return summary;
+      } catch (e) {
+        debugPrint('[News] headline summary failed: $e');
+      }
+    }
+    return '';
+  }
+
   Future<String> summarizeNewsArticle(
     Map<String, dynamic>? details, [
     Map<String, dynamic> options = const {},
@@ -3148,7 +3194,9 @@ Return ONLY valid JSON with this exact shape (no markdown fences):
     final bodyForModel = text.length > 10000 ? text.substring(0, 10000) : text;
     final sourceText = [description, text].where((s) => s.isNotEmpty).join('\n\n');
     final clippedSourceText = sourceText.length > 12000 ? sourceText.substring(0, 12000) : sourceText;
-    if (clippedSourceText.trim().isEmpty) return '';
+    if (clippedSourceText.trim().isEmpty) {
+      return summarizeNewsFromHeadline(title);
+    }
 
     final isRedditThreadBundle =
         RegExp(r'Top comments:|Comment by u/', caseSensitive: false).hasMatch(text);
@@ -3156,6 +3204,7 @@ Return ONLY valid JSON with this exact shape (no markdown fences):
         (description.isNotEmpty && !descIsMostlyHeadline && description.length >= 80) ||
         (isRedditThreadBundle && bodyForModel.length >= 60);
     if (!hasEnoughForSummary && bodyForModel.length < 280 && (description.isEmpty || descIsMostlyHeadline)) {
+      if (!isTeaGossip) return summarizeNewsFromHeadline(title);
       return '';
     }
 
@@ -4071,16 +4120,21 @@ $contextSnippet''';
     try {
       final raw = prefs.getString(cacheKey);
       if (raw != null && raw.isNotEmpty) {
-        try {
-          final parsed = jsonDecode(raw);
-          if (parsed is Map &&
-              parsed['text'] == fullText &&
-              parsed['image'] is String &&
-              (parsed['image'] as String).isNotEmpty) {
-            return parsed['image'] as String;
-          }
-        } catch (_) {
-          if (raw.startsWith('data:image')) return raw;
+        if (raw.length > 64 * 1024 || raw.contains('data:image')) {
+          await prefs.remove(cacheKey);
+        } else {
+          try {
+            final parsed = jsonDecode(raw);
+            if (parsed is Map &&
+                parsed['text'] == fullText &&
+                parsed['image'] is String &&
+                (parsed['image'] as String).isNotEmpty) {
+              final image = parsed['image'] as String;
+              if (shouldPersistGeneratedImageCache(image)) {
+                return image;
+              }
+            }
+          } catch (_) {}
         }
       }
     } catch (e) {
@@ -4109,14 +4163,7 @@ $contextSnippet''';
       );
       final generated = await _generateImageWithGemini(prompt, referenceImage);
       if (generated != null && generated.isNotEmpty) {
-        try {
-          final payload = jsonEncode(<String, String>{'text': fullText, 'image': generated});
-          if (payload.length <= 2 * 1024 * 1024) {
-            await prefs.setString(cacheKey, payload);
-          }
-        } catch (_) {
-          // Ignore cache write failures (quota or serialization issues).
-        }
+        _cacheReflectionImageIfPersistable(prefs, cacheKey, fullText, generated);
       }
       return generated;
     }
@@ -4140,14 +4187,7 @@ $contextSnippet''';
           'A realistic photograph of a $age year old $gender ($nationality), $clipped, natural lighting, high detail, not a celebrity, not stock.';
       final generated = await _generateImageWithGemini(fallback, referenceImage);
       if (generated != null && generated.isNotEmpty) {
-        try {
-          final payload = jsonEncode(<String, String>{'text': fullText, 'image': generated});
-          if (payload.length <= 2 * 1024 * 1024) {
-            await prefs.setString(cacheKey, payload);
-          }
-        } catch (_) {
-          // Ignore cache write failures (quota or serialization issues).
-        }
+        _cacheReflectionImageIfPersistable(prefs, cacheKey, fullText, generated);
       }
       return generated;
     }
@@ -4160,16 +4200,26 @@ $contextSnippet''';
     final fullPrompt = '$imagePrompt $strictRules';
     final generated = await _generateImageWithGemini(fullPrompt, referenceImage);
     if (generated != null && generated.isNotEmpty) {
-      try {
-        final payload = jsonEncode(<String, String>{'text': fullText, 'image': generated});
-        if (payload.length <= 2 * 1024 * 1024) {
-          await prefs.setString(cacheKey, payload);
-        }
-      } catch (_) {
-        // Ignore cache write failures (quota or serialization issues).
-      }
+      _cacheReflectionImageIfPersistable(prefs, cacheKey, fullText, generated);
     }
     return generated;
+  }
+
+  void _cacheReflectionImageIfPersistable(
+    SharedPreferences prefs,
+    String cacheKey,
+    String fullText,
+    String generated,
+  ) {
+    if (!shouldPersistGeneratedImageCache(generated)) return;
+    try {
+      final payload = jsonEncode(<String, String>{'text': fullText, 'image': generated});
+      if (payload.length <= 64 * 1024) {
+        prefs.setString(cacheKey, payload);
+      }
+    } catch (_) {
+      // Ignore cache write failures (quota or serialization issues).
+    }
   }
 
   Future<String?> fetchSingleNewsShareIllustrationImage([

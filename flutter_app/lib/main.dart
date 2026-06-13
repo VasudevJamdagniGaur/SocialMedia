@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'router/app_router.dart';
 import 'router/auth_refresh.dart';
 import 'services/chat_service.dart';
+import 'utils/prefs_maintenance.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,6 +17,8 @@ Future<void> main() async {
     FlutterError.presentError(details);
     debugPrint('FlutterError: ${details.exceptionAsString()}');
   };
+
+  await pruneSharedPreferencesOnStartup();
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await FirebaseAnalytics.instance.setAnalyticsCollectionEnabled(true);

@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../utils/hub_colors.dart';
+import '../router/app_router.dart';
 
 const _whatsappNumber = '919536138120';
 
@@ -44,6 +45,20 @@ class _HelpImproveDeitePageState extends State<HelpImproveDeitePage> {
     }
   }
 
+  void _goBack(BuildContext context) {
+    if (context.canPop()) {
+      context.pop();
+      return;
+    }
+    final extra = GoRouterState.of(context).extra;
+    final returnTo = extra is Map ? extra['returnTo'] as String? : null;
+    if (returnTo != null && returnTo.startsWith('/')) {
+      context.go(returnTo);
+      return;
+    }
+    context.go(AppRoutes.dashboard);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -59,7 +74,7 @@ class _HelpImproveDeitePageState extends State<HelpImproveDeitePage> {
                   child: Row(
                     children: [
                       IconButton(
-                        onPressed: () => context.pop(),
+                        onPressed: () => _goBack(context),
                         icon: const Icon(Icons.arrow_back, color: HubColors.textSecondary),
                       ),
                       const Expanded(

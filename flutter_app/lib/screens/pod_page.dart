@@ -58,7 +58,10 @@ class _PodPageState extends State<PodPage> {
                     isDark: isDark,
                     profilePicture: _profilePicture,
                     onThemeToggle: () => context.read<ThemeNotifier>().toggleTheme(),
-                    onHelp: () => context.push(AppRoutes.helpImprove),
+                    onHelp: () => context.push(
+                      AppRoutes.helpImprove,
+                      extra: {'returnTo': AppRoutes.pod},
+                    ),
                     onProfile: () => context.push(AppRoutes.profile),
                   ),
                   const TrendingTea(),

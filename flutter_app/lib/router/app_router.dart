@@ -226,7 +226,12 @@ class _AppShellState extends State<_AppShell> {
       return;
     }
     if (path == AppRoutes.helpImprove) {
-      router.go(AppRoutes.dashboard);
+      if (router.canPop()) {
+        router.pop();
+        return;
+      }
+      final ret = extra is Map ? extra['returnTo'] as String? : null;
+      router.go(ret != null && ret.startsWith('/') ? ret : AppRoutes.dashboard);
       return;
     }
     if (path == AppRoutes.shareSuggestions || path == AppRoutes.shareReflection) {
