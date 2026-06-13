@@ -141,7 +141,12 @@ class _SignupPageState extends State<SignupPage> with SingleTickerProviderStateM
                     opacity: _isLoaded ? 1 : 0,
                     duration: const Duration(milliseconds: 700),
                     child: Padding(
-                      padding: EdgeInsets.fromLTRB(24, 0, 24, bottomInset > 0 ? bottomInset : 28),
+                      padding: EdgeInsets.fromLTRB(
+                        24,
+                        0,
+                        24,
+                        (bottomInset > 0 ? bottomInset + 12 : 36),
+                      ),
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 400, minHeight: 200),
                         child: Column(
@@ -182,17 +187,6 @@ class _SignupPageState extends State<SignupPage> with SingleTickerProviderStateM
                                           ),
                                         ],
                                       ),
-                              ),
-                            ),
-                            const SizedBox(height: 20),
-                            TextButton(
-                              onPressed: () => context.go(AppRoutes.login),
-                              style: TextButton.styleFrom(
-                                foregroundColor: Colors.white.withValues(alpha: 0.95),
-                              ),
-                              child: const Text(
-                                'Log in with email and password',
-                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
                               ),
                             ),
                           ],
