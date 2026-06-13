@@ -3625,8 +3625,8 @@ Rules:
 - personality: famous people (celebrities, leaders, authors, historical figures). NOT personal contacts or friends.
 - event: famous events, named books, films, conferences, awards (e.g. "The Three-Body Problem", "Source Code" book, "Oscars").
 - place: famous or iconic places, landmarks, cities, venues.
-- brand: famous brands, companies, products.
-- object: famous objects, artworks, monuments (e.g. Mona Lisa, Eiffel Tower as object).
+- brand: famous brands, companies, or named commercial products (e.g. Nike, Apple, Optimum Nutrition, MuscleBlaze, Starbucks).
+- object: physical products, items, or product categories explicitly mentioned (e.g. whey protein, protein powder tub, iPhone, book title, car model).
 
 Return format (use exactly):
 {"personality":[],"event":[],"place":[],"brand":[],"object":[]}
@@ -4038,7 +4038,52 @@ $text''';
     return (showMatch?.group(1) ?? '').trim();
   }
 
-  Future<String?> _resolveFamousPersonForImage(String combinedText) async {
+  List<String> _extractProductMentions(String text) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return const <String>[];
+
+    final found = <String>{};
+    final productPatterns = <({RegExp pattern, String label})>[
+      (pattern: RegExp(r'\bwhey\s+protein\b', caseSensitive: false), label: 'whey protein'),
+      (pattern: RegExp(r'\bprotein\s+powder\b', caseSensitive: false), label: 'protein powder'),
+      (pattern: RegExp(r'\bprotein\s+shake\b', caseSensitive: false), label: 'protein shake'),
+      (pattern: RegExp(r'\benergy\s+drink\b', caseSensitive: false), label: 'energy drink'),
+      (pattern: RegExp(r'\bsmartphone\b', caseSensitive: false), label: 'smartphone'),
+      (pattern: RegExp(r'\blaptop\b', caseSensitive: false), label: 'laptop'),
+      (pattern: RegExp(r'\biphone\b', caseSensitive: false), label: 'iPhone'),
+      (pattern: RegExp(r'\bmacbook\b', caseSensitive: false), label: 'MacBook'),
+      (pattern: RegExp(r'\bairpods\b', caseSensitive: false), label: 'AirPods'),
+      (pattern: RegExp(r'\bsneakers\b', caseSensitive: false), label: 'sneakers'),
+      (pattern: RegExp(r'\brunning\s+shoes\b', caseSensitive: false), label: 'running shoes'),
+    ];
+    for (final entry in productPatterns) {
+      if (entry.pattern.hasMatch(trimmed)) found.add(entry.label);
+    }
+
+    final brandLike = RegExp(
+      r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})\s+(?:protein|shoes|sneakers|phone|laptop|watch|car|coffee|burger|pizza)\b',
+    );
+    for (final match in brandLike.allMatches(trimmed)) {
+      final value = (match.group(1) ?? '').trim();
+      if (value.length >= 3 && value.length <= 40) found.add(value);
+    }
+
+    return found.take(3).toList(growable: false);
+  }
+
+  List<String> _mergeVisualProductMentions(List<String> fromAi, List<String> fromRegex) {
+    final merged = <String>{};
+    for (final item in [...fromAi, ...fromRegex]) {
+      final cleaned = item.trim();
+      if (cleaned.isNotEmpty) merged.add(cleaned);
+    }
+    return merged.take(3).toList(growable: false);
+  }
+
+  Future<String?> _resolveFamousPersonForImage(
+    String combinedText, [
+    Map<String, List<String>>? preDetected,
+  ]) async {
     final text = combinedText.trim();
     if (text.isEmpty) return null;
 
@@ -4046,7 +4091,7 @@ $text''';
     final fromNer = (entities['persons'] ?? []).where((n) => n.trim().isNotEmpty).toList();
     if (fromNer.isNotEmpty) return fromNer.first.trim();
 
-    final detected = await _detectFamousEntities(text);
+    final detected = preDetected ?? await _detectFamousEntities(text);
     final fromPersonality = (detected['personality'] ?? []).where((n) => n.trim().isNotEmpty).toList();
     if (fromPersonality.isNotEmpty) return fromPersonality.first.trim();
 
@@ -4057,15 +4102,18 @@ $text''';
     required String personName,
     required String combinedText,
     required bool isTribute,
+    List<String> brands = const <String>[],
+    List<String> products = const <String>[],
   }) {
     final contextSnippet =
         combinedText.length > 900 ? combinedText.substring(0, 900) : combinedText;
     final showContext = _extractShowOrWorkContext(combinedText);
     final showHint = showContext.isNotEmpty ? ' Known for "$showContext".' : '';
+    final brandHint = _buildBrandProductPromptHint(brands: brands, products: products);
 
     if (isTribute) {
       return '''One editorial memorial tribute illustration for a social media RIP post (same image for all post variants).
-Subject: $personName — show their recognizable face and likeness from their public career, respectfully and warmly.$showHint
+Subject: $personName — show their recognizable face and likeness from their public career, respectfully and warmly.$showHint$brandHint
 Composition: cinematic portrait with the person's face clearly visible and central; integrate subtle tribute symbolism (soft golden memorial light, candles, flowers, stage props like a vintage microphone or director's chair as secondary background elements only).
 Do NOT use an empty chair or silhouette instead of the person — their face must be identifiable.
 Mood: solemn, nostalgic, respectful. Tasteful; no graphic content; no text overlay; photorealistic editorial style.
@@ -4074,9 +4122,46 @@ $contextSnippet''';
     }
 
     return '''One editorial news illustration for social media posts (same image for all variants).
-Include $personName with recognizable face and likeness clearly visible in the scene, matching the story context below.$showHint
+Include $personName with recognizable face and likeness clearly visible in the scene, matching the story context below.$showHint$brandHint
 Medium shot or portrait-in-environment — face must be identifiable, not a generic figure or empty symbolic props.
 Tasteful; high realism; no text overlay.
+Story context:
+$contextSnippet''';
+  }
+
+  String _buildBrandProductPromptHint({
+    List<String> brands = const <String>[],
+    List<String> products = const <String>[],
+  }) {
+    final parts = <String>[];
+    if (brands.isNotEmpty) {
+      parts.add(
+        'Include recognizable brand(s): ${brands.take(2).join(', ')} — show authentic packaging, logo, or product design clearly in frame.',
+      );
+    }
+    if (products.isNotEmpty) {
+      parts.add(
+        'Include product(s): ${products.take(2).join(', ')} — must appear prominently, not a generic substitute.',
+      );
+    }
+    if (parts.isEmpty) return '';
+    return '\n${parts.join(' ')}';
+  }
+
+  String _buildBrandOrProductImagePrompt({
+    required String combinedText,
+    required List<String> brands,
+    required List<String> products,
+  }) {
+    final contextSnippet =
+        combinedText.length > 900 ? combinedText.substring(0, 900) : combinedText;
+    final focusHint = _buildBrandProductPromptHint(brands: brands, products: products).trim();
+
+    return '''One realistic editorial photograph for a social media post (same image for all platforms).
+$focusHint
+Composition: medium or wide shot with the named brand or product as a clear focal point. Match the scene mood from the post (e.g. price complaint → product on a store shelf, in hand, or with visible price context).
+Do NOT substitute unrelated generic items for the named brand or product.
+High realism; natural lighting; no text overlay.
 Story context:
 $contextSnippet''';
   }
@@ -4114,7 +4199,7 @@ $contextSnippet''';
     debugPrint('[ImageGen] fetchImageForReflection start platform=$platform textLen=${postText.trim().length}');
     final fullText = postText.trim();
     final keyText = fullText.length > 300 ? fullText.substring(0, 300) : fullText;
-    final cacheKey = 'post_image_cache_v2::$keyText';
+    final cacheKey = 'post_image_cache_v3::$keyText';
     final prefs = await SharedPreferences.getInstance();
 
     try {
@@ -4152,14 +4237,39 @@ $contextSnippet''';
       referenceImage = await _getProfileImageAsBase64(userContext!['profileImageUrl'].toString().trim());
     }
 
-    final famousPerson = await _resolveFamousPersonForImage(fullText);
+    final detected = await _detectFamousEntities(fullText);
+    final brands = (detected['brand'] ?? []).where((n) => n.trim().isNotEmpty).toList(growable: false);
+    final products = _mergeVisualProductMentions(
+      detected['object'] ?? const <String>[],
+      _extractProductMentions(fullText),
+    );
+
+    final famousPerson = await _resolveFamousPersonForImage(fullText, detected);
     if (famousPerson != null && famousPerson.isNotEmpty) {
       final isTribute = _isTributeOrMemorialContext(fullText);
-      debugPrint('[ImageGen] famous person for reflection: $famousPerson tribute=$isTribute');
+      debugPrint(
+        '[ImageGen] famous person for reflection: $famousPerson tribute=$isTribute brands=$brands products=$products',
+      );
       final prompt = _buildFamousPersonImagePrompt(
         personName: famousPerson,
         combinedText: fullText,
         isTribute: isTribute,
+        brands: brands,
+        products: products,
+      );
+      final generated = await _generateImageWithGemini(prompt, referenceImage);
+      if (generated != null && generated.isNotEmpty) {
+        _cacheReflectionImageIfPersistable(prefs, cacheKey, fullText, generated);
+      }
+      return generated;
+    }
+
+    if (brands.isNotEmpty || products.isNotEmpty) {
+      debugPrint('[ImageGen] brand/product focus for reflection: brands=$brands products=$products');
+      final prompt = _buildBrandOrProductImagePrompt(
+        combinedText: fullText,
+        brands: brands,
+        products: products,
       );
       final generated = await _generateImageWithGemini(prompt, referenceImage);
       if (generated != null && generated.isNotEmpty) {
@@ -4234,15 +4344,33 @@ $contextSnippet''';
       if (storyText.isNotEmpty) storyText,
     ].join('\n\n');
 
-    final famousPerson = await _resolveFamousPersonForImage(combined);
+    final detected = await _detectFamousEntities(combined);
+    final brands = (detected['brand'] ?? []).where((n) => n.trim().isNotEmpty).toList(growable: false);
+    final products = _mergeVisualProductMentions(
+      detected['object'] ?? const <String>[],
+      _extractProductMentions(combined),
+    );
+
+    final famousPerson = await _resolveFamousPersonForImage(combined, detected);
     final String prompt;
     if (famousPerson != null && famousPerson.isNotEmpty) {
       final isTribute = _isTributeOrMemorialContext(combined);
-      debugPrint('[ImageGen] famous person for news illustration: $famousPerson tribute=$isTribute');
+      debugPrint(
+        '[ImageGen] famous person for news illustration: $famousPerson tribute=$isTribute brands=$brands products=$products',
+      );
       prompt = _buildFamousPersonImagePrompt(
         personName: famousPerson,
         combinedText: combined,
         isTribute: isTribute,
+        brands: brands,
+        products: products,
+      );
+    } else if (brands.isNotEmpty || products.isNotEmpty) {
+      debugPrint('[ImageGen] brand/product focus for news illustration: brands=$brands products=$products');
+      prompt = _buildBrandOrProductImagePrompt(
+        combinedText: combined,
+        brands: brands,
+        products: products,
       );
     } else {
       final promptLines = <String>[

@@ -64,6 +64,9 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
   String? _generatedShareImageUrl;
   bool _loadingShareImage = false;
 
+  final TextEditingController _reflectionController = TextEditingController();
+  final FocusNode _reflectionFocusNode = FocusNode();
+
   bool get _isNewsMode => _newsArticle != null;
 
   String? get _shareSuggestionImageUrl {
@@ -96,6 +99,13 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
         if (_suggestions.isEmpty) unawaited(_bootstrapSharePage());
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _reflectionController.dispose();
+    _reflectionFocusNode.dispose();
+    super.dispose();
   }
 
   Map<String, dynamic>? _resolveRoutePayload() {
@@ -145,6 +155,9 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
 
   void _applyRoutePayload(Map<String, dynamic> extra) {
       _reflection = (extra['reflection'] as String? ?? '').trim();
+      if (_reflectionController.text != _reflection) {
+        _reflectionController.text = _reflection;
+      }
       _platform = extra['platform'] as String? ?? 'linkedin';
       _returnTo = extra['returnTo'] as String? ?? AppRoutes.dashboard;
       _suggestionsOnly = extra['suggestionsOnly'] == true;
@@ -762,6 +775,25 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
     _loadSuggestions();
   }
 
+  Future<void> _onReflectionRegenerate() async {
+    if (_isNewsMode || _loading) return;
+
+    final next = _reflectionController.text.trim();
+    if (next.isEmpty) return;
+
+    _reflectionFocusNode.unfocus();
+    setState(() {
+      _reflection = next;
+      _generatedShareImageUrl = null;
+      _selectedIndex = 0;
+      _error = null;
+    });
+
+    await _loadSuggestions();
+    if (!mounted || _isNewsMode) return;
+    await _ensureReflectionShareImage();
+  }
+
   void _openSharePanel(String text) {
     setState(() {
       _editableShareText = text;
@@ -977,6 +1009,9 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
                           isNewsMode: _isNewsMode,
                               isTeaArticle: _isTeaArticleShare,
                           reflection: _reflection,
+                          reflectionController: _isNewsMode ? null : _reflectionController,
+                          reflectionFocusNode: _isNewsMode ? null : _reflectionFocusNode,
+                          onReflectionSubmitted: _isNewsMode ? null : _onReflectionRegenerate,
                           newsArticle: _newsArticle,
                               newsHeadline: _displayNewsHeadline,
                               newsSummary: _displayNewsSummary,
@@ -1112,6 +1147,9 @@ class _SourceCard extends StatelessWidget {
     required this.isNewsMode,
     required this.isTeaArticle,
     required this.reflection,
+    this.reflectionController,
+    this.reflectionFocusNode,
+    this.onReflectionSubmitted,
     required this.newsArticle,
     required this.newsHeadline,
     required this.newsSummary,
@@ -1123,6 +1161,9 @@ class _SourceCard extends StatelessWidget {
   final bool isNewsMode;
   final bool isTeaArticle;
   final String reflection;
+  final TextEditingController? reflectionController;
+  final FocusNode? reflectionFocusNode;
+  final Future<void> Function()? onReflectionSubmitted;
   final Map<String, dynamic>? newsArticle;
   final String newsHeadline;
   final String newsSummary;
@@ -1316,6 +1357,33 @@ class _SourceCard extends StatelessWidget {
               ),
             ],
             ],
+          ] else if (reflectionController != null) ...[
+            Focus(
+              onKeyEvent: (node, event) {
+                if (onReflectionSubmitted == null) return KeyEventResult.ignored;
+                if (event is! KeyDownEvent) return KeyEventResult.ignored;
+                if (event.logicalKey != LogicalKeyboardKey.enter) return KeyEventResult.ignored;
+                if (HardwareKeyboard.instance.isShiftPressed) return KeyEventResult.ignored;
+                unawaited(onReflectionSubmitted!());
+                return KeyEventResult.handled;
+              },
+              child: TextField(
+                controller: reflectionController,
+                focusNode: reflectionFocusNode,
+                maxLines: null,
+                minLines: 2,
+                style: TextStyle(color: primary, fontSize: 15, height: 1.45),
+                decoration: InputDecoration(
+                  border: InputBorder.none,
+                  isDense: true,
+                  contentPadding: EdgeInsets.zero,
+                  hintText: 'Tap to edit · Enter to regenerate',
+                  hintStyle: TextStyle(color: secondary, fontSize: 14),
+                ),
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => unawaited(onReflectionSubmitted?.call()),
+              ),
+            ),
           ] else ...[
             Text(
               reflection,
