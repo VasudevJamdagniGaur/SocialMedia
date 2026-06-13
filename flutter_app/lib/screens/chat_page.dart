@@ -35,7 +35,6 @@ class _ChatPageState extends State<ChatPage> {
   bool _isLoading = false;
   XFile? _selectedImage;
   Uint8List? _imagePreviewBytes;
-  String? _apiProvider;
   DateTime _selectedDate = DateTime.now();
   bool _isWhisperMode = false;
   bool _isFreshSession = false;
@@ -61,8 +60,7 @@ class _ChatPageState extends State<ChatPage> {
       _isFreshSession = extra['isFreshSession'] == true;
     }
     _selectedDateId = getDateId(_selectedDate);
-    await ChatService.instance.loadSavedProvider();
-    _apiProvider = ChatService.instance.apiProvider;
+    ChatService.instance.setApiProvider('gemini');
     await _loadMessages();
     if (mounted) setState(() {});
   }
@@ -156,12 +154,22 @@ class _ChatPageState extends State<ChatPage> {
     final welcomeText = _isWhisperMode
         ? 'Welcome to your Whisper Session. This is a private, fresh space just for you. What would you like to share in confidence today?'
         : "Hi, I'm Detea. How was your day?";
-    setState(() {
-      _messages = [
-        ChatMessage(id: 'welcome', text: welcomeText, sender: 'ai', timestamp: DateTime.now()),
-      ];
-    });
+    final messages = <ChatMessage>[
+      ChatMessage(id: 'welcome', text: welcomeText, sender: 'ai', timestamp: DateTime.now()),
+    ];
+    if (_isWhisperMode) {
+      messages.add(_whisperSystemMessage(true));
+    }
+    setState(() => _messages = messages);
   }
+
+  ChatMessage _whisperSystemMessage(bool enabled) => ChatMessage(
+        id: 'whisper-system-${DateTime.now().millisecondsSinceEpoch}',
+        text: enabled ? 'You turned on whisper session.' : 'You turned off whisper session.',
+        sender: 'system',
+        timestamp: DateTime.now(),
+        systemKind: enabled ? 'whisper_on' : 'whisper_off',
+      );
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -282,7 +290,13 @@ class _ChatPageState extends State<ChatPage> {
       working = [...working, aiMessage];
       setState(() => _messages = working);
 
-      final history = _messages.where((m) => m.id != aiMessage.id && !m.isProcessingReel).toList();
+      final history = _messages
+          .where((m) =>
+              m.id != aiMessage.id &&
+              !m.isProcessingReel &&
+              !m.isSystemNotification &&
+              m.id != 'welcome')
+          .toList();
       final aiResponse = await ChatService.instance.sendMessage(
         userMessageText,
         conversationHistory: history,
@@ -455,8 +469,10 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Future<void> _handleBack() async {
-    if (_isWhisperMode) {
-      final actual = _messages.where((m) => m.id != 'welcome' && m.text.trim().isNotEmpty).toList();
+    if (_isWhisperMode || _hasWhisperMessages) {
+      final actual = _messages
+          .where((m) => m.id != 'welcome' && !m.isSystemNotification && m.text.trim().isNotEmpty)
+          .toList();
       if (actual.isNotEmpty) {
         await _showDeleteDialog();
         return;
@@ -493,10 +509,19 @@ class _ChatPageState extends State<ChatPage> {
     if (mounted) context.go(AppRoutes.dashboard);
   }
 
-  Future<void> _cycleProvider() async {
-    final next = await ChatService.instance.cycleProvider();
-    setState(() => _apiProvider = next);
+  void _toggleWhisperMode({bool? enabled}) {
+    final next = enabled ?? !_isWhisperMode;
+    if (next == _isWhisperMode) return;
+    setState(() {
+      _isWhisperMode = next;
+      _messages = [..._messages, _whisperSystemMessage(next)];
+    });
+    unawaited(_saveMessagesLocal());
+    _scrollToBottom();
   }
+
+  bool get _hasWhisperMessages =>
+      _messages.any((m) => m.isWhisperSession && m.id != 'welcome' && m.text.trim().isNotEmpty);
 
   String _formatTime(DateTime date) {
     final h = date.hour > 12 ? date.hour - 12 : (date.hour == 0 ? 12 : date.hour);
@@ -514,17 +539,6 @@ class _ChatPageState extends State<ChatPage> {
     if (diff == 0) return 'TODAY $time';
     if (diff == 1) return 'YESTERDAY $time';
     return '${d.month}/${d.day} $time';
-  }
-
-  String _providerAsset() {
-    switch (_apiProvider) {
-      case 'gemini':
-        return 'assets/images/gemini-icon.webp';
-      case 'grok':
-        return 'assets/images/grok-icon.webp';
-      default:
-        return 'assets/images/openai-icon.webp';
-    }
   }
 
   @override
@@ -571,18 +585,33 @@ class _ChatPageState extends State<ChatPage> {
               style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87, fontSize: 18, fontWeight: FontWeight.w600),
             ),
           ),
-          _circleBtn(
-            isDarkMode,
-            onTap: _cycleProvider,
-            child: Image.asset(
-              _providerAsset(),
-              width: 24,
-              height: 24,
-              color: (_apiProvider == 'openai' || _apiProvider == 'grok') ? Colors.white : null,
-              colorBlendMode: BlendMode.srcIn,
+          _whisperToggleBtn(isDarkMode),
+        ],
+      ),
+    );
+  }
+
+  Widget _whisperToggleBtn(bool isDarkMode) {
+    final active = _isWhisperMode;
+    return Material(
+      color: active
+          ? HubColors.accent.withValues(alpha: isDarkMode ? 0.35 : 0.2)
+          : (isDarkMode ? const Color(0xFF262626) : Colors.white),
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: _toggleWhisperMode,
+        child: SizedBox(
+          width: 40,
+          height: 40,
+          child: Center(
+            child: Icon(
+              active ? Icons.hearing : Icons.hearing_disabled,
+              size: 22,
+              color: active ? HubColors.accent : (isDarkMode ? Colors.white70 : Colors.black54),
             ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -610,6 +639,27 @@ class _ChatPageState extends State<ChatPage> {
         final dateKey = '${message.timestamp.year}-${message.timestamp.month}-${message.timestamp.day}';
         final showDate = dateKey != lastDateKey;
         if (showDate) lastDateKey = dateKey;
+
+        if (message.isSystemNotification) {
+          return Column(
+            children: [
+              if (showDate)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    _dateLabel(message.timestamp),
+                    style: TextStyle(
+                      color: isDarkMode ? HubColors.chatDateSep : Colors.black54,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              _buildWhisperSystemBanner(message, isDarkMode),
+            ],
+          );
+        }
+
         final isUser = message.sender == 'user';
 
         return Column(
@@ -703,6 +753,43 @@ class _ChatPageState extends State<ChatPage> {
           ],
         );
       },
+    );
+  }
+
+  Widget _buildWhisperSystemBanner(ChatMessage message, bool isDarkMode) {
+    final isOn = message.systemKind == 'whisper_on';
+    final actionLabel = isOn ? 'Turn off' : 'Turn on';
+    final baseColor = isDarkMode ? Colors.white.withValues(alpha: 0.55) : const Color(0xFF667781);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+      child: Center(
+        child: Text.rich(
+          TextSpan(
+            style: TextStyle(fontSize: 12.5, height: 1.35, color: baseColor),
+            children: [
+              TextSpan(text: message.text),
+              const TextSpan(text: ' '),
+              WidgetSpan(
+                alignment: PlaceholderAlignment.baseline,
+                baseline: TextBaseline.alphabetic,
+                child: GestureDetector(
+                  onTap: () => _toggleWhisperMode(enabled: !isOn),
+                  child: Text(
+                    actionLabel,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      color: isDarkMode ? HubColors.accentHighlight : HubColors.accent,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ),
     );
   }
 
