@@ -417,6 +417,7 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
       if (cacheUsable) {
         if (isTea) {
           summary = sanitizeTeaCardSummary(summary);
+          if (isScrapeBlockedBoilerplate(summary)) summary = '';
           if (summary.isNotEmpty) {
             await upsertCachedNewsCard(
               url: url,
@@ -431,7 +432,9 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
         setState(() {
           _newsArticleDetails = cachedDetails;
           _newsCardSummary = summary;
-          _newsCardHeadline = headline;
+          _newsCardHeadline = isScrapeBlockedBoilerplate(headline)
+              ? cleanTeaCardTitle('${_newsArticle?['title'] ?? ''}')
+              : headline;
         });
         return;
       }
@@ -505,6 +508,12 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
             teaCardSummaryLooksLikeTitleOnly(finalSummary, headlineFallback))) {
       finalSummary = localTeaFallback;
     }
+    if (isScrapeBlockedBoilerplate(finalHeadline)) {
+      finalHeadline = headlineFallback;
+    }
+    if (isScrapeBlockedBoilerplate(finalSummary)) {
+      finalSummary = '';
+    }
     if (isTea && finalSummary.isNotEmpty) {
       finalSummary = sanitizeTeaCardSummary(finalSummary);
     }
@@ -550,14 +559,17 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
 
   String get _displayNewsHeadline {
     if (!_isNewsMode) return '';
-    return _newsCardHeadline.isNotEmpty
-        ? _newsCardHeadline
-        : (_newsArticle?['title'] as String? ?? '');
+    final seed = cleanTeaCardTitle('${_newsArticle?['title'] ?? ''}');
+    if (_newsCardHeadline.isNotEmpty) {
+      return resolveTeaDisplayTitle(_newsCardHeadline, seed);
+    }
+    return seed;
   }
 
   String get _displayNewsSummary {
     if (!_isNewsMode) return '';
     if (_loadingNewsDetails) return '';
+    if (isScrapeBlockedBoilerplate(_newsCardSummary)) return '';
     if (_newsCardSummary.isNotEmpty) {
       if (_isTeaArticleShare &&
           teaCardSummaryHasDisplayIssues(
@@ -1118,6 +1130,24 @@ class _SourceCard extends StatelessWidget {
         ? (isTeaArticle ? 'Tea' : (suggestionsOnly ? 'Post' : 'News'))
         : (suggestionsOnly ? 'Create post' : 'Your reflection');
 
+    final seedTitle = cleanTeaCardTitle('${newsArticle?['title'] ?? ''}');
+    final resolvedHeadline = resolveTeaDisplayTitle(
+      newsHeadline.isNotEmpty ? newsHeadline : seedTitle,
+      seedTitle,
+    );
+    final discussionUrl =
+        normalizeRedditDiscussionUrl('${newsArticle?['url'] ?? ''}'.trim()) ??
+            '${newsArticle?['url'] ?? ''}'.trim();
+    final showBlockedRedditFallback = isTeaArticle &&
+        isRedditThreadUrl(discussionUrl) &&
+        !loadingNewsDetails &&
+        teaCardContentIsBlocked(
+          headline: newsHeadline,
+          summary: newsSummary,
+          description: newsArticle?['description'] as String?,
+          bodyText: '${newsArticle?['text'] ?? newsArticle?['selftext'] ?? ''}',
+        );
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -1148,21 +1178,44 @@ class _SourceCard extends StatelessWidget {
               const SizedBox(height: 8),
               const Skeleton(variant: SkeletonVariant.text, height: 14, width: 240),
             ] else ...[
-              if ((newsHeadline.isNotEmpty ? newsHeadline : (newsArticle?['title'] as String? ?? '')).isNotEmpty) ...[
+              if (resolvedHeadline.isNotEmpty) ...[
                 const SizedBox(height: 8),
-            Text(
-                  newsHeadline.isNotEmpty
-                      ? newsHeadline
-                      : (newsArticle?['title'] as String? ?? ''),
-              style: TextStyle(
-                color: primary,
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                height: 1.35,
-              ),
-            ),
+                Text(
+                  resolvedHeadline,
+                  style: TextStyle(
+                    color: primary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    height: 1.35,
+                  ),
+                ),
               ],
-              if (loadingNewsDetails && newsSummary.trim().isEmpty) ...[
+              if (showBlockedRedditFallback) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Source: Reddit',
+                  style: TextStyle(color: secondary, fontSize: 14, height: 1.45),
+                ),
+                const SizedBox(height: 4),
+                InkWell(
+                  onTap: () async {
+                    final uri = Uri.tryParse(discussionUrl);
+                    if (uri == null) return;
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri, mode: LaunchMode.externalApplication);
+                    }
+                  },
+                  child: Text(
+                    'Tap to view the original discussion →',
+                    style: TextStyle(
+                      color: isDarkMode ? HubColors.accentHighlight : const Color(0xFF7C3AED),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      height: 1.45,
+                    ),
+                  ),
+                ),
+              ] else if (loadingNewsDetails && newsSummary.trim().isEmpty) ...[
                 const SizedBox(height: 8),
                 const Skeleton(variant: SkeletonVariant.text, height: 14, width: double.infinity),
                 const SizedBox(height: 8),

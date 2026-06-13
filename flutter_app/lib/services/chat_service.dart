@@ -2298,6 +2298,7 @@ $text""";
         final res = await http.get(Uri.parse(readerUrl)).timeout(const Duration(seconds: 20));
         if (res.statusCode < 200 || res.statusCode >= 300) continue;
         final cleaned = res.body.replaceAll(RegExp(r'\s+'), ' ').trim();
+        if (isScrapeBlockedBoilerplate(cleaned)) continue;
         if (cleaned.length > best.length && cleaned.length > 200) {
           best = cleaned;
         }

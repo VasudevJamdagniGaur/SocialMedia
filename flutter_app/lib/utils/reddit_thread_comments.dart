@@ -87,13 +87,13 @@ Future<Map<String, dynamic>?> fetchRedditThreadViaJina(
       if (res.statusCode < 200 || res.statusCode >= 300) continue;
       var body = res.body.trim();
       if (body.length < 80) continue;
-      final lower = body.toLowerCase();
-      if (lower.contains('403 forbidden') || lower.contains('access denied')) continue;
+      if (isScrapeBlockedBoilerplate(body)) continue;
 
       var title = seedTitle;
       final titleLine = RegExp(r'^Title:\s*(.+)$', multiLine: true).firstMatch(body);
       if (titleLine != null) title = titleLine.group(1)!.trim();
       title = cleanTeaCardTitle(title);
+      if (isScrapeBlockedBoilerplate(title)) title = cleanTeaCardTitle(seedTitle);
       if (title.isEmpty && seedTitle.isNotEmpty) title = cleanTeaCardTitle(seedTitle);
 
       var content = body;

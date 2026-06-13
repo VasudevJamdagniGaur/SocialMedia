@@ -69,6 +69,38 @@ Future<void> _writeJsonMap(String key, Map<String, dynamic> value) async {
 
 String normalizeUrlKey(String? url) => url?.trim() ?? '';
 
+/// True when scrape/readers returned HTTP block pages instead of article content.
+bool isScrapeBlockedBoilerplate(String? text) {
+  final s = '${text ?? ''}'.trim();
+  if (s.isEmpty) return false;
+  final lower = s.toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+  return RegExp(
+    r'403\s*:?\s*forbidden|target url returned error|you.?ve been blocked|network security|access denied|use your developer token|file a ticket below',
+    caseSensitive: false,
+  ).hasMatch(lower);
+}
+
+/// Prefer a clean seed title when enrichment returned scrape/block boilerplate.
+String resolveTeaDisplayTitle(String headline, [String? seedTitle]) {
+  final head = cleanTeaCardTitle(headline);
+  final seed = cleanTeaCardTitle(seedTitle);
+  if (head.isNotEmpty && !isScrapeBlockedBoilerplate(head)) return head;
+  if (seed.isNotEmpty && !isScrapeBlockedBoilerplate(seed)) return seed;
+  return head.isNotEmpty ? head : seed;
+}
+
+bool teaCardContentIsBlocked({
+  String? headline,
+  String? summary,
+  String? description,
+  String? bodyText,
+}) {
+  return isScrapeBlockedBoilerplate(headline) ||
+      isScrapeBlockedBoilerplate(summary) ||
+      isScrapeBlockedBoilerplate(description) ||
+      isScrapeBlockedBoilerplate(bodyText);
+}
+
 /// Strip HTML tags from RSS / scrape descriptions for display and AI prompts.
 String stripHtmlBoilerplate(String? text) {
   var s = '${text ?? ''}';
@@ -186,7 +218,8 @@ bool teaCardSummaryHasDisplayIssues(
   String? headline,
 ]) {
   final head = headline ?? cleanTeaCardTitle('${details?['title'] ?? ''}');
-  return teaCardSummaryTooLong(summary) ||
+  return isScrapeBlockedBoilerplate(summary) ||
+      teaCardSummaryTooLong(summary) ||
       teaCardSummaryLooksLikeRawScrape(summary, details) ||
       teaCardSummaryLooksLikeTitleOnly(summary, head) ||
       RegExp(r'https?://', caseSensitive: false).hasMatch(summary) ||
