@@ -2,10 +2,13 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:image_picker_android/image_picker_android.dart';
+import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -275,9 +278,12 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
     if (mounted) setState(() => _loadingShareImage = true);
 
     try {
-      var text = _reflection.trim();
-      if (text.isEmpty && _suggestions.isNotEmpty) {
-        text = (_suggestions.first['post'] ?? '').trim();
+      var text = _selectedPostText.trim();
+      if (text.isEmpty) {
+        text = _reflection.trim();
+        if (text.isEmpty && _suggestions.isNotEmpty) {
+          text = (_suggestions.first['post'] ?? '').trim();
+        }
       }
       if (text.isEmpty) return;
 
@@ -847,6 +853,26 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
     });
   }
 
+  void _syncSelectedSuggestionPost(String text) {
+    if (_suggestions.isEmpty) return;
+    final idx = _selectedIndex.clamp(0, _suggestions.length - 1);
+    _suggestions[idx] = {
+      ..._suggestions[idx],
+      'post': text,
+    };
+  }
+
+  Future<String> _magicPencilEditShareText(String text, String instruction) async {
+    final platformLabel = _platformLabels[_platform] ?? _platform;
+    final prompt = '''$instruction
+
+Keep this as a real $platformLabel post the user would publish as-is.
+Plain text only: no **bold**, no markdown bullets, no em dashes (—). Use a plain hyphen (-) when needed.''';
+
+    final edited = await ChatService.instance.editTextWithAI(text, prompt);
+    return sanitizeSocialPostText(edited);
+  }
+
   String get _panelShareText {
     final edited = _editableShareText.trim();
     if (_sharePanelOpen && edited.isNotEmpty) return edited;
@@ -858,11 +884,18 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
     return _panelShareText;
   }
 
-  Future<void> _showShareImageEditOptions() async {
+  Future<void> _showShareImageEditOptions(String currentPostCaption) async {
     final isDarkMode = context.read<ThemeNotifier>().isDarkMode;
+    final captionForImage = currentPostCaption.trim().isNotEmpty
+        ? currentPostCaption.trim()
+        : _selectedPostText.trim();
     final action = await showModalBottomSheet<_ShareImageEditAction>(
       context: context,
+      isDismissible: true,
+      enableDrag: true,
+      isScrollControlled: true,
       backgroundColor: isDarkMode ? HubColors.bgSecondary : Colors.white,
+      barrierColor: Colors.black54,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -933,7 +966,7 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
       case _ShareImageEditAction.magicPencil:
         await _editShareImagePromptAndRegenerate();
       case _ShareImageEditAction.magicWand:
-        await _regenerateShareImageFromPostCaption();
+        await _regenerateShareImageFromPostCaption(captionForImage);
       case _ShareImageEditAction.delete:
         _deleteShareImage();
     }
@@ -976,16 +1009,17 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
     await _applyGeneratedShareImage(customPrompt: edited.trim());
   }
 
-  Future<void> _regenerateShareImageFromPostCaption() async {
-    final postText = _panelShareText.trim();
-    if (postText.isEmpty) {
+  Future<void> _regenerateShareImageFromPostCaption(String postText) async {
+    final caption = sanitizeSocialPostText(postText).trim();
+    if (caption.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Post caption is empty')),
       );
       return;
     }
-    await _applyGeneratedShareImage(sourceText: postText, skipCache: true);
+    debugPrint('[ImageGen] magic wand caption textLen=${caption.length}');
+    await _applyGeneratedShareImage(sourceText: caption, skipCache: true);
   }
 
   Future<void> _applyGeneratedShareImage({
@@ -1037,6 +1071,14 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
   }
 
   Future<void> _pickShareImage() async {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      final impl = ImagePickerPlatform.instance;
+      if (impl is ImagePickerAndroid) {
+        // Legacy gallery intent dismisses on outside tap / back; Photo Picker sheet often does not.
+        impl.useAndroidPhotoPicker = false;
+      }
+    }
+
     final picker = ImagePicker();
     final file = await picker.pickImage(
       source: ImageSource.gallery,
@@ -1373,7 +1415,11 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
                   text: _editableShareText,
                   imageUrl: _shareSuggestionImageUrl,
                   imageLoading: _loadingShareImage,
-                  onTextChanged: (v) => setState(() => _editableShareText = v),
+                  onTextChanged: (v) => setState(() {
+                    _editableShareText = v;
+                    _syncSelectedSuggestionPost(v);
+                  }),
+                  onMagicPencilText: _magicPencilEditShareText,
                   onEditImage: _showShareImageEditOptions,
                   onClose: () => setState(() => _sharePanelOpen = false),
                   onSharePlatform: _openPlatformShare,
@@ -2076,13 +2122,7 @@ class _SuggestionImage extends StatelessWidget {
   }
 }
 
-class _ShareImageEditAction {
-  const _ShareImageEditAction._();
-  static const replace = _ShareImageEditAction._();
-  static const magicPencil = _ShareImageEditAction._();
-  static const magicWand = _ShareImageEditAction._();
-  static const delete = _ShareImageEditAction._();
-}
+enum _ShareImageEditAction { replace, magicPencil, magicWand, delete }
 
 class _SharePanelOverlay extends StatefulWidget {
   const _SharePanelOverlay({
@@ -2092,6 +2132,7 @@ class _SharePanelOverlay extends StatefulWidget {
     required this.imageUrl,
     required this.imageLoading,
     required this.onTextChanged,
+    required this.onMagicPencilText,
     required this.onEditImage,
     required this.onClose,
     required this.onSharePlatform,
@@ -2103,7 +2144,8 @@ class _SharePanelOverlay extends StatefulWidget {
   final String? imageUrl;
   final bool imageLoading;
   final ValueChanged<String> onTextChanged;
-  final VoidCallback onEditImage;
+  final Future<String> Function(String text, String instruction) onMagicPencilText;
+  final void Function(String currentCaption) onEditImage;
   final VoidCallback onClose;
   final VoidCallback onSharePlatform;
 
@@ -2113,11 +2155,57 @@ class _SharePanelOverlay extends StatefulWidget {
 
 class _SharePanelOverlayState extends State<_SharePanelOverlay> {
   late final TextEditingController _controller;
+  bool _textMagicPencilLoading = false;
 
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.text);
+  }
+
+  @override
+  void didUpdateWidget(_SharePanelOverlay oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.text != oldWidget.text && widget.text != _controller.text) {
+      _controller.text = widget.text;
+    }
+  }
+
+  Future<void> _openTextMagicPencil() async {
+    if (_textMagicPencilLoading) return;
+
+    final instruction = await showDialog<String>(
+      context: context,
+      builder: (ctx) => _TextMagicPencilDialog(
+        isDarkMode: widget.isDarkMode,
+      ),
+    );
+    if (instruction == null || instruction.trim().isEmpty || !mounted) return;
+
+    setState(() => _textMagicPencilLoading = true);
+    try {
+      final edited = await widget.onMagicPencilText(
+        _controller.text,
+        instruction.trim(),
+      );
+      if (!mounted) return;
+      if (edited.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not rewrite text — try again')),
+        );
+        return;
+      }
+      _controller.text = edited;
+      _controller.selection = TextSelection.collapsed(offset: edited.length);
+      widget.onTextChanged(edited);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Text edit failed: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _textMagicPencilLoading = false);
+    }
   }
 
   @override
@@ -2194,7 +2282,9 @@ class _SharePanelOverlayState extends State<_SharePanelOverlay> {
                         shape: const CircleBorder(),
                         clipBehavior: Clip.antiAlias,
                         child: IconButton(
-                          onPressed: widget.imageLoading ? null : widget.onEditImage,
+                          onPressed: widget.imageLoading
+                              ? null
+                              : () => widget.onEditImage(_controller.text),
                           tooltip: 'Edit image',
                           icon: const Icon(LucideIcons.pencil, color: Colors.white, size: 18),
                           visualDensity: VisualDensity.compact,
@@ -2223,33 +2313,70 @@ class _SharePanelOverlayState extends State<_SharePanelOverlay> {
               ],
               const SizedBox(height: 12),
               Expanded(
-                child: TextField(
-                  controller: _controller,
-                  onChanged: widget.onTextChanged,
-                  maxLines: null,
-                  expands: true,
-                  style: TextStyle(color: primary, fontSize: 15, height: 1.45),
-                  decoration: InputDecoration(
-                    hintText: 'Your post...',
-                    filled: true,
-                    fillColor: widget.isDarkMode ? HubColors.bg : const Color(0xFFF5F5F5),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                        color: widget.isDarkMode ? HubColors.divider : const Color(0x1F000000),
+                child: Stack(
+                  children: [
+                    TextField(
+                      controller: _controller,
+                      onChanged: widget.onTextChanged,
+                      maxLines: null,
+                      expands: true,
+                      readOnly: _textMagicPencilLoading,
+                      style: TextStyle(color: primary, fontSize: 15, height: 1.45),
+                      decoration: InputDecoration(
+                        hintText: 'Your post...',
+                        filled: true,
+                        fillColor: widget.isDarkMode ? HubColors.bg : const Color(0xFFF5F5F5),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color: widget.isDarkMode ? HubColors.divider : const Color(0x1F000000),
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color: widget.isDarkMode ? HubColors.divider : const Color(0x1F000000),
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: HubColors.accent, width: 2),
+                        ),
                       ),
                     ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                        color: widget.isDarkMode ? HubColors.divider : const Color(0x1F000000),
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Material(
+                        color: Colors.black.withValues(alpha: 0.55),
+                        shape: const CircleBorder(),
+                        clipBehavior: Clip.antiAlias,
+                        child: IconButton(
+                          onPressed: _textMagicPencilLoading ? null : _openTextMagicPencil,
+                          tooltip: 'Magic pencil',
+                          icon: const Icon(LucideIcons.penLine, color: Colors.white, size: 18),
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.all(8),
+                          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                        ),
                       ),
                     ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: HubColors.accent, width: 2),
-                    ),
-                  ),
+                    if (_textMagicPencilLoading)
+                      Positioned.fill(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.35),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          alignment: Alignment.center,
+                          child: const SizedBox(
+                            width: 28,
+                            height: 28,
+                            child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
               const SizedBox(height: 16),
@@ -2417,6 +2544,69 @@ class _ImagePromptEditDialogState extends State<_ImagePromptEditDialog> {
           onPressed: () => Navigator.pop(context, _controller.text),
           style: FilledButton.styleFrom(backgroundColor: HubColors.accent),
           child: const Text('Regenerate'),
+        ),
+      ],
+    );
+  }
+}
+
+class _TextMagicPencilDialog extends StatefulWidget {
+  const _TextMagicPencilDialog({required this.isDarkMode});
+
+  final bool isDarkMode;
+
+  @override
+  State<_TextMagicPencilDialog> createState() => _TextMagicPencilDialogState();
+}
+
+class _TextMagicPencilDialogState extends State<_TextMagicPencilDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = widget.isDarkMode ? HubColors.text : const Color(0xFF1A1A1A);
+    final fill = widget.isDarkMode ? HubColors.bg : const Color(0xFFF5F5F5);
+    final border = widget.isDarkMode ? HubColors.divider : const Color(0x1F000000);
+
+    return AlertDialog(
+      backgroundColor: widget.isDarkMode ? HubColors.bgSecondary : Colors.white,
+      title: Text('Magic pencil', style: TextStyle(color: primary, fontSize: 18)),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: TextField(
+          controller: _controller,
+          autofocus: true,
+          maxLines: 4,
+          minLines: 2,
+          style: TextStyle(color: primary, fontSize: 14, height: 1.4),
+          decoration: InputDecoration(
+            hintText: 'e.g. Make it shorter, more casual, add humor…',
+            filled: true,
+            fillColor: fill,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: border)),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: border)),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: HubColors.accent, width: 2),
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text('Cancel', style: TextStyle(color: primary.withValues(alpha: 0.7))),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, _controller.text),
+          style: FilledButton.styleFrom(backgroundColor: HubColors.accent),
+          child: const Text('Apply'),
         ),
       ],
     );
