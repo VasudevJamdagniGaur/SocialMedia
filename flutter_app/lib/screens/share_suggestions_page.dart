@@ -508,9 +508,6 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
             teaCardSummaryLooksLikeTitleOnly(finalSummary, headlineFallback))) {
       finalSummary = localTeaFallback;
     }
-    if (isScrapeBlockedBoilerplate(finalHeadline)) {
-      finalHeadline = headlineFallback;
-    }
     if (isScrapeBlockedBoilerplate(finalSummary)) {
       finalSummary = '';
     }
@@ -526,6 +523,9 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
       finalHeadline = cleanTeaCardTitle(finalHeadline);
     }
     if (finalHeadline.isEmpty) {
+      finalHeadline = headlineFallback;
+    }
+    if (isScrapeBlockedBoilerplate(finalHeadline)) {
       finalHeadline = headlineFallback;
     }
 

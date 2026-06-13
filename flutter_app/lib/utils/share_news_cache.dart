@@ -69,17 +69,6 @@ Future<void> _writeJsonMap(String key, Map<String, dynamic> value) async {
 
 String normalizeUrlKey(String? url) => url?.trim() ?? '';
 
-/// True when scrape/readers returned HTTP block pages instead of article content.
-bool isScrapeBlockedBoilerplate(String? text) {
-  final s = '${text ?? ''}'.trim();
-  if (s.isEmpty) return false;
-  final lower = s.toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
-  return RegExp(
-    r'403\s*:?\s*forbidden|target url returned error|you.?ve been blocked|network security|access denied|use your developer token|file a ticket below',
-    caseSensitive: false,
-  ).hasMatch(lower);
-}
-
 /// Prefer a clean seed title when enrichment returned scrape/block boilerplate.
 String resolveTeaDisplayTitle(String headline, [String? seedTitle]) {
   final head = cleanTeaCardTitle(headline);

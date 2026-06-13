@@ -198,6 +198,17 @@ String cleanTeaCardTitle(String? raw) {
   return s;
 }
 
+/// True when scrape/readers returned HTTP block pages instead of article content.
+bool isScrapeBlockedBoilerplate(String? text) {
+  final s = '${text ?? ''}'.trim();
+  if (s.isEmpty) return false;
+  final lower = s.toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+  return RegExp(
+    r'403\s*:?\s*forbidden|target url returned error|you.?ve been blocked|network security|access denied|use your developer token|file a ticket below',
+    caseSensitive: false,
+  ).hasMatch(lower);
+}
+
 String _decodeHtmlEntities(String text) {
   return text
       .replaceAll('&lt;', '<')
