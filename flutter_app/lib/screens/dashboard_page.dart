@@ -362,6 +362,10 @@ class _DashboardPageState extends State<DashboardPage> {
                 greeting: _greetingLine(),
                 name: _displayName,
                 profilePicture: _profilePicture,
+                onHelp: () => context.push(
+                  AppRoutes.helpImprove,
+                  extra: {'returnTo': AppRoutes.dashboard},
+                ),
                 onProfile: () => context.push(AppRoutes.profile),
               ),
               const SizedBox(height: 20),
@@ -447,12 +451,14 @@ class _DashboardHeader extends StatelessWidget {
     required this.greeting,
     required this.name,
     required this.profilePicture,
+    required this.onHelp,
     required this.onProfile,
   });
 
   final String greeting;
   final String name;
   final String? profilePicture;
+  final VoidCallback onHelp;
   final VoidCallback onProfile;
 
   @override
@@ -478,6 +484,11 @@ class _DashboardHeader extends StatelessWidget {
               ),
             ],
           ),
+        ),
+        IconButton(
+          onPressed: onHelp,
+          tooltip: 'Help improve Deite',
+          icon: const Text('✨', style: TextStyle(fontSize: 18)),
         ),
         Material(
           color: Colors.transparent,
