@@ -213,13 +213,12 @@ class _DashboardPageState extends State<DashboardPage> {
     }
   }
 
-  void _navigateChat({required bool whisper}) {
+  void _navigateChat() {
     context.push(
       AppRoutes.chat,
       extra: {
-        'selectedDate': whisper ? DateTime.now().toIso8601String() : _selectedDate.toIso8601String(),
-        'isWhisperMode': whisper,
-        if (whisper) 'isFreshSession': true,
+        'selectedDate': _selectedDate.toIso8601String(),
+        'isWhisperMode': false,
       },
     );
   }
@@ -307,14 +306,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 icon: LucideIcons.coffee,
                 title: "Spill day's tea",
                 subtitle: 'Write freely, share openly',
-                onTap: () => _navigateChat(whisper: false),
-              ),
-              const SizedBox(height: 10),
-              _JourneyTile(
-                icon: LucideIcons.user,
-                title: 'Whisper Session',
-                subtitle: 'Private thoughts, just for you',
-                onTap: () => _navigateChat(whisper: true),
+                onTap: _navigateChat,
               ),
               const SizedBox(height: 28),
               _SectionHeader(
