@@ -3822,7 +3822,7 @@ ${text.substring(0, text.length > 800 ? 800 : text.length)}''';
 Extract real-world named entities from the text below.
 
 Rules:
-- persons: ONLY famous or well-known public figures (celebrities, leaders, authors, historical figures). Examples: Bill Gates, Sam Altman, Elon Musk. Do NOT include personal contacts, friends, family, or acquaintances (e.g. "my friend Sumit" or "I met John" -> leave persons empty).
+- persons: ONLY famous or well-known public figures (celebrities, actors, comedians, musicians, leaders, authors, sports stars, historical figures). Examples: Bill Gates, Dinyar Tirandaz, Shah Rukh Khan. Do NOT include personal contacts, friends, family, or acquaintances (e.g. "my friend Sumit" or "I met John" -> leave persons empty).
 - places: specific locations or venues (cities, institutions, buildings).
 - events: named events, or named works like books (e.g. "Source Code" as a book title). Put book titles in events if they are clearly named.
 - Include only real identifiable entities. Do NOT include abstract concepts or hashtags.
@@ -3834,6 +3834,7 @@ Return format (use this exact structure):
 Examples:
 - "I caught up with my friend Sumit today" -> {"persons":[],"places":[],"events":[]}
 - "Reading Bill Gates' Source Code" -> {"persons":["Bill Gates"],"places":[],"events":["Source Code"]}
+- "RIP Dinyar Tirandaz, legend from Zabaan Sambhal Ke" -> {"persons":["Dinyar Tirandaz"],"places":[],"events":["Zabaan Sambhal Ke"]}
 
 Text:
 $text''';
@@ -3917,6 +3918,11 @@ $text''';
       result['persons']!.add('Elon Musk');
     }
 
+    final tributeName = _fallbackFamousNameFromText(trimmed);
+    if (tributeName != null) {
+      result['persons']!.add(tributeName);
+    }
+
     final possessivePattern = RegExp(
       r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)['\u2019\u2018\u0022]\s*(?:Source\s+Code|[\w\s]+)",
     );
@@ -3934,6 +3940,95 @@ $text''';
       result['events']!.add('Source Code');
     }
     return result;
+  }
+
+  bool _isTributeOrMemorialContext(String text) {
+    return RegExp(
+      r'\b(rip|rest in peace|passed away|passes away|has died|has passed|death of|memorial|tribute|legend gone|in memoriam|condolences|mourn|mourning|we lost|lost a beloved|no more with us)\b|💔',
+      caseSensitive: false,
+    ).hasMatch(text);
+  }
+
+  String? _fallbackFamousNameFromText(String text) {
+    final patterns = <RegExp>[
+      RegExp(
+        r'\b(?:RIP|Rest in Peace|Tribute to|In memory of)\s+([A-Z][\p{L}]+(?:\s+[A-Z][\p{L}]+){0,3})',
+        caseSensitive: false,
+        unicode: true,
+      ),
+      RegExp(
+        r'\b(?:Actor|Actress|Legend|Star|Comedian|Singer|Director|Writer|Cricket(?:er)?)\s+([A-Z][\p{L}]+(?:\s+[A-Z][\p{L}]+){0,3})\b',
+        unicode: true,
+      ),
+      RegExp(
+        r'\b([A-Z][\p{L}]+(?:\s+[A-Z][\p{L}]+){1,3})\s+(?:has passed away|passed away|has died|dies at|dies|is no more)\b',
+        caseSensitive: false,
+        unicode: true,
+      ),
+    ];
+    for (final pattern in patterns) {
+      final match = pattern.firstMatch(text);
+      if (match == null) continue;
+      final name = (match.group(1) ?? '').trim();
+      if (name.length >= 3 && name.length <= 50) return name;
+    }
+    return null;
+  }
+
+  String _extractShowOrWorkContext(String text) {
+    final quoted = RegExp(r'["\u201c\u2018]([^\n"\u201d\u2019]{3,60})["\u201d\u2019]').firstMatch(text);
+    if (quoted != null) {
+      final value = (quoted.group(1) ?? '').trim();
+      if (value.isNotEmpty) return value;
+    }
+    final showMatch = RegExp(
+      r'''(?:show|film|movie|series|from)\s+['\u201c]?([^'"\n,]{3,60})''',
+      caseSensitive: false,
+    ).firstMatch(text);
+    return (showMatch?.group(1) ?? '').trim();
+  }
+
+  Future<String?> _resolveFamousPersonForImage(String combinedText) async {
+    final text = combinedText.trim();
+    if (text.isEmpty) return null;
+
+    final entities = await extractEntitiesWithNER(text);
+    final fromNer = (entities['persons'] ?? []).where((n) => n.trim().isNotEmpty).toList();
+    if (fromNer.isNotEmpty) return fromNer.first.trim();
+
+    final detected = await _detectFamousEntities(text);
+    final fromPersonality = (detected['personality'] ?? []).where((n) => n.trim().isNotEmpty).toList();
+    if (fromPersonality.isNotEmpty) return fromPersonality.first.trim();
+
+    return _fallbackFamousNameFromText(text);
+  }
+
+  String _buildFamousPersonImagePrompt({
+    required String personName,
+    required String combinedText,
+    required bool isTribute,
+  }) {
+    final contextSnippet =
+        combinedText.length > 900 ? combinedText.substring(0, 900) : combinedText;
+    final showContext = _extractShowOrWorkContext(combinedText);
+    final showHint = showContext.isNotEmpty ? ' Known for "$showContext".' : '';
+
+    if (isTribute) {
+      return '''One editorial memorial tribute illustration for a social media RIP post (same image for all post variants).
+Subject: $personName — show their recognizable face and likeness from their public career, respectfully and warmly.$showHint
+Composition: cinematic portrait with the person's face clearly visible and central; integrate subtle tribute symbolism (soft golden memorial light, candles, flowers, stage props like a vintage microphone or director's chair as secondary background elements only).
+Do NOT use an empty chair or silhouette instead of the person — their face must be identifiable.
+Mood: solemn, nostalgic, respectful. Tasteful; no graphic content; no text overlay; photorealistic editorial style.
+Story context:
+$contextSnippet''';
+    }
+
+    return '''One editorial news illustration for social media posts (same image for all variants).
+Include $personName with recognizable face and likeness clearly visible in the scene, matching the story context below.$showHint
+Medium shot or portrait-in-environment — face must be identifiable, not a generic figure or empty symbolic props.
+Tasteful; high realism; no text overlay.
+Story context:
+$contextSnippet''';
   }
 
   String? _getImagePromptFromEntities(Map<String, List<String>> entities) {
@@ -4002,6 +4097,29 @@ $text''';
       referenceImage = await _getProfileImageAsBase64(userContext!['profileImageUrl'].toString().trim());
     }
 
+    final famousPerson = await _resolveFamousPersonForImage(fullText);
+    if (famousPerson != null && famousPerson.isNotEmpty) {
+      final isTribute = _isTributeOrMemorialContext(fullText);
+      debugPrint('[ImageGen] famous person for reflection: $famousPerson tribute=$isTribute');
+      final prompt = _buildFamousPersonImagePrompt(
+        personName: famousPerson,
+        combinedText: fullText,
+        isTribute: isTribute,
+      );
+      final generated = await _generateImageWithGemini(prompt, referenceImage);
+      if (generated != null && generated.isNotEmpty) {
+        try {
+          final payload = jsonEncode(<String, String>{'text': fullText, 'image': generated});
+          if (payload.length <= 2 * 1024 * 1024) {
+            await prefs.setString(cacheKey, payload);
+          }
+        } catch (_) {
+          // Ignore cache write failures (quota or serialization issues).
+        }
+      }
+      return generated;
+    }
+
     final imagePrompt = await _buildStructuredPromptForNoFamous(fullText, userContext);
     if (imagePrompt == null || imagePrompt.trim().isEmpty) {
       final pieces = fullText.split(RegExp(r'[.!?]')).where((e) => e.trim().isNotEmpty).toList();
@@ -4060,14 +4178,31 @@ $text''';
     final storyText = (opts['storyText'] ?? '').toString().trim();
     if (headline.isEmpty && storyText.isEmpty) return null;
 
-    final promptLines = <String>[
-      'One editorial news illustration for social posts (same image for all variants).',
-      'Symbolic or environmental; tasteful; avoid graphic violence; no identifiable private individuals.',
-      if (headline.isNotEmpty) 'Headline: $headline',
-      if (storyText.isNotEmpty)
-        'Story: ${storyText.length > 4500 ? storyText.substring(0, 4500) : storyText}',
-    ];
-    final prompt = promptLines.join('\n\n');
+    final combined = [
+      if (headline.isNotEmpty) headline,
+      if (storyText.isNotEmpty) storyText,
+    ].join('\n\n');
+
+    final famousPerson = await _resolveFamousPersonForImage(combined);
+    final String prompt;
+    if (famousPerson != null && famousPerson.isNotEmpty) {
+      final isTribute = _isTributeOrMemorialContext(combined);
+      debugPrint('[ImageGen] famous person for news illustration: $famousPerson tribute=$isTribute');
+      prompt = _buildFamousPersonImagePrompt(
+        personName: famousPerson,
+        combinedText: combined,
+        isTribute: isTribute,
+      );
+    } else {
+      final promptLines = <String>[
+        'One editorial news illustration for social posts (same image for all variants).',
+        'Symbolic or environmental; tasteful; avoid graphic violence; no identifiable private individuals.',
+        if (headline.isNotEmpty) 'Headline: $headline',
+        if (storyText.isNotEmpty)
+          'Story: ${storyText.length > 4500 ? storyText.substring(0, 4500) : storyText}',
+      ];
+      prompt = promptLines.join('\n\n');
+    }
     return _generateImageWithGemini(prompt);
   }
 
