@@ -3966,6 +3966,7 @@ $text''';
     String platform = 'x',
   ]) async {
     if (postText.trim().isEmpty) return null;
+    debugPrint('[ImageGen] fetchImageForReflection start platform=$platform textLen=${postText.trim().length}');
     final fullText = postText.trim();
     final keyText = fullText.length > 300 ? fullText.substring(0, 300) : fullText;
     final cacheKey = 'post_image_cache_v2::$keyText';
@@ -4113,7 +4114,20 @@ $text''';
       if (referenceImage != null) {
         debugPrint('[Image] Reference image provided; prompt-only backend will ignore binary reference for now.');
       }
-      return await vertexGenerateNewsImage(p);
+      debugPrint('[ImageGen] _generateImageWithGemini promptLen=${p.length}');
+      final imageDataUrl = await vertexGenerateNewsImage(p);
+      debugPrint('[ImageGen] _generateImageWithGemini received len=${imageDataUrl.length}');
+      if (imageDataUrl.startsWith('data:image')) {
+        try {
+          final base64String = imageDataUrl.split(',').last;
+          base64Decode(base64String);
+          debugPrint('[ImageGen] base64 conversion success (chat_service)');
+        } catch (e) {
+          debugPrint('[ImageGen] base64 conversion failed (chat_service): $e');
+          return null;
+        }
+      }
+      return imageDataUrl;
     } catch (e) {
       debugPrint('[Image] Vertex image generation failed: $e');
       return null;

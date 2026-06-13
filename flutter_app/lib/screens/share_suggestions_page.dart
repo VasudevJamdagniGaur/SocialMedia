@@ -1,7 +1,5 @@
 import 'dart:async';
 
-import 'dart:convert';
-
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -69,11 +67,11 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
 
   String? get _shareSuggestionImageUrl {
     if (_media.isNotEmpty) return _media.first;
-    if (isHubCarouselDisplayImage(_generatedShareImageUrl)) {
+    if (isValidHubCarouselImageUrl(_generatedShareImageUrl)) {
       return _generatedShareImageUrl;
     }
     final fromArticle = _newsArticle?['image'] as String?;
-    if (isHubCarouselDisplayImage(fromArticle)) return fromArticle!.trim();
+    if (isValidHubCarouselImageUrl(fromArticle)) return fromArticle!.trim();
     return _generatedShareImageUrl;
   }
 
@@ -227,12 +225,39 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
       await _ensureNewsShareImage();
     } else {
       await _loadSuggestions();
+      await _ensureReflectionShareImage();
+    }
+  }
+
+  Future<void> _ensureReflectionShareImage() async {
+    if (_isNewsMode || _media.isNotEmpty) return;
+    if (isValidHubCarouselImageUrl(_generatedShareImageUrl)) return;
+
+    if (mounted) setState(() => _loadingShareImage = true);
+
+    try {
+      var text = _reflection.trim();
+      if (text.isEmpty && _suggestions.isNotEmpty) {
+        text = (_suggestions.first['post'] ?? '').trim();
+      }
+      if (text.isEmpty) return;
+
+      debugPrint('[ImageGen] reflection share image request textLen=${text.length}');
+      final generated = await ChatService.instance.fetchImageForReflection(text, null, _platform);
+      debugPrint(
+        '[ImageGen] reflection share image stored hasImage=${generated != null} len=${generated?.length ?? 0}',
+      );
+      if (generated == null || !mounted) return;
+
+      setState(() => _generatedShareImageUrl = generated);
+    } finally {
+      if (mounted) setState(() => _loadingShareImage = false);
     }
   }
 
   Future<void> _ensureNewsShareImage() async {
     if (!_isNewsMode || _media.isNotEmpty) return;
-    if (isHubCarouselDisplayImage(_shareSuggestionImageUrl)) return;
+    if (isValidHubCarouselImageUrl(_generatedShareImageUrl)) return;
 
     if (mounted) setState(() => _loadingShareImage = true);
 
@@ -299,6 +324,7 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
       );
       if (generated == null || !mounted) return;
 
+      debugPrint('[ImageGen] news share image stored len=${generated.length}');
       setState(() {
         _generatedShareImageUrl = generated;
         _newsArticle = {
@@ -950,9 +976,8 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
                         const SizedBox(height: 12),
                         if (_loading)
                           const ListSkeleton(count: 3)
-                            else if (_isNewsMode &&
-                                _loadingShareImage &&
-                                !isHubCarouselDisplayImage(_shareSuggestionImageUrl)) ...[
+                            else if (_loadingShareImage &&
+                                !isValidHubCarouselImageUrl(_shareSuggestionImageUrl)) ...[
                               const AspectRatio(
                                 aspectRatio: 16 / 9,
                                 child: Skeleton(variant: SkeletonVariant.image),
@@ -1518,13 +1543,12 @@ class _SuggestionImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (url.startsWith('data:image')) {
-      try {
-        final base64 = url.contains(',') ? url.split(',').last : url;
-        final bytes = base64Decode(base64);
+      final bytes = decodeDataImageUrlBytes(url, logTag: '[ImageGen] render');
+      if (bytes != null) {
+        debugPrint('[ImageGen] widget render success (_SuggestionImage)');
         return Image.memory(bytes, fit: BoxFit.cover);
-      } catch (_) {
-        return _placeholder();
       }
+      return _placeholder();
     }
     return Image.network(
       url,

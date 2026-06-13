@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../services/chat_service.dart';
@@ -23,6 +24,21 @@ bool isHubCarouselDisplayImage(String? url) {
   return s.startsWith('http://') ||
       s.startsWith('https://') ||
       s.startsWith('data:image');
+}
+
+/// Decode a `data:image/...;base64,...` URL to bytes. Logs success/failure.
+Uint8List? decodeDataImageUrlBytes(String? url, {String logTag = '[ImageGen]'}) {
+  final s = '${url ?? ''}'.trim();
+  if (!s.startsWith('data:image')) return null;
+  try {
+    final base64String = s.contains(',') ? s.split(',').last : s;
+    final bytes = base64Decode(base64String);
+    debugPrint('$logTag base64 conversion success bytes=${bytes.length}');
+    return bytes;
+  } catch (e) {
+    debugPrint('$logTag base64 conversion failed: $e');
+    return null;
+  }
 }
 
 /// Rejects truncated or corrupt data URLs that would render as a black frame.
@@ -109,10 +125,14 @@ Future<String?> getOrGenerateHubCarouselImage({
   if (!isVertexBackendConfigured()) return null;
 
   try {
+    debugPrint('[ImageGen] hub carousel generation start headlineLen=${title.length}');
     final generated = await ChatService.instance.fetchSingleNewsShareIllustrationImage({
       'headline': title,
       if (storyText.trim().isNotEmpty) 'storyText': stripHtmlBoilerplate(storyText),
     });
+    debugPrint(
+      '[ImageGen] hub carousel generation done hasImage=${generated != null} len=${generated?.length ?? 0}',
+    );
     if (generated == null || !generated.startsWith('data:image')) return null;
 
     await persistHubCarouselImage(
@@ -172,13 +192,12 @@ class HubCarouselHeroImage extends StatelessWidget {
       return errorWidget ?? const SizedBox.shrink();
     }
     if (url.startsWith('data:image')) {
-      try {
-        final base64 = url.contains(',') ? url.split(',').last : url;
-        final bytes = base64Decode(base64);
+      final bytes = decodeDataImageUrlBytes(url, logTag: '[ImageGen] render');
+      if (bytes != null) {
+        debugPrint('[ImageGen] widget render success (HubCarouselHeroImage)');
         return Image.memory(bytes, fit: fit);
-      } catch (_) {
-        return errorWidget ?? const SizedBox.shrink();
       }
+      return errorWidget ?? const SizedBox.shrink();
     }
     return Image.network(
       url,

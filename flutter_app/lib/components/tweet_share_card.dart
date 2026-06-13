@@ -1,5 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 
+import '../utils/hub_carousel_ai_image.dart';
+
 const _kDeteaLogo = 'assets/images/DEITECIrc-192.webp';
 
 /// Tweet-style card used only for X sharing. Rendered off-screen and converted to an image.
@@ -105,7 +107,13 @@ class TweetShareCard extends StatelessWidget {
             const SizedBox(height: 16),
             ClipRRect(
               borderRadius: BorderRadius.circular(16),
-              child: Image.network(imageUrl!, fit: BoxFit.cover, width: width - 40),
+              child: SizedBox(
+                width: width - 40,
+                child: HubCarouselHeroImage(
+                  imageUrl: imageUrl,
+                  fit: BoxFit.cover,
+                ),
+              ),
             ),
           ],
         ],

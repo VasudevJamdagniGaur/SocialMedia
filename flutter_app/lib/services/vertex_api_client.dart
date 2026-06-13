@@ -1,6 +1,7 @@
 ﻿import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../config/env.dart';
@@ -146,6 +147,7 @@ class VertexApiClient {
     Exception? lastErr;
     for (final url in urls.toSet()) {
       try {
+        debugPrint('[ImageGen] API request sent url=$url promptLen=${p.length}');
         final client = http.Client();
         final res = await client
             .post(
@@ -156,6 +158,10 @@ class VertexApiClient {
             .timeout(timeout ?? const Duration(seconds: 120));
         client.close();
 
+        debugPrint(
+          '[ImageGen] API response received url=$url status=${res.statusCode} bodyLen=${res.body.length}',
+        );
+
         if (res.statusCode < 200 || res.statusCode >= 300) {
           lastErr = Exception(
             'HTTP ${res.statusCode} from $url: ${res.body.substring(0, res.body.length.clamp(0, 200))}',
@@ -164,11 +170,18 @@ class VertexApiClient {
         }
 
         final data = jsonDecode(res.body) as Map<String, dynamic>;
+        final ok = data['ok'];
+        if (ok == false) {
+          lastErr = Exception('Backend returned ok=false');
+          continue;
+        }
         final imageDataUrl = data['imageDataUrl'];
         if (imageDataUrl is String && imageDataUrl.startsWith('data:image')) {
+          debugPrint('[ImageGen] imageDataUrl length=${imageDataUrl.length}');
           return imageDataUrl;
         }
         lastErr = Exception('Response missing imageDataUrl');
+        debugPrint('[ImageGen] response keys=${data.keys.toList()}');
       } catch (e) {
         lastErr = e is Exception ? e : Exception(e.toString());
       }

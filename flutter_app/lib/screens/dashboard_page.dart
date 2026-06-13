@@ -15,6 +15,7 @@ import '../services/firestore_service.dart';
 import '../services/reflection_service.dart';
 import '../utils/date_utils.dart';
 import '../utils/profile_picture_helper.dart';
+import '../utils/hub_carousel_ai_image.dart';
 import '../utils/share_news_cache.dart';
 import '../utils/tea_watchlist_storage.dart';
 import 'profile_page.dart';
@@ -50,6 +51,7 @@ class _DashboardPageState extends State<DashboardPage> {
   List<Map<String, String>> _postSuggestions = [];
   bool _suggestionsLoading = false;
   String? _suggestionsSourceKey;
+  String? _postSuggestionImageUrl;
 
   @override
   void initState() {
@@ -255,6 +257,7 @@ class _DashboardPageState extends State<DashboardPage> {
           _postSuggestions = [];
           _suggestionsLoading = false;
           _suggestionsSourceKey = null;
+          _postSuggestionImageUrl = null;
         });
       }
       return;
@@ -266,9 +269,18 @@ class _DashboardPageState extends State<DashboardPage> {
       final items = await ChatService.instance
           .generateSocialPostSuggestions(reflection, _platform)
           .timeout(const Duration(seconds: 35));
+      String? imageUrl;
+      try {
+        imageUrl = await ChatService.instance
+            .fetchImageForReflection(reflection, null, _platform)
+            .timeout(const Duration(seconds: 120));
+      } catch (_) {
+        imageUrl = null;
+      }
       if (!mounted) return;
       setState(() {
         _postSuggestions = items.take(3).toList();
+        _postSuggestionImageUrl = imageUrl;
         _suggestionsLoading = false;
         _suggestionsSourceKey = cacheKey;
       });
@@ -278,6 +290,7 @@ class _DashboardPageState extends State<DashboardPage> {
         _postSuggestions = [];
         _suggestionsLoading = false;
         _suggestionsSourceKey = null;
+        _postSuggestionImageUrl = null;
       });
     }
   }
@@ -415,6 +428,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       _PostSuggestionCard(
                         suggestion: _postSuggestions[i],
                         platform: _platform,
+                        imageUrl: _postSuggestionImageUrl,
                         onTap: () => _openPostSuggestions(focus: _postSuggestions[i]),
                       ),
                     ],
@@ -814,11 +828,13 @@ class _PostSuggestionCard extends StatelessWidget {
   const _PostSuggestionCard({
     required this.suggestion,
     required this.platform,
+    this.imageUrl,
     required this.onTap,
   });
 
   final Map<String, String> suggestion;
   final String platform;
+  final String? imageUrl;
   final VoidCallback onTap;
 
   @override
@@ -841,6 +857,16 @@ class _PostSuggestionCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (imageUrl != null && isValidHubCarouselImageUrl(imageUrl)) ...[
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
+                  child: AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: HubCarouselHeroImage(imageUrl: imageUrl, fit: BoxFit.cover),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
               Row(
                 children: [
                   Text(
