@@ -180,6 +180,35 @@ String stripUrlsAndSourceNoise(String? text) {
   return s;
 }
 
+/// Remove markdown-style symbols (**bold**, -- dashes, * bullets) from social post text.
+String sanitizeSocialPostText(String? text) {
+  var s = '${text ?? ''}'.trim();
+  if (s.isEmpty) return s;
+
+  s = s.replaceAllMapped(RegExp(r'\*\*([^*]+)\*\*'), (m) => m.group(1) ?? '');
+  s = s.replaceAllMapped(RegExp(r'__([^_]+)__'), (m) => m.group(1) ?? '');
+  s = s.replaceAll('**', '');
+  s = s.replaceAll('__', '');
+
+  s = s.replaceAllMapped(
+    RegExp(r'(?<!\*)\*([^*\n]+)\*(?!\*)'),
+    (m) => m.group(1) ?? '',
+  );
+
+  s = s.replaceAllMapped(
+    RegExp(r'^(\s*)\*\s+', multiLine: true),
+    (m) => '${m.group(1)}• ',
+  );
+
+  s = s.replaceAll(RegExp(r'\s--\s'), ' — ');
+  s = s.replaceAll('--', '—');
+
+  s = s.replaceAll(RegExp(r'^\s*---+\s*$', multiLine: true), '');
+  s = s.replaceAll(RegExp(r'\n{3,}'), '\n\n');
+
+  return s.trim();
+}
+
 /// Final polish for Tea card summaries — no links, no Reddit/platform mentions.
 String sanitizeTeaCardSummary(String? text) {
   var s = stripUrlsAndSourceNoise(text);
@@ -624,7 +653,7 @@ List<Map<String, String>> cleanCachedNewsSuggestions(
     if (isTea) post = sanitizeTeaSharePostForDisplay(post);
     return {
       'eventLabel': item['eventLabel'] ?? 'News',
-      'post': post,
+      'post': sanitizeSocialPostText(post),
     };
   }).toList();
 }

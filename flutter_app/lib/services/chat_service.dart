@@ -181,7 +181,8 @@ DELIVER + CLOSE:
 - The body must fulfill the hookâ€™s promise. End with a clear call to action (one question, comment prompt, or one concrete next step).
 
 POLISH:
-- First person where natural. 0â€“3 relevant hashtags (e.g. #Learning). No meta ("hereâ€™s my LinkedIn post"). Emoji only if light and natural.''',
+- First person where natural. 0â€“3 relevant hashtags (e.g. #Learning). No meta ("hereâ€™s my LinkedIn post"). Emoji only if light and natural.
+- Plain text only: no markdown (**bold**, *italic*, -- dashes, or asterisk bullet lists). Use • for bullets or short paragraphs.''',
       'x': '''X (TWITTER) STYLE (strict):
 - Very concise. Each post MUST be under 220 characters (count them).
 - Punchy, direct. Use 2–4 short lines with real line breaks between them.
@@ -232,6 +233,7 @@ Output format (strict):
 - Then on the next lines write the full post text.
 - Separate each post with a line that contains only: ---
 - Do NOT use "Option 1", "Option 2", or any option labels. Only EVENT: and the post content.
+- Plain text only in post bodies: never use **, __, --, or markdown bullets. Write like a human typing directly into the app.
 
 Example format (reflection mentioned a mix-up AND a book):
 EVENT: The Director's office mix-up
@@ -252,7 +254,7 @@ ${(reflection ?? '').trim()}''';
     final reflectionTrim = (reflection ?? '').trim();
     if ((trimmed ?? '').isEmpty) {
       return [
-        {'eventLabel': 'Reflection', 'post': reflectionTrim},
+        {'eventLabel': 'Reflection', 'post': sanitizeSocialPostText(reflectionTrim)},
       ];
     }
 
@@ -282,13 +284,16 @@ ${(reflection ?? '').trim()}''';
           ? block.substring(block.indexOf('\n') + 1).trim()
           : block.trim();
       if (post.isNotEmpty) {
-        result.add({'eventLabel': eventLabel.isEmpty ? 'Moment' : eventLabel, 'post': post});
+        result.add({
+          'eventLabel': eventLabel.isEmpty ? 'Moment' : eventLabel,
+          'post': sanitizeSocialPostText(post),
+        });
       }
     }
 
     if (result.isEmpty) {
       return [
-        {'eventLabel': 'Reflection', 'post': reflectionTrim},
+        {'eventLabel': 'Reflection', 'post': sanitizeSocialPostText(reflectionTrim)},
       ];
     }
     return result;
@@ -1913,7 +1918,7 @@ $text""";
                   if (post.isEmpty) continue;
                   normalized.add({
                     'eventLabel': '${row['eventLabel'] ?? 'Moment'}',
-                    'post': post,
+                    'post': sanitizeSocialPostText(post),
                   });
                 }
               }
@@ -2969,6 +2974,7 @@ Rules:
       if (isTea) {
         post = sanitizeTeaSharePostForDisplay(post);
       }
+      post = sanitizeSocialPostText(post);
       if (post.isEmpty || post.length < minPostLen) continue;
       out.add({'eventLabel': eventLabel, 'post': post});
     }
@@ -3049,7 +3055,8 @@ Rules:
 - Share what stuck with you and your honest take: surprise, skepticism, warmth, debate - one clear angle per post.
 - First person ("I", "my") is expected. Sound human and opinionated, still fair - no invented facts; only what the story/thread supports.
 - Not allowed: wire-service tone, "This article discussesâ€¦", "According to reportsâ€¦", "In recent newsâ€¦", or neutral third-person recap unless it's one short beat before your reaction.
-- Short paragraphs or a tight hook + 2-3 lines; optional 0-3 hashtags. End with a question or invite to disagree if it fits.''',
+- Short paragraphs or a tight hook + 2-3 lines; optional 0-3 hashtags. End with a question or invite to disagree if it fits.
+- Plain text only: no **bold**, no -- dashes, no markdown bullets.''',
       'x': 'X: First person. You\'re reacting to something you saw in the news - hot take or quick gut reaction, not a summary. Under 280 characters. 0-2 hashtags. No "breaking:" headline voice.',
       'reddit':
           'REDDIT: You read the story / thread and you\'re chiming in like a real user - opinion + vibe, not a Wikipedia summary. Casual, first-person, can be blunt or funny.',

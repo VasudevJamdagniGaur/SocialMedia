@@ -660,9 +660,9 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
   }
 
   String get _selectedPostText {
-    if (_suggestions.isEmpty) return _baselineText;
+    if (_suggestions.isEmpty) return sanitizeSocialPostText(_baselineText);
     final item = _suggestions[_selectedIndex.clamp(0, _suggestions.length - 1)];
-    return item['post'] ?? _baselineText;
+    return sanitizeSocialPostText(item['post'] ?? _baselineText);
   }
 
   String get _headerTitle {
@@ -771,14 +771,16 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
 
       if (!mounted) return;
       setState(() {
-        _suggestions = items.isNotEmpty
-            ? items
-            : [
-                {
-                  'eventLabel': _isNewsMode ? 'News' : 'Reflection',
-                  'post': _baselineText,
-                },
-              ];
+        _suggestions = _sanitizeSuggestionItems(
+          items.isNotEmpty
+              ? items
+              : [
+                  {
+                    'eventLabel': _isNewsMode ? 'News' : 'Reflection',
+                    'post': _baselineText,
+                  },
+                ],
+        );
         _selectedIndex = 0;
         _loading = false;
       });
@@ -786,15 +788,26 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
       if (!mounted) return;
       setState(() {
         _error = e.toString();
-        _suggestions = [
+        _suggestions = _sanitizeSuggestionItems([
           {
             'eventLabel': _isNewsMode ? 'News' : 'Reflection',
             'post': _baselineText,
           },
-        ];
+        ]);
         _loading = false;
       });
     }
+  }
+
+  List<Map<String, String>> _sanitizeSuggestionItems(List<Map<String, String>> items) {
+    return items
+        .map((item) => {
+              'eventLabel': item['eventLabel'] ?? 'Post',
+              'post': sanitizeSocialPostText(item['post'] ?? ''),
+              if ((item['posted'] ?? '').isNotEmpty) 'posted': item['posted']!,
+            })
+        .where((item) => (item['post'] ?? '').trim().isNotEmpty)
+        .toList();
   }
 
   void _onPlatformChanged(String platform) {
@@ -829,7 +842,7 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
 
   void _openSharePanel(String text) {
     setState(() {
-      _editableShareText = text;
+      _editableShareText = sanitizeSocialPostText(text);
       _sharePanelOpen = true;
     });
   }
@@ -897,6 +910,15 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
                   ),
                   onTap: () => Navigator.pop(ctx, _ShareImageEditAction.magicWand),
                 ),
+                ListTile(
+                  leading: Icon(LucideIcons.trash2, color: Colors.red.shade400),
+                  title: Text('Delete image', style: TextStyle(color: Colors.red.shade400)),
+                  subtitle: Text(
+                    'Remove the image from this post',
+                    style: TextStyle(color: secondary, fontSize: 12),
+                  ),
+                  onTap: () => Navigator.pop(ctx, _ShareImageEditAction.delete),
+                ),
               ],
             ),
           ),
@@ -912,7 +934,23 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
         await _editShareImagePromptAndRegenerate();
       case _ShareImageEditAction.magicWand:
         await _regenerateShareImageFromPostCaption();
+      case _ShareImageEditAction.delete:
+        _deleteShareImage();
     }
+  }
+
+  void _deleteShareImage() {
+    setState(() {
+      _media = [];
+      _generatedShareImageUrl = null;
+      _lastImagePrompt = null;
+      if (_newsArticle != null) {
+        final updated = Map<String, dynamic>.from(_newsArticle!);
+        updated.remove('image');
+        updated.remove('thumbnail');
+        _newsArticle = updated;
+      }
+    });
   }
 
   Future<void> _editShareImagePromptAndRegenerate() async {
@@ -2043,6 +2081,7 @@ class _ShareImageEditAction {
   static const replace = _ShareImageEditAction._();
   static const magicPencil = _ShareImageEditAction._();
   static const magicWand = _ShareImageEditAction._();
+  static const delete = _ShareImageEditAction._();
 }
 
 class _SharePanelOverlay extends StatefulWidget {
