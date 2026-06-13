@@ -46,7 +46,7 @@ class ChatService extends ChangeNotifier {
 
   String openaiApiKey = '';
   String grokApiKey = '';
-  ApiProvider apiProvider = 'openai';
+  ApiProvider apiProvider = 'gemini';
   String openaiBaseURL = 'https://api.openai.com/v1';
   String grokBaseURL = 'https://api.x.ai/v1';
   String openaiModelName = 'gpt-4o';
@@ -56,10 +56,36 @@ class ChatService extends ChangeNotifier {
 
   static const String _providerKey = 'chat_api_provider';
 
+  /// Prefer Gemini via detea-backend when available (same path as share suggestions).
+  String _preferredChatProvider() {
+    if (isVertexBackendConfigured()) return 'gemini';
+    if (openaiApiKey.trim().isNotEmpty) return 'openai';
+    if (grokApiKey.trim().isNotEmpty) return 'grok';
+    return 'gemini';
+  }
+
+  String _resolveChatProvider(String? saved) {
+    openaiApiKey = Env.openAiApiKey.trim().isNotEmpty ? Env.openAiApiKey.trim() : openaiApiKey;
+    grokApiKey = Env.grokApiKey.trim().isNotEmpty ? Env.grokApiKey.trim() : grokApiKey;
+
+    var provider = saved ?? _preferredChatProvider();
+    if (provider == 'openai' && openaiApiKey.trim().isEmpty && isVertexBackendConfigured()) {
+      provider = 'gemini';
+    }
+    if (provider == 'grok' && grokApiKey.trim().isEmpty && isVertexBackendConfigured()) {
+      provider = 'gemini';
+    }
+    return provider;
+  }
+
   Future<void> loadSavedProvider() async {
     final prefs = await SharedPreferences.getInstance();
-    final saved = prefs.getString(_providerKey) ?? 'openai';
-    setApiProvider(saved);
+    final saved = prefs.getString(_providerKey);
+    final provider = _resolveChatProvider(saved);
+    setApiProvider(provider);
+    if (saved != provider) {
+      await prefs.setString(_providerKey, provider);
+    }
   }
 
   Future<void> persistProvider(String provider) async {
@@ -1197,11 +1223,15 @@ Be thorough and detailed. This description will be used to generate a response.'
     openaiApiKey = Env.openAiApiKey.trim().isNotEmpty ? Env.openAiApiKey.trim() : openaiApiKey;
     grokApiKey = Env.grokApiKey.trim().isNotEmpty ? Env.grokApiKey.trim() : grokApiKey;
 
+    if (apiProvider != 'gemini' && (getApiKey() ?? '').trim().isEmpty && isVertexBackendConfigured()) {
+      setApiProvider('gemini');
+    }
+
     final vertexForGemini = apiProvider == 'gemini' && isVertexBackendConfigured();
     final apiKey = '${getApiKey() ?? ''}';
     if (apiProvider == 'gemini' && !vertexForGemini) {
       throw Exception(
-        'Gemini uses your backend only. Set REACT_APP_BACKEND_URL (preferred) or REACT_APP_VERTEX_BACKEND_URL / REACT_APP_VERTEX_GEMINI_URL and restart the dev server.',
+        'Gemini uses your backend only. Set BACKEND_URL to https://detea-backend.onrender.com and rebuild.',
       );
     }
     if (!vertexForGemini && apiKey.trim().isEmpty) {
@@ -1593,9 +1623,8 @@ Assistant:""";
         headers = {'Content-Type': 'application/json', 'Authorization': 'Bearer $apiKey'};
       } else if (vertexForGemini) {
         try {
-          final aiText = await vertexChat(
-            simplePrompt,
-            timeout: const Duration(seconds: 60),
+          final aiText = await callVertexGenerateContent(
+            prompt: simplePrompt,
             temperature: 0.65,
             maxOutputTokens: 1024,
           );
@@ -1612,7 +1641,7 @@ Assistant:""";
           final msg = fetchError.toString();
           if (msg.contains('Failed to fetch') || msg.contains('NetworkError')) {
             throw Exception(
-              'Unable to connect to the backend. Check REACT_APP_BACKEND_URL (preferred) or REACT_APP_VERTEX_BACKEND_URL / REACT_APP_VERTEX_GEMINI_URL.',
+              'Unable to connect to the backend. Check BACKEND_URL (https://detea-backend.onrender.com).',
             );
           }
           rethrow;
@@ -1710,6 +1739,10 @@ Assistant:""";
 
     openaiApiKey = Env.openAiApiKey.trim().isNotEmpty ? Env.openAiApiKey.trim() : openaiApiKey;
     grokApiKey = Env.grokApiKey.trim().isNotEmpty ? Env.grokApiKey.trim() : grokApiKey;
+
+    if (apiProvider != 'gemini' && (getApiKey() ?? '').trim().isEmpty && isVertexBackendConfigured()) {
+      setApiProvider('gemini');
+    }
 
     final vertexForGemini = apiProvider == 'gemini' && isVertexBackendConfigured();
     final apiKey = '${getApiKey() ?? ''}';
