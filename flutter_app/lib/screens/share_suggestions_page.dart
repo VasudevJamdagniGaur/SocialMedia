@@ -88,6 +88,7 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
   @override
   void initState() {
     super.initState();
+    _reflectionFocusNode.addListener(_onReflectionFocusChanged);
     // Safety: never leave the page blank if async route init stalls.
     Future<void>.delayed(const Duration(seconds: 4), () {
       if (!mounted || !_routeInitializing) return;
@@ -103,9 +104,31 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
 
   @override
   void dispose() {
+    _reflectionFocusNode.removeListener(_onReflectionFocusChanged);
     _reflectionController.dispose();
     _reflectionFocusNode.dispose();
     super.dispose();
+  }
+
+  void _onReflectionFocusChanged() {
+    if (_reflectionFocusNode.hasFocus) return;
+    _syncReflectionController(restoreIfEmpty: true);
+  }
+
+  void _syncReflectionController({bool force = false, bool restoreIfEmpty = false}) {
+    if (_isNewsMode || _reflection.isEmpty) return;
+
+    final controllerEmpty = _reflectionController.text.trim().isEmpty;
+    if (restoreIfEmpty && controllerEmpty) {
+      _reflectionController.text = _reflection;
+      return;
+    }
+
+    if (force || controllerEmpty) {
+      if (_reflectionController.text != _reflection) {
+        _reflectionController.text = _reflection;
+      }
+    }
   }
 
   Map<String, dynamic>? _resolveRoutePayload() {
@@ -155,9 +178,7 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
 
   void _applyRoutePayload(Map<String, dynamic> extra) {
       _reflection = (extra['reflection'] as String? ?? '').trim();
-      if (_reflectionController.text != _reflection) {
-        _reflectionController.text = _reflection;
-      }
+      _syncReflectionController(force: true);
       _platform = extra['platform'] as String? ?? 'linkedin';
       _returnTo = extra['returnTo'] as String? ?? AppRoutes.dashboard;
       _suggestionsOnly = extra['suggestionsOnly'] == true;
@@ -778,7 +799,11 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
   Future<void> _onReflectionRegenerate() async {
     if (_isNewsMode || _loading) return;
 
-    final next = _reflectionController.text.trim();
+    var next = _reflectionController.text.trim();
+    if (next.isEmpty) {
+      _syncReflectionController(restoreIfEmpty: true);
+      next = _reflection.trim();
+    }
     if (next.isEmpty) return;
 
     _reflectionFocusNode.unfocus();
@@ -956,6 +981,8 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
     final cardBorder = isDarkMode ? HubColors.divider : const Color(0x14000000);
     final primaryText = isDarkMode ? HubColors.text : const Color(0xFF1A1A1A);
     final secondaryText = isDarkMode ? HubColors.textSecondary : const Color(0xFF666666);
+
+    _syncReflectionController(restoreIfEmpty: true);
 
     return PopScope(
       canPop: false,
@@ -1358,29 +1385,12 @@ class _SourceCard extends StatelessWidget {
             ],
             ],
           ] else if (reflectionController != null) ...[
-            Focus(
-              onKeyEvent: (node, event) {
-                if (onReflectionSubmitted == null) return KeyEventResult.ignored;
-                if (event is! KeyDownEvent) return KeyEventResult.ignored;
-                if (event.logicalKey != LogicalKeyboardKey.enter) return KeyEventResult.ignored;
-                if (HardwareKeyboard.instance.isShiftPressed) return KeyEventResult.ignored;
-                unawaited(onReflectionSubmitted!());
-                return KeyEventResult.handled;
-              },
-              child: TextField(
-                controller: reflectionController,
-                focusNode: reflectionFocusNode,
-                maxLines: null,
-                minLines: 2,
-                style: TextStyle(color: primary, fontSize: 15, height: 1.45),
-                decoration: const InputDecoration(
-                  border: InputBorder.none,
-                  isDense: true,
-                  contentPadding: EdgeInsets.zero,
-                ),
-                textInputAction: TextInputAction.done,
-                onSubmitted: (_) => unawaited(onReflectionSubmitted?.call()),
-              ),
+            _EditableReflectionField(
+              reflection: reflection,
+              controller: reflectionController!,
+              focusNode: reflectionFocusNode,
+              onSubmitted: onReflectionSubmitted,
+              textStyle: TextStyle(color: primary, fontSize: 15, height: 1.45),
             ),
           ] else ...[
             Text(
@@ -1389,6 +1399,79 @@ class _SourceCard extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _EditableReflectionField extends StatefulWidget {
+  const _EditableReflectionField({
+    required this.reflection,
+    required this.controller,
+    required this.textStyle,
+    this.focusNode,
+    this.onSubmitted,
+  });
+
+  final String reflection;
+  final TextEditingController controller;
+  final FocusNode? focusNode;
+  final Future<void> Function()? onSubmitted;
+  final TextStyle textStyle;
+
+  @override
+  State<_EditableReflectionField> createState() => _EditableReflectionFieldState();
+}
+
+class _EditableReflectionFieldState extends State<_EditableReflectionField> {
+  @override
+  void initState() {
+    super.initState();
+    _seedControllerFromReflection(force: true);
+  }
+
+  @override
+  void didUpdateWidget(_EditableReflectionField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.reflection != oldWidget.reflection) {
+      _seedControllerFromReflection(force: widget.controller.text.trim().isEmpty);
+    }
+  }
+
+  void _seedControllerFromReflection({bool force = false}) {
+    final source = widget.reflection.trim();
+    if (source.isEmpty) return;
+    if (force || widget.controller.text.trim().isEmpty) {
+      if (widget.controller.text != source) {
+        widget.controller.text = source;
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Focus(
+      onKeyEvent: (node, event) {
+        if (widget.onSubmitted == null) return KeyEventResult.ignored;
+        if (event is! KeyDownEvent) return KeyEventResult.ignored;
+        if (event.logicalKey != LogicalKeyboardKey.enter) return KeyEventResult.ignored;
+        if (HardwareKeyboard.instance.isShiftPressed) return KeyEventResult.ignored;
+        unawaited(widget.onSubmitted!());
+        return KeyEventResult.handled;
+      },
+      child: TextField(
+        controller: widget.controller,
+        focusNode: widget.focusNode,
+        maxLines: null,
+        minLines: 1,
+        style: widget.textStyle,
+        decoration: const InputDecoration(
+          border: InputBorder.none,
+          isDense: true,
+          contentPadding: EdgeInsets.zero,
+        ),
+        textInputAction: TextInputAction.done,
+        onSubmitted: (_) => unawaited(widget.onSubmitted?.call()),
       ),
     );
   }
