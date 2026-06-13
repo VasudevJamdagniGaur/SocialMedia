@@ -987,26 +987,57 @@ Plain text only: no **bold**, no markdown bullets, no em dashes (—). Use a pla
   }
 
   Future<void> _editShareImagePromptAndRegenerate() async {
-    if (mounted) setState(() => _loadingShareImage = true);
-    var prompt = _lastImagePrompt?.trim();
-    if (prompt == null || prompt.isEmpty) {
-      prompt = await ChatService.instance.resolveShareImagePrompt(
-        _imagePromptSourceText,
-        platform: _platform,
-      );
-    }
-    if (mounted) setState(() => _loadingShareImage = false);
     if (!mounted) return;
 
-    final edited = await showDialog<String>(
+    final instruction = await showDialog<String>(
       context: context,
       builder: (ctx) => _ImagePromptEditDialog(
-        initialPrompt: prompt ?? '',
         isDarkMode: context.read<ThemeNotifier>().isDarkMode,
       ),
     );
-    if (edited == null || edited.trim().isEmpty || !mounted) return;
-    await _applyGeneratedShareImage(customPrompt: edited.trim());
+    if (instruction == null || instruction.trim().isEmpty || !mounted) return;
+
+    if (mounted) setState(() => _loadingShareImage = true);
+    String? updatedPrompt;
+    try {
+      var basePrompt = _lastImagePrompt?.trim();
+      basePrompt ??= await ChatService.instance.resolveShareImagePrompt(
+        _imagePromptSourceText,
+        platform: _platform,
+      );
+      if (basePrompt == null || basePrompt.trim().isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not update image — try again')),
+          );
+        }
+        return;
+      }
+
+      updatedPrompt = await _magicPencilEditImagePrompt(basePrompt, instruction.trim());
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not update image: $e')),
+        );
+      }
+      return;
+    } finally {
+      if (mounted) setState(() => _loadingShareImage = false);
+    }
+
+    if (updatedPrompt == null || updatedPrompt.trim().isEmpty || !mounted) return;
+    await _applyGeneratedShareImage(customPrompt: updatedPrompt.trim());
+  }
+
+  Future<String> _magicPencilEditImagePrompt(String basePrompt, String instruction) async {
+    final edited = await ChatService.instance.editTextWithAI(
+      basePrompt,
+      '''Apply the user's image changes to this generation prompt. Return ONLY the full updated prompt ready for image generation, no quotes or explanation.
+
+User changes: $instruction''',
+    );
+    return edited.trim();
   }
 
   Future<void> _regenerateShareImageFromPostCaption(String postText) async {
@@ -2480,11 +2511,9 @@ class _ShareConfirmBanner extends StatelessWidget {
 
 class _ImagePromptEditDialog extends StatefulWidget {
   const _ImagePromptEditDialog({
-    required this.initialPrompt,
     required this.isDarkMode,
   });
 
-  final String initialPrompt;
   final bool isDarkMode;
 
   @override
@@ -2492,13 +2521,7 @@ class _ImagePromptEditDialog extends StatefulWidget {
 }
 
 class _ImagePromptEditDialogState extends State<_ImagePromptEditDialog> {
-  late final TextEditingController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(text: widget.initialPrompt);
-  }
+  final _controller = TextEditingController();
 
   @override
   void dispose() {
@@ -2519,11 +2542,12 @@ class _ImagePromptEditDialogState extends State<_ImagePromptEditDialog> {
         width: double.maxFinite,
         child: TextField(
           controller: _controller,
-          maxLines: 8,
-          minLines: 4,
+          autofocus: true,
+          maxLines: 4,
+          minLines: 2,
           style: TextStyle(color: primary, fontSize: 14, height: 1.4),
           decoration: InputDecoration(
-            hintText: 'Describe the image you want…',
+            hintText: 'e.g. Zoom in on the product, warmer lighting…',
             filled: true,
             fillColor: fill,
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: border)),
