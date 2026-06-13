@@ -42,7 +42,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
   int _dayStreak = 0;
   int _teasShared = 0;
-  int _momentsSaved = 0;
+  int _bookmarks = 0;
 
   final _mindController = TextEditingController();
   String _platform = 'linkedin';
@@ -147,7 +147,6 @@ class _DashboardPageState extends State<DashboardPage> {
   Future<void> _loadStats() async {
     final user = AuthService().getCurrentUser();
     var teas = 0;
-    var moments = 0;
     if (user != null) {
       try {
         final shares = await FirestoreService.instance.getSocialSharesByUser(user.uid);
@@ -163,11 +162,10 @@ class _DashboardPageState extends State<DashboardPage> {
       } catch (_) {}
     }
     final watchlist = await getTeaWatchlist();
-    moments = watchlist.length + _chatDays.length;
     if (mounted) {
       setState(() {
         _teasShared = teas;
-        _momentsSaved = moments;
+        _bookmarks = watchlist.length;
         _dayStreak = _computeDayStreak(_chatDays);
       });
     }
@@ -367,7 +365,11 @@ class _DashboardPageState extends State<DashboardPage> {
               _StatsRow(
                 dayStreak: _dayStreak,
                 teasShared: _teasShared,
-                momentsSaved: _momentsSaved,
+                bookmarks: _bookmarks,
+                onBookmarksTap: () async {
+                  await context.push(AppRoutes.watchlist);
+                  if (mounted) _loadStats();
+                },
               ),
               const SizedBox(height: 28),
               const _SectionHeader(title: 'Continue your journey'),
@@ -591,12 +593,14 @@ class _StatsRow extends StatelessWidget {
   const _StatsRow({
     required this.dayStreak,
     required this.teasShared,
-    required this.momentsSaved,
+    required this.bookmarks,
+    this.onBookmarksTap,
   });
 
   final int dayStreak;
   final int teasShared;
-  final int momentsSaved;
+  final int bookmarks;
+  final VoidCallback? onBookmarksTap;
 
   @override
   Widget build(BuildContext context) {
@@ -620,9 +624,10 @@ class _StatsRow extends StatelessWidget {
         const SizedBox(width: 10),
         Expanded(
           child: _StatCard(
-            icon: LucideIcons.sparkles,
-            value: '$momentsSaved',
-            label: 'Moments saved',
+            icon: LucideIcons.bookmark,
+            value: '$bookmarks',
+            label: 'Bookmarks',
+            onTap: onBookmarksTap,
           ),
         ),
       ],
@@ -635,15 +640,17 @@ class _StatCard extends StatelessWidget {
     required this.icon,
     required this.value,
     required this.label,
+    this.onTap,
   });
 
   final IconData icon;
   final String value;
   final String label;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final card = Container(
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
       decoration: BoxDecoration(
         color: _cardBg,
@@ -670,6 +677,17 @@ class _StatCard extends StatelessWidget {
             style: const TextStyle(color: _muted, fontSize: 11, fontWeight: FontWeight.w500),
           ),
         ],
+      ),
+    );
+
+    if (onTap == null) return card;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: card,
       ),
     );
   }
