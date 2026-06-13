@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -63,6 +65,7 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
   String _editableShareText = '';
   String? _generatedShareImageUrl;
   bool _loadingShareImage = false;
+  String? _lastImagePrompt;
 
   final TextEditingController _reflectionController = TextEditingController();
   final FocusNode _reflectionFocusNode = FocusNode();
@@ -279,13 +282,17 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
       if (text.isEmpty) return;
 
       debugPrint('[ImageGen] reflection share image request textLen=${text.length}');
+      final prompt = await ChatService.instance.resolveShareImagePrompt(text, platform: _platform);
       final generated = await ChatService.instance.fetchImageForReflection(text, null, _platform);
       debugPrint(
         '[ImageGen] reflection share image stored hasImage=${generated != null} len=${generated?.length ?? 0}',
       );
       if (generated == null || !mounted) return;
 
-      setState(() => _generatedShareImageUrl = generated);
+      setState(() {
+        _generatedShareImageUrl = generated;
+        if (prompt != null && prompt.trim().isNotEmpty) _lastImagePrompt = prompt.trim();
+      });
     } finally {
       if (mounted) setState(() => _loadingShareImage = false);
     }
@@ -810,6 +817,7 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
     setState(() {
       _reflection = next;
       _generatedShareImageUrl = null;
+      _lastImagePrompt = null;
       _selectedIndex = 0;
       _error = null;
     });
@@ -830,6 +838,197 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
     final edited = _editableShareText.trim();
     if (_sharePanelOpen && edited.isNotEmpty) return edited;
     return _selectedPostText.trim();
+  }
+
+  String get _imagePromptSourceText {
+    if (_reflection.trim().isNotEmpty) return _reflection.trim();
+    return _panelShareText;
+  }
+
+  Future<void> _showShareImageEditOptions() async {
+    final isDarkMode = context.read<ThemeNotifier>().isDarkMode;
+    final action = await showModalBottomSheet<_ShareImageEditAction>(
+      context: context,
+      backgroundColor: isDarkMode ? HubColors.bgSecondary : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        final primary = isDarkMode ? HubColors.text : const Color(0xFF1A1A1A);
+        final secondary = isDarkMode ? HubColors.textSecondary : const Color(0xFF666666);
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(8, 12, 8, 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  child: Text(
+                    'Edit image',
+                    style: TextStyle(color: primary, fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                ListTile(
+                  leading: Icon(LucideIcons.pencil, color: primary),
+                  title: Text('Change image', style: TextStyle(color: primary)),
+                  subtitle: Text(
+                    'Pick a photo from your gallery',
+                    style: TextStyle(color: secondary, fontSize: 12),
+                  ),
+                  onTap: () => Navigator.pop(ctx, _ShareImageEditAction.replace),
+                ),
+                ListTile(
+                  leading: Icon(LucideIcons.penLine, color: primary),
+                  title: Text('Magic pencil', style: TextStyle(color: primary)),
+                  subtitle: Text(
+                    'Edit the AI prompt and regenerate',
+                    style: TextStyle(color: secondary, fontSize: 12),
+                  ),
+                  onTap: () => Navigator.pop(ctx, _ShareImageEditAction.magicPencil),
+                ),
+                ListTile(
+                  leading: Icon(LucideIcons.sparkles, color: primary),
+                  title: Text('Magic wand', style: TextStyle(color: primary)),
+                  subtitle: Text(
+                    'Remake image to match this post caption',
+                    style: TextStyle(color: secondary, fontSize: 12),
+                  ),
+                  onTap: () => Navigator.pop(ctx, _ShareImageEditAction.magicWand),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (!mounted || action == null) return;
+    switch (action) {
+      case _ShareImageEditAction.replace:
+        await _pickShareImage();
+      case _ShareImageEditAction.magicPencil:
+        await _editShareImagePromptAndRegenerate();
+      case _ShareImageEditAction.magicWand:
+        await _regenerateShareImageFromPostCaption();
+    }
+  }
+
+  Future<void> _editShareImagePromptAndRegenerate() async {
+    if (mounted) setState(() => _loadingShareImage = true);
+    var prompt = _lastImagePrompt?.trim();
+    if (prompt == null || prompt.isEmpty) {
+      prompt = await ChatService.instance.resolveShareImagePrompt(
+        _imagePromptSourceText,
+        platform: _platform,
+      );
+    }
+    if (mounted) setState(() => _loadingShareImage = false);
+    if (!mounted) return;
+
+    final edited = await showDialog<String>(
+      context: context,
+      builder: (ctx) => _ImagePromptEditDialog(
+        initialPrompt: prompt ?? '',
+        isDarkMode: context.read<ThemeNotifier>().isDarkMode,
+      ),
+    );
+    if (edited == null || edited.trim().isEmpty || !mounted) return;
+    await _applyGeneratedShareImage(customPrompt: edited.trim());
+  }
+
+  Future<void> _regenerateShareImageFromPostCaption() async {
+    final postText = _panelShareText.trim();
+    if (postText.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Post caption is empty')),
+      );
+      return;
+    }
+    await _applyGeneratedShareImage(sourceText: postText, skipCache: true);
+  }
+
+  Future<void> _applyGeneratedShareImage({
+    String? sourceText,
+    String? customPrompt,
+    bool skipCache = false,
+  }) async {
+    if (mounted) {
+      setState(() {
+        _loadingShareImage = true;
+        _media = [];
+      });
+    }
+
+    try {
+      String? image;
+      String? promptUsed;
+      if (customPrompt != null && customPrompt.trim().isNotEmpty) {
+        promptUsed = customPrompt.trim();
+        image = await ChatService.instance.generateShareImageFromPrompt(promptUsed);
+      } else if (sourceText != null && sourceText.trim().isNotEmpty) {
+        promptUsed = await ChatService.instance.resolveShareImagePrompt(sourceText, platform: _platform);
+        image = await ChatService.instance.fetchImageForReflection(
+          sourceText,
+          null,
+          _platform,
+          skipCache,
+        );
+      }
+
+      if (!mounted) return;
+      if (image == null || image.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not generate image — try again')),
+        );
+        return;
+      }
+
+      setState(() {
+        _generatedShareImageUrl = image;
+        _media = [];
+        if (promptUsed != null && promptUsed.isNotEmpty) {
+          _lastImagePrompt = promptUsed;
+        }
+      });
+    } finally {
+      if (mounted) setState(() => _loadingShareImage = false);
+    }
+  }
+
+  Future<void> _pickShareImage() async {
+    final picker = ImagePicker();
+    final file = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1920,
+      imageQuality: 85,
+    );
+    if (file == null || !mounted) return;
+
+    final bytes = await file.readAsBytes();
+    if (bytes.length > 10 * 1024 * 1024) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Image must be less than 10MB')),
+      );
+      return;
+    }
+
+    final ext = file.path.split('.').last.toLowerCase();
+    final mime = ext == 'png'
+        ? 'image/png'
+        : ext == 'webp'
+            ? 'image/webp'
+            : 'image/jpeg';
+    final dataUrl = 'data:$mime;base64,${base64Encode(bytes)}';
+
+    if (!mounted) return;
+    setState(() {
+      _media = [dataUrl];
+      _generatedShareImageUrl = dataUrl;
+    });
   }
 
   Future<void> _openPlatformShare() async {
@@ -1135,7 +1334,9 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
                   isDarkMode: isDarkMode,
                   text: _editableShareText,
                   imageUrl: _shareSuggestionImageUrl,
+                  imageLoading: _loadingShareImage,
                   onTextChanged: (v) => setState(() => _editableShareText = v),
+                  onEditImage: _showShareImageEditOptions,
                   onClose: () => setState(() => _sharePanelOpen = false),
                   onSharePlatform: _openPlatformShare,
                 ),
@@ -1837,13 +2038,22 @@ class _SuggestionImage extends StatelessWidget {
   }
 }
 
+class _ShareImageEditAction {
+  const _ShareImageEditAction._();
+  static const replace = _ShareImageEditAction._();
+  static const magicPencil = _ShareImageEditAction._();
+  static const magicWand = _ShareImageEditAction._();
+}
+
 class _SharePanelOverlay extends StatefulWidget {
   const _SharePanelOverlay({
     required this.platform,
     required this.isDarkMode,
     required this.text,
     required this.imageUrl,
+    required this.imageLoading,
     required this.onTextChanged,
+    required this.onEditImage,
     required this.onClose,
     required this.onSharePlatform,
   });
@@ -1852,7 +2062,9 @@ class _SharePanelOverlay extends StatefulWidget {
   final bool isDarkMode;
   final String text;
   final String? imageUrl;
+  final bool imageLoading;
   final ValueChanged<String> onTextChanged;
+  final VoidCallback onEditImage;
   final VoidCallback onClose;
   final VoidCallback onSharePlatform;
 
@@ -1920,19 +2132,54 @@ class _SharePanelOverlayState extends State<_SharePanelOverlay> {
                   ),
                 ],
               ),
-              if (widget.imageUrl != null &&
-                  widget.imageUrl!.isNotEmpty &&
-                  widget.platform != 'x') ...[
+              if (widget.imageUrl != null && widget.imageUrl!.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxHeight: 220),
-                    child: _SuggestionImage(
-                      url: widget.imageUrl!,
-                      isDarkMode: widget.isDarkMode,
+                Stack(
+                  alignment: Alignment.topRight,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 220),
+                        child: _SuggestionImage(
+                          url: widget.imageUrl!,
+                          isDarkMode: widget.isDarkMode,
+                        ),
+                      ),
                     ),
-                  ),
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Material(
+                        color: Colors.black.withValues(alpha: 0.55),
+                        shape: const CircleBorder(),
+                        clipBehavior: Clip.antiAlias,
+                        child: IconButton(
+                          onPressed: widget.imageLoading ? null : widget.onEditImage,
+                          tooltip: 'Edit image',
+                          icon: const Icon(LucideIcons.pencil, color: Colors.white, size: 18),
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.all(8),
+                          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                        ),
+                      ),
+                    ),
+                    if (widget.imageLoading)
+                      Positioned.fill(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.45),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          alignment: Alignment.center,
+                          child: const SizedBox(
+                            width: 28,
+                            height: 28,
+                            child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ],
               const SizedBox(height: 12),
@@ -2061,6 +2308,78 @@ class _ShareConfirmBanner extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ImagePromptEditDialog extends StatefulWidget {
+  const _ImagePromptEditDialog({
+    required this.initialPrompt,
+    required this.isDarkMode,
+  });
+
+  final String initialPrompt;
+  final bool isDarkMode;
+
+  @override
+  State<_ImagePromptEditDialog> createState() => _ImagePromptEditDialogState();
+}
+
+class _ImagePromptEditDialogState extends State<_ImagePromptEditDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialPrompt);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = widget.isDarkMode ? HubColors.text : const Color(0xFF1A1A1A);
+    final fill = widget.isDarkMode ? HubColors.bg : const Color(0xFFF5F5F5);
+    final border = widget.isDarkMode ? HubColors.divider : const Color(0x1F000000);
+
+    return AlertDialog(
+      backgroundColor: widget.isDarkMode ? HubColors.bgSecondary : Colors.white,
+      title: Text('Magic pencil', style: TextStyle(color: primary, fontSize: 18)),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: TextField(
+          controller: _controller,
+          maxLines: 8,
+          minLines: 4,
+          style: TextStyle(color: primary, fontSize: 14, height: 1.4),
+          decoration: InputDecoration(
+            hintText: 'Describe the image you want…',
+            filled: true,
+            fillColor: fill,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: border)),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: border)),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: HubColors.accent, width: 2),
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text('Cancel', style: TextStyle(color: primary.withValues(alpha: 0.7))),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, _controller.text),
+          style: FilledButton.styleFrom(backgroundColor: HubColors.accent),
+          child: const Text('Regenerate'),
+        ),
+      ],
     );
   }
 }

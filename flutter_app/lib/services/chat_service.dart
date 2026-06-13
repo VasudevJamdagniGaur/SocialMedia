@@ -4190,53 +4190,11 @@ $contextSnippet''';
     return null;
   }
 
-  Future<String?> fetchImageForReflection(
-    String postText, [
+  Future<String?> _resolveShareImagePrompt(
+    String fullText,
+    String platformName, [
     Map<String, dynamic>? userContext,
-    String platform = 'x',
   ]) async {
-    if (postText.trim().isEmpty) return null;
-    debugPrint('[ImageGen] fetchImageForReflection start platform=$platform textLen=${postText.trim().length}');
-    final fullText = postText.trim();
-    final keyText = fullText.length > 300 ? fullText.substring(0, 300) : fullText;
-    final cacheKey = 'post_image_cache_v3::$keyText';
-    final prefs = await SharedPreferences.getInstance();
-
-    try {
-      final raw = prefs.getString(cacheKey);
-      if (raw != null && raw.isNotEmpty) {
-        if (raw.length > 64 * 1024 || raw.contains('data:image')) {
-          await prefs.remove(cacheKey);
-        } else {
-          try {
-            final parsed = jsonDecode(raw);
-            if (parsed is Map &&
-                parsed['text'] == fullText &&
-                parsed['image'] is String &&
-                (parsed['image'] as String).isNotEmpty) {
-              final image = parsed['image'] as String;
-              if (shouldPersistGeneratedImageCache(image)) {
-                return image;
-              }
-            }
-          } catch (_) {}
-        }
-      }
-    } catch (e) {
-      debugPrint('[Image] Failed to read image cache: $e');
-    }
-
-    if (!isVertexBackendConfigured()) {
-      debugPrint('[Image] Vertex backend URL not set; image generation requires the backend.');
-      return null;
-    }
-
-    final platformName = platform.trim().isEmpty ? 'x' : platform.trim().toLowerCase();
-    Map<String, String>? referenceImage;
-    if ((userContext?['profileImageUrl']?.toString().trim().isNotEmpty ?? false)) {
-      referenceImage = await _getProfileImageAsBase64(userContext!['profileImageUrl'].toString().trim());
-    }
-
     final detected = await _detectFamousEntities(fullText);
     final brands = (detected['brand'] ?? []).where((n) => n.trim().isNotEmpty).toList(growable: false);
     final products = _mergeVisualProductMentions(
@@ -4247,35 +4205,21 @@ $contextSnippet''';
     final famousPerson = await _resolveFamousPersonForImage(fullText, detected);
     if (famousPerson != null && famousPerson.isNotEmpty) {
       final isTribute = _isTributeOrMemorialContext(fullText);
-      debugPrint(
-        '[ImageGen] famous person for reflection: $famousPerson tribute=$isTribute brands=$brands products=$products',
-      );
-      final prompt = _buildFamousPersonImagePrompt(
+      return _buildFamousPersonImagePrompt(
         personName: famousPerson,
         combinedText: fullText,
         isTribute: isTribute,
         brands: brands,
         products: products,
       );
-      final generated = await _generateImageWithGemini(prompt, referenceImage);
-      if (generated != null && generated.isNotEmpty) {
-        _cacheReflectionImageIfPersistable(prefs, cacheKey, fullText, generated);
-      }
-      return generated;
     }
 
     if (brands.isNotEmpty || products.isNotEmpty) {
-      debugPrint('[ImageGen] brand/product focus for reflection: brands=$brands products=$products');
-      final prompt = _buildBrandOrProductImagePrompt(
+      return _buildBrandOrProductImagePrompt(
         combinedText: fullText,
         brands: brands,
         products: products,
       );
-      final generated = await _generateImageWithGemini(prompt, referenceImage);
-      if (generated != null && generated.isNotEmpty) {
-        _cacheReflectionImageIfPersistable(prefs, cacheKey, fullText, generated);
-      }
-      return generated;
     }
 
     final imagePrompt = await _buildStructuredPromptForNoFamous(fullText, userContext);
@@ -4293,23 +4237,88 @@ $contextSnippet''';
       final nationality = (userContext?['nationality']?.toString().trim().isNotEmpty ?? false)
           ? userContext!['nationality'].toString().trim()
           : 'Indian';
-      final fallback =
-          'A realistic photograph of a $age year old $gender ($nationality), $clipped, natural lighting, high detail, not a celebrity, not stock.';
-      final generated = await _generateImageWithGemini(fallback, referenceImage);
-      if (generated != null && generated.isNotEmpty) {
-        _cacheReflectionImageIfPersistable(prefs, cacheKey, fullText, generated);
-      }
-      return generated;
+      return 'A realistic photograph of a $age year old $gender ($nationality), $clipped, natural lighting, high detail, not a celebrity, not stock.';
     }
 
-    final strictRules =
-        'STRICT: Same image logic for all platforms including $platformName. Depict the SITUATION from the post '
+    const strictRules =
+        'STRICT: Same image logic for all platforms. Depict the SITUATION from the post '
         '(e.g. director\'s office mix-up = corridor with doors; reading a book = person in setting with the book visible). '
         'Do NOT focus on the face - use a medium or wide shot with scene and environment. '
         'No portrait or face-close-up. No animals unless mentioned. Avoid famous faces. High realism.';
-    final fullPrompt = '$imagePrompt $strictRules';
-    final generated = await _generateImageWithGemini(fullPrompt, referenceImage);
-    if (generated != null && generated.isNotEmpty) {
+    return '$imagePrompt $strictRules';
+  }
+
+  Future<String?> resolveShareImagePrompt(
+    String postText, {
+    String platform = 'x',
+    Map<String, dynamic>? userContext,
+  }) async {
+    if (postText.trim().isEmpty || !isVertexBackendConfigured()) return null;
+    final platformName = platform.trim().isEmpty ? 'x' : platform.trim().toLowerCase();
+    return _resolveShareImagePrompt(postText.trim(), platformName, userContext);
+  }
+
+  Future<String?> generateShareImageFromPrompt(String prompt) async {
+    final trimmed = prompt.trim();
+    if (trimmed.isEmpty || !isVertexBackendConfigured()) return null;
+    return _generateImageWithGemini(trimmed);
+  }
+
+  Future<String?> fetchImageForReflection(
+    String postText, [
+    Map<String, dynamic>? userContext,
+    String platform = 'x',
+    bool skipCache = false,
+  ]) async {
+    if (postText.trim().isEmpty) return null;
+    debugPrint('[ImageGen] fetchImageForReflection start platform=$platform textLen=${postText.trim().length}');
+    final fullText = postText.trim();
+    final keyText = fullText.length > 300 ? fullText.substring(0, 300) : fullText;
+    final cacheKey = 'post_image_cache_v3::$keyText';
+    final prefs = await SharedPreferences.getInstance();
+
+    if (!skipCache) {
+      try {
+        final raw = prefs.getString(cacheKey);
+        if (raw != null && raw.isNotEmpty) {
+          if (raw.length > 64 * 1024 || raw.contains('data:image')) {
+            await prefs.remove(cacheKey);
+          } else {
+            try {
+              final parsed = jsonDecode(raw);
+              if (parsed is Map &&
+                  parsed['text'] == fullText &&
+                  parsed['image'] is String &&
+                  (parsed['image'] as String).isNotEmpty) {
+                final image = parsed['image'] as String;
+                if (shouldPersistGeneratedImageCache(image)) {
+                  return image;
+                }
+              }
+            } catch (_) {}
+          }
+        }
+      } catch (e) {
+        debugPrint('[Image] Failed to read image cache: $e');
+      }
+    }
+
+    if (!isVertexBackendConfigured()) {
+      debugPrint('[Image] Vertex backend URL not set; image generation requires the backend.');
+      return null;
+    }
+
+    final platformName = platform.trim().isEmpty ? 'x' : platform.trim().toLowerCase();
+    Map<String, String>? referenceImage;
+    if ((userContext?['profileImageUrl']?.toString().trim().isNotEmpty ?? false)) {
+      referenceImage = await _getProfileImageAsBase64(userContext!['profileImageUrl'].toString().trim());
+    }
+
+    final prompt = await _resolveShareImagePrompt(fullText, platformName, userContext);
+    if (prompt == null || prompt.trim().isEmpty) return null;
+
+    final generated = await _generateImageWithGemini(prompt, referenceImage);
+    if (generated != null && generated.isNotEmpty && !skipCache) {
       _cacheReflectionImageIfPersistable(prefs, cacheKey, fullText, generated);
     }
     return generated;
