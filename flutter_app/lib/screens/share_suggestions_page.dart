@@ -1373,12 +1373,10 @@ class _SourceCard extends StatelessWidget {
                 maxLines: null,
                 minLines: 2,
                 style: TextStyle(color: primary, fontSize: 15, height: 1.45),
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   border: InputBorder.none,
                   isDense: true,
                   contentPadding: EdgeInsets.zero,
-                  hintText: 'Tap to edit · Enter to regenerate',
-                  hintStyle: TextStyle(color: secondary, fontSize: 14),
                 ),
                 textInputAction: TextInputAction.done,
                 onSubmitted: (_) => unawaited(onReflectionSubmitted?.call()),
