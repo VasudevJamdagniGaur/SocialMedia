@@ -1141,7 +1141,8 @@ class _SourceCard extends StatelessWidget {
 
     final badge = isNewsMode
         ? (isTeaArticle ? 'Tea' : (suggestionsOnly ? 'Post' : 'News'))
-        : (suggestionsOnly ? 'Create post' : 'Your reflection');
+        : 'Create post';
+    final showBadge = isNewsMode || suggestionsOnly;
 
     final seedTitle = cleanTeaCardTitle('${newsArticle?['title'] ?? ''}');
     final resolvedHeadline = resolveTeaDisplayTitle(
@@ -1185,14 +1186,15 @@ class _SourceCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            badge,
-            style: TextStyle(
-              color: badgeColor,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
+          if (showBadge)
+            Text(
+              badge,
+              style: TextStyle(
+                color: badgeColor,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
             ),
-          ),
           if (isNewsMode) ...[
             if (loadingNewsDetails &&
                 newsSummary.trim().isEmpty &&
@@ -1315,7 +1317,6 @@ class _SourceCard extends StatelessWidget {
             ],
             ],
           ] else ...[
-            const SizedBox(height: 4),
             Text(
               reflection,
               style: TextStyle(color: primary, fontSize: 15, height: 1.45),
