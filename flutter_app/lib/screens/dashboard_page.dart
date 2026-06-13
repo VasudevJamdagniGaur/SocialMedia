@@ -9,6 +9,7 @@ import '../components/share_platform_selector.dart';
 import '../contexts/theme_context.dart';
 import '../router/app_router.dart';
 import '../services/auth_service.dart';
+import '../services/chat_service.dart';
 import '../services/firestore_result.dart';
 import '../services/firestore_service.dart';
 import '../services/reflection_service.dart';
@@ -22,7 +23,7 @@ const _cardBg = Color(0xFF161616);
 const _cardBorder = Color(0xFF252525);
 const _muted = Color(0xFF9CA3AF);
 
-/// Home dashboard — greeting, composer, stats, journey shortcuts, recent posts.
+/// Home dashboard — greeting, composer, stats, journey shortcuts, post suggestions.
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
 
@@ -45,6 +46,10 @@ class _DashboardPageState extends State<DashboardPage> {
 
   final _mindController = TextEditingController();
   String _platform = 'linkedin';
+
+  List<Map<String, String>> _postSuggestions = [];
+  bool _suggestionsLoading = false;
+  String? _suggestionsSourceKey;
 
   @override
   void initState() {
@@ -199,18 +204,102 @@ class _DashboardPageState extends State<DashboardPage> {
     final user = AuthService().getCurrentUser();
     if (user == null) {
       final local = await getReflectionFromLocalStorage(dateId);
-      if (mounted) setState(() => _reflection = local);
+      if (mounted) {
+        setState(() => _reflection = local);
+        await _loadPostSuggestions();
+      }
       return;
     }
     try {
       final result = await ReflectionService.instance.getReflection(user.uid, dateId);
       var text = result.reflection ?? '';
       if (text.isEmpty) text = await getReflectionFromLocalStorage(dateId);
-      if (mounted) setState(() => _reflection = text);
+      if (text.isEmpty && dateId == getDateId(DateTime.now())) {
+        text = await _reflectionFromTodayChat(user.uid, dateId);
+      }
+      if (mounted) {
+        setState(() => _reflection = text);
+        await _loadPostSuggestions();
+      }
     } catch (_) {
       final local = await getReflectionFromLocalStorage(dateId);
-      if (mounted) setState(() => _reflection = local);
+      if (mounted) {
+        setState(() => _reflection = local);
+        await _loadPostSuggestions();
+      }
     }
+  }
+
+  Future<String> _reflectionFromTodayChat(String uid, String dateId) async {
+    try {
+      final result = await FirestoreService.instance.getChatMessagesNew(uid, dateId);
+      if (result['success'] != true) return '';
+      final raw = (result['messages'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+      final chatRows = raw
+          .where((m) =>
+              m['sender'] != 'system' &&
+              '${m['text'] ?? ''}'.trim().isNotEmpty &&
+              m['isWhisperSession'] != true)
+          .toList();
+      if (chatRows.length < 2) return '';
+      return (await ReflectionService.instance.generateReflection(chatRows)).trim();
+    } catch (_) {
+      return '';
+    }
+  }
+
+  Future<void> _loadPostSuggestions() async {
+    final reflection = _reflection.trim();
+    final cacheKey = '${getDateId(_selectedDate)}|$_platform|${reflection.hashCode}';
+    if (reflection.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _postSuggestions = [];
+          _suggestionsLoading = false;
+          _suggestionsSourceKey = null;
+        });
+      }
+      return;
+    }
+    if (_suggestionsSourceKey == cacheKey && _postSuggestions.isNotEmpty) return;
+
+    if (mounted) setState(() => _suggestionsLoading = true);
+    try {
+      final items = await ChatService.instance
+          .generateSocialPostSuggestions(reflection, _platform)
+          .timeout(const Duration(seconds: 35));
+      if (!mounted) return;
+      setState(() {
+        _postSuggestions = items.take(3).toList();
+        _suggestionsLoading = false;
+        _suggestionsSourceKey = cacheKey;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _postSuggestions = [];
+        _suggestionsLoading = false;
+        _suggestionsSourceKey = null;
+      });
+    }
+  }
+
+  Future<void> _openPostSuggestions({Map<String, String>? focus}) async {
+    final reflection = _reflection.trim();
+    if (reflection.isEmpty) {
+      context.push(AppRoutes.reflections);
+      return;
+    }
+    final payload = {
+      'reflection': reflection,
+      'platform': _platform,
+      'selectedDate': _selectedDate.toIso8601String(),
+      'returnTo': AppRoutes.dashboard,
+      if (focus != null) 'postDraft': focus['post'],
+    };
+    await prepareShareSuggestionsRoute(payload);
+    if (!mounted) return;
+    await context.push(AppRoutes.shareSuggestions, extra: payload);
   }
 
   void _navigateChat() {
@@ -242,23 +331,12 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Future<void> _openDaysReflect() async {
-    if (_reflection.isNotEmpty) {
-      final payload = {
-        'reflection': _reflection,
-        'selectedDate': _selectedDate.toIso8601String(),
-      };
-      await prepareShareSuggestionsRoute(payload);
-      if (!mounted) return;
-      context.push(AppRoutes.shareSuggestions, extra: payload);
-      return;
-    }
-    context.push(AppRoutes.reflections);
+    await _openPostSuggestions();
   }
 
   @override
   Widget build(BuildContext context) {
     context.watch<ThemeNotifier>();
-    final user = AuthService().getCurrentUser();
     final bottomPad = MediaQuery.paddingOf(context).bottom;
 
     return Scaffold(
@@ -279,7 +357,10 @@ class _DashboardPageState extends State<DashboardPage> {
               _MindComposerCard(
                 controller: _mindController,
                 platform: _platform,
-                onPlatformChanged: (p) => setState(() => _platform = p),
+                onPlatformChanged: (p) {
+                  setState(() => _platform = p);
+                  _loadPostSuggestions();
+                },
                 onSubmit: _openComposerSubmit,
               ),
               const SizedBox(height: 16),
@@ -310,35 +391,37 @@ class _DashboardPageState extends State<DashboardPage> {
               ),
               const SizedBox(height: 28),
               _SectionHeader(
-                title: 'Recent posts',
-                actionLabel: 'View all',
-                onAction: () => context.push(AppRoutes.community),
+                title: 'Post suggestions',
+                actionLabel: _reflection.trim().isNotEmpty ? 'View all' : null,
+                onAction: _reflection.trim().isNotEmpty ? () => _openPostSuggestions() : null,
               ),
               const SizedBox(height: 12),
-              if (user != null)
-                StreamBuilder<List<Map<String, dynamic>>>(
-                  stream: FirestoreService.instance.streamCommunityPosts(limitCount: 40),
-                  builder: (context, snap) {
-                    final all = snap.data ?? [];
-                    final mine = all
-                        .where((p) => p['authorId'] == user.uid)
-                        .take(3)
-                        .toList();
-                    if (mine.isEmpty) {
-                      return const _RecentPostPlaceholder();
-                    }
-                    return Column(
-                      children: [
-                        for (var i = 0; i < mine.length; i++) ...[
-                          if (i > 0) const SizedBox(height: 10),
-                          _RecentPostCard(post: mine[i]),
-                        ],
-                      ],
-                    );
-                  },
-                )
+              if (_suggestionsLoading)
+                const _PostSuggestionsLoading()
+              else if (_reflection.trim().isEmpty)
+                const _PostSuggestionsPlaceholder(hasReflection: false)
+              else if (_postSuggestions.isEmpty)
+                const _PostSuggestionsPlaceholder(hasReflection: true)
               else
-                const _RecentPostPlaceholder(),
+                Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Text(
+                        "Based on today's reflect · ${sharePlatformLabel(_platform)}",
+                        style: const TextStyle(color: _muted, fontSize: 12, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                    for (var i = 0; i < _postSuggestions.length; i++) ...[
+                      if (i > 0) const SizedBox(height: 10),
+                      _PostSuggestionCard(
+                        suggestion: _postSuggestions[i],
+                        platform: _platform,
+                        onTap: () => _openPostSuggestions(focus: _postSuggestions[i]),
+                      ),
+                    ],
+                  ],
+                ),
             ],
           ),
         ),
@@ -599,13 +682,13 @@ class _StatCard extends StatelessWidget {
 class _SectionHeader extends StatelessWidget {
   const _SectionHeader({
     required this.title,
-    required this.actionLabel,
-    required this.onAction,
+    this.actionLabel,
+    this.onAction,
   });
 
   final String title;
-  final String actionLabel;
-  final VoidCallback onAction;
+  final String? actionLabel;
+  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -622,18 +705,19 @@ class _SectionHeader extends StatelessWidget {
             ),
           ),
         ),
-        TextButton(
-          onPressed: onAction,
-          style: TextButton.styleFrom(
-            foregroundColor: HubTheme.accent,
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            minimumSize: Size.zero,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
+        if (actionLabel != null && onAction != null)
+          TextButton(
+            onPressed: onAction,
+            style: TextButton.styleFrom(
+              foregroundColor: HubTheme.accent,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
             children: [
-              Text(actionLabel, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+              Text(actionLabel!, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
               const SizedBox(width: 2),
               const Icon(LucideIcons.chevronRight, size: 16),
             ],
@@ -712,87 +796,125 @@ class _JourneyTile extends StatelessWidget {
   }
 }
 
-class _RecentPostCard extends StatelessWidget {
-  const _RecentPostCard({required this.post});
+class _PostSuggestionCard extends StatelessWidget {
+  const _PostSuggestionCard({
+    required this.suggestion,
+    required this.platform,
+    required this.onTap,
+  });
 
-  final Map<String, dynamic> post;
+  final Map<String, String> suggestion;
+  final String platform;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final content = '${post['content'] ?? ''}'.trim();
-    final platform = '${post['platform'] ?? post['kind'] ?? 'linkedin'}';
-    final kind = sharePlatformLabel(platform);
-    final createdAt = post['createdAt'];
-    final likes = (post['likes'] as num?)?.toInt() ?? 0;
-    final when = createdAt is DateTime ? formatTimeAgo(createdAt) : '';
+    final eventLabel = suggestion['eventLabel'] ?? 'Post';
+    final post = suggestion['post'] ?? '';
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: _cardBg,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _cardBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: _cardBg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: _cardBorder),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(
-                child: Text.rich(
-                  TextSpan(
-                    style: const TextStyle(color: _muted, fontSize: 12, fontWeight: FontWeight.w500),
-                    children: [
-                      if (when.isNotEmpty) TextSpan(text: when),
-                      if (when.isNotEmpty)
-                        const TextSpan(text: ' • ', style: TextStyle(color: Color(0xFF4B5563))),
-                      TextSpan(
-                        text: kind,
-                        style: const TextStyle(color: HubTheme.accent, fontWeight: FontWeight.w700),
-                      ),
-                    ],
+              Row(
+                children: [
+                  Text(
+                    eventLabel,
+                    style: const TextStyle(
+                      color: HubTheme.accent,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    sharePlatformLabel(platform),
+                    style: const TextStyle(color: _muted, fontSize: 11, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+              if (post.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  post,
+                  maxLines: 5,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    height: 1.45,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
+              ],
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Text(
+                    'Tap to share',
+                    style: TextStyle(
+                      color: HubTheme.accent.withValues(alpha: 0.85),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const Spacer(),
+                  Icon(LucideIcons.chevronRight, color: Colors.white.withValues(alpha: 0.35), size: 18),
+                ],
               ),
-              const Icon(LucideIcons.ellipsis, color: Color(0xFF6B7280), size: 18),
             ],
           ),
-          if (content.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Text(
-              content,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 17,
-                fontWeight: FontWeight.w600,
-                height: 1.35,
-              ),
-            ),
-          ],
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              const Icon(LucideIcons.heart, color: HubTheme.accent, size: 18),
-              const SizedBox(width: 6),
-              Text(
-                '$likes',
-                style: const TextStyle(color: _muted, fontSize: 13, fontWeight: FontWeight.w600),
-              ),
-              const Spacer(),
-              Icon(LucideIcons.bookmark, color: Colors.white.withValues(alpha: 0.35), size: 18),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }
 }
 
-class _RecentPostPlaceholder extends StatelessWidget {
-  const _RecentPostPlaceholder();
+class _PostSuggestionsLoading extends StatelessWidget {
+  const _PostSuggestionsLoading();
 
   @override
   Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
+      decoration: BoxDecoration(
+        color: _cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _cardBorder),
+      ),
+      child: const Center(
+        child: SizedBox(
+          width: 24,
+          height: 24,
+          child: CircularProgressIndicator(strokeWidth: 2, color: HubTheme.accent),
+        ),
+      ),
+    );
+  }
+}
+
+class _PostSuggestionsPlaceholder extends StatelessWidget {
+  const _PostSuggestionsPlaceholder({required this.hasReflection});
+
+  final bool hasReflection;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = hasReflection
+        ? "Couldn't load suggestions right now. Tap View all to try again."
+        : "Spill some tea with Detea today to build your Day's Reflect — post suggestions will show up here.";
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -800,10 +922,10 @@ class _RecentPostPlaceholder extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: _cardBorder),
       ),
-      child: const Text(
-        'Write something above, pick LinkedIn / X / Reddit, and share — your posts will show up here.',
+      child: Text(
+        text,
         textAlign: TextAlign.center,
-        style: TextStyle(color: _muted, fontSize: 14, height: 1.45, fontWeight: FontWeight.w500),
+        style: const TextStyle(color: _muted, fontSize: 14, height: 1.45, fontWeight: FontWeight.w500),
       ),
     );
   }
