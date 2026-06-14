@@ -278,6 +278,7 @@ class _HubTrendingFeedState extends State<HubTrendingFeed> {
       });
     }
     unawaited(_syncCachedAiImages());
+    unawaited(_enrichMissingAiImages());
   }
 
   Future<void> _load() async {
@@ -294,6 +295,8 @@ class _HubTrendingFeedState extends State<HubTrendingFeed> {
     }
 
     if (_items.isNotEmpty && _hubCache != null && _hubCache!.isNotEmpty) {
+      unawaited(_syncCachedAiImages());
+      unawaited(_enrichMissingAiImages());
       unawaited(_refreshFromNetwork());
       return;
     }

@@ -8,13 +8,23 @@ import '../services/chat_service.dart';
 import '../services/cached_news_service.dart';
 import '../services/vertex_api_client.dart';
 import '../services/youtube_tea_service.dart';
-import '../services/youtube_tea_service.dart';
 import 'hub_carousel_image_store.dart';
 import 'share_news_cache.dart';
 
 const maxHubCarouselAiGenerationsPerPass = 15;
+const _hubCarouselEnrichStaggerMs = 2500;
 
 final Map<String, String> _memoryAiImageCache = {};
+final Map<String, Future<HubCarouselImageResult?>> _inFlightHubCarouselImages = {};
+
+bool isVertexRateLimitError(Object error) {
+  final msg = error.toString().toLowerCase();
+  return msg.contains('429') ||
+      msg.contains('resource exhausted') ||
+      msg.contains('rate limit') ||
+      msg.contains('rate limited') ||
+      msg.contains('quota');
+}
 
 String hubCarouselImageCacheKey(String url, [String fallback = '']) {
   final normalized = normalizeUrlKey(url);
@@ -50,7 +60,8 @@ bool isReliableCarouselImageUrl(String? url) {
   final s = '${url ?? ''}'.trim();
   if (!isValidHubCarouselImageUrl(s)) return false;
   if (s.startsWith('data:image')) return true;
-  if (s.contains('ytimg.com') ||
+  if (s.contains('firebasestorage.googleapis.com') ||
+      s.contains('ytimg.com') ||
       s.contains('redd.it') ||
       s.contains('imgur.com') ||
       s.contains('i.ibb.co')) {
@@ -200,7 +211,34 @@ Future<HubCarouselImageResult?> getOrGenerateHubCarouselImageFull({
   if (key.isEmpty || title.isEmpty) return null;
 
   final url = articleUrl.trim().isNotEmpty ? articleUrl.trim() : key;
+  final dedupeKey = hubCarouselImageCacheKey(url, key);
+  final inFlight = _inFlightHubCarouselImages[dedupeKey];
+  if (inFlight != null) return inFlight;
 
+  final future = _getOrGenerateHubCarouselImageFullImpl(
+    key: key,
+    title: title,
+    url: url,
+    storyText: storyText,
+    kind: kind,
+    sourceImageUrl: sourceImageUrl,
+  );
+  _inFlightHubCarouselImages[dedupeKey] = future;
+  try {
+    return await future;
+  } finally {
+    _inFlightHubCarouselImages.remove(dedupeKey);
+  }
+}
+
+Future<HubCarouselImageResult?> _getOrGenerateHubCarouselImageFullImpl({
+  required String key,
+  required String title,
+  required String url,
+  String storyText = '',
+  HubCarouselImageKind kind = HubCarouselImageKind.news,
+  String? sourceImageUrl,
+}) async {
   // 1. Check local memory + disk cache first (instant, no network).
   final localCached = await resolveHubCarouselImageFast(
     url: url,
@@ -259,10 +297,15 @@ Future<HubCarouselImageResult?> getOrGenerateHubCarouselImageFull({
       fromCache: fromCache,
     );
   } catch (e) {
+    debugPrint('[ImageGen] ensure-image failed: $e');
+    if (isVertexRateLimitError(e)) {
+      debugPrint('[ImageGen] rate limited — skipping duplicate fallback generation');
+      return null;
+    }
     debugPrint('[ImageGen] ensure-image failed, falling back to local generation: $e');
   }
 
-  // 3. Fallback: generate locally if Render server is unreachable.
+  // 3. Fallback only when the server is unreachable — not when quota is exhausted.
   try {
     final generated = await ChatService.instance.fetchSingleNewsShareIllustrationImage({
       'headline': title,
@@ -300,13 +343,16 @@ Future<void> enrichCarouselSlotsWithAiImages({
     if (needsImage(i)) indices.add(i);
   }
   final todo = indices.take(maxGenerate).toList();
-  const batchSize = 3;
+  const batchSize = 1;
   for (var start = 0; start < todo.length; start += batchSize) {
     final batch = todo.skip(start).take(batchSize).toList();
     await Future.wait(batch.map((i) async {
       final img = await generateForIndex(i);
       if (img != null && img.isNotEmpty) applyImage(i, img);
     }));
+    if (start + batchSize < todo.length) {
+      await Future<void>.delayed(const Duration(milliseconds: _hubCarouselEnrichStaggerMs));
+    }
   }
 }
 
@@ -479,7 +525,8 @@ class _HubCarouselResolvingHeroState extends State<HubCarouselResolvingHero> {
     final immediate = _bestCandidate();
     if (immediate != null) {
       if (mounted && token == _resolveGen) _applyResolved(immediate);
-      return;
+      // Reliable URLs (RSS, YouTube, Firebase AI cache) do not need generation.
+      if (isReliableCarouselImageUrl(immediate)) return;
     }
 
     final ids = [

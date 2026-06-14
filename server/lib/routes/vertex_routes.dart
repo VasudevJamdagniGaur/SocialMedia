@@ -131,7 +131,13 @@ Router buildVertexRouter(VertexClient vertex) {
       }
       return jsonOk({'imageDataUrl': imageDataUrl});
     } catch (e) {
-      return jsonError(500, 'Image generation failed', details: '$e');
+      final details = '$e';
+      final rateLimited = details.contains('429') ||
+          details.toLowerCase().contains('resource exhausted');
+      if (rateLimited) {
+        return jsonError(429, 'Image generation rate limited', details: details);
+      }
+      return jsonError(500, 'Image generation failed', details: details);
     }
   });
 
@@ -240,7 +246,13 @@ Router buildVertexRouter(VertexClient vertex) {
       dataUrl = await vertex.generateNewsIllustrationImage(prompt);
     } catch (e) {
       stderr.writeln('[EnsureImage] AI generation failed: $e');
-      return jsonError(502, 'Image generation failed', details: '$e');
+      final details = '$e';
+      final rateLimited = details.contains('429') ||
+          details.toLowerCase().contains('resource exhausted');
+      if (rateLimited) {
+        return jsonError(429, 'Image generation rate limited', details: details);
+      }
+      return jsonError(502, 'Image generation failed', details: details);
     }
     if (dataUrl == null || !dataUrl.startsWith('data:image')) {
       return jsonError(502, 'Image generation returned no image');

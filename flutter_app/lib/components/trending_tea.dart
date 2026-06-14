@@ -172,7 +172,7 @@ Future<void> warmTeaCacheFromDisk() async {
   if (cached.isEmpty) return;
   _memoryTeaCache = prioritizeWithImagesFirst(
     cached,
-    teaHasReliableHeroImage,
+    teaHasDisplayableHeroImage,
   );
   _memoryTeaCacheAt = DateTime.now();
 }
@@ -202,7 +202,7 @@ Future<List<TeaItem>> fetchTrendingTea({
 
   var items = prioritizeWithImagesFirst(
     rows.map(_rowToTeaItem).toList(),
-    teaHasReliableHeroImage,
+    teaHasDisplayableHeroImage,
   ).take(10).toList();
   items = await _hydrateTeaItemsFast(items);
 
@@ -221,10 +221,8 @@ Future<List<TeaItem>> fetchTrendingTea({
 String? teaHeroImageUrl(TeaItem item) {
   if (_isDirectImageUrl(item.postUrl)) {
     final u = item.postUrl.trim();
-    return isValidHubCarouselImageUrl(u) ? u : null;
+    if (isValidHubCarouselImageUrl(u)) return u;
   }
-  final thumb = item.thumbnail.trim();
-  if (isValidHubCarouselImageUrl(thumb)) return thumb;
 
   for (final key in [
     hubCarouselImageCacheKey(item.url, item.id),
@@ -236,12 +234,28 @@ String? teaHeroImageUrl(TeaItem item) {
     if (mem != null && isValidHubCarouselImageUrl(mem)) return mem;
   }
 
+  final thumb = item.thumbnail.trim();
+  if (thumb.startsWith('data:image') || thumb.contains('firebasestorage.googleapis.com')) {
+    if (isValidHubCarouselImageUrl(thumb)) return thumb;
+  }
+  if (isReliableCarouselImageUrl(thumb)) return thumb;
+
   final yt = youtubeTeaThumbnailFromUrl(item.url);
   if (yt != null && isValidHubCarouselImageUrl(yt)) return yt;
+
+  if (isValidHubCarouselImageUrl(thumb)) return thumb;
   return null;
 }
 
-bool teaHasReliableHeroImage(TeaItem item) {
+/// Carousel initial URL — only pass images that actually load (matches News carousel).
+String? teaCarouselInitialUrl(TeaItem item) {
+  final hero = teaHeroImageUrl(item);
+  if (hero == null) return null;
+  if (isReliableCarouselImageUrl(hero)) return hero;
+  return null;
+}
+
+bool teaHasDisplayableHeroImage(TeaItem item) {
   final hero = teaHeroImageUrl(item);
   if (hero == null) return false;
   return isReliableCarouselImageUrl(hero);
@@ -250,7 +264,7 @@ bool teaHasReliableHeroImage(TeaItem item) {
 Future<List<TeaItem>> _hydrateTeaItemsFast(List<TeaItem> items) async {
   if (items.isEmpty) return items;
   final hydrated = await Future.wait(items.map((item) async {
-    if (teaHasReliableHeroImage(item)) return item;
+    if (teaHasDisplayableHeroImage(item)) return item;
 
     final yt = youtubeTeaThumbnailFromUrl(item.url);
     if (yt != null) {
@@ -288,7 +302,7 @@ Future<List<TeaItem>> _hydrateTeaItemsFast(List<TeaItem> items) async {
     }
     return item;
   }));
-  return prioritizeWithImagesFirst(hydrated, teaHasReliableHeroImage);
+  return prioritizeWithImagesFirst(hydrated, teaHasDisplayableHeroImage);
 }
 
 Future<void> _enrichTeaRowsInBackground(
@@ -300,7 +314,7 @@ Future<void> _enrichTeaRowsInBackground(
     if (enriched.isEmpty) return;
     var items = prioritizeWithImagesFirst(
       enriched.map(_rowToTeaItem).toList(),
-      teaHasReliableHeroImage,
+      teaHasDisplayableHeroImage,
     ).take(10).toList();
     items = await _hydrateTeaItemsFast(items);
     if (items.isEmpty) return;
@@ -349,6 +363,7 @@ class _TrendingTeaState extends State<TrendingTea> {
       });
     }
     unawaited(_syncCachedAiImages());
+    unawaited(_enrichMissingAiImages());
   }
 
   Future<void> _load() async {
@@ -365,6 +380,8 @@ class _TrendingTeaState extends State<TrendingTea> {
     }
 
     if (_items.isNotEmpty && _memoryTeaCache != null && _memoryTeaCache!.isNotEmpty) {
+      unawaited(_syncCachedAiImages());
+      unawaited(_enrichMissingAiImages());
       unawaited(_refreshFromNetwork());
       return;
     }
@@ -374,7 +391,7 @@ class _TrendingTeaState extends State<TrendingTea> {
       setState(() {
         _items = prioritizeWithImagesFirst(
           cached,
-          teaHasReliableHeroImage,
+          teaHasDisplayableHeroImage,
         );
         _loading = false;
         _error = null;
@@ -461,7 +478,7 @@ class _TrendingTeaState extends State<TrendingTea> {
     var changed = false;
     final updated = <TeaItem>[];
     for (final item in _items) {
-      if (teaHasReliableHeroImage(item)) {
+      if (teaHasDisplayableHeroImage(item)) {
         updated.add(item);
         continue;
       }
@@ -508,7 +525,7 @@ class _TrendingTeaState extends State<TrendingTea> {
       setState(() {
         _items = prioritizeWithImagesFirst(
           updated,
-          teaHasReliableHeroImage,
+          teaHasDisplayableHeroImage,
         );
         _memoryTeaCache = _items;
       });
@@ -534,7 +551,7 @@ class _TrendingTeaState extends State<TrendingTea> {
         score: item.score,
         numComments: item.numComments,
       );
-      _items = prioritizeWithImagesFirst(updated, teaHasReliableHeroImage);
+      _items = prioritizeWithImagesFirst(updated, teaHasDisplayableHeroImage);
       _memoryTeaCache = _items;
     });
     return _saveTeaToDisk(_items);
@@ -544,7 +561,7 @@ class _TrendingTeaState extends State<TrendingTea> {
     final token = ++_aiImageGen;
     await enrichCarouselSlotsWithAiImages(
       slotCount: _items.length,
-      needsImage: (i) => !teaHasReliableHeroImage(_items[i]),
+      needsImage: (i) => !teaHasDisplayableHeroImage(_items[i]),
       generateForIndex: (i) {
         final item = _items[i];
         // Pass existing thumbnail as sourceImageUrl so server stores it alongside the AI image.
@@ -654,7 +671,7 @@ class _TrendingTeaState extends State<TrendingTea> {
                                       fit: StackFit.expand,
                                       children: [
                                         HubCarouselResolvingHero(
-                                          initialUrl: teaHeroImageUrl(item),
+                                          initialUrl: teaCarouselInitialUrl(item),
                                           articleUrl: item.url,
                                           title: item.title,
                                           storyText: item.gossip,

@@ -70,7 +70,11 @@ class VertexApiClient {
 
       if (res.statusCode < 200 || res.statusCode >= 300) {
         final msg = data['error'] ?? data['message'] ?? res.body;
-        throw Exception(msg is String ? msg : jsonEncode(msg));
+        final details = data['details'];
+        final detailText = details == null ? '' : ' $details';
+        throw Exception(
+          'HTTP ${res.statusCode} from $url: ${msg is String ? msg : jsonEncode(msg)}$detailText',
+        );
       }
       return data;
     } on TimeoutException catch (e) {

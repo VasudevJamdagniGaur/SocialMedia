@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -6,12 +7,38 @@ import 'package:http/http.dart' as http;
 
 import '../config.dart';
 
+/// Serializes Vertex image API calls so parallel carousel requests do not exhaust quota.
+class _VertexImageGenQueue {
+  Future<void> _tail = Future.value();
+
+  Future<T> run<T>(Future<T> Function() action) {
+    final completer = Completer<T>();
+    _tail = _tail.then((_) async {
+      try {
+        completer.complete(await action());
+      } catch (e, st) {
+        completer.completeError(e, st);
+      }
+    });
+    return completer.future;
+  }
+}
+
+bool _isVertexRateLimited(http.Response res) {
+  if (res.statusCode == 429) return true;
+  final body = res.body.toLowerCase();
+  return body.contains('resource exhausted') ||
+      body.contains('"code":429') ||
+      body.contains('rate limit');
+}
+
 /// Vertex AI Gemini via REST (service account) — port of backend-vertex/lib/generateText.js
 class VertexClient {
   VertexClient({http.Client? httpClient}) : _http = httpClient ?? http.Client();
 
   final http.Client _http;
   AutoRefreshingAuthClient? _authClient;
+  final _imageGenQueue = _VertexImageGenQueue();
 
   Future<AutoRefreshingAuthClient> _client() async {
     if (_authClient != null) return _authClient!;
@@ -127,14 +154,14 @@ class VertexClient {
   }
 
   Future<String?> generateNewsIllustrationImage(String prompt) async {
-    return _generateIllustrationImage(
-      prompt,
-      prefix:
-          'Create a single editorial illustration for a news story. '
-          'Tasteful and symbolic or environmental; no graphic violence, gore, or identifiable private individuals. '
-          'No text, captions, or logos in the image. '
-          'Use a medium or wide shot when people appear; avoid face close-ups.\n\n',
-    );
+    return _imageGenQueue.run(() => _generateIllustrationImage(
+          prompt,
+          prefix:
+              'Create a single editorial illustration for a news story. '
+              'Tasteful and symbolic or environmental; no graphic violence, gore, or identifiable private individuals. '
+              'No text, captions, or logos in the image. '
+              'Use a medium or wide shot when people appear; avoid face close-ups.\n\n',
+        ));
   }
 
   Future<String?> generatePublicFigureIllustrationImage(
@@ -142,57 +169,75 @@ class VertexClient {
     required String referenceImageBase64,
     String mimeType = 'image/jpeg',
   }) async {
-    final b64 = referenceImageBase64.replaceAll(RegExp(r'\s'), '');
-    if (b64.isEmpty) return null;
+    return _imageGenQueue.run(() async {
+      final b64 = referenceImageBase64.replaceAll(RegExp(r'\s'), '');
+      if (b64.isEmpty) return null;
 
-    final body = prompt.trim();
-    if (body.isEmpty) return null;
+      final body = prompt.trim();
+      if (body.isEmpty) return null;
 
-    const instructions =
-        'REFERENCE PHOTO ATTACHED: This is the real public figure who must appear in the output.\n'
-        'Generate ONE editorial news illustration for social media.\n'
-        'CRITICAL: The person in the generated image MUST have the EXACT same face, facial structure, '
-        'skin tone, hair, and beard or hairstyle as the reference photo. Do NOT invent a different person.\n'
-        'Show their face clearly and recognizably. Match the story scene below while preserving identity.\n'
-        'No text overlays or logos unless mentioned in the story.\n\n'
-        'Story / scene:\n';
+      const instructions =
+          'REFERENCE PHOTO ATTACHED: This is the real public figure who must appear in the output.\n'
+          'Generate ONE editorial news illustration for social media.\n'
+          'CRITICAL: The person in the generated image MUST have the EXACT same face, facial structure, '
+          'skin tone, hair, and beard or hairstyle as the reference photo. Do NOT invent a different person.\n'
+          'Show their face clearly and recognizably. Match the story scene below while preserving identity.\n'
+          'No text overlays or logos unless mentioned in the story.\n\n'
+          'Story / scene:\n';
 
-    final full = '$instructions${body.length > 5500 ? body.substring(0, 5500) : body}';
-    final cleanMime = mimeType.trim().isEmpty ? 'image/jpeg' : mimeType.trim();
+      final full = '$instructions${body.length > 5500 ? body.substring(0, 5500) : body}';
+      final cleanMime = mimeType.trim().isEmpty ? 'image/jpeg' : mimeType.trim();
 
-    final payload = jsonEncode({
-      'contents': [
-        {
-          'role': 'user',
-          'parts': [
-            {
-              'inlineData': {
-                'mimeType': cleanMime,
-                'data': b64,
+      final payload = jsonEncode({
+        'contents': [
+          {
+            'role': 'user',
+            'parts': [
+              {
+                'inlineData': {
+                  'mimeType': cleanMime,
+                  'data': b64,
+                },
               },
-            },
-            {'text': full},
-          ],
+              {'text': full},
+            ],
+          },
+        ],
+        'generationConfig': {
+          'temperature': 0.35,
+          'maxOutputTokens': 8192,
+          'responseModalities': ['TEXT', 'IMAGE'],
         },
-      ],
-      'generationConfig': {
-        'temperature': 0.35,
-        'maxOutputTokens': 8192,
-        'responseModalities': ['TEXT', 'IMAGE'],
-      },
-    });
+      });
 
+      return _postImagePayload(payload);
+    });
+  }
+
+  Future<String?> _postImagePayload(String payload) async {
     final client = await _client();
-    final res = await client.post(
-      _modelUri(ServerConfig.vertexImageModel),
-      headers: {'Content-Type': 'application/json'},
-      body: payload,
-    );
-    if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw HttpException('Vertex public figure image ${res.statusCode}: ${res.body}');
+    Object? lastErr;
+    for (var attempt = 0; attempt < 4; attempt++) {
+      if (attempt > 0) {
+        final delaySec = 2 << (attempt - 1);
+        await Future<void>.delayed(Duration(seconds: delaySec));
+      }
+      final res = await client.post(
+        _modelUri(ServerConfig.vertexImageModel),
+        headers: {'Content-Type': 'application/json'},
+        body: payload,
+      );
+      if (_isVertexRateLimited(res)) {
+        lastErr = HttpException('Vertex image ${res.statusCode}: ${res.body}');
+        continue;
+      }
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        throw HttpException('Vertex image ${res.statusCode}: ${res.body}');
+      }
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      return _extractImageDataUrl(data);
     }
-    final data = jsonDecode(res.body) as Map<String, dynamic>;
-    return _extractImageDataUrl(data);
+    throw lastErr ?? Exception('Vertex image generation failed after retries');
   }
 
   Future<String?> _generateIllustrationImage(String prompt, {required String prefix}) async {
@@ -217,17 +262,7 @@ class VertexClient {
       },
     });
 
-    final client = await _client();
-    final res = await client.post(
-      _modelUri(ServerConfig.vertexImageModel),
-      headers: {'Content-Type': 'application/json'},
-      body: payload,
-    );
-    if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw HttpException('Vertex image ${res.statusCode}: ${res.body}');
-    }
-    final data = jsonDecode(res.body) as Map<String, dynamic>;
-    return _extractImageDataUrl(data);
+    return _postImagePayload(payload);
   }
 
   void close() {
