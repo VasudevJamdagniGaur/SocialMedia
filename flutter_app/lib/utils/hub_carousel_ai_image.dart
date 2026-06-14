@@ -1,14 +1,17 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../services/chat_service.dart';
+import '../services/cached_news_service.dart';
 import '../services/vertex_api_client.dart';
+import '../services/youtube_tea_service.dart';
 import 'hub_carousel_image_store.dart';
 import 'share_news_cache.dart';
 
-const maxHubCarouselAiGenerationsPerPass = 10;
+const maxHubCarouselAiGenerationsPerPass = 15;
 
 final Map<String, String> _memoryAiImageCache = {};
 
@@ -39,6 +42,53 @@ Uint8List? decodeDataImageUrlBytes(String? url, {String logTag = '[ImageGen]'}) 
     debugPrint('$logTag base64 conversion failed: $e');
     return null;
   }
+}
+
+/// URLs that typically load in the app (not hotlink-blocked RSS redirects).
+bool isReliableCarouselImageUrl(String? url) {
+  final s = '${url ?? ''}'.trim();
+  if (!isValidHubCarouselImageUrl(s)) return false;
+  if (s.startsWith('data:image')) return true;
+  if (s.contains('ytimg.com') ||
+      s.contains('redd.it') ||
+      s.contains('imgur.com') ||
+      s.contains('i.ibb.co')) {
+    return true;
+  }
+  return RegExp(r'\.(jpe?g|png|gif|webp)(\?|#|$)', caseSensitive: false).hasMatch(s);
+}
+
+bool teaRowHasReliableImage(Map<String, dynamic> row) {
+  final url = '${row['url'] ?? ''}'.trim();
+  if (isYouTubeTeaUrl(url) && youtubeTeaThumbnailFromUrl(url) != null) return true;
+
+  final thumb = '${row['image'] ?? row['thumbnail'] ?? ''}'.trim();
+  if (isReliableCarouselImageUrl(thumb)) return true;
+
+  for (final key in [
+    hubCarouselImageCacheKey(url, ''),
+    if (url.isNotEmpty) hubCarouselImageCacheKey(url, hubNewsDocIdFromUrl(url)),
+  ]) {
+    final mem = peekHubCarouselMemory(key);
+    if (mem != null && isReliableCarouselImageUrl(mem)) return true;
+  }
+  return false;
+}
+
+bool hubNewsRowHasReliableImage(Map<String, dynamic> row) {
+  final url = '${row['url'] ?? ''}'.trim();
+  final thumb = '${row['image'] ?? row['thumbnail'] ?? ''}'.trim();
+  if (isReliableCarouselImageUrl(thumb)) return true;
+  if (isYouTubeTeaUrl(url) && youtubeTeaThumbnailFromUrl(url) != null) return true;
+
+  for (final key in [
+    hubCarouselImageCacheKey(url, ''),
+    if (url.isNotEmpty) hubCarouselImageCacheKey(url, hubNewsDocIdFromUrl(url)),
+  ]) {
+    final mem = peekHubCarouselMemory(key);
+    if (mem != null && isReliableCarouselImageUrl(mem)) return true;
+  }
+  return false;
 }
 
 /// Rejects truncated or corrupt data URLs that would render as a black frame.
@@ -162,7 +212,7 @@ Future<void> enrichCarouselSlotsWithAiImages({
     if (needsImage(i)) indices.add(i);
   }
   final todo = indices.take(maxGenerate).toList();
-  const batchSize = 2;
+  const batchSize = 3;
   for (var start = 0; start < todo.length; start += batchSize) {
     final batch = todo.skip(start).take(batchSize).toList();
     await Future.wait(batch.map((i) async {
@@ -222,6 +272,265 @@ class HubCarouselHeroImage extends StatelessWidget {
         );
       },
       errorBuilder: (_, __, ___) => errorWidget ?? const SizedBox.shrink(),
+    );
+  }
+}
+
+List<String> hubCarouselImageFallbackIds({
+  required String url,
+  required String title,
+  String fallbackId = '',
+}) {
+  final ids = <String>[];
+  void add(String? value) {
+    final v = '${value ?? ''}'.trim();
+    if (v.isNotEmpty && !ids.contains(v)) ids.add(v);
+  }
+
+  add(hubCarouselImageCacheKey(url, fallbackId));
+  add(hubCarouselImageCacheKey(url, ''));
+  if (title.trim().isNotEmpty) add(hubCarouselImageCacheKey('', title));
+  return ids;
+}
+
+/// Carousel hero that retries YouTube thumbs, cache, and AI when the initial URL fails.
+class HubCarouselResolvingHero extends StatefulWidget {
+  const HubCarouselResolvingHero({
+    super.key,
+    this.initialUrl,
+    required this.articleUrl,
+    required this.title,
+    this.storyText = '',
+    this.fallbackId = '',
+    this.fallbackIds = const [],
+    required this.kind,
+    required this.errorWidget,
+    this.fit = BoxFit.cover,
+    this.onResolved,
+    this.tryYouTubeThumbnail = false,
+  });
+
+  final String? initialUrl;
+  final String articleUrl;
+  final String title;
+  final String storyText;
+  final String fallbackId;
+  final List<String> fallbackIds;
+  final HubCarouselImageKind kind;
+  final Widget errorWidget;
+  final BoxFit fit;
+  final ValueChanged<String>? onResolved;
+  final bool tryYouTubeThumbnail;
+
+  @override
+  State<HubCarouselResolvingHero> createState() => _HubCarouselResolvingHeroState();
+}
+
+class _HubCarouselResolvingHeroState extends State<HubCarouselResolvingHero> {
+  final Set<String> _failedUrls = {};
+  String? _resolvedUrl;
+  int _resolveGen = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolvedUrl = _bestCandidate();
+    unawaited(_resolveHeroImage());
+  }
+
+  @override
+  void didUpdateWidget(covariant HubCarouselResolvingHero oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialUrl != widget.initialUrl ||
+        oldWidget.articleUrl != widget.articleUrl ||
+        oldWidget.title != widget.title ||
+        oldWidget.fallbackId != widget.fallbackId) {
+      _failedUrls.clear();
+      _resolvedUrl = _bestCandidate();
+      unawaited(_resolveHeroImage());
+    }
+  }
+
+  List<String?> _candidateUrls({bool includeResolved = true}) {
+    final candidates = <String?>[
+      widget.initialUrl?.trim(),
+      if (includeResolved) _resolvedUrl,
+      if (widget.tryYouTubeThumbnail) youtubeTeaThumbnailFromUrl(widget.articleUrl),
+    ];
+    return candidates;
+  }
+
+  String? _bestCandidate() {
+    for (final candidate in _candidateUrls(includeResolved: true)) {
+      if (candidate != null &&
+          isValidHubCarouselImageUrl(candidate) &&
+          !_failedUrls.contains(candidate)) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  void _onImageFailed(String failedUrl) {
+    if (!_failedUrls.add(failedUrl)) return;
+    if (!mounted) return;
+    setState(() {
+      if (_resolvedUrl == failedUrl) _resolvedUrl = null;
+    });
+    unawaited(_resolveHeroImage());
+  }
+
+  void _applyResolved(String url) {
+    if (!mounted) return;
+    setState(() => _resolvedUrl = url);
+    widget.onResolved?.call(url);
+  }
+
+  Future<void> _resolveHeroImage() async {
+    final token = ++_resolveGen;
+    final immediate = _bestCandidate();
+    if (immediate != null) {
+      if (mounted && token == _resolveGen) _applyResolved(immediate);
+      return;
+    }
+
+    final ids = [
+      ...widget.fallbackIds,
+      ...hubCarouselImageFallbackIds(
+        url: widget.articleUrl,
+        title: widget.title,
+        fallbackId: widget.fallbackId,
+      ),
+    ];
+    for (final fallbackId in ids) {
+      final cached = await resolveHubCarouselImageFast(
+        url: widget.articleUrl,
+        title: widget.title,
+        fallbackId: fallbackId,
+        kind: widget.kind,
+      );
+      if (cached != null &&
+          isValidHubCarouselImageUrl(cached) &&
+          !_failedUrls.contains(cached)) {
+        if (mounted && token == _resolveGen) _applyResolved(cached);
+        return;
+      }
+    }
+
+    final generated = await getOrGenerateHubCarouselImage(
+      cacheKey: hubCarouselImageCacheKey(widget.articleUrl, widget.fallbackId),
+      headline: widget.title,
+      storyText: widget.storyText,
+      articleUrl: widget.articleUrl,
+      kind: widget.kind,
+    );
+    if (!mounted || token != _resolveGen) return;
+    if (generated != null &&
+        isValidHubCarouselImageUrl(generated) &&
+        !_failedUrls.contains(generated)) {
+      _applyResolved(generated);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final heroUrl = _bestCandidate();
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Positioned.fill(child: widget.errorWidget),
+        if (heroUrl != null)
+          Positioned.fill(
+            child: _CarouselHeroImage(
+              imageUrl: heroUrl,
+              fit: widget.fit,
+              onFailed: () => _onImageFailed(heroUrl),
+              errorWidget: widget.errorWidget,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _CarouselHeroImage extends StatefulWidget {
+  const _CarouselHeroImage({
+    required this.imageUrl,
+    required this.onFailed,
+    required this.errorWidget,
+    this.fit = BoxFit.cover,
+  });
+
+  final String imageUrl;
+  final VoidCallback onFailed;
+  final Widget errorWidget;
+  final BoxFit fit;
+
+  @override
+  State<_CarouselHeroImage> createState() => _CarouselHeroImageState();
+}
+
+class _CarouselHeroImageState extends State<_CarouselHeroImage> {
+  var _failed = false;
+
+  @override
+  void didUpdateWidget(covariant _CarouselHeroImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.imageUrl != widget.imageUrl) _failed = false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_failed) return widget.errorWidget;
+
+    final url = widget.imageUrl.trim();
+    if (!isHubCarouselDisplayImage(url)) return widget.errorWidget;
+
+    if (url.startsWith('data:image')) {
+      final bytes = decodeDataImageUrlBytes(url, logTag: '[HubCarousel]');
+      if (bytes != null) {
+        return Image.memory(bytes, fit: widget.fit);
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_failed) {
+          setState(() => _failed = true);
+          widget.onFailed();
+        }
+      });
+      return widget.errorWidget;
+    }
+
+    return Image.network(
+      url,
+      fit: widget.fit,
+      gaplessPlayback: true,
+      loadingBuilder: (context, child, progress) {
+        if (progress == null) return child;
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            widget.errorWidget,
+            Center(
+              child: CircularProgressIndicator(
+                value: progress.expectedTotalBytes != null
+                    ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
+                    : null,
+                strokeWidth: 2,
+                color: Colors.white54,
+              ),
+            ),
+          ],
+        );
+      },
+      errorBuilder: (_, __, ___) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && !_failed) {
+            setState(() => _failed = true);
+            widget.onFailed();
+          }
+        });
+        return widget.errorWidget;
+      },
     );
   }
 }

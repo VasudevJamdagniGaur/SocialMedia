@@ -8,6 +8,7 @@ import '../lib/hub_trending_algorithms.dart';
 import '../lib/pod_reddit_hot.dart';
 import '../lib/pod_topic_news_shared.dart';
 import '../lib/reddit_post_filter.dart';
+import '../utils/hub_carousel_ai_image.dart';
 import '../utils/reddit_thread_comments.dart';
 import 'youtube_tea_service.dart';
 
@@ -379,7 +380,7 @@ List<Map<String, dynamic>> _mergeTeaRowLists(
 ) {
   final merged = <Map<String, dynamic>>[];
   final seen = <String>{};
-  for (final row in [...primary, ...secondary]) {
+  for (final row in [...secondary, ...primary]) {
     final url = '${row['url'] ?? ''}'.trim();
     if (url.isEmpty || seen.contains(url)) continue;
     seen.add(url);
@@ -406,12 +407,14 @@ Future<List<Map<String, dynamic>>> fetchTrendingTeaRows({bool deferEnrich = true
   if (rows.isNotEmpty) {
     sortHubMapRowsImageFirst(
       rows,
+      hasReliableImage: teaRowHasReliableImage,
       compare: (a, b) => hubMapRowScore(b).compareTo(hubMapRowScore(a)),
     );
     if (!deferEnrich) {
-      rows = await enrichTeaRows(rows, maxEnrich: 6);
+      rows = await enrichTeaRows(rows, maxEnrich: 10);
       sortHubMapRowsImageFirst(
         rows,
+        hasReliableImage: teaRowHasReliableImage,
         compare: (a, b) => hubMapRowScore(b).compareTo(hubMapRowScore(a)),
       );
     }

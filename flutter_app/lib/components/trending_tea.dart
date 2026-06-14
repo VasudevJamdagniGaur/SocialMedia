@@ -102,12 +102,17 @@ bool _isDirectImageUrl(String? postUrl) {
 TeaItem _rowToTeaItem(Map<String, dynamic> row) {
   final url = row['url'] is String ? row['url'] as String : '';
   final gossip = '${row['gossip'] ?? row['description'] ?? row['selftext'] ?? ''}'.trim();
+  var thumbnail = '${row['image'] ?? row['thumbnail'] ?? ''}'.replaceAll('&amp;', '&');
+  if (!isValidHubCarouselImageUrl(thumbnail)) {
+    final yt = youtubeTeaThumbnailFromUrl(url);
+    if (yt != null) thumbnail = yt;
+  }
   return TeaItem(
     id: url.isNotEmpty ? hubNewsDocIdFromUrl(url) : '${row['title']}'.hashCode.toString(),
     title: row['title'] is String ? row['title'] as String : '',
     url: url,
     postUrl: url,
-    thumbnail: '${row['image'] ?? row['thumbnail'] ?? ''}'.replaceAll('&amp;', '&'),
+    thumbnail: thumbnail,
     gossip: gossip,
     author: row['author'] is String ? row['author'] as String : 'unknown',
     score: row['score'] is num ? (row['score'] as num).toInt() : 0,
@@ -167,7 +172,7 @@ Future<void> warmTeaCacheFromDisk() async {
   if (cached.isEmpty) return;
   _memoryTeaCache = prioritizeWithImagesFirst(
     cached,
-    (item) => teaHeroImageUrl(item) != null,
+    teaHasReliableHeroImage,
   );
   _memoryTeaCacheAt = DateTime.now();
 }
@@ -197,8 +202,9 @@ Future<List<TeaItem>> fetchTrendingTea({
 
   var items = prioritizeWithImagesFirst(
     rows.map(_rowToTeaItem).toList(),
-    (item) => teaHeroImageUrl(item) != null,
+    teaHasReliableHeroImage,
   ).take(10).toList();
+  items = await _hydrateTeaItemsFast(items);
 
   _memoryTeaCache = items;
   _memoryTeaCacheAt = DateTime.now();
@@ -210,24 +216,6 @@ Future<List<TeaItem>> fetchTrendingTea({
   }
 
   return items;
-}
-
-Future<void> _enrichTeaRowsInBackground(
-  List<Map<String, dynamic>> rows,
-  List<TeaItem> baseline,
-) async {
-  try {
-    final enriched = await enrichTeaRows(rows, maxEnrich: 6);
-    if (enriched.isEmpty) return;
-    final items = prioritizeWithImagesFirst(
-      enriched.map(_rowToTeaItem).toList(),
-      (item) => teaHeroImageUrl(item) != null,
-    ).take(10).toList();
-    if (items.isEmpty) return;
-    _memoryTeaCache = items;
-    _memoryTeaCacheAt = DateTime.now();
-    unawaited(_saveTeaToDisk(items));
-  } catch (_) {}
 }
 
 String? teaHeroImageUrl(TeaItem item) {
@@ -251,6 +239,75 @@ String? teaHeroImageUrl(TeaItem item) {
   final yt = youtubeTeaThumbnailFromUrl(item.url);
   if (yt != null && isValidHubCarouselImageUrl(yt)) return yt;
   return null;
+}
+
+bool teaHasReliableHeroImage(TeaItem item) {
+  final hero = teaHeroImageUrl(item);
+  if (hero == null) return false;
+  return isReliableCarouselImageUrl(hero);
+}
+
+Future<List<TeaItem>> _hydrateTeaItemsFast(List<TeaItem> items) async {
+  if (items.isEmpty) return items;
+  final hydrated = await Future.wait(items.map((item) async {
+    if (teaHasReliableHeroImage(item)) return item;
+
+    final yt = youtubeTeaThumbnailFromUrl(item.url);
+    if (yt != null) {
+      return TeaItem(
+        id: item.id,
+        title: item.title,
+        url: item.url,
+        postUrl: item.postUrl,
+        thumbnail: yt,
+        gossip: item.gossip,
+        author: item.author,
+        score: item.score,
+        numComments: item.numComments,
+      );
+    }
+
+    final cached = await resolveCachedHubCarouselImage(
+      url: item.url,
+      title: item.title,
+      fallbackId: item.id,
+      kind: HubCarouselImageKind.tea,
+    );
+    if (cached != null) {
+      return TeaItem(
+        id: item.id,
+        title: item.title,
+        url: item.url,
+        postUrl: item.postUrl,
+        thumbnail: cached,
+        gossip: item.gossip,
+        author: item.author,
+        score: item.score,
+        numComments: item.numComments,
+      );
+    }
+    return item;
+  }));
+  return prioritizeWithImagesFirst(hydrated, teaHasReliableHeroImage);
+}
+
+Future<void> _enrichTeaRowsInBackground(
+  List<Map<String, dynamic>> rows,
+  List<TeaItem> baseline,
+) async {
+  try {
+    final enriched = await enrichTeaRows(rows, maxEnrich: 10);
+    if (enriched.isEmpty) return;
+    var items = prioritizeWithImagesFirst(
+      enriched.map(_rowToTeaItem).toList(),
+      teaHasReliableHeroImage,
+    ).take(10).toList();
+    items = await _hydrateTeaItemsFast(items);
+    if (items.isEmpty) return;
+    _memoryTeaCache = items;
+    _memoryTeaCacheAt = DateTime.now();
+    unawaited(_saveTeaToDisk(items));
+  } catch (_) {}
 }
 
 /// Lightweight payload for Tea feed navigation (omit huge inline data URLs).
@@ -317,13 +374,18 @@ class _TrendingTeaState extends State<TrendingTea> {
       setState(() {
         _items = prioritizeWithImagesFirst(
           cached,
-          (item) => teaHeroImageUrl(item) != null,
+          teaHasReliableHeroImage,
         );
         _loading = false;
         _error = null;
       });
       _memoryTeaCache = _items;
       _memoryTeaCacheAt = DateTime.now();
+      final hydrated = await _hydrateTeaItemsFast(_items);
+      if (mounted && hydrated != _items) {
+        setState(() => _items = hydrated);
+        _memoryTeaCache = hydrated;
+      }
       unawaited(_syncCachedAiImages());
       unawaited(_enrichMissingAiImages());
       unawaited(_refreshFromNetwork());
@@ -349,14 +411,16 @@ class _TrendingTeaState extends State<TrendingTea> {
     try {
       final items = await fetchTrendingTea(
         allowCache: false,
-        deferEnrich: true,
+        deferEnrich: false,
       );
       if (!mounted) return;
+      final hydrated = await _hydrateTeaItemsFast(items);
       setState(() {
-        _items = items;
+        _items = hydrated;
         _loading = false;
         _error = null;
       });
+      _memoryTeaCache = hydrated;
       unawaited(_syncCachedAiImages());
       unawaited(_enrichMissingAiImages());
     } catch (e) {
@@ -397,8 +461,24 @@ class _TrendingTeaState extends State<TrendingTea> {
     var changed = false;
     final updated = <TeaItem>[];
     for (final item in _items) {
-      if (teaHeroImageUrl(item) != null) {
+      if (teaHasReliableHeroImage(item)) {
         updated.add(item);
+        continue;
+      }
+      final yt = youtubeTeaThumbnailFromUrl(item.url);
+      if (yt != null) {
+        updated.add(TeaItem(
+          id: item.id,
+          title: item.title,
+          url: item.url,
+          postUrl: item.postUrl,
+          thumbnail: yt,
+          gossip: item.gossip,
+          author: item.author,
+          score: item.score,
+          numComments: item.numComments,
+        ));
+        changed = true;
         continue;
       }
       final cached = await resolveCachedHubCarouselImage(
@@ -428,7 +508,7 @@ class _TrendingTeaState extends State<TrendingTea> {
       setState(() {
         _items = prioritizeWithImagesFirst(
           updated,
-          (item) => teaHeroImageUrl(item) != null,
+          teaHasReliableHeroImage,
         );
         _memoryTeaCache = _items;
       });
@@ -436,11 +516,35 @@ class _TrendingTeaState extends State<TrendingTea> {
     }
   }
 
+  Future<void> _applyTeaImageAt(int index, String imageUrl) {
+    if (index < 0 || index >= _items.length) return Future.value();
+    final item = _items[index];
+    if (item.thumbnail == imageUrl) return Future.value();
+    if (!mounted) return Future.value();
+    setState(() {
+      final updated = [..._items];
+      updated[index] = TeaItem(
+        id: item.id,
+        title: item.title,
+        url: item.url,
+        postUrl: item.postUrl,
+        thumbnail: imageUrl,
+        gossip: item.gossip,
+        author: item.author,
+        score: item.score,
+        numComments: item.numComments,
+      );
+      _items = prioritizeWithImagesFirst(updated, teaHasReliableHeroImage);
+      _memoryTeaCache = _items;
+    });
+    return _saveTeaToDisk(_items);
+  }
+
   Future<void> _enrichMissingAiImages() async {
     final token = ++_aiImageGen;
     await enrichCarouselSlotsWithAiImages(
       slotCount: _items.length,
-      needsImage: (i) => teaHeroImageUrl(_items[i]) == null,
+      needsImage: (i) => !teaHasReliableHeroImage(_items[i]),
       generateForIndex: (i) {
         final item = _items[i];
         return getOrGenerateHubCarouselImage(
@@ -453,25 +557,9 @@ class _TrendingTeaState extends State<TrendingTea> {
       },
       applyImage: (i, imageUrl) {
         if (!mounted || token != _aiImageGen) return;
-        setState(() {
-          final item = _items[i];
-          final updated = [..._items];
-          updated[i] = TeaItem(
-            id: item.id,
-            title: item.title,
-            url: item.url,
-            postUrl: item.postUrl,
-            thumbnail: imageUrl,
-            gossip: item.gossip,
-            author: item.author,
-            score: item.score,
-            numComments: item.numComments,
-          );
-          _items = updated;
-          _memoryTeaCache = updated;
-        });
-        unawaited(_saveTeaToDisk(_items));
+        unawaited(_applyTeaImageAt(i, imageUrl));
       },
+      maxGenerate: _items.length,
     );
   }
 
@@ -550,7 +638,6 @@ class _TrendingTeaState extends State<TrendingTea> {
                               separatorBuilder: (_, __) => const SizedBox(width: 12),
                               itemBuilder: (context, idx) {
                                 final item = _items[idx];
-                                final hero = teaHeroImageUrl(item);
                                 return GestureDetector(
                                   onTap: () => _openShare(item),
                                   child: Container(
@@ -563,14 +650,17 @@ class _TrendingTeaState extends State<TrendingTea> {
                                     child: Stack(
                                       fit: StackFit.expand,
                                       children: [
-                                        if (hero != null)
-                                          HubCarouselHeroImage(
-                                            imageUrl: hero,
-                                            fit: BoxFit.cover,
-                                            errorWidget: _gradientFallback(idx),
-                                          )
-                                        else
-                                          _gradientFallback(idx),
+                                        HubCarouselResolvingHero(
+                                          initialUrl: teaHeroImageUrl(item),
+                                          articleUrl: item.url,
+                                          title: item.title,
+                                          storyText: item.gossip,
+                                          fallbackId: item.id,
+                                          kind: HubCarouselImageKind.tea,
+                                          tryYouTubeThumbnail: true,
+                                          errorWidget: _gradientFallback(idx),
+                                          onResolved: (url) => unawaited(_applyTeaImageAt(idx, url)),
+                                        ),
                                         Positioned(
                                           left: 0,
                                           right: 0,

@@ -216,8 +216,14 @@ List<T> prioritizeWithImagesFirst<T>(
 void sortHubMapRowsImageFirst(
   List<Map<String, dynamic>> rows, {
   int Function(Map<String, dynamic> a, Map<String, dynamic> b)? compare,
+  bool Function(Map<String, dynamic> row)? hasReliableImage,
 }) {
   rows.sort((a, b) {
+    if (hasReliableImage != null) {
+      final ar = hasReliableImage(a);
+      final br = hasReliableImage(b);
+      if (ar != br) return ar ? -1 : 1;
+    }
     final ai = hubMapRowHasImage(a);
     final bi = hubMapRowHasImage(b);
     if (ai != bi) return ai ? -1 : 1;

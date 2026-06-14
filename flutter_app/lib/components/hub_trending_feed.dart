@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../router/app_router.dart';
 import '../services/cached_news_service.dart';
+import '../services/youtube_tea_service.dart';
 import 'package:deite/lib/pod_topic_news_shared.dart';
 import '../lib/hub_trending_algorithms.dart';
 import '../utils/hub_carousel_ai_image.dart';
@@ -34,6 +35,61 @@ class HubTrendingItem {
   final String image;
   final String source;
   final String category;
+}
+
+bool hubTrendingItemHasReliableImage(HubTrendingItem item) {
+  final img = item.image.trim();
+  if (!hasUsableHubImage(img)) {
+    for (final key in [
+      hubCarouselImageCacheKey(item.url, item.id),
+      hubCarouselImageCacheKey(item.url, ''),
+    ]) {
+      final mem = peekHubCarouselMemory(key);
+      if (mem != null && isReliableCarouselImageUrl(mem)) return true;
+    }
+    return isYouTubeTeaUrl(item.url) && youtubeTeaThumbnailFromUrl(item.url) != null;
+  }
+  return isReliableCarouselImageUrl(img);
+}
+
+Future<List<HubTrendingItem>> _hydrateHubNewsItemsFast(List<HubTrendingItem> items) async {
+  if (items.isEmpty) return items;
+  final hydrated = await Future.wait(items.map((item) async {
+    if (hubTrendingItemHasReliableImage(item)) return item;
+
+    final yt = youtubeTeaThumbnailFromUrl(item.url);
+    if (yt != null) {
+      return HubTrendingItem(
+        id: item.id,
+        title: item.title,
+        url: item.url,
+        description: item.description,
+        image: yt,
+        source: item.source,
+        category: item.category,
+      );
+    }
+
+    final cached = await resolveCachedHubCarouselImage(
+      url: item.url,
+      title: item.title,
+      fallbackId: item.id,
+      kind: HubCarouselImageKind.news,
+    );
+    if (cached != null) {
+      return HubTrendingItem(
+        id: item.id,
+        title: item.title,
+        url: item.url,
+        description: item.description,
+        image: cached,
+        source: item.source,
+        category: item.category,
+      );
+    }
+    return item;
+  }));
+  return prioritizeWithImagesFirst(hydrated, hubTrendingItemHasReliableImage);
 }
 
 List<HubTrendingItem>? _hubCache;
@@ -102,7 +158,7 @@ Future<void> warmHubNewsCacheFromDisk() async {
   if (disk.isEmpty) return;
   _hubCache = prioritizeWithImagesFirst(
     disk,
-    (item) => hasUsableHubImage(item.image),
+    hubTrendingItemHasReliableImage,
   );
 }
 
@@ -180,8 +236,9 @@ Future<List<HubTrendingItem>> fetchHubTrendingItems({bool forceRefresh = false})
 
   var sorted = prioritizeWithImagesFirst(
     items,
-    (item) => hasUsableHubImage(item.image),
+    hubTrendingItemHasReliableImage,
   );
+  sorted = await _hydrateHubNewsItemsFast(sorted);
   _hubCache = sorted;
   if (sorted.isNotEmpty) {
     unawaited(writeHubNewsUrlsAndPruneImageCache(sorted.map((e) => e.url).toList()));
@@ -246,12 +303,17 @@ class _HubTrendingFeedState extends State<HubTrendingFeed> {
       setState(() {
         _items = prioritizeWithImagesFirst(
           disk,
-          (item) => hasUsableHubImage(item.image),
+          hubTrendingItemHasReliableImage,
         );
         _loading = false;
         _error = '';
       });
       _hubCache = _items;
+      final hydrated = await _hydrateHubNewsItemsFast(_items);
+      if (mounted && hydrated != _items) {
+        setState(() => _items = hydrated);
+        _hubCache = hydrated;
+      }
       unawaited(_syncCachedAiImages());
       unawaited(_enrichMissingAiImages());
       unawaited(_refreshFromNetwork());
@@ -270,11 +332,13 @@ class _HubTrendingFeedState extends State<HubTrendingFeed> {
     try {
       final items = await fetchHubTrendingItems(forceRefresh: !hadItems || _hubCache == null);
       if (!mounted) return;
+      final hydrated = await _hydrateHubNewsItemsFast(items);
       setState(() {
-        _items = items;
+        _items = hydrated;
         _loading = false;
-        _error = items.isEmpty ? 'No headlines yet.' : '';
+        _error = hydrated.isEmpty ? 'No headlines yet.' : '';
       });
+      _hubCache = hydrated;
       unawaited(_syncCachedAiImages());
       unawaited(_enrichMissingAiImages());
     } catch (e) {
@@ -291,7 +355,7 @@ class _HubTrendingFeedState extends State<HubTrendingFeed> {
     var changed = false;
     final updated = <HubTrendingItem>[];
     for (final item in _items) {
-      if (hasUsableHubImage(item.image)) {
+      if (hasUsableHubImage(item.image) && hubTrendingItemHasReliableImage(item)) {
         updated.add(item);
         continue;
       }
@@ -320,7 +384,7 @@ class _HubTrendingFeedState extends State<HubTrendingFeed> {
       setState(() {
         _items = prioritizeWithImagesFirst(
           updated,
-          (item) => hasUsableHubImage(item.image),
+          hubTrendingItemHasReliableImage,
         );
         _hubCache = _items;
       });
@@ -328,11 +392,33 @@ class _HubTrendingFeedState extends State<HubTrendingFeed> {
     }
   }
 
+  Future<void> _applyNewsImageAt(int index, String imageUrl) {
+    if (index < 0 || index >= _items.length) return Future.value();
+    final item = _items[index];
+    if (item.image == imageUrl) return Future.value();
+    if (!mounted) return Future.value();
+    setState(() {
+      final updated = [..._items];
+      updated[index] = HubTrendingItem(
+        id: item.id,
+        title: item.title,
+        url: item.url,
+        description: item.description,
+        image: imageUrl,
+        source: item.source,
+        category: item.category,
+      );
+      _items = prioritizeWithImagesFirst(updated, hubTrendingItemHasReliableImage);
+      _hubCache = _items;
+    });
+    return _saveHubNewsToDisk(_items);
+  }
+
   Future<void> _enrichMissingAiImages() async {
     final token = ++_aiImageGen;
     await enrichCarouselSlotsWithAiImages(
       slotCount: _items.length,
-      needsImage: (i) => !hasUsableHubImage(_items[i].image),
+      needsImage: (i) => !hubTrendingItemHasReliableImage(_items[i]),
       generateForIndex: (i) {
         final item = _items[i];
         return getOrGenerateHubCarouselImage(
@@ -345,23 +431,9 @@ class _HubTrendingFeedState extends State<HubTrendingFeed> {
       },
       applyImage: (i, imageUrl) {
         if (!mounted || token != _aiImageGen) return;
-        setState(() {
-          final item = _items[i];
-          final updated = [..._items];
-          updated[i] = HubTrendingItem(
-            id: item.id,
-            title: item.title,
-            url: item.url,
-            description: item.description,
-            image: imageUrl,
-            source: item.source,
-            category: item.category,
-          );
-          _items = updated;
-          _hubCache = updated;
-        });
-        unawaited(_saveHubNewsToDisk(_items));
+        unawaited(_applyNewsImageAt(i, imageUrl));
       },
+      maxGenerate: _items.length,
     );
   }
 
@@ -435,11 +507,17 @@ class _HubTrendingFeedState extends State<HubTrendingFeed> {
                           scrollDirection: Axis.horizontal,
                           itemCount: carousel.length,
                           separatorBuilder: (_, __) => const SizedBox(width: 12),
-                          itemBuilder: (_, idx) => _HubTrendingCard(
-                            item: carousel[idx],
-                            idx: idx,
-                            onTap: () => _openShare(context, carousel[idx]),
-                          ),
+                          itemBuilder: (_, idx) {
+                            final item = carousel[idx];
+                            final sourceIndex = _items.indexWhere((e) => e.id == item.id && e.url == item.url);
+                            final listIndex = sourceIndex >= 0 ? sourceIndex : idx;
+                            return _HubTrendingCard(
+                              item: item,
+                              idx: idx,
+                              onTap: () => _openShare(context, item),
+                              onImageResolved: (url) => unawaited(_applyNewsImageAt(listIndex, url)),
+                            );
+                          },
                         ),
             ),
           ),
@@ -450,11 +528,17 @@ class _HubTrendingFeedState extends State<HubTrendingFeed> {
 }
 
 class _HubTrendingCard extends StatelessWidget {
-  const _HubTrendingCard({required this.item, required this.idx, required this.onTap});
+  const _HubTrendingCard({
+    required this.item,
+    required this.idx,
+    required this.onTap,
+    this.onImageResolved,
+  });
 
   final HubTrendingItem item;
   final int idx;
   final VoidCallback onTap;
+  final ValueChanged<String>? onImageResolved;
 
   static const _gradients = [
     [Color(0xFF1A1A2E), Color(0xFF0F3460)],
@@ -467,7 +551,7 @@ class _HubTrendingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final g = _gradients[idx % _gradients.length];
-    final hasImg = isHubCarouselDisplayImage(item.image);
+    final fallback = _gradient(g);
     return GestureDetector(
       onTap: item.url.isEmpty ? null : onTap,
       child: Container(
@@ -480,14 +564,17 @@ class _HubTrendingCard extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (hasImg)
-              HubCarouselHeroImage(
-                imageUrl: item.image,
-                fit: BoxFit.cover,
-                errorWidget: _gradient(g),
-              )
-            else
-              _gradient(g),
+            HubCarouselResolvingHero(
+              initialUrl: hasUsableHubImage(item.image) ? item.image : null,
+              articleUrl: item.url,
+              title: item.title,
+              storyText: item.description,
+              fallbackId: item.id,
+              kind: HubCarouselImageKind.news,
+              tryYouTubeThumbnail: isYouTubeTeaUrl(item.url),
+              errorWidget: fallback,
+              onResolved: onImageResolved,
+            ),
             Container(
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
