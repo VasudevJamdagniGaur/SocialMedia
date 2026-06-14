@@ -203,7 +203,7 @@ class _CommunityPageState extends State<CommunityPage> {
     if (authorId == null || authorId.isEmpty) return;
     final user = FirebaseAuth.instance.currentUser;
     if (user != null && authorId == user.uid) {
-      context.go(AppRoutes.profile);
+      context.push(AppRoutes.profile);
     } else {
       context.go('/user/$authorId');
     }
@@ -463,7 +463,7 @@ class _CommunityPageState extends State<CommunityPage> {
             icon: const Text('✨', style: TextStyle(fontSize: 18)),
           ),
           IconButton(
-            onPressed: () => context.go(AppRoutes.profile),
+            onPressed: () => context.push(AppRoutes.profile),
             tooltip: 'Profile',
             icon: _profileAvatar(_profilePicture, radius: 18),
           ),

@@ -428,6 +428,14 @@ class _ProfilePageState extends State<ProfilePage> {
   String get _displayName =>
       _editData.displayName.isNotEmpty ? _editData.displayName : (_user?.displayName ?? 'User');
 
+  void _goBack() {
+    if (context.canPop()) {
+      context.pop();
+      return;
+    }
+    context.go(AppRoutes.dashboard);
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDarkMode = context.watch<ThemeNotifier>().isDarkMode;
@@ -456,7 +464,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       child: Row(
                         children: [
                           IconButton(
-                            onPressed: () => context.go(AppRoutes.dashboard),
+                            onPressed: _goBack,
                             icon: Icon(LucideIcons.arrowLeft, color: isDarkMode ? HubColors.text : Colors.black87),
                           ),
                           Text(

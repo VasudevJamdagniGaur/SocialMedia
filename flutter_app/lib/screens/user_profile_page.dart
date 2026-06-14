@@ -160,7 +160,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
                       child: Text(_followLoading ? '…' : isFollowing ? 'Following' : 'Follow'),
                     ),
                   if (isOwn)
-                    OutlinedButton(onPressed: () => context.go(AppRoutes.profile), child: const Text('Edit profile')),
+                    OutlinedButton(onPressed: () => context.push(AppRoutes.profile), child: const Text('Edit profile')),
                   const SizedBox(height: 16),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,

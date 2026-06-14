@@ -222,6 +222,10 @@ class _AppShellState extends State<_AppShell> {
       return;
     }
     if (path == AppRoutes.profile) {
+      if (router.canPop()) {
+        router.pop();
+        return;
+      }
       router.go(AppRoutes.dashboard);
       return;
     }
