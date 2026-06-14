@@ -416,6 +416,7 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
         articleUrl: url,
         kind: _isTeaArticleShare ? HubCarouselImageKind.tea : HubCarouselImageKind.news,
         sourceImageUrl: existingImg.startsWith('http') ? existingImg : null,
+        priority: HubCarouselImagePriority.shareScreen,
       );
       if (result == null || !mounted) return;
 

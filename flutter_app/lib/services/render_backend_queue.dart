@@ -2,11 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
-/// Minimum gap between consecutive Render backend HTTP calls.
-const renderBackendRequestGapMs = 3000;
+/// Gap between Pod Tea / News carousel image calls (1 per second).
+const renderBackendCarouselGapMs = 1000;
 
 /// Global priority for all requests to detea-backend.onrender.com.
-/// [postCreation] blocks every other priority while a share/post flow is active.
 enum RenderBackendPriority {
   postCreation,
   podTeaHome,
@@ -46,11 +45,18 @@ class RenderBackendQueue {
 
   bool get isPostCreationActive => _postCreationDepth > 0;
 
+  bool _isFrozenCarouselPriority(RenderBackendPriority priority) {
+    return priority == RenderBackendPriority.podTeaHome ||
+        priority == RenderBackendPriority.podNewsHome ||
+        priority == RenderBackendPriority.podVertical;
+  }
+
   /// Call when the user opens share / post creation (before navigating).
   void beginPostCreationSession() {
     _postCreationDepth++;
     debugPrint('[RenderQueue] post-creation session started (depth=$_postCreationDepth)');
     _sortPending();
+    unawaited(_drain());
   }
 
   /// Call when share / post creation screen is closed.
@@ -58,6 +64,18 @@ class RenderBackendQueue {
     if (_postCreationDepth > 0) _postCreationDepth--;
     debugPrint('[RenderQueue] post-creation session ended (depth=$_postCreationDepth)');
     unawaited(_drain());
+  }
+
+  /// Share/post flows — always highest priority.
+  Future<T> runPostCreation<T>(
+    Future<T> Function() work, {
+    String? debugLabel,
+  }) {
+    return run(
+      priority: RenderBackendPriority.postCreation,
+      work: work,
+      debugLabel: debugLabel,
+    );
   }
 
   Future<T> run<T>({
@@ -79,12 +97,28 @@ class RenderBackendQueue {
     return completer.future;
   }
 
+  RenderBackendPriority _effectivePriority(RenderBackendPriority requested) {
+    if (!isPostCreationActive) return requested;
+    if (requested == RenderBackendPriority.postCreation) return requested;
+    if (_isFrozenCarouselPriority(requested)) return requested;
+    return RenderBackendPriority.postCreation;
+  }
+
   void _sortPending() {
     _pending.sort((a, b) {
       final byPriority = a.priority.index.compareTo(b.priority.index);
       if (byPriority != 0) return byPriority;
       return a.seq.compareTo(b.seq);
     });
+  }
+
+  int _gapAfter(RenderBackendPriority priority) {
+    if (priority == RenderBackendPriority.postCreation) return 0;
+    if (priority == RenderBackendPriority.podTeaHome ||
+        priority == RenderBackendPriority.podNewsHome) {
+      return renderBackendCarouselGapMs;
+    }
+    return renderBackendCarouselGapMs;
   }
 
   Future<void> _drain() async {
@@ -94,28 +128,37 @@ class RenderBackendQueue {
       while (_pending.isNotEmpty) {
         _sortPending();
 
-        if (isPostCreationActive) {
-          final postIdx = _pending.indexWhere(
-            (e) => e.priority == RenderBackendPriority.postCreation,
-          );
-          if (postIdx < 0) {
-            await Future<void>.delayed(const Duration(milliseconds: 100));
-            continue;
-          }
-          await _execute(_pending.removeAt(postIdx));
-        } else {
-          await _execute(_pending.removeAt(0));
+        final takeIdx = _nextRunnableIndex();
+        if (takeIdx < 0) {
+          // Post session active but only carousel work is queued — freeze until post calls arrive.
+          break;
         }
 
-        if (_pending.isNotEmpty) {
-          await Future<void>.delayed(
-            const Duration(milliseconds: renderBackendRequestGapMs),
-          );
+        final item = _pending.removeAt(takeIdx);
+        await _execute(item);
+
+        if (_pending.isEmpty) break;
+
+        final gap = _gapAfter(item.priority);
+        if (gap > 0) {
+          await Future<void>.delayed(Duration(milliseconds: gap));
         }
       }
     } finally {
       _draining = false;
+      if (_pending.isNotEmpty && _nextRunnableIndex() >= 0) {
+        unawaited(_drain());
+      }
     }
+  }
+
+  int _nextRunnableIndex() {
+    if (_pending.isEmpty) return -1;
+    _sortPending();
+    if (isPostCreationActive) {
+      return _pending.indexWhere((e) => e.priority == RenderBackendPriority.postCreation);
+    }
+    return 0;
   }
 
   Future<void> _execute(_QueuedRenderRequest<dynamic> item) async {
@@ -129,18 +172,6 @@ class RenderBackendQueue {
         item.completer.completeError(e, st);
       }
     }
-  }
-
-  /// During post creation, share/post API calls run first; carousel work stays queued.
-  RenderBackendPriority _effectivePriority(RenderBackendPriority requested) {
-    if (!isPostCreationActive) return requested;
-    if (requested == RenderBackendPriority.postCreation) {
-      return requested;
-    }
-    if (requested.index >= RenderBackendPriority.shareScreen.index) {
-      return RenderBackendPriority.postCreation;
-    }
-    return requested;
   }
 }
 
@@ -169,4 +200,10 @@ enum HubCarouselImagePriority {
   teaFeed,
   shareScreen,
   background,
+}
+
+RenderBackendPriority renderPriorityWhenSharing() {
+  return RenderBackendQueue.instance.isPostCreationActive
+      ? RenderBackendPriority.postCreation
+      : RenderBackendPriority.shareScreen;
 }

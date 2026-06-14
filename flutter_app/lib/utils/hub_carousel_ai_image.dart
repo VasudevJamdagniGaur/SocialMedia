@@ -299,7 +299,9 @@ Future<HubCarouselImageResult?> _getOrGenerateHubCarouselImageFullImpl({
         if (effSource != null && effSource.startsWith('http')) 'sourceImageUrl': effSource,
       },
       timeout: const Duration(seconds: 90),
-      priority: hubCarouselPriorityToRender(priority),
+      priority: RenderBackendQueue.instance.isPostCreationActive
+          ? RenderBackendPriority.postCreation
+          : hubCarouselPriorityToRender(priority),
     );
     final aiImageUrl = (response['aiImageUrl'] ?? response['imageUrl']) as String?;
     final srcUrl = response['sourceImageUrl'] as String?;

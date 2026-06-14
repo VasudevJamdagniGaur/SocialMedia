@@ -17,6 +17,7 @@ import '../utils/prefs_maintenance.dart';
 import '../models/chat_message.dart';
 import 'auth_service.dart';
 import 'firestore_service.dart';
+import 'render_backend_queue.dart';
 import 'vertex_api_client.dart';
 
 typedef ApiProvider = String; // openai | gemini | grok
@@ -148,6 +149,9 @@ class ChatService extends ChangeNotifier {
       prompt: prompt,
       temperature: temperature,
       maxOutputTokens: maxOutputTokens,
+      priority: RenderBackendQueue.instance.isPostCreationActive
+          ? RenderBackendPriority.postCreation
+          : RenderBackendPriority.background,
     );
   }
 
@@ -1174,7 +1178,13 @@ Be thorough and detailed. This description will be used to generate a response.'
     final key = apiProvider == 'openai' ? openaiApiKey : grokApiKey;
     if (key.trim().isEmpty) {
       if (isVertexBackendConfigured()) {
-        return vertexGenerateContent(prompt: prompt, maxOutputTokens: maxTokens);
+        return vertexGenerateContent(
+          prompt: prompt,
+          maxOutputTokens: maxTokens,
+          priority: RenderBackendQueue.instance.isPostCreationActive
+              ? RenderBackendPriority.postCreation
+              : RenderBackendPriority.background,
+        );
       }
       throw Exception('No AI provider configured.');
     }
@@ -1900,13 +1910,16 @@ $text""";
       for (final apiBase in candidates) {
         if (apiBase.isEmpty) continue;
         try {
-          final res = await http
-              .post(
-                Uri.parse('$apiBase/api/linkedin/suggestions'),
-                headers: {'Content-Type': 'application/json'},
-                body: jsonEncode({'reflection': reflection.trim(), 'platform': platform}),
-              )
-              .timeout(const Duration(seconds: 45));
+          final res = await RenderBackendQueue.instance.runPostCreation(
+            () => http
+                .post(
+                  Uri.parse('$apiBase/api/linkedin/suggestions'),
+                  headers: {'Content-Type': 'application/json'},
+                  body: jsonEncode({'reflection': reflection.trim(), 'platform': platform}),
+                )
+                .timeout(const Duration(seconds: 45)),
+            debugLabel: '/api/linkedin/suggestions',
+          );
 
           if (res.statusCode >= 200 && res.statusCode < 300) {
             Map<String, dynamic>? data;
@@ -4691,6 +4704,9 @@ $contextSnippet''';
       final imageDataUrl = await vertexGenerateNewsImage(
         p,
         referenceImage: referenceImage,
+        priority: RenderBackendQueue.instance.isPostCreationActive
+            ? RenderBackendPriority.postCreation
+            : RenderBackendPriority.background,
       );
       debugPrint('[ImageGen] _generateImageWithGemini received len=${imageDataUrl.length}');
       if (imageDataUrl.startsWith('data:image')) {
