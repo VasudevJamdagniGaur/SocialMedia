@@ -808,13 +808,13 @@ class _ComposerPlusButton extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        customBorder: const CircleBorder(),
+        borderRadius: BorderRadius.circular(10),
         child: Container(
-          width: 34,
-          height: 34,
+          width: 36,
+          height: 36,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            shape: BoxShape.circle,
+            borderRadius: BorderRadius.circular(10),
             border: Border.all(color: HubTheme.accent.withValues(alpha: 0.85), width: 1.5),
             color: Colors.black.withValues(alpha: 0.35),
           ),
