@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -24,6 +27,8 @@ const _cardBg = Color(0xFF161616);
 const _cardBorder = Color(0xFF252525);
 const _muted = Color(0xFF9CA3AF);
 
+const _composerMaxChars = 1000;
+
 /// Home dashboard — greeting, composer, stats, journey shortcuts, post suggestions.
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -47,6 +52,8 @@ class _DashboardPageState extends State<DashboardPage> {
 
   final _mindController = TextEditingController();
   String _platform = 'linkedin';
+  final List<String> _composerMedia = [];
+  final _imagePicker = ImagePicker();
 
   List<Map<String, String>> _postSuggestions = [];
   bool _suggestionsLoading = false;
@@ -323,22 +330,62 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
+  Future<void> _pickComposerImages() async {
+    final files = await _imagePicker.pickMultiImage(imageQuality: 85);
+    if (files.isEmpty) return;
+    await _addComposerImageFiles(files);
+  }
+
+  Future<void> _pickComposerCamera() async {
+    final file = await _imagePicker.pickImage(source: ImageSource.camera, imageQuality: 85);
+    if (file == null) return;
+    await _addComposerImageFiles([file]);
+  }
+
+  Future<void> _addComposerImageFiles(List<XFile> files) async {
+    for (final file in files) {
+      final bytes = await file.readAsBytes();
+      if (bytes.length > 10 * 1024 * 1024) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Each image must be less than 10MB')),
+          );
+        }
+        continue;
+      }
+      final src = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+      if (!mounted) return;
+      setState(() {
+        _composerMedia.insert(0, src);
+        if (_composerMedia.length > 6) {
+          _composerMedia.removeRange(6, _composerMedia.length);
+        }
+      });
+    }
+  }
+
+  void _removeComposerImage(int index) {
+    if (index < 0 || index >= _composerMedia.length) return;
+    setState(() => _composerMedia.removeAt(index));
+  }
+
   Future<void> _openComposerSubmit() async {
     final text = _mindController.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty && _composerMedia.isEmpty) return;
 
     final payload = {
-      'reflection': text,
+      'reflection': text.isEmpty ? ' ' : text,
       'platform': _platform,
       'selectedDate': _selectedDate.toIso8601String(),
       'returnTo': AppRoutes.dashboard,
+      if (_composerMedia.isNotEmpty) 'media': _composerMedia.take(6).toList(),
     };
     await prepareShareSuggestionsRoute(payload);
     if (!mounted) return;
     await context.push(AppRoutes.shareSuggestions, extra: payload);
     if (!mounted) return;
     _mindController.clear();
-    setState(() {});
+    setState(() => _composerMedia.clear());
   }
 
   Future<void> _openDaysReflect() async {
@@ -372,11 +419,16 @@ class _DashboardPageState extends State<DashboardPage> {
               _MindComposerCard(
                 controller: _mindController,
                 platform: _platform,
+                mediaUrls: _composerMedia,
                 onPlatformChanged: (p) {
                   setState(() => _platform = p);
                   _loadPostSuggestions();
                 },
+                onPickGallery: _pickComposerImages,
+                onPickCamera: _pickComposerCamera,
+                onRemovePhoto: _removeComposerImage,
                 onSubmit: _openComposerSubmit,
+                onTextChanged: () => setState(() {}),
               ),
               const SizedBox(height: 16),
               _StatsRow(
@@ -533,18 +585,85 @@ class _DashboardHeader extends StatelessWidget {
   }
 }
 
-class _MindComposerCard extends StatelessWidget {
+class _MindComposerCard extends StatefulWidget {
   const _MindComposerCard({
     required this.controller,
     required this.platform,
+    required this.mediaUrls,
     required this.onPlatformChanged,
+    required this.onPickGallery,
+    required this.onPickCamera,
+    required this.onRemovePhoto,
     required this.onSubmit,
+    required this.onTextChanged,
   });
 
   final TextEditingController controller;
   final String platform;
+  final List<String> mediaUrls;
   final ValueChanged<String> onPlatformChanged;
+  final VoidCallback onPickGallery;
+  final VoidCallback onPickCamera;
+  final ValueChanged<int> onRemovePhoto;
   final VoidCallback onSubmit;
+  final VoidCallback onTextChanged;
+
+  @override
+  State<_MindComposerCard> createState() => _MindComposerCardState();
+}
+
+class _MindComposerCardState extends State<_MindComposerCard> {
+  final _addButtonKey = GlobalKey();
+
+  bool get _canSubmit => widget.controller.text.trim().isNotEmpty || widget.mediaUrls.isNotEmpty;
+
+  int get _charCount => widget.controller.text.characters.length;
+
+  bool get _showCharCount => _charCount >= 400;
+
+  Future<void> _showAddContentMenu(BuildContext context) async {
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox?;
+    final box = _addButtonKey.currentContext?.findRenderObject() as RenderBox?;
+    if (overlay == null || box == null) return;
+
+    final offset = box.localToGlobal(Offset.zero, ancestor: overlay);
+    final selected = await showMenu<String>(
+      context: context,
+      color: const Color(0xFF1C1C1C),
+      elevation: 8,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      position: RelativeRect.fromLTRB(
+        offset.dx - 160,
+        offset.dy + box.size.height + 6,
+        offset.dx + box.size.width,
+        offset.dy + box.size.height + 6,
+      ),
+      items: const [
+        _ComposerMenuItem(value: 'photo', icon: LucideIcons.image, label: 'Photo / Video'),
+        _ComposerMenuItem(value: 'camera', icon: LucideIcons.camera, label: 'Camera'),
+        _ComposerMenuItem(value: 'gif', icon: LucideIcons.imagePlay, label: 'GIF'),
+        _ComposerMenuItem(value: 'poll', icon: LucideIcons.chartNoAxesColumn, label: 'Poll'),
+        _ComposerMenuItem(value: 'link', icon: LucideIcons.link, label: 'Add link'),
+        _ComposerMenuItem(value: 'location', icon: LucideIcons.mapPin, label: 'Location'),
+      ],
+    );
+
+    if (selected == null) return;
+    if (!context.mounted) return;
+    switch (selected) {
+      case 'photo':
+        widget.onPickGallery();
+      case 'camera':
+        widget.onPickCamera();
+      default:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Coming soon')),
+        );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -558,45 +677,109 @@ class _MindComposerCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Padding(
-                padding: EdgeInsets.only(top: 2),
-                child: Icon(LucideIcons.penLine, color: _muted, size: 20),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: TextField(
-                  controller: controller,
-                  style: const TextStyle(color: Colors.white, fontSize: 16, height: 1.4),
-                  maxLines: 3,
-                  minLines: 1,
-                  decoration: const InputDecoration(
-                    isDense: true,
-                    border: InputBorder.none,
-                    hintText: "What's on your mind?",
-                    hintStyle: TextStyle(color: Color(0xFF6B7280), fontSize: 16),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.22),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+            ),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Padding(
+                  padding: EdgeInsets.fromLTRB(12, 12, 48, _showCharCount ? 28 : 12),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.only(top: 2),
+                        child: Icon(LucideIcons.penLine, color: _muted, size: 18),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          controller: widget.controller,
+                          onChanged: (_) => widget.onTextChanged(),
+                          style: const TextStyle(color: Colors.white, fontSize: 16, height: 1.45),
+                          maxLines: 8,
+                          minLines: 2,
+                          maxLength: _composerMaxChars,
+                          buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            border: InputBorder.none,
+                            hintText: "What's on your mind?",
+                            hintStyle: TextStyle(color: Color(0xFF6B7280), fontSize: 16),
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-            ],
+                Positioned(
+                  top: 10,
+                  right: 10,
+                  child: _ComposerPlusButton(
+                    key: _addButtonKey,
+                    onTap: () => _showAddContentMenu(context),
+                  ),
+                ),
+                if (_showCharCount)
+                  Positioned(
+                    right: 12,
+                    bottom: 8,
+                    child: Text(
+                      '$_charCount/$_composerMaxChars',
+                      style: TextStyle(
+                        color: _charCount >= _composerMaxChars
+                            ? Colors.red.shade300
+                            : const Color(0xFF6B7280),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
+          if (widget.mediaUrls.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 72,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: widget.mediaUrls.length + (widget.mediaUrls.length < 6 ? 1 : 0),
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (_, i) {
+                  if (i < widget.mediaUrls.length) {
+                    return _ComposerPhotoThumb(
+                      src: widget.mediaUrls[i],
+                      onRemove: () => widget.onRemovePhoto(i),
+                    );
+                  }
+                  return _ComposerAddMoreTile(
+                    onTap: () => _showAddContentMenu(context),
+                  );
+                },
+              ),
+            ),
+          ],
           const SizedBox(height: 14),
           Row(
             children: [
               SharePlatformSelector(
-                platform: platform,
+                platform: widget.platform,
                 compact: true,
-                onChanged: onPlatformChanged,
+                onChanged: widget.onPlatformChanged,
               ),
               const Spacer(),
               Material(
-                color: HubTheme.accent,
+                color: _canSubmit ? HubTheme.accent : HubTheme.accent.withValues(alpha: 0.35),
                 borderRadius: BorderRadius.circular(999),
                 elevation: 0,
                 child: InkWell(
-                  onTap: onSubmit,
+                  onTap: _canSubmit ? widget.onSubmit : null,
                   borderRadius: BorderRadius.circular(999),
                   child: Container(
                     width: 44,
@@ -612,6 +795,218 @@ class _MindComposerCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ComposerPlusButton extends StatelessWidget {
+  const _ComposerPlusButton({super.key, required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: Container(
+          width: 34,
+          height: 34,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: HubTheme.accent.withValues(alpha: 0.85), width: 1.5),
+            color: Colors.black.withValues(alpha: 0.35),
+          ),
+          child: const Icon(LucideIcons.plus, color: Colors.white, size: 18),
+        ),
+      ),
+    );
+  }
+}
+
+class _ComposerAddMoreTile extends StatelessWidget {
+  const _ComposerAddMoreTile({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: CustomPaint(
+          painter: _DashedRectPainter(
+            color: HubTheme.accent.withValues(alpha: 0.5),
+            radius: 12,
+          ),
+          child: Container(
+            width: 64,
+            height: 64,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              color: HubTheme.accent.withValues(alpha: 0.06),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(LucideIcons.plus, color: HubTheme.accent.withValues(alpha: 0.9), size: 20),
+                const SizedBox(height: 2),
+                Text(
+                  'Add more',
+                  style: TextStyle(
+                    color: HubTheme.accent.withValues(alpha: 0.85),
+                    fontSize: 9,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DashedRectPainter extends CustomPainter {
+  _DashedRectPainter({required this.color, required this.radius});
+
+  final Color color;
+  final double radius;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    final path = Path()..addRRect(RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(radius)));
+    for (final metric in path.computeMetrics()) {
+      var distance = 0.0;
+      while (distance < metric.length) {
+        final next = distance + 5;
+        canvas.drawPath(metric.extractPath(distance, next.clamp(0, metric.length)), paint);
+        distance = next + 4;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedRectPainter oldDelegate) =>
+      oldDelegate.color != color || oldDelegate.radius != radius;
+}
+
+class _ComposerMenuItem extends PopupMenuEntry<String> {
+  const _ComposerMenuItem({
+    required this.value,
+    required this.icon,
+    required this.label,
+  });
+
+  final String value;
+  final IconData icon;
+  final String label;
+
+  @override
+  double get height => 44;
+
+  @override
+  bool represents(String? value) => this.value == value;
+
+  @override
+  State<_ComposerMenuItem> createState() => _ComposerMenuItemState();
+}
+
+class _ComposerMenuItemState extends State<_ComposerMenuItem> {
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () => Navigator.pop(context, widget.value),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: Row(
+          children: [
+            Icon(widget.icon, color: Colors.white.withValues(alpha: 0.88), size: 18),
+            const SizedBox(width: 12),
+            Text(
+              widget.label,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.92),
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ComposerPhotoThumb extends StatelessWidget {
+  const _ComposerPhotoThumb({
+    required this.src,
+    required this.onRemove,
+  });
+
+  final String src;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: SizedBox(
+            width: 64,
+            height: 64,
+            child: _composerImageFromSrc(src),
+          ),
+        ),
+        Positioned(
+          top: -6,
+          right: -6,
+          child: Material(
+            color: Colors.black87,
+            shape: const CircleBorder(),
+            child: InkWell(
+              onTap: onRemove,
+              customBorder: const CircleBorder(),
+              child: const Padding(
+                padding: EdgeInsets.all(4),
+                child: Icon(LucideIcons.x, color: Colors.white, size: 14),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+Widget _composerImageFromSrc(String src) {
+  if (src.startsWith('data:image')) {
+    final comma = src.indexOf(',');
+    if (comma >= 0) {
+      try {
+        return Image.memory(
+          base64Decode(src.substring(comma + 1)),
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => const ColoredBox(color: _cardBorder),
+        );
+      } catch (_) {}
+    }
+  }
+  if (src.startsWith('http://') || src.startsWith('https://')) {
+    return Image.network(src, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: _cardBorder));
+  }
+  return const ColoredBox(color: _cardBorder);
 }
 
 class _StatsRow extends StatelessWidget {
