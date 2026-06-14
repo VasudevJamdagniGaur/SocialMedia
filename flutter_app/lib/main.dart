@@ -1,4 +1,6 @@
-﻿import 'package:firebase_analytics/firebase_analytics.dart';
+import 'dart:async';
+
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,6 +11,7 @@ import 'package:go_router/go_router.dart';
 import 'router/app_router.dart';
 import 'router/auth_refresh.dart';
 import 'services/chat_service.dart';
+import 'services/pod_hub_prefetch.dart';
 import 'utils/prefs_maintenance.dart';
 
 Future<void> main() async {
@@ -29,6 +32,7 @@ Future<void> main() async {
   );
   final themeNotifier = await ThemeNotifier.load();
   final router = createAppRouter();
+  unawaited(prefetchPodHubContent());
   runApp(DeiteApp(themeNotifier: themeNotifier, router: router));
 }
 

@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -160,49 +160,37 @@ Future<void> _saveTeaToDisk(List<TeaItem> items) async {
   } catch (_) {}
 }
 
-Future<List<TeaItem>> fetchTrendingTea({bool allowCache = true}) async {
+/// Hydrate in-memory Tea cache from disk (call at app start / before Pod tab).
+Future<void> warmTeaCacheFromDisk() async {
+  if (_memoryTeaCache != null && _memoryTeaCache!.isNotEmpty) return;
+  final cached = await _loadTeaFromDisk();
+  if (cached.isEmpty) return;
+  _memoryTeaCache = prioritizeWithImagesFirst(
+    cached,
+    (item) => teaHeroImageUrl(item) != null,
+  );
+  _memoryTeaCacheAt = DateTime.now();
+}
+
+Future<void> refreshTrendingTeaInBackground() async {
+  try {
+    await fetchTrendingTea(allowCache: false, deferEnrich: true);
+  } catch (_) {}
+}
+
+Future<List<TeaItem>> fetchTrendingTea({
+  bool allowCache = true,
+  bool deferEnrich = false,
+}) async {
   if (allowCache &&
       _memoryTeaCache != null &&
       _memoryTeaCache!.isNotEmpty &&
       _memoryTeaCacheAt != null &&
       DateTime.now().difference(_memoryTeaCacheAt!) < _teaCacheMaxAge) {
-    final hydrated = <TeaItem>[];
-    for (final item in _memoryTeaCache!) {
-      if (teaHeroImageUrl(item) != null) {
-        hydrated.add(item);
-        continue;
-      }
-      final cached = await resolveCachedHubCarouselImage(
-        url: item.url,
-        title: item.title,
-        fallbackId: item.id,
-        kind: HubCarouselImageKind.tea,
-      );
-      if (cached != null) {
-        hydrated.add(TeaItem(
-          id: item.id,
-          title: item.title,
-          url: item.url,
-          postUrl: item.postUrl,
-          thumbnail: cached,
-          gossip: item.gossip,
-          author: item.author,
-          score: item.score,
-          numComments: item.numComments,
-        ));
-      } else {
-        hydrated.add(item);
-      }
-    }
-    final sorted = prioritizeWithImagesFirst(
-      hydrated,
-      (item) => teaHeroImageUrl(item) != null,
-    );
-    _memoryTeaCache = sorted;
-    return sorted;
+    return List<TeaItem>.from(_memoryTeaCache!);
   }
 
-  final rows = await fetchTrendingTeaRows();
+  final rows = await fetchTrendingTeaRows(deferEnrich: deferEnrich);
   if (rows.isEmpty) {
     throw Exception('Could not load tea. Check your connection.');
   }
@@ -211,42 +199,35 @@ Future<List<TeaItem>> fetchTrendingTea({bool allowCache = true}) async {
     rows.map(_rowToTeaItem).toList(),
     (item) => teaHeroImageUrl(item) != null,
   ).take(10).toList();
-  final hydrated = <TeaItem>[];
-  for (final item in items) {
-    if (teaHeroImageUrl(item) != null) {
-      hydrated.add(item);
-      continue;
-    }
-    final cached = await resolveCachedHubCarouselImage(
-      url: item.url,
-      title: item.title,
-      fallbackId: item.id,
-    );
-    if (cached != null) {
-      hydrated.add(TeaItem(
-        id: item.id,
-        title: item.title,
-        url: item.url,
-        postUrl: item.postUrl,
-        thumbnail: cached,
-        gossip: item.gossip,
-        author: item.author,
-        score: item.score,
-        numComments: item.numComments,
-      ));
-    } else {
-      hydrated.add(item);
-    }
-  }
-  items = prioritizeWithImagesFirst(
-    hydrated,
-    (item) => teaHeroImageUrl(item) != null,
-  );
+
   _memoryTeaCache = items;
   _memoryTeaCacheAt = DateTime.now();
   await writeTrendingTeaUrlsAndPruneShareCache(items.map((e) => e.url).toList());
   unawaited(_saveTeaToDisk(items));
+
+  if (deferEnrich) {
+    unawaited(_enrichTeaRowsInBackground(rows, items));
+  }
+
   return items;
+}
+
+Future<void> _enrichTeaRowsInBackground(
+  List<Map<String, dynamic>> rows,
+  List<TeaItem> baseline,
+) async {
+  try {
+    final enriched = await enrichTeaRows(rows, maxEnrich: 6);
+    if (enriched.isEmpty) return;
+    final items = prioritizeWithImagesFirst(
+      enriched.map(_rowToTeaItem).toList(),
+      (item) => teaHeroImageUrl(item) != null,
+    ).take(10).toList();
+    if (items.isEmpty) return;
+    _memoryTeaCache = items;
+    _memoryTeaCacheAt = DateTime.now();
+    unawaited(_saveTeaToDisk(items));
+  } catch (_) {}
 }
 
 String? teaHeroImageUrl(TeaItem item) {
@@ -304,10 +285,33 @@ class _TrendingTeaState extends State<TrendingTea> {
   @override
   void activate() {
     super.activate();
+    if (_items.isEmpty && _memoryTeaCache != null && _memoryTeaCache!.isNotEmpty && mounted) {
+      setState(() {
+        _items = List<TeaItem>.from(_memoryTeaCache!);
+        _loading = false;
+      });
+    }
     unawaited(_syncCachedAiImages());
   }
 
   Future<void> _load() async {
+    if (_items.isEmpty && _memoryTeaCache != null && _memoryTeaCache!.isNotEmpty && mounted) {
+      setState(() {
+        _items = List<TeaItem>.from(_memoryTeaCache!);
+        _loading = false;
+        _error = null;
+      });
+      unawaited(_syncCachedAiImages());
+      unawaited(_enrichMissingAiImages());
+      unawaited(_refreshFromNetwork());
+      return;
+    }
+
+    if (_items.isNotEmpty && _memoryTeaCache != null && _memoryTeaCache!.isNotEmpty) {
+      unawaited(_refreshFromNetwork());
+      return;
+    }
+
     final cached = await _loadTeaFromDisk();
     if (cached.isNotEmpty && mounted) {
       setState(() {
@@ -318,26 +322,42 @@ class _TrendingTeaState extends State<TrendingTea> {
         _loading = false;
         _error = null;
       });
-      _memoryTeaCache = cached;
+      _memoryTeaCache = _items;
       _memoryTeaCacheAt = DateTime.now();
-      await _syncCachedAiImages();
+      unawaited(_syncCachedAiImages());
       unawaited(_enrichMissingAiImages());
-    } else if (_items.isEmpty) {
+      unawaited(_refreshFromNetwork());
+      return;
+    }
+
+    if (_items.isEmpty) {
       setState(() {
         _loading = true;
         _error = null;
       });
     }
 
+    await _refreshFromNetwork();
+  }
+
+  Future<void> _refreshFromNetwork() async {
+    final hadItems = _items.isNotEmpty;
+    final stale = _memoryTeaCacheAt == null ||
+        DateTime.now().difference(_memoryTeaCacheAt!) >= _teaCacheMaxAge;
+    if (hadItems && !stale) return;
+
     try {
-      final items = await fetchTrendingTea(allowCache: false);
+      final items = await fetchTrendingTea(
+        allowCache: false,
+        deferEnrich: true,
+      );
       if (!mounted) return;
       setState(() {
         _items = items;
         _loading = false;
         _error = null;
       });
-      await _syncCachedAiImages();
+      unawaited(_syncCachedAiImages());
       unawaited(_enrichMissingAiImages());
     } catch (e) {
       if (!mounted) return;
@@ -514,7 +534,7 @@ class _TrendingTeaState extends State<TrendingTea> {
           const Divider(height: 1, color: hubDivider),
           Padding(
             padding: const EdgeInsets.only(top: 12, left: 16, bottom: 12),
-            child: _loading
+            child: _loading && _items.isEmpty
                 ? const CardSkeleton(count: 4)
                 : _error != null
                     ? Text(_error!, style: const TextStyle(color: hubMuted))

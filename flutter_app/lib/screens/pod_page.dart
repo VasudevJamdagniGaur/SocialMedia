@@ -1,4 +1,6 @@
-﻿import 'package:cached_network_image/cached_network_image.dart';
+import 'dart:async';
+
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -12,6 +14,7 @@ import '../contexts/theme_context.dart';
 import '../router/app_router.dart';
 import '../services/auth_service.dart';
 import '../services/hub_personalization_service.dart';
+import '../services/pod_hub_prefetch.dart';
 import '../services/pod_news_service.dart';
 
 /// Mirrors src/components/PodPage.js
@@ -28,6 +31,8 @@ class _PodPageState extends State<PodPage> {
   @override
   void initState() {
     super.initState();
+    unawaited(warmPodHubCachesFromDisk());
+    unawaited(refreshPodHubContentInBackground());
     Future.delayed(const Duration(milliseconds: 900), prefetchAllSportsExploreTopicsNow);
     _loadProfilePicture();
   }

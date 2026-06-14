@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -16,6 +17,7 @@ import '../services/chat_service.dart';
 import '../services/firestore_result.dart';
 import '../services/firestore_service.dart';
 import '../services/reflection_service.dart';
+import '../services/pod_hub_prefetch.dart';
 import '../utils/date_utils.dart';
 import '../utils/profile_picture_helper.dart';
 import '../utils/hub_carousel_ai_image.dart';
@@ -63,6 +65,7 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   void initState() {
     super.initState();
+    unawaited(prefetchPodHubContent());
     _loadSavedDate();
     _ensureUser();
     _loadProfilePicture();

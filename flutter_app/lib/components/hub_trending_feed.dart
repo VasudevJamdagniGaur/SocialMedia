@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -95,126 +95,98 @@ Future<void> _saveHubNewsToDisk(List<HubTrendingItem> items) async {
   } catch (_) {}
 }
 
-Future<List<HubTrendingItem>> fetchHubTrendingItems() async {
-  if (_hubCache != null && _hubCache!.isNotEmpty) {
-    final hydrated = <HubTrendingItem>[];
-    for (final item in _hubCache!) {
-      if (hasUsableHubImage(item.image)) {
-        hydrated.add(item);
-        continue;
-      }
-      final cached = await resolveCachedHubCarouselImage(
-        url: item.url,
-        title: item.title,
-        fallbackId: item.id,
-        kind: HubCarouselImageKind.news,
-      );
-      if (cached != null) {
-        hydrated.add(HubTrendingItem(
-          id: item.id,
-          title: item.title,
-          url: item.url,
-          description: item.description,
-          image: cached,
-          source: item.source,
-          category: item.category,
-        ));
-      } else {
-        hydrated.add(item);
-      }
-    }
-    final sorted = prioritizeWithImagesFirst(
-      hydrated,
-      (item) => hasUsableHubImage(item.image),
-    );
-    _hubCache = sorted;
-    return sorted;
+/// Hydrate in-memory News cache from disk (call at app start / before Pod tab).
+Future<void> warmHubNewsCacheFromDisk() async {
+  if (_hubCache != null && _hubCache!.isNotEmpty) return;
+  final disk = await _loadHubNewsFromDisk();
+  if (disk.isEmpty) return;
+  _hubCache = prioritizeWithImagesFirst(
+    disk,
+    (item) => hasUsableHubImage(item.image),
+  );
+}
+
+Future<void> refreshHubNewsInBackground() async {
+  try {
+    await fetchHubTrendingItems(forceRefresh: true);
+  } catch (_) {}
+}
+
+List<HubTrendingItem> _hubItemsFromArticleMaps(
+  Iterable<Map<String, dynamic>> articles,
+  Set<String> seen, {
+  String defaultSource = 'News',
+  String defaultCategory = 'general',
+}) {
+  final items = <HubTrendingItem>[];
+  for (final a in articles) {
+    final url = '${a['url'] ?? ''}'.trim();
+    if (url.isEmpty || seen.contains(url)) continue;
+    seen.add(url);
+    final img = a['image'];
+    items.add(HubTrendingItem(
+      id: '${a['id'] ?? hubNewsDocIdFromUrl(url)}',
+      title: a['title'] as String? ?? '',
+      url: url,
+      description: a['description'] as String? ?? '',
+      image: img is String && img.trim().startsWith('http') ? img.trim() : '',
+      source: a['source'] as String? ?? defaultSource,
+      category: a['category'] as String? ?? defaultCategory,
+    ));
+  }
+  return items;
+}
+
+Future<List<HubTrendingItem>> fetchHubTrendingItems({bool forceRefresh = false}) async {
+  if (!forceRefresh && _hubCache != null && _hubCache!.isNotEmpty) {
+    return List<HubTrendingItem>.from(_hubCache!);
   }
 
   final seen = <String>{};
   final items = <HubTrendingItem>[];
 
-  try {
-    final merged = await getHubTrendingMergedFromFirestore()
-        .timeout(const Duration(seconds: 18));
-    final rawItems = merged['items'];
-    if (rawItems is List) {
-      for (final a in rawItems) {
-        if (a is! Map) continue;
-        final url = '${a['url'] ?? ''}'.trim();
-        if (url.isEmpty || seen.contains(url)) continue;
-        seen.add(url);
-        final img = a['image'];
-        items.add(HubTrendingItem(
-          id: '${a['id'] ?? url.hashCode}',
-          title: a['title'] as String? ?? '',
-          url: url,
-          description: a['description'] as String? ?? '',
-          image: img is String && img.trim().startsWith('http') ? img.trim() : '',
-          source: a['source'] as String? ?? '',
-          category: a['category'] as String? ?? '',
-        ));
-      }
-    }
-  } catch (_) {}
+  final firestoreFuture = getHubTrendingMergedFromFirestore()
+      .timeout(const Duration(seconds: 7), onTimeout: () => {'success': false, 'items': []});
+  final rssWorldFuture = fetchLiveFromGoogleRssByQueryFast('world news when:2d', timeoutMs: 6000);
+  final rssIndiaFuture = fetchLiveFromGoogleRssByQueryFast('india news when:2d', timeoutMs: 6000);
 
-  if (items.isEmpty) {
-    try {
-      final rss = await fetchLiveFromGoogleRssByQueryFast('world news when:2d', timeoutMs: 10000);
-      for (final a in normalizeArticles(rss)) {
-        final url = '${a['url'] ?? ''}'.trim();
-        if (url.isEmpty || seen.contains(url)) continue;
-        seen.add(url);
-        final img = a['image'];
-        items.add(HubTrendingItem(
-          id: hubNewsDocIdFromUrl(url),
-          title: a['title'] as String? ?? '',
-          url: url,
-          description: a['description'] as String? ?? '',
-          image: img is String && '$img'.trim().startsWith('http') ? '$img'.trim() : '',
-          source: a['source'] as String? ?? 'News',
-          category: 'general',
-        ));
-      }
-    } catch (_) {}
+  final results = await Future.wait([
+    firestoreFuture.catchError((_) => {'success': false, 'items': []}),
+    rssWorldFuture.catchError((_) => <Map<String, dynamic>>[]),
+    rssIndiaFuture.catchError((_) => <Map<String, dynamic>>[]),
+  ]);
+
+  final merged = results[0] is Map
+      ? Map<String, dynamic>.from(results[0] as Map)
+      : <String, dynamic>{'items': <dynamic>[]};
+  final rawItems = merged['items'];
+  if (rawItems is List) {
+    for (final a in rawItems) {
+      if (a is! Map) continue;
+      items.addAll(_hubItemsFromArticleMaps([Map<String, dynamic>.from(a)], seen));
+    }
+  }
+
+  for (final rss in [results[1], results[2]]) {
+    if (rss is List<Map<String, dynamic>>) {
+      items.addAll(_hubItemsFromArticleMaps(normalizeArticles(rss), seen));
+    } else if (rss is List) {
+      items.addAll(_hubItemsFromArticleMaps(
+        normalizeArticles(rss.whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList()),
+        seen,
+      ));
+    }
   }
 
   var sorted = prioritizeWithImagesFirst(
     items,
     (item) => hasUsableHubImage(item.image),
   );
-  final hydrated = <HubTrendingItem>[];
-  for (final item in sorted) {
-    if (hasUsableHubImage(item.image)) {
-      hydrated.add(item);
-      continue;
-    }
-    final cached = await resolveCachedHubCarouselImage(
-      url: item.url,
-      title: item.title,
-      fallbackId: item.id,
-    );
-    if (cached != null) {
-      hydrated.add(HubTrendingItem(
-        id: item.id,
-        title: item.title,
-        url: item.url,
-        description: item.description,
-        image: cached,
-        source: item.source,
-        category: item.category,
-      ));
-    } else {
-      hydrated.add(item);
-    }
-  }
-  sorted = prioritizeWithImagesFirst(
-    hydrated,
-    (item) => hasUsableHubImage(item.image),
-  );
   _hubCache = sorted;
-  await writeHubNewsUrlsAndPruneImageCache(sorted.map((e) => e.url).toList());
-  unawaited(_saveHubNewsToDisk(sorted));
+  if (sorted.isNotEmpty) {
+    unawaited(writeHubNewsUrlsAndPruneImageCache(sorted.map((e) => e.url).toList()));
+    unawaited(_saveHubNewsToDisk(sorted));
+  }
   return sorted;
 }
 
@@ -242,10 +214,33 @@ class _HubTrendingFeedState extends State<HubTrendingFeed> {
   @override
   void activate() {
     super.activate();
+    if (_items.isEmpty && _hubCache != null && _hubCache!.isNotEmpty && mounted) {
+      setState(() {
+        _items = List<HubTrendingItem>.from(_hubCache!);
+        _loading = false;
+      });
+    }
     unawaited(_syncCachedAiImages());
   }
 
   Future<void> _load() async {
+    if (_items.isEmpty && _hubCache != null && _hubCache!.isNotEmpty && mounted) {
+      setState(() {
+        _items = List<HubTrendingItem>.from(_hubCache!);
+        _loading = false;
+        _error = '';
+      });
+      unawaited(_syncCachedAiImages());
+      unawaited(_enrichMissingAiImages());
+      unawaited(_refreshFromNetwork());
+      return;
+    }
+
+    if (_items.isNotEmpty && _hubCache != null && _hubCache!.isNotEmpty) {
+      unawaited(_refreshFromNetwork());
+      return;
+    }
+
     final disk = await _loadHubNewsFromDisk();
     if (disk.isNotEmpty && mounted) {
       setState(() {
@@ -257,20 +252,30 @@ class _HubTrendingFeedState extends State<HubTrendingFeed> {
         _error = '';
       });
       _hubCache = _items;
-      await _syncCachedAiImages();
+      unawaited(_syncCachedAiImages());
       unawaited(_enrichMissingAiImages());
-    } else if (_hubCache == null || _hubCache!.isEmpty) {
+      unawaited(_refreshFromNetwork());
+      return;
+    }
+
+    if (_items.isEmpty) {
       setState(() => _loading = true);
     }
+
+    await _refreshFromNetwork();
+  }
+
+  Future<void> _refreshFromNetwork() async {
+    final hadItems = _items.isNotEmpty;
     try {
-      final items = await fetchHubTrendingItems();
+      final items = await fetchHubTrendingItems(forceRefresh: !hadItems || _hubCache == null);
       if (!mounted) return;
       setState(() {
         _items = items;
         _loading = false;
         _error = items.isEmpty ? 'No headlines yet.' : '';
       });
-      await _syncCachedAiImages();
+      unawaited(_syncCachedAiImages());
       unawaited(_enrichMissingAiImages());
     } catch (e) {
       if (!mounted) return;

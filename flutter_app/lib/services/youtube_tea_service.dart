@@ -259,7 +259,7 @@ Future<List<Map<String, dynamic>>> fetchTeaRowsFromBackendYouTube({
       );
       final res = await http
           .get(url, headers: {'Accept': 'application/json', 'User-Agent': _newsApiUserAgent})
-          .timeout(const Duration(seconds: 18));
+          .timeout(const Duration(seconds: 8));
       if (res.statusCode != 200) continue;
       final body = jsonDecode(res.body);
       if (body is! Map || body['ok'] != true) continue;
@@ -286,6 +286,7 @@ Future<List<Map<String, dynamic>>> fetchTeaRowsFromYouTubeDirect({
   const perQuery = 5;
 
   for (final query in _teaYouTubeQueries) {
+    if (rows.length >= maxKeep) break;
     try {
       final searchUri = Uri.parse('https://www.googleapis.com/youtube/v3/search').replace(
         queryParameters: {
@@ -302,7 +303,7 @@ Future<List<Map<String, dynamic>>> fetchTeaRowsFromYouTubeDirect({
       );
       final searchRes = await http
           .get(searchUri, headers: {'Accept': 'application/json'})
-          .timeout(const Duration(seconds: 16));
+          .timeout(const Duration(seconds: 8));
       if (searchRes.statusCode != 200) {
         debugPrint('[YouTubeTea] search failed ${searchRes.statusCode}: ${searchRes.body.substring(0, searchRes.body.length.clamp(0, 200))}');
         continue;
@@ -335,7 +336,7 @@ Future<List<Map<String, dynamic>>> fetchTeaRowsFromYouTubeDirect({
       );
       final statsRes = await http
           .get(statsUri, headers: {'Accept': 'application/json'})
-          .timeout(const Duration(seconds: 16));
+          .timeout(const Duration(seconds: 8));
       if (statsRes.statusCode != 200) continue;
       final statsBody = jsonDecode(statsRes.body);
       final statItems = statsBody is Map ? statsBody['items'] : null;

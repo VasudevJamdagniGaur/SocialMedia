@@ -363,19 +363,58 @@ List<Map<String, dynamic>> teaRowsFromRssArticles(List<Map<String, dynamic>> rss
       .toList();
 }
 
+Future<List<Map<String, dynamic>>> _fetchTeaRssQuickRows() async {
+  try {
+    const query = '(bollywood gossip OR celebrity scandal OR "bollywood drama") india when:7d';
+    final rss = await fetchLiveFromGoogleRssByQueryFast(query, timeoutMs: 5500);
+    return teaRowsFromRssArticles(rss);
+  } catch (_) {
+    return [];
+  }
+}
+
+List<Map<String, dynamic>> _mergeTeaRowLists(
+  List<Map<String, dynamic>> primary,
+  List<Map<String, dynamic>> secondary,
+) {
+  final merged = <Map<String, dynamic>>[];
+  final seen = <String>{};
+  for (final row in [...primary, ...secondary]) {
+    final url = '${row['url'] ?? ''}'.trim();
+    if (url.isEmpty || seen.contains(url)) continue;
+    seen.add(url);
+    merged.add(row);
+  }
+  return merged;
+}
+
 /// Trending Tea rows via YouTube Data API (replaces Reddit scraping).
-Future<List<Map<String, dynamic>>> fetchTrendingTeaRows() async {
-  var rows = await fetchTeaRowsFromYouTube();
+Future<List<Map<String, dynamic>>> fetchTrendingTeaRows({bool deferEnrich = true}) async {
+  final rssFuture = _fetchTeaRssQuickRows();
+  final ytFuture = fetchTeaRowsFromYouTube(maxKeep: 14).timeout(
+    const Duration(seconds: 8),
+    onTimeout: () => <Map<String, dynamic>>[],
+  );
+  final parts = await Future.wait([rssFuture, ytFuture]);
+  var rows = _mergeTeaRowLists(parts[0], parts[1]);
+
   if (rows.length < 6) {
     final fromRss = await _fetchTeaRssFallbackRows();
-    if (fromRss.length > rows.length) rows = fromRss;
+    rows = _mergeTeaRowLists(rows, fromRss);
   }
+
   if (rows.isNotEmpty) {
-    rows = await enrichTeaRows(rows, maxEnrich: 10);
     sortHubMapRowsImageFirst(
       rows,
       compare: (a, b) => hubMapRowScore(b).compareTo(hubMapRowScore(a)),
     );
+    if (!deferEnrich) {
+      rows = await enrichTeaRows(rows, maxEnrich: 6);
+      sortHubMapRowsImageFirst(
+        rows,
+        compare: (a, b) => hubMapRowScore(b).compareTo(hubMapRowScore(a)),
+      );
+    }
   }
   return rows;
 }
