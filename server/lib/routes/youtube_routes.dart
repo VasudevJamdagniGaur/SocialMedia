@@ -170,6 +170,9 @@ const _hubVerticalYouTubeQueries = <String, List<String>>{
     'india politics news latest',
     'india economy RBI news latest',
     'climate environment news india',
+    'india parliament election news',
+    'international relations india news',
+    'india breaking news hindi',
   ],
 };
 

@@ -56,6 +56,9 @@ const _hubVerticalYouTubeQueries = <String, List<String>>{
     'india politics news latest',
     'india economy RBI news latest',
     'climate environment news india',
+    'india parliament election news',
+    'international relations india news',
+    'india breaking news hindi',
   ],
 };
 
@@ -78,7 +81,8 @@ const _hubVerticalSignals = <String, List<String>>{
   ],
   'current-affairs': [
     'news', 'politic', 'econom', 'climate', 'india', 'world', 'government',
-    'election', 'parliament', 'budget', 'minister', 'diplomat',
+    'election', 'parliament', 'budget', 'minister', 'diplomat', 'breaking',
+    'un', 'nato', 'war', 'summit', 'policy', 'inflation', 'market',
   ],
 };
 
@@ -569,6 +573,36 @@ Future<List<NewsArticle>> _fetchEntrepreneurshipNewsRss({int maxKeep = 10}) =>
       ],
     );
 
+Future<List<NewsArticle>> _fetchCurrentAffairsYouTubeViaGoogleRss({int maxKeep = 10}) =>
+    _fetchHubYouTubeViaGoogleRss(
+      logTag: 'current-affairs',
+      maxKeep: maxKeep,
+      queries: const [
+        'youtube india news breaking when:7d',
+        'youtube world news today when:7d',
+        'youtube india politics news when:7d',
+        'youtube india economy RBI when:7d',
+        'youtube climate change news when:7d',
+        'youtube international news india when:7d',
+      ],
+    );
+
+Future<List<NewsArticle>> _fetchCurrentAffairsNewsRss({int maxKeep = 10}) =>
+    _fetchHubNewsViaGoogleRss(
+      logTag: 'current-affairs',
+      maxKeep: maxKeep,
+      defaultSource: 'News',
+      queries: const [
+        'india news breaking when:3d',
+        'world news when:3d',
+        'india politics when:5d',
+        'india economy when:5d',
+        'climate change news when:5d',
+        'international affairs when:5d',
+        'india parliament when:5d',
+      ],
+    );
+
 Future<List<NewsArticle>> _fetchHubVerticalTrendingMerged({
   required String vertical,
   required Future<List<NewsArticle>> Function() youtubeRss,
@@ -627,6 +661,15 @@ Future<List<NewsArticle>> fetchEntrepreneurshipTrendingAll({int maxKeep = 10}) =
       maxKeep: maxKeep,
       youtubeRss: () => _fetchEntrepreneurshipYouTubeViaGoogleRss(maxKeep: maxKeep),
       newsRss: () => _fetchEntrepreneurshipNewsRss(maxKeep: maxKeep),
+    );
+
+/// Current Affairs trending: YouTube API (if configured) + Google News RSS (always).
+Future<List<NewsArticle>> fetchCurrentAffairsTrendingAll({int maxKeep = 10}) =>
+    _fetchHubVerticalTrendingMerged(
+      vertical: 'current-affairs',
+      maxKeep: maxKeep,
+      youtubeRss: () => _fetchCurrentAffairsYouTubeViaGoogleRss(maxKeep: maxKeep),
+      newsRss: () => _fetchCurrentAffairsNewsRss(maxKeep: maxKeep),
     );
 
 /// YouTube trending cards for a hub vertical (Sports, AI & Tech, etc.).

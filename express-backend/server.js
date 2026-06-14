@@ -398,6 +398,9 @@ const HUB_YT_QUERIES = {
     'india politics news latest',
     'india economy RBI news latest',
     'climate environment news india',
+    'india parliament election news',
+    'international relations india news',
+    'india breaking news hindi',
   ],
 };
 
@@ -418,7 +421,8 @@ const HUB_YT_SIGNALS = {
   ],
   'current-affairs': [
     'news', 'politic', 'econom', 'climate', 'india', 'world', 'government',
-    'election', 'parliament', 'budget', 'minister', 'diplomat',
+    'election', 'parliament', 'budget', 'minister', 'diplomat', 'breaking',
+    'un', 'nato', 'war', 'summit', 'policy', 'inflation', 'market',
   ],
 };
 
