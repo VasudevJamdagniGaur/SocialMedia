@@ -108,7 +108,7 @@ Future<String?> getOrGenerateHubCarouselImage({
   String articleUrl = '',
   HubCarouselImageKind kind = HubCarouselImageKind.news,
 }) async {
-  final key = hubCarouselImageCacheKey(cacheKey, headline);
+  final key = hubCarouselImageCacheKey('$cacheKey#refphoto1', headline);
   final title = headline.trim();
   if (key.isEmpty || title.isEmpty) return null;
 

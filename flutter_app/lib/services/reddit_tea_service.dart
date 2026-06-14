@@ -368,7 +368,7 @@ Future<List<Map<String, dynamic>>> fetchTrendingTeaRows() async {
   var rows = await fetchTeaRowsFromYouTube();
   if (rows.length < 4) {
     final rss = await fetchLiveFromGoogleRssByQueryFast(
-      'bollywood OR "bollywood gossip" OR celebrity when:7d',
+      '(bollywood OR "bollywood gossip" OR IPL OR "indian cricket" OR "indian celebrity") india when:7d',
       timeoutMs: 12000,
     );
     final fromRss = teaRowsFromRssArticles(rss);

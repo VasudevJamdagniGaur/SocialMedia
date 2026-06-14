@@ -108,7 +108,21 @@ Router buildVertexRouter(VertexClient vertex) {
       return jsonError(400, 'Missing or invalid "prompt" (non-empty string required)');
     }
     try {
-      final imageDataUrl = await vertex.generateNewsIllustrationImage(prompt);
+      final referenceImage = body['referenceImage'];
+      final String? imageDataUrl;
+      if (referenceImage is Map &&
+          referenceImage['base64'] is String &&
+          '${referenceImage['base64']}'.trim().isNotEmpty) {
+        imageDataUrl = await vertex.generatePublicFigureIllustrationImage(
+          prompt,
+          referenceImageBase64: '${referenceImage['base64']}',
+          mimeType: referenceImage['mimeType'] is String
+              ? '${referenceImage['mimeType']}'
+              : 'image/jpeg',
+        );
+      } else {
+        imageDataUrl = await vertex.generateNewsIllustrationImage(prompt);
+      }
       if (imageDataUrl == null) {
         return jsonError(502, 'Image generation returned no image', details: 'Model did not return an image part');
       }

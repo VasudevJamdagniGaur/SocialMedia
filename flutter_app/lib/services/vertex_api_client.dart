@@ -132,7 +132,11 @@ class VertexApiClient {
     throw Exception('Unexpected response from Vertex /generateContent');
   }
 
-  Future<String> vertexGenerateNewsImage(String prompt, {Duration? timeout}) async {
+  Future<String> vertexGenerateNewsImage(
+    String prompt, {
+    Duration? timeout,
+    Map<String, String>? referenceImage,
+  }) async {
     final p = prompt.trim();
     if (p.isEmpty) throw Exception('vertexGenerateNewsImage: prompt is required');
 
@@ -144,16 +148,28 @@ class VertexApiClient {
       if (fallback.isNotEmpty) '$fallback/generate-news-image',
     ];
 
+    final requestBody = <String, dynamic>{'prompt': p};
+    if (referenceImage != null &&
+        (referenceImage['base64'] ?? '').trim().isNotEmpty) {
+      requestBody['referenceImage'] = {
+        'base64': referenceImage['base64'],
+        'mimeType': referenceImage['mimeType'] ?? 'image/jpeg',
+      };
+    }
+
     Exception? lastErr;
     for (final url in urls.toSet()) {
       try {
-        debugPrint('[ImageGen] API request sent url=$url promptLen=${p.length}');
+        debugPrint(
+          '[ImageGen] API request sent url=$url promptLen=${p.length} '
+          'hasReference=${requestBody.containsKey('referenceImage')}',
+        );
         final client = http.Client();
         final res = await client
             .post(
               Uri.parse(url),
               headers: {'Content-Type': 'application/json'},
-              body: jsonEncode({'prompt': p}),
+              body: jsonEncode(requestBody),
             )
             .timeout(timeout ?? const Duration(seconds: 120));
         client.close();
@@ -223,8 +239,16 @@ Future<String> vertexGenerateContent({
       timeout: timeout,
     );
 
-Future<String> vertexGenerateNewsImage(String prompt, {Duration? timeout}) =>
-    _vertex.vertexGenerateNewsImage(prompt, timeout: timeout);
+Future<String> vertexGenerateNewsImage(
+  String prompt, {
+  Duration? timeout,
+  Map<String, String>? referenceImage,
+}) =>
+    _vertex.vertexGenerateNewsImage(
+      prompt,
+      timeout: timeout,
+      referenceImage: referenceImage,
+    );
 
 Future<String> vertexAnalyzePattern(
   Map<String, dynamic> data, {

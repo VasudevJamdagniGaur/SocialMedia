@@ -207,12 +207,78 @@ app.get('/api/reddit/thread', async (req, res) => {
   }
 });
 
-/** Fresh Tea feed via YouTube Data API */
+/** Fresh Tea feed via YouTube Data API — India-first: Bollywood, cricket, local entertainment */
 const TEA_YT_QUERIES = [
-  'bollywood gossip celebrity tea',
-  'bollywood controversy drama',
-  'celebrity news india entertainment',
+  'bollywood gossip celebrity news india latest',
+  'bollywood controversy drama india hindi',
+  'IPL cricket highlights news india',
+  'indian cricket team sports news',
+  'tollywood kollywood sandalwood gossip india',
+  'indian celebrity entertainment news hindi',
 ];
+
+const TEA_YT_INTERNATIONAL_SIGNALS = [
+  'hollywood',
+  'kardashian',
+  'taylor swift',
+  'nba ',
+  ' nfl',
+  'premier league',
+  'manchester united',
+  'real madrid',
+  'barcelona fc',
+  'uk royal',
+  'white house',
+  'fox news',
+  'cnn breaking',
+  'k-pop',
+  'kpop',
+  'marvel studios',
+  'disney world',
+  'eurovision',
+  'grammy awards',
+];
+
+const TEA_YT_INDIAN_SIGNALS = [
+  'bollywood',
+  'india',
+  'indian',
+  'hindi',
+  'cricket',
+  'ipl',
+  'bcci',
+  'tollywood',
+  'kollywood',
+  'sandalwood',
+  'mumbai',
+  'delhi',
+  'bigg boss',
+  'filmfare',
+  'box office',
+  'crore',
+  'lakh',
+  'virat',
+  'dhoni',
+  'rohit sharma',
+  'ind vs',
+  'india vs',
+  'star sports',
+  'hotstar',
+];
+
+function isRelevantIndianTeaYouTubeContent(title, description = '', channel = '') {
+  const blob = `${title} ${description} ${channel}`.toLowerCase();
+  if (!blob.trim()) return false;
+  const hasIndiaLean = TEA_YT_INDIAN_SIGNALS.some((s) => blob.includes(s));
+  if (!hasIndiaLean) return false;
+  const looksInternational = TEA_YT_INTERNATIONAL_SIGNALS.some((s) => blob.includes(s));
+  if (looksInternational && !TEA_YT_INDIAN_SIGNALS.some((s) => blob.includes(s))) return false;
+  return true;
+}
+
+function teaYouTubePublishedAfter() {
+  return new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
 
 function bestYouTubeThumb(thumbnails) {
   if (!thumbnails || typeof thumbnails !== 'object') return '';
@@ -229,14 +295,16 @@ async function fetchYouTubeTeaItems(apiKey, maxKeep) {
 
   for (const query of TEA_YT_QUERIES) {
     if (rows.length >= maxKeep) break;
+    const perQuery = Math.min(25, Math.max(8, maxKeep * 2));
     const searchParams = new URLSearchParams({
       part: 'snippet',
       type: 'video',
-      order: 'viewCount',
+      order: 'date',
       q: query,
-      maxResults: String(maxKeep),
+      maxResults: String(perQuery),
       regionCode: 'IN',
-      relevanceLanguage: 'en',
+      relevanceLanguage: 'hi',
+      publishedAfter: teaYouTubePublishedAfter(),
       key: apiKey,
     });
     const searchRes = await fetch(
@@ -275,10 +343,12 @@ async function fetchYouTubeTeaItems(apiKey, maxKeep) {
       const title = String(snippet.title || '').trim();
       if (!title) continue;
       const description = String(snippet.description || '').trim();
+      const channel = String(snippet.channelTitle || 'YouTube').trim();
+      if (!isRelevantIndianTeaYouTubeContent(title, description, channel)) continue;
       const gossip = description.length > 320
         ? `${description.slice(0, 320).trimEnd()}…`
         : (description || title);
-      const channel = String(snippet.channelTitle || 'YouTube').trim();
+      const channelName = channel;
       const image = bestYouTubeThumb(snippet.thumbnails);
       const views = parseInt(statItem.statistics?.viewCount || '0', 10) || 0;
       const comments = parseInt(statItem.statistics?.commentCount || '0', 10) || 0;
@@ -290,7 +360,7 @@ async function fetchYouTubeTeaItems(apiKey, maxKeep) {
         thumbnail: image,
         score: views,
         num_comments: comments,
-        author: channel || 'YouTube',
+        author: channelName || 'YouTube',
         source: 'YouTube',
         description: gossip,
         gossip,

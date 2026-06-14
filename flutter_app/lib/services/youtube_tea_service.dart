@@ -9,11 +9,91 @@ import 'reddit_tea_service.dart';
 
 const _newsApiUserAgent = 'DeiteNews/1.0 (+https://deitedatabase.web.app)';
 
+/// India-first Tea feed: Bollywood gossip, local entertainment, cricket/sports.
 const _teaYouTubeQueries = [
-  'bollywood gossip celebrity tea',
-  'bollywood controversy drama',
-  'celebrity news india entertainment',
+  'bollywood gossip celebrity news india latest',
+  'bollywood controversy drama india hindi',
+  'IPL cricket highlights news india',
+  'indian cricket team sports news',
+  'tollywood kollywood sandalwood gossip india',
+  'indian celebrity entertainment news hindi',
 ];
+
+const _internationalTeaSignals = [
+  'hollywood',
+  'kardashian',
+  'taylor swift',
+  'nba ',
+  ' nfl',
+  'premier league',
+  'manchester united',
+  'real madrid',
+  'barcelona fc',
+  'uk royal',
+  'white house',
+  'fox news',
+  'cnn breaking',
+  'k-pop',
+  'kpop',
+  'marvel studios',
+  'disney world',
+  'eurovision',
+  'grammy awards',
+];
+
+const _indianTeaSignals = [
+  'bollywood',
+  'india',
+  'indian',
+  'hindi',
+  'cricket',
+  'ipl',
+  'bcci',
+  'tollywood',
+  'kollywood',
+  'sandalwood',
+  'mumbai',
+  'delhi',
+  'bigg boss',
+  'filmfare',
+  'box office',
+  'crore',
+  'lakh',
+  'virat',
+  'dhoni',
+  'rohit sharma',
+  'ind vs',
+  'india vs',
+  'star sports',
+  'hotstar',
+];
+
+bool isRelevantIndianTeaYouTubeContent({
+  required String title,
+  String description = '',
+  String channel = '',
+}) {
+  final blob = '$title $description $channel'.toLowerCase();
+  if (blob.trim().isEmpty) return false;
+
+  final hasIndiaLean = _indianTeaSignals.any((s) => blob.contains(s)) ||
+      bollywoodTeaTopicKeywords.any((kw) => blob.contains(kw.toLowerCase()));
+  if (!hasIndiaLean) return false;
+
+  final looksInternational = _internationalTeaSignals.any((s) => blob.contains(s));
+  if (looksInternational && !_indianTeaSignals.any((s) => blob.contains(s))) {
+    return false;
+  }
+  return true;
+}
+
+String _teaYouTubePublishedAfter() {
+  return DateTime.now()
+      .toUtc()
+      .subtract(const Duration(days: 14))
+      .toIso8601String()
+      .replaceFirst(RegExp(r'\.\d+'), '');
+}
 
 bool isYouTubeTeaUrl(String? url) {
   final u = '${url ?? ''}'.trim().toLowerCase();
@@ -53,10 +133,18 @@ Map<String, dynamic>? rowFromYouTubeSnippet(
   if (title.isEmpty || titleHasExcludedKeyword(title)) return null;
 
   final description = '${snippet['description'] ?? ''}'.trim();
+  final channel = '${snippet['channelTitle'] ?? 'YouTube'}'.trim();
+  if (!isRelevantIndianTeaYouTubeContent(
+    title: title,
+    description: description,
+    channel: channel,
+  )) {
+    return null;
+  }
   final gossip = description.length > 320
       ? '${description.substring(0, 320).trimRight()}…'
       : description;
-  final channel = '${snippet['channelTitle'] ?? 'YouTube'}'.trim();
+  final channelTitle = channel;
   final image = _bestYouTubeThumbnail(
     snippet['thumbnails'] is Map ? Map<String, dynamic>.from(snippet['thumbnails'] as Map) : null,
   );
@@ -68,7 +156,7 @@ Map<String, dynamic>? rowFromYouTubeSnippet(
     'thumbnail': image,
     'score': viewCount,
     'num_comments': commentCount,
-    'author': channel.isNotEmpty ? channel : 'YouTube',
+    'author': channelTitle.isNotEmpty ? channelTitle : 'YouTube',
     'source': 'YouTube',
     'description': gossip.isNotEmpty ? gossip : title,
     'gossip': gossip.isNotEmpty ? gossip : title,
@@ -86,6 +174,16 @@ List<Map<String, dynamic>> _parseYouTubeTeaItems(dynamic raw) {
     final m = Map<String, dynamic>.from(item);
     final url = '${m['url'] ?? ''}'.trim();
     if (url.isEmpty || seen.contains(url)) continue;
+    final title = '${m['title'] ?? ''}'.trim();
+    final description = '${m['description'] ?? m['gossip'] ?? ''}'.trim();
+    final channel = '${m['author'] ?? ''}'.trim();
+    if (!isRelevantIndianTeaYouTubeContent(
+      title: title,
+      description: description,
+      channel: channel,
+    )) {
+      continue;
+    }
     seen.add(url);
     rows.add(m);
   }
@@ -130,15 +228,17 @@ Future<List<Map<String, dynamic>>> fetchTeaRowsFromYouTubeDirect({
   for (final query in _teaYouTubeQueries) {
     if (rows.length >= maxKeep) break;
     try {
+      final perQuery = (maxKeep * 2).clamp(8, 25);
       final searchUri = Uri.parse('https://www.googleapis.com/youtube/v3/search').replace(
         queryParameters: {
           'part': 'snippet',
           'type': 'video',
-          'order': 'viewCount',
+          'order': 'date',
           'q': query,
-          'maxResults': '${maxKeep.clamp(4, 25)}',
+          'maxResults': '$perQuery',
           'regionCode': 'IN',
-          'relevanceLanguage': 'en',
+          'relevanceLanguage': 'hi',
+          'publishedAfter': _teaYouTubePublishedAfter(),
           'key': apiKey,
         },
       );

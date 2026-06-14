@@ -127,14 +127,78 @@ class VertexClient {
   }
 
   Future<String?> generateNewsIllustrationImage(String prompt) async {
+    return _generateIllustrationImage(
+      prompt,
+      prefix:
+          'Create a single editorial illustration for a news story. '
+          'Tasteful and symbolic or environmental; no graphic violence, gore, or identifiable private individuals. '
+          'No text, captions, or logos in the image. '
+          'Use a medium or wide shot when people appear; avoid face close-ups.\n\n',
+    );
+  }
+
+  Future<String?> generatePublicFigureIllustrationImage(
+    String prompt, {
+    required String referenceImageBase64,
+    String mimeType = 'image/jpeg',
+  }) async {
+    final b64 = referenceImageBase64.replaceAll(RegExp(r'\s'), '');
+    if (b64.isEmpty) return null;
+
     final body = prompt.trim();
     if (body.isEmpty) return null;
 
-    const prefix =
-        'Create a single editorial illustration for a news story. '
-        'Tasteful and symbolic or environmental; no graphic violence, gore, or identifiable private individuals. '
-        'No text, captions, or logos in the image. '
-        'Use a medium or wide shot when people appear; avoid face close-ups.\n\n';
+    const instructions =
+        'REFERENCE PHOTO ATTACHED: This is the real public figure who must appear in the output.\n'
+        'Generate ONE editorial news illustration for social media.\n'
+        'CRITICAL: The person in the generated image MUST have the EXACT same face, facial structure, '
+        'skin tone, hair, and beard or hairstyle as the reference photo. Do NOT invent a different person.\n'
+        'Show their face clearly and recognizably. Match the story scene below while preserving identity.\n'
+        'No text overlays or logos unless mentioned in the story.\n\n'
+        'Story / scene:\n';
+
+    final full = '$instructions${body.length > 5500 ? body.substring(0, 5500) : body}';
+    final cleanMime = mimeType.trim().isEmpty ? 'image/jpeg' : mimeType.trim();
+
+    final payload = jsonEncode({
+      'contents': [
+        {
+          'role': 'user',
+          'parts': [
+            {
+              'inlineData': {
+                'mimeType': cleanMime,
+                'data': b64,
+              },
+            },
+            {'text': full},
+          ],
+        },
+      ],
+      'generationConfig': {
+        'temperature': 0.35,
+        'maxOutputTokens': 8192,
+        'responseModalities': ['TEXT', 'IMAGE'],
+      },
+    });
+
+    final client = await _client();
+    final res = await client.post(
+      _modelUri(ServerConfig.vertexImageModel),
+      headers: {'Content-Type': 'application/json'},
+      body: payload,
+    );
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw HttpException('Vertex public figure image ${res.statusCode}: ${res.body}');
+    }
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    return _extractImageDataUrl(data);
+  }
+
+  Future<String?> _generateIllustrationImage(String prompt, {required String prefix}) async {
+    final body = prompt.trim();
+    if (body.isEmpty) return null;
+
     final full = '$prefix${body.length > 6000 ? body.substring(0, 6000) : body}';
 
     final payload = jsonEncode({

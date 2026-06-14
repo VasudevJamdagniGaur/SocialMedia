@@ -3640,7 +3640,7 @@ ${jsonEncode(payloadItems)}''';
     final prompt = '''Extract ONLY famous or well-known entities from the text. Return STRICT JSON, no markdown.
 
 Rules:
-- personality: famous people (celebrities, leaders, authors, historical figures). NOT personal contacts or friends.
+- personality: famous people (celebrities, leaders, authors, sports stars, cricketers, historical figures). NOT personal contacts or friends.
 - event: famous events, named books, films, conferences, awards (e.g. "The Three-Body Problem", "Source Code" book, "Oscars").
 - place: famous or iconic places, landmarks, cities, venues.
 - brand: famous brands, companies, or named commercial products (e.g. Nike, Apple, Optimum Nutrition, MuscleBlaze, Starbucks).
@@ -3890,7 +3890,7 @@ ${text.substring(0, text.length > 800 ? 800 : text.length)}''';
 Extract real-world named entities from the text below.
 
 Rules:
-- persons: ONLY famous or well-known public figures (celebrities, actors, comedians, musicians, leaders, authors, sports stars, historical figures). Examples: Bill Gates, Dinyar Tirandaz, Shah Rukh Khan. Do NOT include personal contacts, friends, family, or acquaintances (e.g. "my friend Sumit" or "I met John" -> leave persons empty).
+- persons: ONLY famous or well-known public figures (celebrities, actors, comedians, musicians, leaders, authors, sports stars, cricketers, historical figures). Examples: Bill Gates, Jasprit Bumrah, Virat Kohli, Shah Rukh Khan, Dinyar Tirandaz. Do NOT include personal contacts, friends, family, or acquaintances (e.g. "my friend Sumit" or "I met John" -> leave persons empty).
 - places: specific locations or venues (cities, institutions, buildings).
 - events: named events, or named works like books (e.g. "Source Code" as a book title). Put book titles in events if they are clearly named.
 - Include only real identifiable entities. Do NOT include abstract concepts or hashtags.
@@ -3902,6 +3902,7 @@ Return format (use this exact structure):
 Examples:
 - "I caught up with my friend Sumit today" -> {"persons":[],"places":[],"events":[]}
 - "Reading Bill Gates' Source Code" -> {"persons":["Bill Gates"],"places":[],"events":["Source Code"]}
+- "Jasprit Bumrah receives stern IPL message" -> {"persons":["Jasprit Bumrah"],"places":[],"events":["IPL"]}
 - "RIP Dinyar Tirandaz, legend from Zabaan Sambhal Ke" -> {"persons":["Dinyar Tirandaz"],"places":[],"events":["Zabaan Sambhal Ke"]}
 
 Text:
@@ -3991,6 +3992,10 @@ $text''';
       result['persons']!.add(tributeName);
     }
 
+    for (final name in _extractCapitalizedPersonNames(trimmed)) {
+      result['persons']!.add(name);
+    }
+
     final possessivePattern = RegExp(
       r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)['\u2019\u2018\u0022]\s*(?:Source\s+Code|[\w\s]+)",
     );
@@ -4025,7 +4030,7 @@ $text''';
         unicode: true,
       ),
       RegExp(
-        r'\b(?:Actor|Actress|Legend|Star|Comedian|Singer|Director|Writer|Cricket(?:er)?)\s+([A-Z][\p{L}]+(?:\s+[A-Z][\p{L}]+){0,3})\b',
+        r'\b(?:Actor|Actress|Legend|Star|Comedian|Singer|Director|Writer|Cricket(?:er)?|Football(?:er)?|Athlete|Player)\s+([A-Z][\p{L}]+(?:\s+[A-Z][\p{L}]+){0,3})\b',
         unicode: true,
       ),
       RegExp(
@@ -4033,14 +4038,117 @@ $text''';
         caseSensitive: false,
         unicode: true,
       ),
+      RegExp(
+        r':\s*([A-Z][\p{L}]+(?:\s+[A-Z][\p{L}]+){1,2})\s+(?:receives|received|gets|got|has|had|is|was|will|returns|returned|commits|committed|says|said|announces|announced|wins|won|scores|scored|joins|joined|leaves|left|faces|faced)\b',
+        unicode: true,
+      ),
+      RegExp(
+        r'\b([A-Z][\p{L}]+(?:\s+[A-Z][\p{L}]+){1,2})\s+(?:receives|received|gets|got|says|said|announces|announced|wins|won|scores|scored|stars|starred|joins|joined|leaves|left|commits|committed|returns|returned|faces|faced)\b',
+        unicode: true,
+      ),
     ];
     for (final pattern in patterns) {
       final match = pattern.firstMatch(text);
       if (match == null) continue;
       final name = (match.group(1) ?? '').trim();
-      if (name.length >= 3 && name.length <= 50) return name;
+      if (_isLikelyPublicFigureName(name)) return name;
     }
+
+    final fromCapitalized = _extractCapitalizedPersonNames(text);
+    if (fromCapitalized.isNotEmpty) return fromCapitalized.first;
     return null;
+  }
+
+  static const _nonPersonNamePhrases = {
+    'Insight Learning',
+    'World News',
+    'New Delhi',
+    'San Francisco',
+    'Los Angeles',
+    'United States',
+    'United Kingdom',
+    'Prime Minister',
+    'Super Bowl',
+    'Star Sports',
+    'Big Boss',
+    'Box Office',
+    'Source Code',
+    'Middle East',
+    'South Africa',
+    'North America',
+    'Silicon Valley',
+    'Artificial Intelligence',
+    'Machine Learning',
+    'Social Media',
+    'Breaking News',
+    'Current Affairs',
+    'Actionable What',
+    'Contrarian Debate',
+    'Future Prediction',
+    'Ethical Concern',
+    'Business Startup',
+    'Leadership Angle',
+  };
+
+  bool _isLikelyPublicFigureName(String name) {
+    if (name.length < 5 || name.length > 50) return false;
+    if (_nonPersonNamePhrases.contains(name)) return false;
+    final parts = name.split(RegExp(r'\s+'));
+    if (parts.length < 2) return false;
+    return parts.every((p) => p.length >= 2 && RegExp(r'^[A-Z]').hasMatch(p));
+  }
+
+  List<String> _extractCapitalizedPersonNames(String text) {
+    if (text.trim().isEmpty) return const [];
+
+    const contextSignals = r'\b(IPL|BCCI|cricket|bollywood|actor|actress|celebrity|minister|politician|'
+        r'singer|musician|director|composer|writer|author|athlete|football|tennis|basketball|'
+        r'leader|CEO|founder|legend|entrepreneur|ind\s+vs|vs\s+india|sports\s+star|film\s+star)\b';
+    final hasContext = RegExp(contextSignals, caseSensitive: false).hasMatch(text);
+
+    final pattern = RegExp(
+      r'\b([A-Z][\p{L}''\u2019-]+(?:\s+[A-Z][\p{L}''\u2019-]+){1,2})\b',
+      unicode: true,
+    );
+    final scored = <({String name, int score})>[];
+
+    for (final match in pattern.allMatches(text)) {
+      final name = (match.group(1) ?? '').trim();
+      if (!_isLikelyPublicFigureName(name)) continue;
+
+      var score = 0;
+      if (hasContext) score += 2;
+
+      final start = match.start;
+      final end = match.end;
+      if (start > 0) {
+        final before = text.substring(0, start);
+        if (RegExp(r':\s*$').hasMatch(before)) score += 4;
+      }
+      if (end < text.length) {
+        final afterEnd = end + 48 > text.length ? text.length : end + 48;
+        final after = text.substring(end, afterEnd);
+        if (RegExp(
+          r'^\s+(receives|received|gets|got|says|said|announces|announced|wins|won|'
+          r'scores|scored|stars|starred|joins|joined|leaves|left|commits|committed|'
+          r'returns|returned|faces|faced|has|had|is|was|will)\b',
+          caseSensitive: false,
+        ).hasMatch(after)) {
+          score += 4;
+        }
+      }
+
+      scored.add((name: name, score: score));
+    }
+
+    scored.sort((a, b) => b.score.compareTo(a.score));
+    final minScore = hasContext ? 2 : 5;
+    final seen = <String>{};
+    return scored
+        .where((entry) => entry.score >= minScore)
+        .map((entry) => entry.name)
+        .where(seen.add)
+        .toList(growable: false);
   }
 
   String _extractShowOrWorkContext(String text) {
@@ -4113,7 +4221,23 @@ $text''';
     final fromPersonality = (detected['personality'] ?? []).where((n) => n.trim().isNotEmpty).toList();
     if (fromPersonality.isNotEmpty) return fromPersonality.first.trim();
 
-    return _fallbackFamousNameFromText(text);
+    final fromFallback = _fallbackFamousNameFromText(text);
+    if (fromFallback != null && fromFallback.isNotEmpty) return fromFallback;
+
+    final fromCapitalized = _extractCapitalizedPersonNames(text);
+    if (fromCapitalized.isNotEmpty) return fromCapitalized.first.trim();
+
+    return null;
+  }
+
+  String _famousPersonLikenessRules(String personName) {
+    return '''
+CRITICAL — SUBJECT LIKENESS (always follow):
+The person shown MUST be $personName — their real, publicly known face and appearance from photos, matches, interviews, and official media.
+Use $personName's actual facial features, skin tone, hair, beard or hairstyle, and typical public look.
+Do NOT generate a random stranger, generic athlete, or unrelated lookalike.
+Do NOT substitute a different celebrity or invented face.
+The face must be clearly identifiable as $personName.''';
   }
 
   String _buildFamousPersonImagePrompt({
@@ -4131,17 +4255,19 @@ $text''';
 
     if (isTribute) {
       return '''One editorial memorial tribute illustration for a social media RIP post (same image for all post variants).
-Subject: $personName — show their recognizable face and likeness from their public career, respectfully and warmly.$showHint$brandHint
+${_famousPersonLikenessRules(personName)}
+Subject: $personName — memorial portrait.$showHint$brandHint
 Composition: cinematic portrait with the person's face clearly visible and central; integrate subtle tribute symbolism (soft golden memorial light, candles, flowers, stage props like a vintage microphone or director's chair as secondary background elements only).
-Do NOT use an empty chair or silhouette instead of the person — their face must be identifiable.
+Do NOT use an empty chair, silhouette, or random face instead of $personName.
 Mood: solemn, nostalgic, respectful. Tasteful; no graphic content; no text overlay; photorealistic editorial style.
 Story context:
 $contextSnippet''';
     }
 
     return '''One editorial news illustration for social media posts (same image for all variants).
-Include $personName with recognizable face and likeness clearly visible in the scene, matching the story context below.$showHint$brandHint
-Medium shot or portrait-in-environment — face must be identifiable, not a generic figure or empty symbolic props.
+${_famousPersonLikenessRules(personName)}
+Include $personName in the scene with their recognizable face clearly visible and central, matching the story context below.$showHint$brandHint
+Medium shot or portrait-in-environment — face must be $personName specifically, not a generic figure or empty symbolic props.
 Tasteful; high realism; no text overlay.
 Story context:
 $contextSnippet''';
@@ -4188,16 +4314,18 @@ $contextSnippet''';
     final person = (entities['persons']?.isNotEmpty ?? false) ? entities['persons']!.first.trim() : '';
     final place = (entities['places']?.isNotEmpty ?? false) ? entities['places']!.first.trim() : '';
     final event = (entities['events']?.isNotEmpty ?? false) ? entities['events']!.first.trim() : '';
-    const styleSuffix = 'Professional LinkedIn-style thumbnail, minimal text on image, high quality, engaging.';
+    const styleSuffix =
+        'Show their real recognizable face and public likeness — not a random or generic person. '
+        'Professional LinkedIn-style thumbnail, minimal text on image, high quality, engaging.';
 
     if (person.isNotEmpty && event.isNotEmpty) {
-      return '$person with the book "$event", featured together in one image. $styleSuffix';
+      return '$person with the book "$event", featured together in one image. $person\'s actual recognizable face must be visible. $styleSuffix';
     }
     if (person.isNotEmpty && place.isNotEmpty) {
-      return '$person at $place, featured together. $styleSuffix';
+      return '$person at $place, featured together. $person\'s actual recognizable face must be visible. $styleSuffix';
     }
     if (person.isNotEmpty) {
-      return '$person, professional LinkedIn-style thumbnail, engaging and dynamic, not a plain headshot. $styleSuffix';
+      return '$person with their real recognizable face clearly visible — not a random lookalike. $styleSuffix';
     }
     if (place.isNotEmpty) {
       return '$place, professional LinkedIn-style thumbnail. $styleSuffix';
@@ -4279,7 +4407,8 @@ $contextSnippet''';
   Future<String?> generateShareImageFromPrompt(String prompt) async {
     final trimmed = prompt.trim();
     if (trimmed.isEmpty || !isVertexBackendConfigured()) return null;
-    return _generateImageWithGemini(trimmed);
+    final referencePhoto = await _resolveShareImageReferencePhoto(trimmed);
+    return _generateImageWithGeminiOrReferenceFallback(trimmed, referencePhoto);
   }
 
   Future<String?> fetchImageForReflection(
@@ -4292,7 +4421,7 @@ $contextSnippet''';
     debugPrint('[ImageGen] fetchImageForReflection start platform=$platform textLen=${postText.trim().length}');
     final fullText = postText.trim();
     final keyText = fullText.length > 300 ? fullText.substring(0, 300) : fullText;
-    final cacheKey = 'post_image_cache_v3::$keyText';
+    final cacheKey = 'post_image_cache_v5::$keyText';
     final prefs = await SharedPreferences.getInstance();
 
     if (!skipCache) {
@@ -4327,15 +4456,16 @@ $contextSnippet''';
     }
 
     final platformName = platform.trim().isEmpty ? 'x' : platform.trim().toLowerCase();
-    Map<String, String>? referenceImage;
-    if ((userContext?['profileImageUrl']?.toString().trim().isNotEmpty ?? false)) {
+    Map<String, String>? referenceImage = await _resolveShareImageReferencePhoto(fullText);
+    if (referenceImage == null &&
+        (userContext?['profileImageUrl']?.toString().trim().isNotEmpty ?? false)) {
       referenceImage = await _getProfileImageAsBase64(userContext!['profileImageUrl'].toString().trim());
     }
 
     final prompt = await _resolveShareImagePrompt(fullText, platformName, userContext);
     if (prompt == null || prompt.trim().isEmpty) return null;
 
-    final generated = await _generateImageWithGemini(prompt, referenceImage);
+    final generated = await _generateImageWithGeminiOrReferenceFallback(prompt, referenceImage);
     if (generated != null && generated.isNotEmpty && !skipCache) {
       _cacheReflectionImageIfPersistable(prefs, cacheKey, fullText, generated);
     }
@@ -4409,7 +4539,110 @@ $contextSnippet''';
       ];
       prompt = promptLines.join('\n\n');
     }
-    return _generateImageWithGemini(prompt);
+    Map<String, String>? referencePhoto;
+    if (famousPerson != null && famousPerson.isNotEmpty) {
+      referencePhoto = await _fetchPublicFigureReferencePhoto(famousPerson);
+    }
+    return _generateImageWithGeminiOrReferenceFallback(prompt, referencePhoto);
+  }
+
+  static const _wikiUserAgent = 'DeiteApp/1.0 (https://deitedatabase.web.app; share-image)';
+
+  Future<String?> _fetchWikipediaThumbnailUrl(String pageTitle) async {
+    final title = pageTitle.trim();
+    if (title.isEmpty) return null;
+    final wikiTitle = title.replaceAll(' ', '_');
+    try {
+      final uri = Uri.parse(
+        'https://en.wikipedia.org/api/rest_v1/page/summary/${Uri.encodeComponent(wikiTitle)}',
+      );
+      final res = await http
+          .get(
+            uri,
+            headers: {'Accept': 'application/json', 'User-Agent': _wikiUserAgent},
+          )
+          .timeout(const Duration(seconds: 12));
+      if (res.statusCode != 200) return null;
+      final data = jsonDecode(res.body);
+      if (data is! Map || data['thumbnail'] is! Map) return null;
+      var src = '${(data['thumbnail'] as Map)['source'] ?? ''}'.trim();
+      if (!src.startsWith('http')) return null;
+      src = src.replaceAll(RegExp(r'/(\d+)px-'), '/800px-');
+      return src;
+    } catch (e) {
+      debugPrint('[Image] Wikipedia thumbnail lookup failed for "$title": $e');
+      return null;
+    }
+  }
+
+  Future<String?> _searchWikipediaThumbnailUrl(String personName) async {
+    try {
+      final uri = Uri.parse('https://en.wikipedia.org/w/api.php').replace(
+        queryParameters: {
+          'action': 'query',
+          'list': 'search',
+          'srsearch': personName,
+          'format': 'json',
+          'srlimit': '5',
+        },
+      );
+      final res = await http
+          .get(uri, headers: {'User-Agent': _wikiUserAgent})
+          .timeout(const Duration(seconds: 12));
+      if (res.statusCode != 200) return null;
+      final data = jsonDecode(res.body);
+      final query = data is Map ? data['query'] : null;
+      final search = query is Map ? query['search'] : null;
+      if (search is! List) return null;
+      for (final hit in search) {
+        if (hit is! Map) continue;
+        final title = '${hit['title'] ?? ''}'.trim();
+        if (title.isEmpty) continue;
+        final thumb = await _fetchWikipediaThumbnailUrl(title);
+        if (thumb != null) return thumb;
+      }
+    } catch (e) {
+      debugPrint('[Image] Wikipedia search failed for "$personName": $e');
+    }
+    return null;
+  }
+
+  Future<Map<String, String>?> _fetchPublicFigureReferencePhoto(String personName) async {
+    final name = personName.trim();
+    if (name.isEmpty) return null;
+
+    var thumbUrl = await _fetchWikipediaThumbnailUrl(name);
+    thumbUrl ??= await _searchWikipediaThumbnailUrl(name);
+    if (thumbUrl == null) {
+      debugPrint('[Image] No Wikipedia photo found for "$name"');
+      return null;
+    }
+
+    final encoded = await _getProfileImageAsBase64(thumbUrl);
+    if (encoded != null) {
+      debugPrint('[Image] Loaded reference photo for "$name" (${encoded['mimeType']})');
+    }
+    return encoded;
+  }
+
+  Future<Map<String, String>?> _resolveShareImageReferencePhoto(String fullText) async {
+    final famousPerson = await _resolveFamousPersonForImage(fullText);
+    if (famousPerson == null || famousPerson.trim().isEmpty) return null;
+    return _fetchPublicFigureReferencePhoto(famousPerson);
+  }
+
+  Future<String?> _generateImageWithGeminiOrReferenceFallback(
+    String prompt,
+    Map<String, String>? referenceImage,
+  ) async {
+    final generated = await _generateImageWithGemini(prompt, referenceImage);
+    if (generated != null && generated.isNotEmpty) return generated;
+    if (referenceImage != null && (referenceImage['base64'] ?? '').trim().isNotEmpty) {
+      final mime = referenceImage['mimeType'] ?? 'image/jpeg';
+      debugPrint('[ImageGen] AI failed; using reference photo directly');
+      return 'data:$mime;base64,${referenceImage['base64']}';
+    }
+    return null;
   }
 
   Future<Map<String, String>?> _getProfileImageAsBase64(String urlOrDataUrl) async {
@@ -4451,12 +4684,14 @@ $contextSnippet''';
     final p = prompt.trim();
     if (p.isEmpty || !isVertexBackendConfigured()) return null;
     try {
-      // Current backend route accepts prompt-only image generation.
-      if (referenceImage != null) {
-        debugPrint('[Image] Reference image provided; prompt-only backend will ignore binary reference for now.');
-      }
-      debugPrint('[ImageGen] _generateImageWithGemini promptLen=${p.length}');
-      final imageDataUrl = await vertexGenerateNewsImage(p);
+      debugPrint(
+        '[ImageGen] _generateImageWithGemini promptLen=${p.length} '
+        'hasReference=${referenceImage != null}',
+      );
+      final imageDataUrl = await vertexGenerateNewsImage(
+        p,
+        referenceImage: referenceImage,
+      );
       debugPrint('[ImageGen] _generateImageWithGemini received len=${imageDataUrl.length}');
       if (imageDataUrl.startsWith('data:image')) {
         try {

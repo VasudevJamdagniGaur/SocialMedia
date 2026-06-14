@@ -8,11 +8,109 @@ import '../config.dart';
 import '../utils/http_utils.dart';
 import 'news_routes.dart';
 
+/// India-first Tea feed: Bollywood gossip, local entertainment, cricket/sports.
 const _teaYouTubeQueries = [
-  'bollywood gossip celebrity tea',
-  'bollywood controversy drama',
-  'celebrity news india entertainment',
+  'bollywood gossip celebrity news india latest',
+  'bollywood controversy drama india hindi',
+  'IPL cricket highlights news india',
+  'indian cricket team sports news',
+  'tollywood kollywood sandalwood gossip india',
+  'indian celebrity entertainment news hindi',
 ];
+
+const _internationalTeaSignals = [
+  'hollywood',
+  'kardashian',
+  'taylor swift',
+  'nba ',
+  ' nfl',
+  'premier league',
+  'manchester united',
+  'real madrid',
+  'barcelona fc',
+  'uk royal',
+  'white house',
+  'fox news',
+  'cnn breaking',
+  'k-pop',
+  'kpop',
+  'marvel studios',
+  'disney world',
+  'eurovision',
+  'grammy awards',
+];
+
+const _indianTeaSignals = [
+  'bollywood',
+  'india',
+  'indian',
+  'hindi',
+  'cricket',
+  'ipl',
+  'bcci',
+  'tollywood',
+  'kollywood',
+  'sandalwood',
+  'mumbai',
+  'delhi',
+  'bigg boss',
+  'filmfare',
+  'box office',
+  'crore',
+  'lakh',
+  'virat',
+  'dhoni',
+  'rohit sharma',
+  'ind vs',
+  'india vs',
+  'star sports',
+  'hotstar',
+];
+
+const _bollywoodTeaTopicKeywords = [
+  'bollywood',
+  'movie',
+  'film',
+  'actor',
+  'actress',
+  'box office',
+  'trailer',
+  'release',
+  'cricket',
+  'ipl',
+  'celebrity',
+  'gossip',
+  'hindi',
+  'tollywood',
+  'kollywood',
+];
+
+bool _isRelevantIndianTeaYouTubeContent({
+  required String title,
+  String description = '',
+  String channel = '',
+}) {
+  final blob = '$title $description $channel'.toLowerCase();
+  if (blob.trim().isEmpty) return false;
+
+  final hasIndiaLean = _indianTeaSignals.any((s) => blob.contains(s)) ||
+      _bollywoodTeaTopicKeywords.any((kw) => blob.contains(kw));
+  if (!hasIndiaLean) return false;
+
+  final looksInternational = _internationalTeaSignals.any((s) => blob.contains(s));
+  if (looksInternational && !_indianTeaSignals.any((s) => blob.contains(s))) {
+    return false;
+  }
+  return true;
+}
+
+String _teaYouTubePublishedAfter() {
+  return DateTime.now()
+      .toUtc()
+      .subtract(const Duration(days: 14))
+      .toIso8601String()
+      .replaceFirst(RegExp(r'\.\d+'), '');
+}
 
 Router buildYouTubeRouter() {
   final router = Router();
@@ -36,15 +134,17 @@ Router buildYouTubeRouter() {
     for (final query in _teaYouTubeQueries) {
       if (rows.length >= maxKeep) break;
       try {
+        final perQuery = (maxKeep * 2).clamp(8, 25);
         final searchUri = Uri.parse('https://www.googleapis.com/youtube/v3/search').replace(
           queryParameters: {
             'part': 'snippet',
             'type': 'video',
-            'order': 'viewCount',
+            'order': 'date',
             'q': query,
-            'maxResults': '$maxKeep',
+            'maxResults': '$perQuery',
             'regionCode': 'IN',
-            'relevanceLanguage': 'en',
+            'relevanceLanguage': 'hi',
+            'publishedAfter': _teaYouTubePublishedAfter(),
             'key': apiKey,
           },
         );
@@ -97,10 +197,18 @@ Router buildYouTubeRouter() {
           if (title.isEmpty) continue;
 
           final description = '${s['description'] ?? ''}'.trim();
+          final channel = '${s['channelTitle'] ?? 'YouTube'}'.trim();
+          if (!_isRelevantIndianTeaYouTubeContent(
+            title: title,
+            description: description,
+            channel: channel,
+          )) {
+            continue;
+          }
+
           final gossip = description.length > 320
               ? '${description.substring(0, 320).trimRight()}…'
               : (description.isNotEmpty ? description : title);
-          final channel = '${s['channelTitle'] ?? 'YouTube'}'.trim();
           final thumbs = s['thumbnails'] is Map ? s['thumbnails'] as Map : null;
           String? image;
           if (thumbs != null) {
