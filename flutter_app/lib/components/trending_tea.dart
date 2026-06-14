@@ -22,6 +22,18 @@ const _teaCacheMaxAge = Duration(hours: 6);
 
 List<TeaItem>? _memoryTeaCache;
 DateTime? _memoryTeaCacheAt;
+List<TeaItem>? _teaFeedLaunchHandoff;
+
+/// Full in-memory items for Tea feed (keeps AI/data-URL thumbnails out of router extra).
+void stashTeaFeedLaunchItems(List<TeaItem> items) {
+  _teaFeedLaunchHandoff = List<TeaItem>.from(items);
+}
+
+List<TeaItem>? takeTeaFeedLaunchItems() {
+  final handoff = _teaFeedLaunchHandoff;
+  _teaFeedLaunchHandoff = null;
+  return handoff == null ? null : List<TeaItem>.from(handoff);
+}
 
 class TeaItem {
   TeaItem({
@@ -222,6 +234,19 @@ String? teaHeroImageUrl(TeaItem item) {
   }
   final thumb = item.thumbnail.trim();
   if (isValidHubCarouselImageUrl(thumb)) return thumb;
+
+  for (final key in [
+    hubCarouselImageCacheKey(item.url, item.id),
+    hubCarouselImageCacheKey(item.url, ''),
+    if (item.title.trim().isNotEmpty) hubCarouselImageCacheKey('', item.title),
+  ]) {
+    if (key.isEmpty) continue;
+    final mem = peekHubCarouselMemory(key);
+    if (mem != null && isValidHubCarouselImageUrl(mem)) return mem;
+  }
+
+  final yt = youtubeTeaThumbnailFromUrl(item.url);
+  if (yt != null && isValidHubCarouselImageUrl(yt)) return yt;
   return null;
 }
 
@@ -407,6 +432,7 @@ class _TrendingTeaState extends State<TrendingTea> {
   }
 
   void _openTeaFeed() {
+    stashTeaFeedLaunchItems(_items);
     context.go(AppRoutes.teaFeed, extra: {
       'teaItems': _items.map(teaItemFeedPayload).toList(),
       'returnTo': GoRouterState.of(context).uri.path,

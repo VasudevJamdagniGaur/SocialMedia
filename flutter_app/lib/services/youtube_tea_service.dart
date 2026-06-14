@@ -140,6 +140,27 @@ bool isYouTubeTeaUrl(String? url) {
       u.contains('youtu.be/');
 }
 
+String? youtubeTeaVideoId(String? url) {
+  final u = '${url ?? ''}'.trim();
+  if (u.isEmpty) return null;
+  for (final pattern in [
+    RegExp(r'[?&]v=([\w-]{11})', caseSensitive: false),
+    RegExp(r'youtu\.be/([\w-]{11})', caseSensitive: false),
+    RegExp(r'youtube\.com/shorts/([\w-]{11})', caseSensitive: false),
+  ]) {
+    final match = pattern.firstMatch(u);
+    if (match != null) return match.group(1);
+  }
+  return null;
+}
+
+/// Standard YouTube poster when API thumbnail is missing from navigation payload.
+String? youtubeTeaThumbnailFromUrl(String? url) {
+  final id = youtubeTeaVideoId(url);
+  if (id == null || id.isEmpty) return null;
+  return 'https://i.ytimg.com/vi/$id/hqdefault.jpg';
+}
+
 String? _bestYouTubeThumbnail(Map<String, dynamic>? thumbnails) {
   if (thumbnails == null) return null;
   for (final key in ['maxres', 'high', 'medium', 'default']) {

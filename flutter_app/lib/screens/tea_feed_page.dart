@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../components/trending_tea.dart';
 import '../router/app_router.dart';
+import '../services/youtube_tea_service.dart';
 import '../utils/hub_carousel_ai_image.dart';
 import '../utils/hub_carousel_image_store.dart';
 import '../utils/hub_colors.dart';
@@ -74,13 +75,20 @@ class _TeaFeedPageState extends State<TeaFeedPage> {
   }
 
   Future<void> _bootstrapTeaFeed() async {
+    final handoff = takeTeaFeedLaunchItems();
+    if (handoff != null && handoff.isNotEmpty) {
+      _rawItems = handoff;
+    }
+
     final extra = GoRouterState.of(context).extra;
     if (extra is Map) {
       _returnTo = extra['returnTo'] as String? ?? AppRoutes.dashboard;
       if (!_returnTo.startsWith('/')) _returnTo = AppRoutes.dashboard;
-      final raw = extra['teaItems'];
-      if (raw is List) {
-        _rawItems = raw.map(_parseTeaItem).whereType<TeaItem>().toList();
+      if (_rawItems.isEmpty) {
+        final raw = extra['teaItems'];
+        if (raw is List) {
+          _rawItems = raw.map(_parseTeaItem).whereType<TeaItem>().toList();
+        }
       }
     }
     if (_rawItems.isEmpty) {
@@ -107,16 +115,33 @@ class _TeaFeedPageState extends State<TeaFeedPage> {
     final updated = <TeaItem>[];
 
     for (final item in _rawItems) {
-      if (teaHeroImageUrl(item) != null) {
-        updated.add(item);
+      final immediate = teaHeroImageUrl(item);
+      if (immediate != null) {
+        updated.add(_copyTeaItem(item, thumbnail: immediate));
+        if (immediate != item.thumbnail) changed = true;
         continue;
       }
-      final cached = await resolveHubCarouselImageFast(
-        url: item.url,
-        title: item.title,
-        fallbackId: item.id,
-        kind: HubCarouselImageKind.tea,
-      );
+
+      final ytFallback = youtubeTeaThumbnailFromUrl(item.url);
+      if (ytFallback != null) {
+        updated.add(_copyTeaItem(item, thumbnail: ytFallback));
+        changed = true;
+        continue;
+      }
+
+      String? cached;
+      for (final fallbackId in [
+        item.id,
+        hubCarouselImageCacheKey(hubCarouselImageCacheKey(item.url, item.id), item.title),
+      ]) {
+        cached = await resolveHubCarouselImageFast(
+          url: item.url,
+          title: item.title,
+          fallbackId: fallbackId,
+          kind: HubCarouselImageKind.tea,
+        );
+        if (cached != null) break;
+      }
       if (cached != null) {
         updated.add(_copyTeaItem(item, thumbnail: cached));
         changed = true;
@@ -530,15 +555,26 @@ class _TeaSlideState extends State<_TeaSlide> {
       return;
     }
 
-    final cached = await resolveHubCarouselImageFast(
-      url: item.url,
-      title: item.title,
-      fallbackId: item.id,
-      kind: HubCarouselImageKind.tea,
-    );
-    if (cached != null && isValidHubCarouselImageUrl(cached)) {
-      if (mounted && token == _resolveGen) setState(() => _heroUrl = cached);
+    final ytFallback = youtubeTeaThumbnailFromUrl(item.url);
+    if (ytFallback != null && isValidHubCarouselImageUrl(ytFallback)) {
+      if (mounted && token == _resolveGen) setState(() => _heroUrl = ytFallback);
       return;
+    }
+
+    for (final fallbackId in [
+      item.id,
+      hubCarouselImageCacheKey(hubCarouselImageCacheKey(item.url, item.id), item.title),
+    ]) {
+      final cached = await resolveHubCarouselImageFast(
+        url: item.url,
+        title: item.title,
+        fallbackId: fallbackId,
+        kind: HubCarouselImageKind.tea,
+      );
+      if (cached != null && isValidHubCarouselImageUrl(cached)) {
+        if (mounted && token == _resolveGen) setState(() => _heroUrl = cached);
+        return;
+      }
     }
 
     final generated = await getOrGenerateHubCarouselImage(
@@ -574,13 +610,6 @@ class _TeaSlideState extends State<_TeaSlide> {
                 fit: BoxFit.cover,
                 errorWidget: const SizedBox.shrink(),
               ),
-            ),
-          )
-        else
-          Positioned.fill(
-            child: GestureDetector(
-              onTap: canShare ? widget.onOpenShare : null,
-              child: const SizedBox.expand(),
             ),
           ),
         IgnorePointer(

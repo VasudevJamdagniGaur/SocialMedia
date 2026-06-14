@@ -205,7 +205,21 @@ class HubCarouselHeroImage extends StatelessWidget {
       gaplessPlayback: true,
       loadingBuilder: (context, child, progress) {
         if (progress == null) return child;
-        return errorWidget ?? const SizedBox.shrink();
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            child,
+            Center(
+              child: CircularProgressIndicator(
+                value: progress.expectedTotalBytes != null
+                    ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
+                    : null,
+                strokeWidth: 2,
+                color: Colors.white54,
+              ),
+            ),
+          ],
+        );
       },
       errorBuilder: (_, __, ___) => errorWidget ?? const SizedBox.shrink(),
     );
