@@ -26,7 +26,7 @@ List<TeaItem>? _teaFeedLaunchHandoff;
 
 /// Full in-memory items for Tea feed (keeps AI/data-URL thumbnails out of router extra).
 void stashTeaFeedLaunchItems(List<TeaItem> items) {
-  _teaFeedLaunchHandoff = List<TeaItem>.from(items);
+  _teaFeedLaunchHandoff = teaItemsWithResolvedHeroes(items);
 }
 
 List<TeaItem>? takeTeaFeedLaunchItems() {
@@ -34,6 +34,28 @@ List<TeaItem>? takeTeaFeedLaunchItems() {
   _teaFeedLaunchHandoff = null;
   return handoff == null ? null : List<TeaItem>.from(handoff);
 }
+
+/// Carousel cards can show images from memory cache while [TeaItem.thumbnail] is still empty.
+List<TeaItem> teaItemsWithResolvedHeroes(Iterable<TeaItem> items) {
+  return items.map((item) {
+    final hero = teaHeroImageUrl(item);
+    if (hero == null || hero == item.thumbnail) return item;
+    return TeaItem(
+      id: item.id,
+      title: item.title,
+      url: item.url,
+      postUrl: item.postUrl,
+      thumbnail: hero,
+      gossip: item.gossip,
+      author: item.author,
+      score: item.score,
+      numComments: item.numComments,
+    );
+  }).toList();
+}
+
+List<TeaItem>? get memoryTeaCacheSnapshot =>
+    _memoryTeaCache == null ? null : List<TeaItem>.from(_memoryTeaCache!);
 
 class TeaItem {
   TeaItem({

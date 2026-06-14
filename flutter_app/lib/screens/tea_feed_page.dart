@@ -59,11 +59,53 @@ class _TeaFeedPageState extends State<TeaFeedPage> {
   int _imageHydrateGen = 0;
 
   List<TeaItem> get _displayItems {
-    final items = List<TeaItem>.from(_rawItems);
+    final items = teaItemsWithResolvedHeroes(_rawItems);
     if (_tab == _TeaTab.trending) {
       items.sort((a, b) => b.score.compareTo(a.score));
     }
     return items;
+  }
+
+  bool _applyLaunchHandoff() {
+    final handoff = takeTeaFeedLaunchItems();
+    if (handoff == null || handoff.isEmpty) return false;
+    _rawItems = teaItemsWithResolvedHeroes(handoff);
+    return true;
+  }
+
+  List<TeaItem> _mergeWithMemoryTeaCache(List<TeaItem> items) {
+    final mem = memoryTeaCacheSnapshot;
+    if (mem == null || mem.isEmpty) return items;
+    final richByUrl = {
+      for (final row in teaItemsWithResolvedHeroes(mem))
+        if (row.url.trim().isNotEmpty) normalizeUrlKey(row.url): row,
+    };
+    if (richByUrl.isEmpty) return items;
+    return items.map((item) {
+      if (teaHeroImageUrl(item) != null) return item;
+      final rich = richByUrl[normalizeUrlKey(item.url)];
+      if (rich == null || teaHeroImageUrl(rich) == null) return item;
+      return _copyTeaItem(item, thumbnail: teaHeroImageUrl(rich)!);
+    }).toList();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    if (_applyLaunchHandoff()) {
+      _rawItems = _mergeWithMemoryTeaCache(_rawItems);
+    }
+  }
+
+  @override
+  void activate() {
+    super.activate();
+    if (_applyLaunchHandoff()) {
+      setState(() => _rawItems = _mergeWithMemoryTeaCache(_rawItems));
+      unawaited(_hydrateTeaFeedImages());
+    } else {
+      unawaited(_hydrateTeaFeedImages());
+    }
   }
 
   @override
@@ -75,9 +117,8 @@ class _TeaFeedPageState extends State<TeaFeedPage> {
   }
 
   Future<void> _bootstrapTeaFeed() async {
-    final handoff = takeTeaFeedLaunchItems();
-    if (handoff != null && handoff.isNotEmpty) {
-      _rawItems = handoff;
+    if (_rawItems.isEmpty) {
+      _applyLaunchHandoff();
     }
 
     final extra = GoRouterState.of(context).extra;
@@ -91,6 +132,9 @@ class _TeaFeedPageState extends State<TeaFeedPage> {
         }
       }
     }
+    _rawItems = _mergeWithMemoryTeaCache(_rawItems);
+    _rawItems = teaItemsWithResolvedHeroes(_rawItems);
+
     if (_rawItems.isEmpty) {
       try {
         _rawItems = await fetchTrendingTea();
@@ -100,12 +144,6 @@ class _TeaFeedPageState extends State<TeaFeedPage> {
     setState(() {});
     await _refreshWatchlistIds();
     await _hydrateTeaFeedImages();
-  }
-
-  @override
-  void activate() {
-    super.activate();
-    unawaited(_hydrateTeaFeedImages());
   }
 
   Future<void> _hydrateTeaFeedImages() async {
@@ -593,7 +631,11 @@ class _TeaSlideState extends State<_TeaSlide> {
   @override
   Widget build(BuildContext context) {
     final item = widget.item;
-    final heroUrl = _heroUrl != null && isValidHubCarouselImageUrl(_heroUrl) ? _heroUrl : null;
+    final heroUrl = teaHeroImageUrl(item) ??
+        (_heroUrl != null && isValidHubCarouselImageUrl(_heroUrl) ? _heroUrl : null) ??
+        youtubeTeaThumbnailFromUrl(item.url);
+    final displayHero =
+        heroUrl != null && isValidHubCarouselImageUrl(heroUrl) ? heroUrl : null;
     final canShare = item.url.isNotEmpty;
     final bottomPad = MediaQuery.paddingOf(context).bottom;
 
@@ -601,14 +643,14 @@ class _TeaSlideState extends State<_TeaSlide> {
       fit: StackFit.expand,
       children: [
         Positioned.fill(child: _FallbackHero(index: widget.index)),
-        if (heroUrl != null)
+        if (displayHero != null)
           Positioned.fill(
             child: GestureDetector(
               onTap: canShare ? widget.onOpenShare : null,
               child: HubCarouselHeroImage(
-                imageUrl: heroUrl,
+                imageUrl: displayHero,
                 fit: BoxFit.cover,
-                errorWidget: const SizedBox.shrink(),
+                errorWidget: _FallbackHero(index: widget.index),
               ),
             ),
           ),
