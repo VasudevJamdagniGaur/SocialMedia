@@ -24,11 +24,18 @@ const bollywoodTeaTopicKeywords = [
   'release',
   'cricket',
   'ipl',
+  'football',
+  'soccer',
   'celebrity',
   'gossip',
+  'scandal',
+  'controversy',
+  'viral',
+  'trending',
   'hindi',
   'tollywood',
   'kollywood',
+  'bigg boss',
 ];
 
 int normalizeUps(Map<String, dynamic> post) {

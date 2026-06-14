@@ -366,12 +366,8 @@ List<Map<String, dynamic>> teaRowsFromRssArticles(List<Map<String, dynamic>> rss
 /// Trending Tea rows via YouTube Data API (replaces Reddit scraping).
 Future<List<Map<String, dynamic>>> fetchTrendingTeaRows() async {
   var rows = await fetchTeaRowsFromYouTube();
-  if (rows.length < 4) {
-    final rss = await fetchLiveFromGoogleRssByQueryFast(
-      '(bollywood OR "bollywood gossip" OR IPL OR "indian cricket" OR "indian celebrity") india when:7d',
-      timeoutMs: 12000,
-    );
-    final fromRss = teaRowsFromRssArticles(rss);
+  if (rows.length < 6) {
+    final fromRss = await _fetchTeaRssFallbackRows();
     if (fromRss.length > rows.length) rows = fromRss;
   }
   if (rows.isNotEmpty) {
@@ -382,4 +378,28 @@ Future<List<Map<String, dynamic>>> fetchTrendingTeaRows() async {
     );
   }
   return rows;
+}
+
+Future<List<Map<String, dynamic>>> _fetchTeaRssFallbackRows() async {
+  const queries = [
+    '(bollywood gossip OR celebrity scandal OR "bollywood drama") india when:7d',
+    '(IPL OR "cricket gossip" OR "cricket controversy") india when:7d',
+    '(ISL OR football OR soccer) (gossip OR controversy OR viral) india when:7d',
+    '(viral OR trending OR meme OR famous) india when:3d',
+  ];
+
+  final merged = <Map<String, dynamic>>[];
+  final seen = <String>{};
+  for (final query in queries) {
+    try {
+      final rss = await fetchLiveFromGoogleRssByQueryFast(query, timeoutMs: 10000);
+      for (final row in teaRowsFromRssArticles(rss)) {
+        final url = '${row['url'] ?? ''}'.trim();
+        if (url.isEmpty || seen.contains(url)) continue;
+        seen.add(url);
+        merged.add(row);
+      }
+    } catch (_) {}
+  }
+  return merged;
 }

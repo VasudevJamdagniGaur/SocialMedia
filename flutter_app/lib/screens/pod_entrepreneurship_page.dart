@@ -6,9 +6,9 @@ import '../components/hub_theme.dart';
 import '../components/hub_widgets.dart';
 import '../contexts/theme_context.dart';
 import '../router/app_router.dart';
-import 'package:deite/lib/pod_topic_news_shared.dart';
 import '../services/cached_news_service.dart';
 import '../services/hub_personalization_service.dart';
+import '../services/hub_youtube_trending_service.dart';
 import '../services/pod_news_service.dart';
 
 /// Mirrors src/components/PodEntrepreneurshipPage.js
@@ -54,6 +54,11 @@ class _PodEntrepreneurshipPageState extends State<PodEntrepreneurshipPage> {
     ];
     if (_trending.isEmpty) setState(() => _loading = true);
     try {
+      var youtube = <NewsArticle>[];
+      try {
+        youtube = await fetchHubVerticalTrendingArticles('entrepreneurship');
+      } catch (_) {}
+
       var reddit = <NewsArticle>[];
       try {
         reddit = await fetchEntrepreneurshipHubTrendingCarouselItems();
@@ -65,22 +70,18 @@ class _PodEntrepreneurshipPageState extends State<PodEntrepreneurshipPage> {
       final filtered = newsMerged.where(isLikelyEntrepreneurshipTrendingItem).toList();
       if (filtered.length >= 3) newsMerged = filtered;
       final weights = await getEntrepreneurshipPersonalizationWeights();
-      final all = [...reddit, ...newsMerged];
-      all.sort((a, b) {
+      final others = [...reddit, ...newsMerged];
+      others.sort((a, b) {
         final ra = (weights[classifyExploreSlugForEntrepreneurshipTrending(a)] ?? 0) * 2000 + (a.trendingScore ?? 0);
         final rb = (weights[classifyExploreSlugForEntrepreneurshipTrending(b)] ?? 0) * 2000 + (b.trendingScore ?? 0);
         return rb.compareTo(ra);
       });
-      final seen = <String>{};
-      final merged = <NewsArticle>[];
-      for (final row in all) {
-        if (row.url.isNotEmpty && !seen.contains(row.url)) {
-          seen.add(row.url);
-          merged.add(row);
-          if (merged.length >= 10) break;
-        }
-      }
-      final rows = merged.isNotEmpty ? merged.take(10).toList() : fallback;
+      final merged = mergeHubTrendingWithFallback(
+        youtube: youtube,
+        others: others,
+        maxItems: 10,
+      );
+      final rows = merged.isNotEmpty ? merged : fallback;
       _cache = rows;
       setState(() {
         _trending = rows;

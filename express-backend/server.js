@@ -207,14 +207,27 @@ app.get('/api/reddit/thread', async (req, res) => {
   }
 });
 
-/** Fresh Tea feed via YouTube Data API — India-first: Bollywood, cricket, local entertainment */
+/** Spicy Tea feed: Bollywood gossip, cricket/football drama, viral internet (India-first) */
 const TEA_YT_QUERIES = [
-  'bollywood gossip celebrity news india latest',
-  'bollywood controversy drama india hindi',
-  'IPL cricket highlights news india',
-  'indian cricket team sports news',
-  'tollywood kollywood sandalwood gossip india',
-  'indian celebrity entertainment news hindi',
+  'bollywood gossip scandal drama india latest',
+  'bollywood celebrity breakup affair controversy hindi',
+  'bollywood insider tea spilled india entertainment',
+  'IPL cricket gossip controversy drama india',
+  'cricket team india gossip news controversy',
+  'ISL indian super league football gossip news',
+  'football soccer gossip viral india hindi',
+  'tollywood kollywood sandalwood gossip scandal india',
+  'bigg boss india drama gossip hindi',
+  'india viral trend today social media famous',
+  'trending india viral video meme internet',
+  'indian celebrity spotted dating leaked news',
+];
+
+const TEA_YT_SPICY_SIGNALS = [
+  'gossip', 'scandal', 'controversy', 'drama', 'viral', 'trending', 'meme',
+  'feud', 'breakup', 'affair', 'leaked', 'spotted', 'dating', 'exclusive',
+  'exposed', 'fight', 'slams', 'roast', 'inside', 'truth', 'spicy', 'tea',
+  'rumour', 'rumor',
 ];
 
 const TEA_YT_INTERNATIONAL_SIGNALS = [
@@ -223,10 +236,6 @@ const TEA_YT_INTERNATIONAL_SIGNALS = [
   'taylor swift',
   'nba ',
   ' nfl',
-  'premier league',
-  'manchester united',
-  'real madrid',
-  'barcelona fc',
   'uk royal',
   'white house',
   'fox news',
@@ -240,39 +249,21 @@ const TEA_YT_INTERNATIONAL_SIGNALS = [
 ];
 
 const TEA_YT_INDIAN_SIGNALS = [
-  'bollywood',
-  'india',
-  'indian',
-  'hindi',
-  'cricket',
-  'ipl',
-  'bcci',
-  'tollywood',
-  'kollywood',
-  'sandalwood',
-  'mumbai',
-  'delhi',
-  'bigg boss',
-  'filmfare',
-  'box office',
-  'crore',
-  'lakh',
-  'virat',
-  'dhoni',
-  'rohit sharma',
-  'ind vs',
-  'india vs',
-  'star sports',
-  'hotstar',
+  'bollywood', 'india', 'indian', 'hindi', 'cricket', 'ipl', 'bcci',
+  'football', 'soccer', 'isl', 'tollywood', 'kollywood', 'sandalwood',
+  'mumbai', 'delhi', 'bigg boss', 'filmfare', 'box office', 'crore', 'lakh',
+  'virat', 'dhoni', 'rohit sharma', 'ind vs', 'india vs', 'star sports', 'hotstar',
+  'messi', 'ronaldo', 'neymar', 'team india', 'wicket', 'premier league', 'champions league',
 ];
 
 function isRelevantIndianTeaYouTubeContent(title, description = '', channel = '') {
   const blob = `${title} ${description} ${channel}`.toLowerCase();
   if (!blob.trim()) return false;
-  const hasIndiaLean = TEA_YT_INDIAN_SIGNALS.some((s) => blob.includes(s));
-  if (!hasIndiaLean) return false;
+  const hasTeaLean = TEA_YT_INDIAN_SIGNALS.some((s) => blob.includes(s))
+    || TEA_YT_SPICY_SIGNALS.some((s) => blob.includes(s));
+  if (!hasTeaLean) return false;
   const looksInternational = TEA_YT_INTERNATIONAL_SIGNALS.some((s) => blob.includes(s));
-  if (looksInternational && !TEA_YT_INDIAN_SIGNALS.some((s) => blob.includes(s))) return false;
+  if (looksInternational && !hasTeaLean) return false;
   return true;
 }
 
@@ -294,8 +285,7 @@ async function fetchYouTubeTeaItems(apiKey, maxKeep) {
   const rows = [];
 
   for (const query of TEA_YT_QUERIES) {
-    if (rows.length >= maxKeep) break;
-    const perQuery = Math.min(25, Math.max(8, maxKeep * 2));
+    const perQuery = 5;
     const searchParams = new URLSearchParams({
       part: 'snippet',
       type: 'video',
@@ -336,7 +326,6 @@ async function fetchYouTubeTeaItems(apiKey, maxKeep) {
     const statItems = Array.isArray(statsBody.items) ? statsBody.items : [];
 
     for (const statItem of statItems) {
-      if (rows.length >= maxKeep) break;
       const vid = statItem?.id;
       if (!vid || seen.has(vid)) continue;
       const snippet = statItem.snippet || {};
@@ -374,6 +363,151 @@ async function fetchYouTubeTeaItems(apiKey, maxKeep) {
   return rows.slice(0, maxKeep);
 }
 
+const HUB_YT_QUERIES = {
+  sports: [
+    'IPL cricket highlights news india',
+    'cricket gossip controversy india latest',
+    'football soccer ISL news india',
+    'Formula 1 F1 race highlights news',
+    'chess india tournament news',
+    'sports viral moments india',
+  ],
+  'ai-tech': [
+    'artificial intelligence AI news latest',
+    'ChatGPT OpenAI Google Gemini AI news',
+    'tech startup news india latest',
+    'coding developer programming tools news',
+    'Nvidia Apple Microsoft big tech news',
+    'vibe coding AI tools news',
+  ],
+  entrepreneurship: [
+    'startup news india funding latest',
+    'entrepreneur founder story india',
+    'venture capital startup unicorn news',
+    'business startup success india hindi',
+    'SMB founder playbook india',
+  ],
+  'current-affairs': [
+    'india news today breaking latest',
+    'world news today latest headlines',
+    'india politics news latest',
+    'india economy RBI news latest',
+    'climate environment news india',
+  ],
+};
+
+const HUB_YT_SIGNALS = {
+  sports: [
+    'cricket', 'ipl', 'football', 'soccer', 'f1', 'formula', 'chess', 'sport',
+    'wicket', 'goal', 'match', 'tennis', 'badminton', 'bcci', 'isl',
+  ],
+  'ai-tech': [
+    'ai', 'artificial intelligence', 'tech', 'startup', 'chatgpt', 'openai',
+    'google', 'microsoft', 'nvidia', 'coding', 'software', 'developer', 'gemini',
+    'llm', 'machine learning', 'robot',
+  ],
+  entrepreneurship: [
+    'startup', 'founder', 'entrepreneur', 'funding', 'venture', 'business',
+    'unicorn', 'invest', 'revenue', 'ceo', 'bootstrap', 'pitch',
+  ],
+  'current-affairs': [
+    'news', 'politic', 'econom', 'climate', 'india', 'world', 'government',
+    'election', 'parliament', 'budget', 'minister', 'diplomat',
+  ],
+};
+
+function isRelevantHubVerticalYouTubeContent(vertical, title, description = '', channel = '') {
+  if (!String(title || '').trim()) return false;
+  const blob = `${title} ${description} ${channel}`.toLowerCase();
+  const signals = HUB_YT_SIGNALS[vertical];
+  if (!signals || !signals.length) return true;
+  return signals.some((s) => blob.includes(s));
+}
+
+async function fetchYouTubeHubItems(apiKey, vertical, maxKeep) {
+  const queries = HUB_YT_QUERIES[vertical];
+  if (!queries || !queries.length) return [];
+  const seen = new Set();
+  const rows = [];
+
+  for (const query of queries) {
+    const perQuery = 5;
+    const searchParams = new URLSearchParams({
+      part: 'snippet',
+      type: 'video',
+      order: 'date',
+      q: query,
+      maxResults: String(perQuery),
+      regionCode: 'IN',
+      relevanceLanguage: 'en',
+      publishedAfter: teaYouTubePublishedAfter(),
+      key: apiKey,
+    });
+    const searchRes = await fetch(
+      `https://www.googleapis.com/youtube/v3/search?${searchParams}`,
+      { headers: { Accept: 'application/json' } },
+    );
+    if (!searchRes.ok) continue;
+    const searchBody = await searchRes.json();
+    const items = Array.isArray(searchBody.items) ? searchBody.items : [];
+    const videoIds = [];
+    for (const item of items) {
+      const vid = item?.id?.videoId;
+      if (!vid || seen.has(vid)) continue;
+      videoIds.push(vid);
+    }
+    if (!videoIds.length) continue;
+
+    const statsParams = new URLSearchParams({
+      part: 'statistics,snippet',
+      id: videoIds.join(','),
+      key: apiKey,
+    });
+    const statsRes = await fetch(
+      `https://www.googleapis.com/youtube/v3/videos?${statsParams}`,
+      { headers: { Accept: 'application/json' } },
+    );
+    if (!statsRes.ok) continue;
+    const statsBody = await statsRes.json();
+    const statItems = Array.isArray(statsBody.items) ? statsBody.items : [];
+
+    for (const statItem of statItems) {
+      const vid = statItem?.id;
+      if (!vid || seen.has(vid)) continue;
+      const snippet = statItem.snippet || {};
+      const title = String(snippet.title || '').trim();
+      if (!title) continue;
+      const description = String(snippet.description || '').trim();
+      const channel = String(snippet.channelTitle || 'YouTube').trim();
+      if (!isRelevantHubVerticalYouTubeContent(vertical, title, description, channel)) continue;
+      const gossip = description.length > 320
+        ? `${description.slice(0, 320).trimEnd()}…`
+        : (description || title);
+      const image = bestYouTubeThumb(snippet.thumbnails);
+      const views = parseInt(statItem.statistics?.viewCount || '0', 10) || 0;
+      const comments = parseInt(statItem.statistics?.commentCount || '0', 10) || 0;
+      seen.add(vid);
+      rows.push({
+        title,
+        url: `https://www.youtube.com/watch?v=${vid}`,
+        image,
+        thumbnail: image,
+        score: views,
+        num_comments: comments,
+        author: channel || 'YouTube',
+        source: 'YouTube',
+        description: gossip,
+        gossip,
+        selftext: description || title,
+        videoId: vid,
+      });
+    }
+  }
+
+  rows.sort((a, b) => (b.score || 0) - (a.score || 0));
+  return rows.slice(0, maxKeep);
+}
+
 app.get('/api/youtube/tea', async (req, res) => {
   const apiKey = process.env.YOUTUBE_API_KEY || '';
   if (!apiKey) {
@@ -382,6 +516,28 @@ app.get('/api/youtube/tea', async (req, res) => {
   const maxKeep = clampLimit(req.query.limit || 12);
   try {
     const items = await fetchYouTubeTeaItems(apiKey, maxKeep);
+    res.json({ ok: true, items });
+  } catch (err) {
+    res.status(502).json({
+      ok: false,
+      items: [],
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+app.get('/api/youtube/hub', async (req, res) => {
+  const apiKey = process.env.YOUTUBE_API_KEY || '';
+  if (!apiKey) {
+    return res.status(503).json({ ok: false, items: [], error: 'youtube_not_configured' });
+  }
+  const vertical = String(req.query.vertical || '').trim().toLowerCase();
+  if (!HUB_YT_QUERIES[vertical]) {
+    return res.status(400).json({ ok: false, error: 'Invalid vertical' });
+  }
+  const maxKeep = clampLimit(req.query.limit || 12);
+  try {
+    const items = await fetchYouTubeHubItems(apiKey, vertical, maxKeep);
     res.json({ ok: true, items });
   } catch (err) {
     res.status(502).json({

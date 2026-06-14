@@ -10,6 +10,7 @@ import '../services/auth_service.dart';
 import 'package:deite/lib/pod_topic_news_shared.dart';
 import '../services/firestore_service.dart';
 import '../services/hub_personalization_service.dart';
+import '../services/hub_youtube_trending_service.dart';
 import '../services/pod_news_service.dart';
 
 /// Mirrors src/components/PodCurrentAffairsPage.js
@@ -48,12 +49,20 @@ class _PodCurrentAffairsPageState extends State<PodCurrentAffairsPage> {
       NewsArticle(title: 'Scientists publish extreme weather findings', source: 'News', url: googleNewsSearchUrl('climate change news'), exploreTopic: 'climate'),
     ];
     try {
-      final articles = await fetchCurrentAffairsHubTrendingCarouselItems();
+      var youtube = <NewsArticle>[];
+      try {
+        youtube = await fetchHubVerticalTrendingArticles('current-affairs');
+      } catch (_) {}
+
+      final reddit = await fetchCurrentAffairsHubTrendingCarouselItems();
+      final merged = mergeHubTrendingWithFallback(
+        youtube: youtube,
+        others: reddit,
+        maxItems: 10,
+      );
       setState(() {
-        _trending = articles.isNotEmpty
-            ? articles
-            : fallback;
-        _error = articles.isEmpty ? 'Could not load Reddit. Showing placeholder headlines.' : '';
+        _trending = merged.isNotEmpty ? merged : fallback;
+        _error = merged.isEmpty ? 'Could not load trending. Showing placeholder headlines.' : '';
         _loading = false;
       });
       _patchImages();

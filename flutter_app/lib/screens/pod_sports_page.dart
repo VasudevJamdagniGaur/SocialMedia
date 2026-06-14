@@ -15,6 +15,7 @@ import 'package:deite/lib/pod_topic_news_shared.dart';
 import '../services/cached_news_service.dart';
 import '../services/firestore_service.dart';
 import '../services/hub_personalization_service.dart';
+import '../services/hub_youtube_trending_service.dart';
 import '../services/pod_news_service.dart';
 import '../utils/hub_carousel_ai_image.dart';
 import '../utils/hub_carousel_image_store.dart';
@@ -69,6 +70,11 @@ class _PodSportsPageState extends State<PodSportsPage> {
     ];
 
     try {
+      var youtube = <NewsArticle>[];
+      try {
+        youtube = await fetchHubVerticalTrendingArticles('sports');
+      } catch (_) {}
+
       var reddit = <NewsArticle>[];
       try {
         reddit = await fetchSportsHubTrendingCarouselItems();
@@ -91,27 +97,12 @@ class _PodSportsPageState extends State<PodSportsPage> {
         return rb.compareTo(ra);
       });
 
-      final seen = <String>{};
-      final merged = <NewsArticle>[];
-      for (final r in reddit) {
-        if (r.url.isEmpty || seen.contains(r.url)) continue;
-        seen.add(r.url);
-        merged.add(r);
-      }
-      for (final a in newsMerged) {
-        if (merged.length >= 10) break;
-        if (a.url.isEmpty || seen.contains(a.url)) continue;
-        seen.add(a.url);
-        merged.add(a);
-      }
-
-      if (token != _loadToken) return;
-      final rows = merged.isNotEmpty
-          ? prioritizeWithImagesFirst(
-              merged.take(10).toList(),
-              (item) => hasUsableHubImage(item.image),
-            )
-          : fallback;
+      final merged = mergeHubTrendingWithFallback(
+        youtube: youtube,
+        others: [...reddit, ...newsMerged],
+        maxItems: 10,
+      );
+      final rows = merged.isNotEmpty ? merged : fallback;
       _cache = rows;
       setState(() {
         _trending = rows;

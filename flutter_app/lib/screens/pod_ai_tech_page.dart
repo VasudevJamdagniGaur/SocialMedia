@@ -9,6 +9,7 @@ import '../router/app_router.dart';
 import 'package:deite/lib/pod_topic_news_shared.dart';
 import '../services/cached_news_service.dart';
 import '../services/hub_personalization_service.dart';
+import '../services/hub_youtube_trending_service.dart';
 import '../services/pod_news_service.dart';
 
 /// Mirrors src/components/PodAiTechPage.js
@@ -54,6 +55,11 @@ class _PodAiTechPageState extends State<PodAiTechPage> {
     ];
     if (_trending.isEmpty) setState(() => _loading = true);
     try {
+      var youtube = <NewsArticle>[];
+      try {
+        youtube = await fetchHubVerticalTrendingArticles('ai-tech');
+      } catch (_) {}
+
       var reddit = <NewsArticle>[];
       try {
         reddit = await fetchAiTechHubTrendingCarouselItems();
@@ -65,21 +71,18 @@ class _PodAiTechPageState extends State<PodAiTechPage> {
       final filtered = newsMerged.where(isLikelyAiTechTrendingItem).toList();
       if (filtered.length >= 4) newsMerged = filtered;
       final weights = await getAiTechPersonalizationWeights();
-      final all = [...reddit, ...newsMerged];
-      all.sort((a, b) {
+      final others = [...reddit, ...newsMerged];
+      others.sort((a, b) {
         final ra = (weights[classifyExploreSlugForAiTechTrending(a)] ?? 0) * 2000 + (a.trendingScore ?? 0);
         final rb = (weights[classifyExploreSlugForAiTechTrending(b)] ?? 0) * 2000 + (b.trendingScore ?? 0);
         return rb.compareTo(ra);
       });
-      final seen = <String>{};
-      final merged = <NewsArticle>[];
-      for (final row in all) {
-        if (row.url.isEmpty || seen.contains(row.url)) continue;
-        seen.add(row.url);
-        merged.add(row);
-        if (merged.length >= 10) break;
-      }
-      final rows = merged.isNotEmpty ? merged.take(10).toList() : fallback;
+      final merged = mergeHubTrendingWithFallback(
+        youtube: youtube,
+        others: others,
+        maxItems: 10,
+      );
+      final rows = merged.isNotEmpty ? merged : fallback;
       _cache = rows;
       setState(() {
         _trending = rows;

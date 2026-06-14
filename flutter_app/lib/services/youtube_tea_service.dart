@@ -9,14 +9,47 @@ import 'reddit_tea_service.dart';
 
 const _newsApiUserAgent = 'DeiteNews/1.0 (+https://deitedatabase.web.app)';
 
-/// India-first Tea feed: Bollywood gossip, local entertainment, cricket/sports.
+/// Spicy Tea feed: Bollywood gossip, cricket/football drama, viral internet moments (India-first).
 const _teaYouTubeQueries = [
-  'bollywood gossip celebrity news india latest',
-  'bollywood controversy drama india hindi',
-  'IPL cricket highlights news india',
-  'indian cricket team sports news',
-  'tollywood kollywood sandalwood gossip india',
-  'indian celebrity entertainment news hindi',
+  'bollywood gossip scandal drama india latest',
+  'bollywood celebrity breakup affair controversy hindi',
+  'bollywood insider tea spilled india entertainment',
+  'IPL cricket gossip controversy drama india',
+  'cricket team india gossip news controversy',
+  'ISL indian super league football gossip news',
+  'football soccer gossip viral india hindi',
+  'tollywood kollywood sandalwood gossip scandal india',
+  'bigg boss india drama gossip hindi',
+  'india viral trend today social media famous',
+  'trending india viral video meme internet',
+  'indian celebrity spotted dating leaked news',
+];
+
+const _teaSpicySignals = [
+  'gossip',
+  'scandal',
+  'controversy',
+  'drama',
+  'viral',
+  'trending',
+  'meme',
+  'feud',
+  'breakup',
+  'affair',
+  'leaked',
+  'spotted',
+  'dating',
+  'exclusive',
+  'exposed',
+  'fight',
+  'slams',
+  'roast',
+  'inside',
+  'truth',
+  'spicy',
+  'tea',
+  'rumour',
+  'rumor',
 ];
 
 const _internationalTeaSignals = [
@@ -25,10 +58,6 @@ const _internationalTeaSignals = [
   'taylor swift',
   'nba ',
   ' nfl',
-  'premier league',
-  'manchester united',
-  'real madrid',
-  'barcelona fc',
   'uk royal',
   'white house',
   'fox news',
@@ -49,6 +78,9 @@ const _indianTeaSignals = [
   'cricket',
   'ipl',
   'bcci',
+  'football',
+  'soccer',
+  'isl',
   'tollywood',
   'kollywood',
   'sandalwood',
@@ -66,6 +98,13 @@ const _indianTeaSignals = [
   'india vs',
   'star sports',
   'hotstar',
+  'messi',
+  'ronaldo',
+  'neymar',
+  'team india',
+  'wicket',
+  'premier league',
+  'champions league',
 ];
 
 bool isRelevantIndianTeaYouTubeContent({
@@ -76,14 +115,13 @@ bool isRelevantIndianTeaYouTubeContent({
   final blob = '$title $description $channel'.toLowerCase();
   if (blob.trim().isEmpty) return false;
 
-  final hasIndiaLean = _indianTeaSignals.any((s) => blob.contains(s)) ||
-      bollywoodTeaTopicKeywords.any((kw) => blob.contains(kw.toLowerCase()));
-  if (!hasIndiaLean) return false;
+  final hasTeaLean = _indianTeaSignals.any((s) => blob.contains(s)) ||
+      bollywoodTeaTopicKeywords.any((kw) => blob.contains(kw.toLowerCase())) ||
+      _teaSpicySignals.any((s) => blob.contains(s));
+  if (!hasTeaLean) return false;
 
   final looksInternational = _internationalTeaSignals.any((s) => blob.contains(s));
-  if (looksInternational && !_indianTeaSignals.any((s) => blob.contains(s))) {
-    return false;
-  }
+  if (looksInternational && !hasTeaLean) return false;
   return true;
 }
 
@@ -191,7 +229,7 @@ List<Map<String, dynamic>> _parseYouTubeTeaItems(dynamic raw) {
 }
 
 Future<List<Map<String, dynamic>>> fetchTeaRowsFromBackendYouTube({
-  int maxKeep = 12,
+  int maxKeep = 18,
 }) async {
   for (final base in redditProxyBaseUrls()) {
     try {
@@ -217,18 +255,17 @@ Future<List<Map<String, dynamic>>> fetchTeaRowsFromBackendYouTube({
 }
 
 Future<List<Map<String, dynamic>>> fetchTeaRowsFromYouTubeDirect({
-  int maxKeep = 12,
+  int maxKeep = 18,
 }) async {
   final apiKey = Env.youtubeApiKey.trim();
   if (apiKey.isEmpty) return [];
 
   final seen = <String>{};
   final rows = <Map<String, dynamic>>[];
+  const perQuery = 5;
 
   for (final query in _teaYouTubeQueries) {
-    if (rows.length >= maxKeep) break;
     try {
-      final perQuery = (maxKeep * 2).clamp(8, 25);
       final searchUri = Uri.parse('https://www.googleapis.com/youtube/v3/search').replace(
         queryParameters: {
           'part': 'snippet',
@@ -284,7 +321,6 @@ Future<List<Map<String, dynamic>>> fetchTeaRowsFromYouTubeDirect({
       if (statItems is! List) continue;
 
       for (final statItem in statItems) {
-        if (rows.length >= maxKeep) break;
         if (statItem is! Map) continue;
         final vid = '${statItem['id'] ?? ''}'.trim();
         if (vid.isEmpty || seen.contains(vid)) continue;
@@ -325,7 +361,7 @@ Future<List<Map<String, dynamic>>> fetchTeaRowsFromYouTubeDirect({
 
 /// Trending Tea via YouTube Data API (backend proxy first, then direct key).
 Future<List<Map<String, dynamic>>> fetchTeaRowsFromYouTube({
-  int maxKeep = 12,
+  int maxKeep = 18,
 }) async {
   var rows = await fetchTeaRowsFromBackendYouTube(maxKeep: maxKeep);
   if (rows.length < 4) {
