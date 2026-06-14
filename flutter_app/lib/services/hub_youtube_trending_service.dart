@@ -46,6 +46,9 @@ const _hubVerticalYouTubeQueries = <String, List<String>>{
     'venture capital startup unicorn news',
     'business startup success india hindi',
     'SMB founder playbook india',
+    'startup pitch shark tank india',
+    'india unicorn startup news',
+    'small business entrepreneur india',
   ],
   'current-affairs': [
     'india news today breaking latest',
@@ -70,7 +73,8 @@ const _hubVerticalSignals = <String, List<String>>{
   ],
   'entrepreneurship': [
     'startup', 'founder', 'entrepreneur', 'funding', 'venture', 'business',
-    'unicorn', 'invest', 'revenue', 'ceo', 'bootstrap', 'pitch',
+    'unicorn', 'invest', 'revenue', 'ceo', 'bootstrap', 'pitch', 'india',
+    'indian', 'smb', 'accelerator', 'seed', 'series', 'valuation',
   ],
   'current-affairs': [
     'news', 'politic', 'econom', 'climate', 'india', 'world', 'government',
@@ -536,6 +540,35 @@ Future<List<NewsArticle>> _fetchAiTechNewsRss({int maxKeep = 10}) =>
       ],
     );
 
+Future<List<NewsArticle>> _fetchEntrepreneurshipYouTubeViaGoogleRss({int maxKeep = 10}) =>
+    _fetchHubYouTubeViaGoogleRss(
+      logTag: 'entrepreneurship',
+      maxKeep: maxKeep,
+      queries: const [
+        'youtube startup india funding when:7d',
+        'youtube entrepreneur founder story india when:7d',
+        'youtube venture capital startup when:7d',
+        'youtube shark tank india startup when:7d',
+        'youtube business success india when:7d',
+        'youtube startup pitch india when:7d',
+      ],
+    );
+
+Future<List<NewsArticle>> _fetchEntrepreneurshipNewsRss({int maxKeep = 10}) =>
+    _fetchHubNewsViaGoogleRss(
+      logTag: 'entrepreneurship',
+      maxKeep: maxKeep,
+      defaultSource: 'Business',
+      queries: const [
+        'startup funding india when:5d',
+        'entrepreneur founder india when:5d',
+        'venture capital startup when:5d',
+        'unicorn startup india when:5d',
+        'small business entrepreneur when:5d',
+        'startup news india when:5d',
+      ],
+    );
+
 Future<List<NewsArticle>> _fetchHubVerticalTrendingMerged({
   required String vertical,
   required Future<List<NewsArticle>> Function() youtubeRss,
@@ -585,6 +618,15 @@ Future<List<NewsArticle>> fetchAiTechTrendingAll({int maxKeep = 10}) =>
       maxKeep: maxKeep,
       youtubeRss: () => _fetchAiTechYouTubeViaGoogleRss(maxKeep: maxKeep),
       newsRss: () => _fetchAiTechNewsRss(maxKeep: maxKeep),
+    );
+
+/// Entrepreneurship trending: YouTube API (if configured) + Google News RSS (always).
+Future<List<NewsArticle>> fetchEntrepreneurshipTrendingAll({int maxKeep = 10}) =>
+    _fetchHubVerticalTrendingMerged(
+      vertical: 'entrepreneurship',
+      maxKeep: maxKeep,
+      youtubeRss: () => _fetchEntrepreneurshipYouTubeViaGoogleRss(maxKeep: maxKeep),
+      newsRss: () => _fetchEntrepreneurshipNewsRss(maxKeep: maxKeep),
     );
 
 /// YouTube trending cards for a hub vertical (Sports, AI & Tech, etc.).
