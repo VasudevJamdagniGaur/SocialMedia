@@ -133,12 +133,17 @@ const _bollywoodTeaTopicKeywords = [
 
 const _hubVerticalYouTubeQueries = <String, List<String>>{
   'sports': [
-    'IPL cricket highlights news india',
-    'cricket gossip controversy india latest',
-    'football soccer ISL news india',
-    'Formula 1 F1 race highlights news',
-    'chess india tournament news',
-    'sports viral moments india',
+    'india cricket news today latest',
+    'IPL cricket news hindi india',
+    'team india cricket highlights news',
+    'BCCI cricket news india latest',
+    'indian football ISL news today',
+    'sports news india hindi latest',
+    'pro kabaddi india news',
+    'badminton india sports news',
+    'Formula 1 F1 race news india',
+    'chess india grandmaster news',
+    'sports viral moments india today',
   ],
   'ai-tech': [
     'artificial intelligence AI news latest',
@@ -167,7 +172,8 @@ const _hubVerticalYouTubeQueries = <String, List<String>>{
 const _hubVerticalSignals = <String, List<String>>{
   'sports': [
     'cricket', 'ipl', 'football', 'soccer', 'f1', 'formula', 'chess', 'sport',
-    'wicket', 'goal', 'match', 'tennis', 'badminton', 'bcci', 'isl',
+    'wicket', 'goal', 'match', 'tennis', 'badminton', 'bcci', 'isl', 'kabaddi',
+    'hockey', 'india', 'indian', 'team india', 'hindi', 'sports',
   ],
   'ai-tech': [
     'ai', 'artificial intelligence', 'tech', 'startup', 'chatgpt', 'openai',

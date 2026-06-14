@@ -13,12 +13,17 @@ const _newsApiUserAgent = 'DeiteNews/1.0 (+https://deitedatabase.web.app)';
 
 const _hubVerticalYouTubeQueries = <String, List<String>>{
   'sports': [
-    'IPL cricket highlights news india',
-    'cricket gossip controversy india latest',
-    'football soccer ISL news india',
-    'Formula 1 F1 race highlights news',
-    'chess india tournament news',
-    'sports viral moments india',
+    'india cricket news today latest',
+    'IPL cricket news hindi india',
+    'team india cricket highlights news',
+    'BCCI cricket news india latest',
+    'indian football ISL news today',
+    'sports news india hindi latest',
+    'pro kabaddi india news',
+    'badminton india sports news',
+    'Formula 1 F1 race news india',
+    'chess india grandmaster news',
+    'sports viral moments india today',
   ],
   'ai-tech': [
     'artificial intelligence AI news latest',
@@ -47,7 +52,8 @@ const _hubVerticalYouTubeQueries = <String, List<String>>{
 const _hubVerticalSignals = <String, List<String>>{
   'sports': [
     'cricket', 'ipl', 'football', 'soccer', 'f1', 'formula', 'chess', 'sport',
-    'wicket', 'goal', 'match', 'tennis', 'badminton', 'bcci', 'isl',
+    'wicket', 'goal', 'match', 'tennis', 'badminton', 'bcci', 'isl', 'kabaddi',
+    'hockey', 'india', 'indian', 'team india', 'hindi', 'sports',
   ],
   'ai-tech': [
     'ai', 'artificial intelligence', 'tech', 'startup', 'chatgpt', 'openai',
@@ -78,23 +84,57 @@ bool isRelevantHubVerticalYouTubeContent(
 }
 
 NewsArticle hubNewsArticleFromYouTubeRow(Map<String, dynamic> row, {String? exploreTopic}) {
+  final videoId = '${row['videoId'] ?? ''}'.trim();
+  var image = row['image'] is String ? row['image'] as String : (row['thumbnail'] as String?);
+  image = '${image ?? ''}'.trim();
+  if (!image.startsWith('http')) {
+    image = _youtubeThumbFromVideoId(videoId) ?? '';
+  }
   return NewsArticle(
     title: '${row['title'] ?? ''}'.trim(),
     source: '${row['author'] ?? row['source'] ?? 'YouTube'}'.trim(),
     url: '${row['url'] ?? ''}'.trim(),
-    image: row['image'] is String ? row['image'] as String : (row['thumbnail'] as String?),
+    image: image.isNotEmpty ? image : null,
     description: '${row['description'] ?? row['gossip'] ?? ''}'.trim(),
     trendingScore: row['score'] is num ? row['score'] as num : null,
     exploreTopic: exploreTopic,
   );
 }
 
-String _hubYouTubePublishedAfter() {
+String _hubYouTubePublishedAfter({int days = 21}) {
   return DateTime.now()
       .toUtc()
-      .subtract(const Duration(days: 14))
+      .subtract(Duration(days: days))
       .toIso8601String()
       .replaceFirst(RegExp(r'\.\d+'), '');
+}
+
+String? _youtubeThumbFromVideoId(String? videoId) {
+  final id = '${videoId ?? ''}'.trim();
+  if (id.length < 6) return null;
+  return 'https://i.ytimg.com/vi/$id/hqdefault.jpg';
+}
+
+List<Map<String, dynamic>> _mergeHubYouTubeRows(
+  Iterable<List<Map<String, dynamic>>> batches, {
+  required int maxKeep,
+}) {
+  final seen = <String>{};
+  final rows = <Map<String, dynamic>>[];
+  for (final batch in batches) {
+    for (final row in batch) {
+      final url = '${row['url'] ?? ''}'.trim();
+      if (url.isEmpty || seen.contains(url)) continue;
+      seen.add(url);
+      rows.add(row);
+    }
+  }
+  rows.sort((a, b) {
+    final sa = a['score'] is num ? (a['score'] as num).toInt() : 0;
+    final sb = b['score'] is num ? (b['score'] as num).toInt() : 0;
+    return sb.compareTo(sa);
+  });
+  return rows.take(maxKeep).toList();
 }
 
 Future<List<Map<String, dynamic>>> _fetchHubVerticalFromBackend(
@@ -152,32 +192,48 @@ Future<List<Map<String, dynamic>>> _fetchHubVerticalYouTubeDirect(
   if (queries == null || queries.isEmpty) return [];
 
   final apiKey = Env.youtubeApiKey.trim();
-  if (apiKey.isEmpty) return [];
+  if (apiKey.isEmpty) {
+    debugPrint('[HubYouTube] direct skipped for $vertical — YOUTUBE_API_KEY not set');
+    return [];
+  }
 
   final seen = <String>{};
   final rows = <Map<String, dynamic>>[];
-  const perQuery = 5;
-  final lang = vertical == 'sports' || vertical == 'current-affairs' ? 'en' : 'en';
+  const perQuery = 6;
+  final publishedAfter = _hubYouTubePublishedAfter(
+    days: vertical == 'sports' ? 30 : 21,
+  );
 
-  for (final query in queries) {
+  for (var qi = 0; qi < queries.length; qi++) {
+    final query = queries[qi];
+    final order = vertical == 'sports'
+        ? (qi.isEven ? 'relevance' : 'date')
+        : 'date';
+    final lang = vertical == 'sports' && qi.isOdd ? 'hi' : 'en';
     try {
       final searchUri = Uri.parse('https://www.googleapis.com/youtube/v3/search').replace(
         queryParameters: {
           'part': 'snippet',
           'type': 'video',
-          'order': 'date',
+          'order': order,
           'q': query,
           'maxResults': '$perQuery',
           'regionCode': 'IN',
           'relevanceLanguage': lang,
-          'publishedAfter': _hubYouTubePublishedAfter(),
+          'publishedAfter': publishedAfter,
           'key': apiKey,
         },
       );
       final searchRes = await http
           .get(searchUri, headers: {'Accept': 'application/json'})
           .timeout(const Duration(seconds: 16));
-      if (searchRes.statusCode != 200) continue;
+      if (searchRes.statusCode != 200) {
+        debugPrint(
+          '[HubYouTube] search failed ${searchRes.statusCode} ($vertical/$query): '
+          '${searchRes.body.substring(0, searchRes.body.length.clamp(0, 180))}',
+        );
+        continue;
+      }
       final searchBody = jsonDecode(searchRes.body);
       if (searchBody is! Map) continue;
       final items = searchBody['items'];
@@ -242,7 +298,7 @@ Future<List<Map<String, dynamic>>> _fetchHubVerticalYouTubeDirect(
           snippet['thumbnails'] is Map
               ? Map<String, dynamic>.from(snippet['thumbnails'] as Map)
               : null,
-        );
+        ) ?? _youtubeThumbFromVideoId(vid);
         final gossip = description.length > 320
             ? '${description.substring(0, 320).trimRight()}…'
             : (description.isNotEmpty ? description : title);
@@ -273,6 +329,9 @@ Future<List<Map<String, dynamic>>> _fetchHubVerticalYouTubeDirect(
     final sb = b['score'] is num ? (b['score'] as num).toInt() : 0;
     return sb.compareTo(sa);
   });
+  if (rows.isNotEmpty) {
+    debugPrint('[HubYouTube] direct API returned ${rows.length} for $vertical');
+  }
   return rows.take(maxKeep).toList();
 }
 
@@ -292,13 +351,20 @@ Future<List<Map<String, dynamic>>> fetchHubVerticalYouTubeRows(
   String vertical, {
   int maxKeep = 12,
 }) async {
-  var rows = await _fetchHubVerticalFromBackend(vertical, maxKeep: maxKeep);
-  if (rows.length < 4) {
-    final direct = await _fetchHubVerticalYouTubeDirect(vertical, maxKeep: maxKeep);
-    if (direct.length > rows.length) rows = direct;
+  final batches = await Future.wait([
+    _fetchHubVerticalFromBackend(vertical, maxKeep: maxKeep),
+    _fetchHubVerticalYouTubeDirect(vertical, maxKeep: maxKeep),
+  ]);
+  final merged = _mergeHubYouTubeRows(batches, maxKeep: maxKeep);
+  if (merged.isNotEmpty) {
+    debugPrint('[HubYouTube] merged ${merged.length} rows for $vertical');
   }
-  return rows;
+  return merged;
 }
+
+/// Sports Trending — India-first YouTube videos.
+Future<List<NewsArticle>> fetchSportsYouTubeTrending({int maxKeep = 12}) =>
+    fetchHubVerticalTrendingArticles('sports', maxKeep: maxKeep);
 
 /// YouTube trending cards for a hub vertical (Sports, AI & Tech, etc.).
 Future<List<NewsArticle>> fetchHubVerticalTrendingArticles(
