@@ -24,6 +24,7 @@ import '../services/firestore_service.dart';
 import '../services/youtube_tea_service.dart';
 import '../utils/date_utils.dart';
 import '../utils/hub_colors.dart';
+import '../services/render_backend_queue.dart';
 import '../utils/hub_carousel_ai_image.dart';
 import '../utils/hub_carousel_image_store.dart';
 import '../utils/reddit_thread_comments.dart';
@@ -114,6 +115,7 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
 
   @override
   void dispose() {
+    RenderBackendQueue.instance.endPostCreationSession();
     _reflectionFocusNode.removeListener(_onReflectionFocusChanged);
     _reflectionController.dispose();
     _reflectionFocusNode.dispose();
@@ -156,6 +158,9 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
   }
 
   void _finishRouteInit(Map<String, dynamic> payload) {
+    if (!RenderBackendQueue.instance.isPostCreationActive) {
+      RenderBackendQueue.instance.beginPostCreationSession();
+    }
     _applyRoutePayload(payload);
     unawaited(persistShareSuggestionsRouteState(payload));
 

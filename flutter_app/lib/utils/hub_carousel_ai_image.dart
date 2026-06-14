@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../services/render_backend_queue.dart';
 import '../services/chat_service.dart';
 import '../services/cached_news_service.dart';
 import '../services/vertex_api_client.dart';
@@ -11,8 +12,9 @@ import '../services/youtube_tea_service.dart';
 import 'hub_carousel_image_store.dart';
 import 'share_news_cache.dart';
 
+export '../services/render_backend_queue.dart' show HubCarouselImagePriority;
+
 const maxHubCarouselAiGenerationsPerPass = 15;
-const _hubCarouselEnrichStaggerMs = 2500;
 
 final Map<String, String> _memoryAiImageCache = {};
 final Map<String, Future<HubCarouselImageResult?>> _inFlightHubCarouselImages = {};
@@ -184,6 +186,7 @@ Future<String?> getOrGenerateHubCarouselImage({
   String articleUrl = '',
   HubCarouselImageKind kind = HubCarouselImageKind.news,
   String? sourceImageUrl,
+  HubCarouselImagePriority priority = HubCarouselImagePriority.background,
 }) async {
   final result = await getOrGenerateHubCarouselImageFull(
     cacheKey: cacheKey,
@@ -192,6 +195,7 @@ Future<String?> getOrGenerateHubCarouselImage({
     articleUrl: articleUrl,
     kind: kind,
     sourceImageUrl: sourceImageUrl,
+    priority: priority,
   );
   return result?.aiImageUrl;
 }
@@ -205,6 +209,7 @@ Future<HubCarouselImageResult?> getOrGenerateHubCarouselImageFull({
   String articleUrl = '',
   HubCarouselImageKind kind = HubCarouselImageKind.news,
   String? sourceImageUrl,
+  HubCarouselImagePriority priority = HubCarouselImagePriority.background,
 }) async {
   final key = hubCarouselImageCacheKey('$cacheKey#refphoto1', headline);
   final title = headline.trim();
@@ -212,6 +217,22 @@ Future<HubCarouselImageResult?> getOrGenerateHubCarouselImageFull({
 
   final url = articleUrl.trim().isNotEmpty ? articleUrl.trim() : key;
   final dedupeKey = hubCarouselImageCacheKey(url, key);
+
+  final localCached = await resolveHubCarouselImageFast(
+    url: url,
+    title: title,
+    fallbackId: key,
+    kind: kind,
+  );
+  if (localCached != null) {
+    final src = sourceImageUrl?.trim();
+    return HubCarouselImageResult(
+      aiImageUrl: localCached,
+      sourceImageUrl: src?.startsWith('http') == true ? src : null,
+      fromCache: true,
+    );
+  }
+
   final inFlight = _inFlightHubCarouselImages[dedupeKey];
   if (inFlight != null) return inFlight;
 
@@ -222,6 +243,7 @@ Future<HubCarouselImageResult?> getOrGenerateHubCarouselImageFull({
     storyText: storyText,
     kind: kind,
     sourceImageUrl: sourceImageUrl,
+    priority: priority,
   );
   _inFlightHubCarouselImages[dedupeKey] = future;
   try {
@@ -238,6 +260,7 @@ Future<HubCarouselImageResult?> _getOrGenerateHubCarouselImageFullImpl({
   String storyText = '',
   HubCarouselImageKind kind = HubCarouselImageKind.news,
   String? sourceImageUrl,
+  HubCarouselImagePriority priority = HubCarouselImagePriority.background,
 }) async {
   // 1. Check local memory + disk cache first (instant, no network).
   final localCached = await resolveHubCarouselImageFast(
@@ -276,6 +299,7 @@ Future<HubCarouselImageResult?> _getOrGenerateHubCarouselImageFullImpl({
         if (effSource != null && effSource.startsWith('http')) 'sourceImageUrl': effSource,
       },
       timeout: const Duration(seconds: 90),
+      priority: hubCarouselPriorityToRender(priority),
     );
     final aiImageUrl = (response['aiImageUrl'] ?? response['imageUrl']) as String?;
     final srcUrl = response['sourceImageUrl'] as String?;
@@ -350,9 +374,6 @@ Future<void> enrichCarouselSlotsWithAiImages({
       final img = await generateForIndex(i);
       if (img != null && img.isNotEmpty) applyImage(i, img);
     }));
-    if (start + batchSize < todo.length) {
-      await Future<void>.delayed(const Duration(milliseconds: _hubCarouselEnrichStaggerMs));
-    }
   }
 }
 
@@ -442,6 +463,7 @@ class HubCarouselResolvingHero extends StatefulWidget {
     this.fit = BoxFit.cover,
     this.onResolved,
     this.tryYouTubeThumbnail = false,
+    this.imagePriority = HubCarouselImagePriority.background,
   });
 
   final String? initialUrl;
@@ -455,6 +477,7 @@ class HubCarouselResolvingHero extends StatefulWidget {
   final BoxFit fit;
   final ValueChanged<String>? onResolved;
   final bool tryYouTubeThumbnail;
+  final HubCarouselImagePriority imagePriority;
 
   @override
   State<HubCarouselResolvingHero> createState() => _HubCarouselResolvingHeroState();
@@ -558,6 +581,7 @@ class _HubCarouselResolvingHeroState extends State<HubCarouselResolvingHero> {
       storyText: widget.storyText,
       articleUrl: widget.articleUrl,
       kind: widget.kind,
+      priority: widget.imagePriority,
     );
     if (!mounted || token != _resolveGen) return;
     if (generated != null &&

@@ -127,6 +127,7 @@ class _PodEntrepreneurshipPageState extends State<PodEntrepreneurshipPage> {
           storyText: stripHtmlBoilerplate(item.description),
           articleUrl: item.url,
           kind: HubCarouselImageKind.news,
+          priority: HubCarouselImagePriority.podVertical,
         );
       },
       applyImage: (i, imageUrl) {

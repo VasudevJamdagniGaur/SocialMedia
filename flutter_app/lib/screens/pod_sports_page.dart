@@ -138,6 +138,7 @@ class _PodSportsPageState extends State<PodSportsPage> {
           storyText: stripHtmlBoilerplate(item.description),
           articleUrl: item.url,
           kind: HubCarouselImageKind.news,
+          priority: HubCarouselImagePriority.podVertical,
         );
       },
       applyImage: (i, imageUrl) {

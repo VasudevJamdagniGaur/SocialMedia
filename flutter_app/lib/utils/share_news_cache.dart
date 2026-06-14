@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../services/render_backend_queue.dart';
 import 'reddit_thread_comments.dart';
 import 'tea_trending_storage.dart';
 
@@ -62,6 +63,7 @@ Map<String, dynamic>? takePendingShareSuggestionsRoute() {
 
 /// Stage in memory and prefs before navigating to share suggestions.
 Future<void> prepareShareSuggestionsRoute(Map<String, dynamic> extra) async {
+  RenderBackendQueue.instance.beginPostCreationSession();
   stageShareSuggestionsRoute(extra);
   await persistShareSuggestionsRouteState(extra);
 }

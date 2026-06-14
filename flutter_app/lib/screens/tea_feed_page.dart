@@ -205,6 +205,7 @@ class _TeaFeedPageState extends State<TeaFeedPage> {
         storyText: item.gossip,
         articleUrl: item.url,
         kind: HubCarouselImageKind.tea,
+        priority: HubCarouselImagePriority.teaFeed,
       );
       if (generated == null || !mounted || token != _imageHydrateGen) continue;
 
@@ -636,6 +637,7 @@ class _TeaHeroBackgroundState extends State<_TeaHeroBackground> {
       storyText: item.gossip,
       articleUrl: item.url,
       kind: HubCarouselImageKind.tea,
+      priority: HubCarouselImagePriority.teaFeed,
     );
     if (!mounted || token != _resolveGen) return;
     if (generated != null &&

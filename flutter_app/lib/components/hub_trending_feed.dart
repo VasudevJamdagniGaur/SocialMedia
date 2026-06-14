@@ -432,6 +432,7 @@ class _HubTrendingFeedState extends State<HubTrendingFeed> {
           articleUrl: item.url,
           kind: HubCarouselImageKind.news,
           sourceImageUrl: existingImg.startsWith('http') ? existingImg : null,
+          priority: HubCarouselImagePriority.podNewsHome,
         );
       },
       applyImage: (i, imageUrl) {
@@ -577,6 +578,7 @@ class _HubTrendingCard extends StatelessWidget {
               fallbackId: item.id,
               kind: HubCarouselImageKind.news,
               tryYouTubeThumbnail: isYouTubeTeaUrl(item.url),
+              imagePriority: HubCarouselImagePriority.podNewsHome,
               errorWidget: fallback,
               onResolved: onImageResolved,
             ),

@@ -5,9 +5,11 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../config/env.dart';
+import 'render_backend_queue.dart';
 
 /// HTTP client for the Vertex AI Express backend.
-/// No Gemini API keys in the app â€” AI goes through the server.
+/// No Gemini API keys in the app — AI goes through the server.
+/// All requests are serialized globally via [RenderBackendQueue].
 class VertexApiClient {
   VertexApiClient._();
 
@@ -35,6 +37,25 @@ class VertexApiClient {
   bool isVertexBackendConfigured() => isConfigured;
 
   Future<Map<String, dynamic>> fetchJson(
+    String path, {
+    String method = 'POST',
+    Map<String, dynamic>? body,
+    Duration? timeout,
+    RenderBackendPriority priority = RenderBackendPriority.background,
+  }) async {
+    return RenderBackendQueue.instance.run(
+      priority: priority,
+      debugLabel: path,
+      work: () => _fetchJsonUnqueued(
+        path,
+        method: method,
+        body: body,
+        timeout: timeout,
+      ),
+    );
+  }
+
+  Future<Map<String, dynamic>> _fetchJsonUnqueued(
     String path, {
     String method = 'POST',
     Map<String, dynamic>? body,
@@ -92,12 +113,13 @@ class VertexApiClient {
     Duration? timeout,
     double? temperature,
     int? maxOutputTokens,
+    RenderBackendPriority priority = RenderBackendPriority.background,
   }) async {
     final body = <String, dynamic>{'message': message};
     if (temperature != null) body['temperature'] = temperature;
     if (maxOutputTokens != null) body['maxOutputTokens'] = maxOutputTokens;
 
-    final data = await fetchJson('/chat', body: body, timeout: timeout);
+    final data = await fetchJson('/chat', body: body, timeout: timeout, priority: priority);
     final reply = data['reply'];
     if (reply is! String) {
       throw Exception('Vertex /chat: response missing reply');
@@ -110,6 +132,7 @@ class VertexApiClient {
     double temperature = 0.65,
     int maxOutputTokens = 1024,
     Duration? timeout,
+    RenderBackendPriority priority = RenderBackendPriority.background,
   }) async {
     if (prompt.trim().isEmpty) {
       throw Exception('vertexGenerateContent: prompt is required');
@@ -122,6 +145,7 @@ class VertexApiClient {
         'maxOutputTokens': maxOutputTokens,
       },
       timeout: timeout,
+      priority: priority,
     );
 
     final candidates = data['candidates'];
@@ -140,10 +164,27 @@ class VertexApiClient {
     String prompt, {
     Duration? timeout,
     Map<String, String>? referenceImage,
+    RenderBackendPriority priority = RenderBackendPriority.background,
   }) async {
     final p = prompt.trim();
     if (p.isEmpty) throw Exception('vertexGenerateNewsImage: prompt is required');
 
+    return RenderBackendQueue.instance.run(
+      priority: priority,
+      debugLabel: '/generate-news-image',
+      work: () => _vertexGenerateNewsImageUnqueued(
+        p,
+        timeout: timeout,
+        referenceImage: referenceImage,
+      ),
+    );
+  }
+
+  Future<String> _vertexGenerateNewsImageUnqueued(
+    String p, {
+    Duration? timeout,
+    Map<String, String>? referenceImage,
+  }) async {
     final base = baseUrl.replaceAll(RegExp(r'/$'), '');
     final fallback = Env.generateNewsImageFallbackUrl.trim().replaceAll(RegExp(r'/$'), '');
 
@@ -222,12 +263,14 @@ Future<String> vertexChat(
   Duration? timeout,
   double? temperature,
   int? maxOutputTokens,
+  RenderBackendPriority priority = RenderBackendPriority.background,
 }) =>
     _vertex.vertexChat(
       message,
       timeout: timeout,
       temperature: temperature,
       maxOutputTokens: maxOutputTokens,
+      priority: priority,
     );
 
 Future<String> vertexGenerateContent({
@@ -235,33 +278,39 @@ Future<String> vertexGenerateContent({
   double temperature = 0.65,
   int maxOutputTokens = 1024,
   Duration? timeout,
+  RenderBackendPriority priority = RenderBackendPriority.background,
 }) =>
     _vertex.vertexGenerateContent(
       prompt: prompt,
       temperature: temperature,
       maxOutputTokens: maxOutputTokens,
       timeout: timeout,
+      priority: priority,
     );
 
 Future<String> vertexGenerateNewsImage(
   String prompt, {
   Duration? timeout,
   Map<String, String>? referenceImage,
+  RenderBackendPriority priority = RenderBackendPriority.background,
 }) =>
     _vertex.vertexGenerateNewsImage(
       prompt,
       timeout: timeout,
       referenceImage: referenceImage,
+      priority: priority,
     );
 
 Future<String> vertexAnalyzePattern(
   Map<String, dynamic> data, {
   Duration? timeout,
+  RenderBackendPriority priority = RenderBackendPriority.background,
 }) async {
   final res = await _vertex.fetchJson(
     '/analyze-pattern',
     body: {'data': data},
     timeout: timeout,
+    priority: priority,
   );
   final result = res['result'];
   if (result is! String) {

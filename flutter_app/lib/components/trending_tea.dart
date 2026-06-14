@@ -573,6 +573,7 @@ class _TrendingTeaState extends State<TrendingTea> {
           articleUrl: item.url,
           kind: HubCarouselImageKind.tea,
           sourceImageUrl: existingThumb.startsWith('http') ? existingThumb : null,
+          priority: HubCarouselImagePriority.podTeaHome,
         );
       },
       applyImage: (i, imageUrl) {
@@ -678,6 +679,7 @@ class _TrendingTeaState extends State<TrendingTea> {
                                           fallbackId: item.id,
                                           kind: HubCarouselImageKind.tea,
                                           tryYouTubeThumbnail: true,
+                                          imagePriority: HubCarouselImagePriority.podTeaHome,
                                           errorWidget: _gradientFallback(idx),
                                           onResolved: (url) => unawaited(_applyTeaImageAt(idx, url)),
                                         ),

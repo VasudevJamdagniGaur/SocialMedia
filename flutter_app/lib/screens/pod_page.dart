@@ -33,7 +33,7 @@ class _PodPageState extends State<PodPage> {
     super.initState();
     unawaited(warmPodHubCachesFromDisk());
     unawaited(refreshPodHubContentInBackground());
-    Future.delayed(const Duration(milliseconds: 900), prefetchAllSportsExploreTopicsNow);
+    Future.delayed(const Duration(seconds: 60), prefetchAllSportsExploreTopicsNow);
     _loadProfilePicture();
   }
 

@@ -134,6 +134,7 @@ class _PodCurrentAffairsPageState extends State<PodCurrentAffairsPage> {
           storyText: stripHtmlBoilerplate(item.description),
           articleUrl: item.url,
           kind: HubCarouselImageKind.news,
+          priority: HubCarouselImagePriority.podVertical,
         );
       },
       applyImage: (i, imageUrl) {
