@@ -102,8 +102,8 @@ class _TeaFeedPageState extends State<TeaFeedPage> {
     super.activate();
     if (_applyLaunchHandoff()) {
       setState(() => _rawItems = _mergeWithMemoryTeaCache(_rawItems));
-      unawaited(_hydrateTeaFeedImages());
-    } else {
+    }
+    if (_parsedExtra) {
       unawaited(_hydrateTeaFeedImages());
     }
   }
@@ -168,10 +168,7 @@ class _TeaFeedPageState extends State<TeaFeedPage> {
       }
 
       String? cached;
-      for (final fallbackId in [
-        item.id,
-        hubCarouselImageCacheKey(hubCarouselImageCacheKey(item.url, item.id), item.title),
-      ]) {
+      for (final fallbackId in _teaImageFallbackIds(item)) {
         cached = await resolveHubCarouselImageFast(
           url: item.url,
           title: item.title,
@@ -391,6 +388,7 @@ class _TeaFeedPageState extends State<TeaFeedPage> {
                       }
                       final item = items[index];
                       return _TeaSlide(
+                        key: ValueKey('${item.id}|${item.thumbnail}|${teaHeroImageUrl(item) ?? ''}'),
                         item: item,
                         index: index,
                         liked: _liked.contains(item.id),
@@ -537,8 +535,208 @@ class _TeaEmptyState extends StatelessWidget {
   }
 }
 
-class _TeaSlide extends StatefulWidget {
+List<String> _teaImageFallbackIds(TeaItem item) => [
+      item.id,
+      hubCarouselImageCacheKey(item.url, item.id),
+      hubCarouselImageCacheKey(item.url, item.title),
+      if (item.title.trim().isNotEmpty) hubCarouselImageCacheKey('', item.title),
+    ];
+
+class _TeaHeroBackground extends StatefulWidget {
+  const _TeaHeroBackground({
+    required this.item,
+    required this.index,
+    this.onTap,
+  });
+
+  final TeaItem item;
+  final int index;
+  final VoidCallback? onTap;
+
+  @override
+  State<_TeaHeroBackground> createState() => _TeaHeroBackgroundState();
+}
+
+class _TeaHeroBackgroundState extends State<_TeaHeroBackground> {
+  String? _resolvedUrl;
+  final Set<String> _failedUrls = {};
+  int _resolveGen = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolvedUrl = _bestCandidate();
+    unawaited(_resolveHeroImage());
+  }
+
+  @override
+  void didUpdateWidget(covariant _TeaHeroBackground oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.item.id != widget.item.id ||
+        oldWidget.item.thumbnail != widget.item.thumbnail ||
+        oldWidget.item.url != widget.item.url) {
+      _failedUrls.clear();
+      _resolvedUrl = _bestCandidate();
+      unawaited(_resolveHeroImage());
+    }
+  }
+
+  String? _bestCandidate() {
+    for (final candidate in _candidateUrls(includeResolved: true)) {
+      if (candidate != null &&
+          isValidHubCarouselImageUrl(candidate) &&
+          !_failedUrls.contains(candidate)) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  List<String?> _candidateUrls({bool includeResolved = true}) => [
+        teaHeroImageUrl(widget.item),
+        if (includeResolved) _resolvedUrl,
+        youtubeTeaThumbnailFromUrl(widget.item.url),
+      ];
+
+  void _onImageFailed(String failedUrl) {
+    if (!_failedUrls.add(failedUrl)) return;
+    if (!mounted) return;
+    setState(() {
+      if (_resolvedUrl == failedUrl) _resolvedUrl = null;
+    });
+    unawaited(_resolveHeroImage());
+  }
+
+  Future<void> _resolveHeroImage() async {
+    final token = ++_resolveGen;
+    final item = widget.item;
+
+    final immediate = _bestCandidate();
+    if (immediate != null) {
+      if (mounted && token == _resolveGen) setState(() => _resolvedUrl = immediate);
+      return;
+    }
+
+    for (final fallbackId in _teaImageFallbackIds(item)) {
+      final cached = await resolveHubCarouselImageFast(
+        url: item.url,
+        title: item.title,
+        fallbackId: fallbackId,
+        kind: HubCarouselImageKind.tea,
+      );
+      if (cached != null &&
+          isValidHubCarouselImageUrl(cached) &&
+          !_failedUrls.contains(cached)) {
+        if (mounted && token == _resolveGen) setState(() => _resolvedUrl = cached);
+        return;
+      }
+    }
+
+    final generated = await getOrGenerateHubCarouselImage(
+      cacheKey: hubCarouselImageCacheKey(item.url, item.id),
+      headline: item.title,
+      storyText: item.gossip,
+      articleUrl: item.url,
+      kind: HubCarouselImageKind.tea,
+    );
+    if (!mounted || token != _resolveGen) return;
+    if (generated != null &&
+        isValidHubCarouselImageUrl(generated) &&
+        !_failedUrls.contains(generated)) {
+      setState(() => _resolvedUrl = generated);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final heroUrl = _bestCandidate();
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Positioned.fill(child: _FallbackHero(index: widget.index)),
+        if (heroUrl != null)
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: widget.onTap,
+              child: _TeaHeroImage(
+                imageUrl: heroUrl,
+                onFailed: () => _onImageFailed(heroUrl),
+                errorWidget: _FallbackHero(index: widget.index),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _TeaHeroImage extends StatefulWidget {
+  const _TeaHeroImage({
+    required this.imageUrl,
+    required this.onFailed,
+    required this.errorWidget,
+  });
+
+  final String imageUrl;
+  final VoidCallback onFailed;
+  final Widget errorWidget;
+
+  @override
+  State<_TeaHeroImage> createState() => _TeaHeroImageState();
+}
+
+class _TeaHeroImageState extends State<_TeaHeroImage> {
+  var _failed = false;
+
+  @override
+  void didUpdateWidget(covariant _TeaHeroImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.imageUrl != widget.imageUrl) {
+      _failed = false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_failed) return widget.errorWidget;
+
+    final url = widget.imageUrl.trim();
+    if (!isHubCarouselDisplayImage(url)) return widget.errorWidget;
+
+    if (url.startsWith('data:image')) {
+      final bytes = decodeDataImageUrlBytes(url, logTag: '[TeaFeed]');
+      if (bytes != null) {
+        return Image.memory(bytes, fit: BoxFit.cover);
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_failed) {
+          setState(() => _failed = true);
+          widget.onFailed();
+        }
+      });
+      return widget.errorWidget;
+    }
+
+    return Image.network(
+      url,
+      fit: BoxFit.cover,
+      gaplessPlayback: true,
+      errorBuilder: (_, __, ___) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && !_failed) {
+            setState(() => _failed = true);
+            widget.onFailed();
+          }
+        });
+        return widget.errorWidget;
+      },
+    );
+  }
+}
+
+class _TeaSlide extends StatelessWidget {
   const _TeaSlide({
+    super.key,
     required this.item,
     required this.index,
     required this.liked,
@@ -559,101 +757,14 @@ class _TeaSlide extends StatefulWidget {
   final VoidCallback onOpenShare;
 
   @override
-  State<_TeaSlide> createState() => _TeaSlideState();
-}
-
-class _TeaSlideState extends State<_TeaSlide> {
-  String? _heroUrl;
-  int _resolveGen = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _heroUrl = teaHeroImageUrl(widget.item);
-    unawaited(_resolveHeroImage());
-  }
-
-  @override
-  void didUpdateWidget(covariant _TeaSlide oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.item.id != widget.item.id ||
-        oldWidget.item.thumbnail != widget.item.thumbnail) {
-      _heroUrl = teaHeroImageUrl(widget.item);
-      unawaited(_resolveHeroImage());
-    }
-  }
-
-  Future<void> _resolveHeroImage() async {
-    final item = widget.item;
-    final token = ++_resolveGen;
-
-    final existing = teaHeroImageUrl(item);
-    if (existing != null) {
-      if (mounted && token == _resolveGen) setState(() => _heroUrl = existing);
-      return;
-    }
-
-    final ytFallback = youtubeTeaThumbnailFromUrl(item.url);
-    if (ytFallback != null && isValidHubCarouselImageUrl(ytFallback)) {
-      if (mounted && token == _resolveGen) setState(() => _heroUrl = ytFallback);
-      return;
-    }
-
-    for (final fallbackId in [
-      item.id,
-      hubCarouselImageCacheKey(hubCarouselImageCacheKey(item.url, item.id), item.title),
-    ]) {
-      final cached = await resolveHubCarouselImageFast(
-        url: item.url,
-        title: item.title,
-        fallbackId: fallbackId,
-        kind: HubCarouselImageKind.tea,
-      );
-      if (cached != null && isValidHubCarouselImageUrl(cached)) {
-        if (mounted && token == _resolveGen) setState(() => _heroUrl = cached);
-        return;
-      }
-    }
-
-    final generated = await getOrGenerateHubCarouselImage(
-      cacheKey: hubCarouselImageCacheKey(item.url, item.id),
-      headline: item.title,
-      storyText: item.gossip,
-      articleUrl: item.url,
-      kind: HubCarouselImageKind.tea,
-    );
-    if (!mounted || token != _resolveGen) return;
-    if (generated != null && isValidHubCarouselImageUrl(generated)) {
-      setState(() => _heroUrl = generated);
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final item = widget.item;
-    final heroUrl = teaHeroImageUrl(item) ??
-        (_heroUrl != null && isValidHubCarouselImageUrl(_heroUrl) ? _heroUrl : null) ??
-        youtubeTeaThumbnailFromUrl(item.url);
-    final displayHero =
-        heroUrl != null && isValidHubCarouselImageUrl(heroUrl) ? heroUrl : null;
     final canShare = item.url.isNotEmpty;
     final bottomPad = MediaQuery.paddingOf(context).bottom;
 
     return Stack(
       fit: StackFit.expand,
       children: [
-        Positioned.fill(child: _FallbackHero(index: widget.index)),
-        if (displayHero != null)
-          Positioned.fill(
-            child: GestureDetector(
-              onTap: canShare ? widget.onOpenShare : null,
-              child: HubCarouselHeroImage(
-                imageUrl: displayHero,
-                fit: BoxFit.cover,
-                errorWidget: _FallbackHero(index: widget.index),
-              ),
-            ),
-          ),
+        _TeaHeroBackground(item: item, index: index, onTap: canShare ? onOpenShare : null),
         IgnorePointer(
           child: DecoratedBox(
             decoration: BoxDecoration(
@@ -676,25 +787,25 @@ class _TeaSlideState extends State<_TeaSlide> {
           child: Column(
             children: [
               _ActionButton(
-                icon: widget.liked ? Icons.favorite : Icons.favorite_border,
-                iconColor: widget.liked ? const Color(0xE6EF4444) : Colors.white,
-                filled: widget.liked,
-                onPressed: widget.onToggleLike,
-                semanticLabel: widget.liked ? 'Unlike' : 'Like',
+                icon: liked ? Icons.favorite : Icons.favorite_border,
+                iconColor: liked ? const Color(0xE6EF4444) : Colors.white,
+                filled: liked,
+                onPressed: onToggleLike,
+                semanticLabel: liked ? 'Unlike' : 'Like',
               ),
               const SizedBox(height: 20),
               _ActionButton(
                 icon: Icons.chat_bubble_outline,
-                onPressed: item.url.isEmpty ? null : widget.onOpenComments,
+                onPressed: item.url.isEmpty ? null : onOpenComments,
                 semanticLabel: item.numComments > 0 ? 'Comments, ${item.numComments} total' : 'Comments',
               ),
               const SizedBox(height: 20),
               _ActionButton(
-                icon: widget.watchlisted ? Icons.bookmark : Icons.bookmark_border,
-                iconColor: widget.watchlisted ? HubColors.accentHighlight : Colors.white,
-                filled: widget.watchlisted,
-                onPressed: item.url.isEmpty ? null : widget.onToggleWatchlist,
-                semanticLabel: widget.watchlisted ? 'Remove from watchlist' : 'Save to watchlist',
+                icon: watchlisted ? Icons.bookmark : Icons.bookmark_border,
+                iconColor: watchlisted ? HubColors.accentHighlight : Colors.white,
+                filled: watchlisted,
+                onPressed: item.url.isEmpty ? null : onToggleWatchlist,
+                semanticLabel: watchlisted ? 'Remove from watchlist' : 'Save to watchlist',
               ),
             ],
           ),
