@@ -8,6 +8,7 @@ import 'package:deite/lib/hub_trending_algorithms.dart';
 import 'package:deite/lib/pod_topic_news_shared.dart';
 import 'package:deite/lib/reddit_post_filter.dart';
 import 'reddit_tea_service.dart';
+import 'youtube_tea_service.dart';
 
 const _newsApiUserAgent = 'DeiteNews/1.0 (+https://deitedatabase.web.app)';
 
@@ -362,9 +363,107 @@ Future<List<Map<String, dynamic>>> fetchHubVerticalYouTubeRows(
   return merged;
 }
 
-/// Sports Trending — India-first YouTube videos.
+/// Sports Trending — India-first YouTube videos (Data API + RSS fallbacks).
 Future<List<NewsArticle>> fetchSportsYouTubeTrending({int maxKeep = 12}) =>
-    fetchHubVerticalTrendingArticles('sports', maxKeep: maxKeep);
+    fetchSportsTrendingAll(maxKeep: maxKeep);
+
+NewsArticle _sportsArticleFromRssMap(Map<String, dynamic> raw) {
+  final url = '${raw['url'] ?? ''}'.trim();
+  final title = '${raw['title'] ?? ''}'.trim();
+  var image = '${raw['image'] ?? ''}'.trim();
+  if (isYouTubeTeaUrl(url)) {
+    image = youtubeTeaThumbnailFromUrl(url) ?? image;
+  }
+  return NewsArticle(
+    title: title,
+    source: isYouTubeTeaUrl(url) ? 'YouTube' : '${raw['source'] ?? 'Sports'}'.trim(),
+    url: url,
+    image: image.startsWith('http') ? image : null,
+    description: '${raw['description'] ?? ''}'.trim(),
+  );
+}
+
+Future<List<NewsArticle>> _fetchSportsYouTubeViaGoogleRss({int maxKeep = 10}) async {
+  const queries = [
+    'site:youtube.com IPL cricket india when:7d',
+    'site:youtube.com team india cricket when:7d',
+    'site:youtube.com ISL football india when:7d',
+    'site:youtube.com sports news india when:7d',
+  ];
+  final seen = <String>{};
+  final out = <NewsArticle>[];
+  for (final query in queries) {
+    try {
+      final items = await fetchLiveFromGoogleRssByQueryFast(query, timeoutMs: 9000);
+      for (final raw in normalizeArticles(items)) {
+        final url = '${raw['url'] ?? ''}'.trim();
+        if (!isYouTubeTeaUrl(url) || seen.contains(url)) continue;
+        final title = '${raw['title'] ?? ''}'.trim();
+        if (title.isEmpty || titleHasExcludedKeyword(title)) continue;
+        seen.add(url);
+        out.add(_sportsArticleFromRssMap(raw));
+        if (out.length >= maxKeep) return out;
+      }
+    } catch (e) {
+      debugPrint('[HubYouTube] sports YouTube RSS failed ($query): $e');
+    }
+  }
+  if (out.isNotEmpty) {
+    debugPrint('[HubYouTube] sports YouTube RSS returned ${out.length}');
+  }
+  return out;
+}
+
+Future<List<NewsArticle>> _fetchSportsIndiaNewsRss({int maxKeep = 10}) async {
+  const queries = [
+    'cricket india when:5d',
+    'IPL india when:5d',
+    'india sports news when:5d',
+    'BCCI team india when:5d',
+  ];
+  final seen = <String>{};
+  final out = <NewsArticle>[];
+  for (final query in queries) {
+    try {
+      final items = await fetchLiveFromGoogleRssByQueryFast(query, timeoutMs: 9000);
+      for (final raw in normalizeArticles(items)) {
+        final url = '${raw['url'] ?? ''}'.trim();
+        if (url.isEmpty || seen.contains(url)) continue;
+        final title = '${raw['title'] ?? ''}'.trim();
+        if (title.isEmpty || titleHasExcludedKeyword(title)) continue;
+        seen.add(url);
+        out.add(_sportsArticleFromRssMap(raw));
+        if (out.length >= maxKeep) return out;
+      }
+    } catch (e) {
+      debugPrint('[HubYouTube] sports news RSS failed ($query): $e');
+    }
+  }
+  return out;
+}
+
+/// India sports trending: YouTube API (if configured) + Google News RSS (always).
+Future<List<NewsArticle>> fetchSportsTrendingAll({int maxKeep = 10}) async {
+  final apiFuture = fetchHubVerticalTrendingArticles('sports', maxKeep: maxKeep);
+  final ytRssFuture = _fetchSportsYouTubeViaGoogleRss(maxKeep: maxKeep);
+  final newsRssFuture = _fetchSportsIndiaNewsRss(maxKeep: maxKeep);
+
+  final parts = await Future.wait([apiFuture, ytRssFuture, newsRssFuture]);
+  final fromApi = parts[0];
+  final fromYtRss = parts[1];
+  final fromNewsRss = parts[2];
+
+  final merged = mergeHubTrendingWithFallback(
+    youtube: [...fromApi, ...fromYtRss],
+    others: fromNewsRss,
+    maxItems: maxKeep,
+  );
+  debugPrint(
+    '[HubYouTube] sports total=${merged.length} '
+    '(api=${fromApi.length} ytRss=${fromYtRss.length} newsRss=${fromNewsRss.length})',
+  );
+  return merged.where((a) => a.title.trim().isNotEmpty).toList();
+}
 
 /// YouTube trending cards for a hub vertical (Sports, AI & Tech, etc.).
 Future<List<NewsArticle>> fetchHubVerticalTrendingArticles(

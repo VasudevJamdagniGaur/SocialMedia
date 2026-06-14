@@ -17,7 +17,6 @@ import '../services/firestore_service.dart';
 import '../services/hub_personalization_service.dart';
 import '../services/hub_youtube_trending_service.dart';
 import '../services/pod_news_service.dart';
-import '../config/env.dart';
 import '../utils/hub_carousel_ai_image.dart';
 import '../utils/hub_carousel_image_store.dart';
 import '../utils/share_news_cache.dart';
@@ -31,8 +30,6 @@ class PodSportsPage extends StatefulWidget {
 }
 
 class _PodSportsPageState extends State<PodSportsPage> {
-  static List<NewsArticle>? _cache;
-
   final _sportsExplore = const [
     ('Cricket', 'cricket'),
     ('Football', 'football'),
@@ -52,25 +49,7 @@ class _PodSportsPageState extends State<PodSportsPage> {
     super.initState();
     recordHubVerticalDwell('sports', 0, 1);
     prefetchAllSportsExploreTopicsNow();
-    if (_cache != null && _cache!.isNotEmpty && !_cacheLooksLikePlaceholder(_cache!)) {
-      _trending = List.from(_cache!);
-      _loading = false;
-    }
     _loadNews();
-  }
-
-  bool _cacheLooksLikePlaceholder(List<NewsArticle> rows) {
-    if (rows.isEmpty) return true;
-    final placeholders = rows.where(_isSportsPlaceholderArticle).length;
-    return placeholders >= (rows.length * 0.6).ceil();
-  }
-
-  bool _isSportsPlaceholderArticle(NewsArticle a) {
-    final src = a.source.toLowerCase();
-    return a.url.contains('google.com/search') &&
-        (src.contains('sports desk') ||
-            src.contains('motorsport') ||
-            src.contains('chess chronicle'));
   }
 
   Future<void> _loadNews({bool skipBar = false}) async {
@@ -85,69 +64,59 @@ class _PodSportsPageState extends State<PodSportsPage> {
     ];
 
     try {
-      var youtube = <NewsArticle>[];
+      var rows = <NewsArticle>[];
       try {
-        youtube = await fetchSportsYouTubeTrending(maxKeep: 12);
+        rows = await fetchSportsTrendingAll(maxKeep: 10);
       } catch (e) {
-        debugPrint('[Sports] YouTube trending failed: $e');
+        debugPrint('[Sports] trending fetch failed: $e');
       }
 
       if (token != _loadToken) return;
-      if (youtube.length >= 3) {
-        final rows = youtube.take(10).toList();
-        _cache = rows;
-        setState(() {
-          _trending = rows;
-          _error = '';
-          _loading = false;
-        });
-        unawaited(_enrichMissingAiImages());
-        return;
+
+      if (rows.length < 4) {
+        var reddit = <NewsArticle>[];
+        try {
+          reddit = await fetchSportsHubTrendingCarouselItems();
+        } catch (_) {}
+        if (token != _loadToken) return;
+        rows = mergeHubTrendingWithFallback(
+          youtube: rows,
+          others: reddit,
+          maxItems: 10,
+        );
       }
 
-      var reddit = <NewsArticle>[];
-      try {
-        reddit = await fetchSportsHubTrendingCarouselItems();
-      } catch (_) {}
+      if (rows.isEmpty) {
+        try {
+          final news = await getNewsWithLiveFallback('sports');
+          if (token != _loadToken) return;
+          var newsMerged = news.articles
+              .map((a) => NewsArticle(
+                    title: a.title,
+                    source: a.source,
+                    url: a.url,
+                    image: a.image,
+                    description: a.description,
+                    publishedAt: a.publishedAt,
+                  ))
+              .toList();
+          final filtered = newsMerged.where(isLikelySportsTrendingItem).toList();
+          if (filtered.length >= 3) newsMerged = filtered;
+          rows = mergeHubTrendingWithFallback(youtube: rows, others: newsMerged, maxItems: 10);
+        } catch (_) {}
+      }
 
-      if (token != _loadToken) return;
-      final news = await getNewsWithLiveFallback('sports');
-      if (token != _loadToken) return;
-
-      var newsMerged = news.articles
-          .map((a) => NewsArticle(title: a.title, source: a.source, url: a.url, image: a.image, description: a.description, publishedAt: a.publishedAt))
-          .toList();
-      final filtered = newsMerged.where(isLikelySportsTrendingItem).toList();
-      if (filtered.length >= 4) newsMerged = filtered;
-
-      final weights = await getSportsPersonalizationWeights(null);
-      newsMerged.sort((a, b) {
-        final ra = (weights[classifyExploreSlugForTrending(a)] ?? 0) + (a.trendingScore ?? 0);
-        final rb = (weights[classifyExploreSlugForTrending(b)] ?? 0) + (b.trendingScore ?? 0);
-        return rb.compareTo(ra);
-      });
-
-      final merged = mergeHubTrendingWithFallback(
-        youtube: youtube,
-        others: [...reddit, ...newsMerged],
-        maxItems: 10,
-      );
-      final rows = merged.isNotEmpty ? merged : fallback;
-      final loadError = merged.isEmpty && youtube.isEmpty
-          ? (Env.youtubeApiKey.trim().isEmpty
-              ? 'Set YOUTUBE_API_KEY to load live sports videos.'
-              : (news.error ?? news.fallbackError ?? 'Could not load sports trending.'))
-          : '';
-      _cache = rows;
+      final display = rows.isNotEmpty ? rows : fallback;
+      if (!mounted || token != _loadToken) return;
       setState(() {
-        _trending = rows;
-        _error = loadError;
+        _trending = display;
+        _error = rows.isEmpty ? 'Live feed unavailable — showing top picks.' : '';
         _loading = false;
       });
       unawaited(_enrichMissingAiImages());
     } catch (e) {
       if (token != _loadToken) return;
-      _cache = fallback;
+      if (!mounted) return;
       setState(() {
         _trending = fallback;
         _error = e.toString();
@@ -190,7 +159,6 @@ class _PodSportsPageState extends State<PodSportsPage> {
             firestoreId: item.firestoreId,
           );
           _trending = updated;
-          _cache = updated;
         });
       },
     );
