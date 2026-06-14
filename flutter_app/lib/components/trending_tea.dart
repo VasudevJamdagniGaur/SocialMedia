@@ -372,22 +372,24 @@ class _TrendingTeaState extends State<TrendingTea> {
 
   Future<void> _openShare(TeaItem item) async {
     if (item.url.isEmpty) return;
+    final story = item.gossip.trim().isNotEmpty ? item.gossip.trim() : item.title.trim();
     final payload = {
       'newsArticle': {
         'title': item.title,
         'url': item.url,
-        'description': item.gossip,
-        'text': item.gossip,
-        'gossip': item.gossip,
+        'description': story,
+        'text': story,
+        'gossip': story,
         'image': teaHeroImageUrl(item) ?? item.thumbnail,
-        'source': isYouTubeTeaUrl(item.url) ? 'YouTube' : publicTeaSourceLabel(item.author),
+        'source': isYouTubeTeaUrl(item.url) ? 'YouTube' : 'Tea',
       },
       'returnTo': GoRouterState.of(context).uri.path,
       'platform': 'linkedin',
+      'autoOpenSharePanel': true,
     };
     await prepareShareSuggestionsRoute(payload);
     if (!mounted) return;
-    context.go(AppRoutes.shareSuggestions, extra: payload);
+    await context.push(AppRoutes.shareSuggestions, extra: payload);
   }
 
   Future<void> _syncCachedAiImages() async {

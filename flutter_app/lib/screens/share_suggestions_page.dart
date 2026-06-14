@@ -64,6 +64,7 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
   String? _routeInitError;
   bool _shareConfirmOpen = false;
   bool _sharePanelOpen = false;
+  bool _autoOpenSharePanel = false;
   String? _pendingShareText;
   String _editableShareText = '';
   String? _generatedShareImageUrl;
@@ -188,6 +189,7 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
       _platform = extra['platform'] as String? ?? 'linkedin';
       _returnTo = extra['returnTo'] as String? ?? AppRoutes.dashboard;
       _suggestionsOnly = extra['suggestionsOnly'] == true;
+      _autoOpenSharePanel = extra['autoOpenSharePanel'] == true;
 
       final mediaRaw = extra['media'];
       if (mediaRaw is List) {
@@ -790,6 +792,7 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
         _selectedIndex = 0;
         _loading = false;
       });
+      _maybeAutoOpenSharePanel();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -802,7 +805,21 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
         ]);
         _loading = false;
       });
+      _maybeAutoOpenSharePanel();
     }
+  }
+
+  void _maybeAutoOpenSharePanel() {
+    if (!_autoOpenSharePanel || _sharePanelOpen) return;
+    _autoOpenSharePanel = false;
+    if (_suggestions.isEmpty) return;
+    final post = _suggestions[_selectedIndex.clamp(0, _suggestions.length - 1)]['post'] ??
+        _baselineText;
+    if (post.trim().isEmpty) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _openSharePanel(post);
+    });
   }
 
   List<Map<String, String>> _sanitizeSuggestionItems(List<Map<String, String>> items) {

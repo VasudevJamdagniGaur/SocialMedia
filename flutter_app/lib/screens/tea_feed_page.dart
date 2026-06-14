@@ -310,26 +310,24 @@ class _TeaFeedPageState extends State<TeaFeedPage> {
 
   Future<void> _openShareSuggestions(TeaItem item) async {
     if (item.url.isEmpty) return;
+    final story = item.gossip.trim().isNotEmpty ? item.gossip.trim() : item.title.trim();
     final payload = {
       'newsArticle': {
         'title': item.title,
         'url': item.url,
-        'description': item.gossip,
-        'text': item.gossip,
-        'gossip': item.gossip,
+        'description': story,
+        'text': story,
+        'gossip': story,
         'image': teaHeroImageUrl(item) ?? item.thumbnail,
-        'source': publicTeaSourceLabel(item.author),
+        'source': isYouTubeTeaUrl(item.url) ? 'YouTube' : 'Tea',
       },
       'returnTo': AppRoutes.teaFeed,
-      'returnState': {
-        'teaItems': _rawItems.map((e) => e.toJson()).toList(),
-        'returnTo': _returnTo,
-      },
       'platform': 'linkedin',
+      'autoOpenSharePanel': true,
     };
     await prepareShareSuggestionsRoute(payload);
     if (!mounted) return;
-    context.push(AppRoutes.shareSuggestions, extra: payload);
+    await context.push(AppRoutes.shareSuggestions, extra: payload);
   }
 
   void _openComments(TeaItem item) {
@@ -806,6 +804,12 @@ class _TeaSlide extends StatelessWidget {
                 filled: watchlisted,
                 onPressed: item.url.isEmpty ? null : onToggleWatchlist,
                 semanticLabel: watchlisted ? 'Remove from watchlist' : 'Save to watchlist',
+              ),
+              const SizedBox(height: 20),
+              _ActionButton(
+                icon: Icons.ios_share_rounded,
+                onPressed: item.url.isEmpty ? null : onOpenShare,
+                semanticLabel: 'Share to LinkedIn, X, or Reddit',
               ),
             ],
           ),
