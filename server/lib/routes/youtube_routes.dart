@@ -152,6 +152,10 @@ const _hubVerticalYouTubeQueries = <String, List<String>>{
     'coding developer programming tools news',
     'Nvidia Apple Microsoft big tech news',
     'vibe coding AI tools news',
+    'machine learning LLM news today',
+    'AI agents automation news latest',
+    'india tech startup funding news',
+    'software engineering developer news',
   ],
   'entrepreneurship': [
     'startup news india funding latest',

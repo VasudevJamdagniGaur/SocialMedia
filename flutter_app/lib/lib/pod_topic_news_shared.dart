@@ -875,6 +875,44 @@ Future<List<Map<String, dynamic>>> fetchLiveFromGoogleRssByQueryFast(
   return [];
 }
 
+/// India-locale Google News RSS (better for local sports/tech feeds on mobile).
+Future<List<Map<String, dynamic>>> fetchLiveFromGoogleRssIndiaByQueryFast(
+  String googleRssQuery, {
+  int timeoutMs = 10000,
+}) async {
+  final q = googleRssQuery.trim();
+  if (q.isEmpty) return [];
+  final rssUrl =
+      'https://news.google.com/rss/search?q=${Uri.encodeComponent(q)}&hl=en-IN&gl=IN&ceid=IN:en';
+  final timeout = Duration(milliseconds: timeoutMs);
+
+  try {
+    final res = await http
+        .get(
+          Uri.parse(rssUrl),
+          headers: {
+            'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+            'User-Agent': _newsApiUserAgent,
+          },
+        )
+        .timeout(timeout);
+    if (res.statusCode == 200) {
+      final items = _parseGoogleNewsRssXml(res.body);
+      if (items.isNotEmpty) return items;
+    }
+  } catch (_) {}
+
+  try {
+    final items = await _fetchItemsThroughRss2Json(rssUrl).timeout(
+      timeout,
+      onTimeout: () => <Map<String, dynamic>>[],
+    );
+    if (items.isNotEmpty) return items;
+  } catch (_) {}
+
+  return fetchLiveFromGoogleRssByQueryFast(q, timeoutMs: timeoutMs);
+}
+
 List<Map<String, dynamic>> normalizeArticles(List<dynamic> list) {
   if (list.isEmpty) return [];
   return list

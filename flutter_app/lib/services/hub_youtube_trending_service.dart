@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -33,6 +35,10 @@ const _hubVerticalYouTubeQueries = <String, List<String>>{
     'coding developer programming tools news',
     'Nvidia Apple Microsoft big tech news',
     'vibe coding AI tools news',
+    'machine learning LLM news today',
+    'AI agents automation news latest',
+    'india tech startup funding news',
+    'software engineering developer news',
   ],
   'entrepreneurship': [
     'startup news india funding latest',
@@ -57,9 +63,10 @@ const _hubVerticalSignals = <String, List<String>>{
     'hockey', 'india', 'indian', 'team india', 'hindi', 'sports',
   ],
   'ai-tech': [
-    'ai', 'artificial intelligence', 'tech', 'startup', 'chatgpt', 'openai',
-    'google', 'microsoft', 'nvidia', 'coding', 'software', 'developer', 'gemini',
-    'llm', 'machine learning', 'robot',
+    'ai', 'artificial intelligence', 'tech', 'technology', 'startup', 'chatgpt', 'openai',
+    'google', 'microsoft', 'nvidia', 'apple', 'meta', 'amazon', 'coding', 'software',
+    'developer', 'gemini', 'llm', 'machine learning', 'robot', 'anthropic', 'claude',
+    'chip', 'android', 'iphone', 'computer', 'digital',
   ],
   'entrepreneurship': [
     'startup', 'founder', 'entrepreneur', 'funding', 'venture', 'business',
@@ -83,6 +90,29 @@ bool isRelevantHubVerticalYouTubeContent(
   if (signals == null || signals.isEmpty) return true;
   return signals.any((s) => blob.contains(s));
 }
+
+String? _extractYouTubeUrlFromBlob(String blob) {
+  final text = blob.trim();
+  if (text.isEmpty) return null;
+  for (final pattern in [
+    RegExp(r'https?://(?:www\.)?youtube\.com/watch\?[^\s"<>]+', caseSensitive: false),
+    RegExp(r'https?://(?:www\.)?youtube\.com/shorts/[\w-]+', caseSensitive: false),
+    RegExp(r'https?://youtu\.be/[\w-]+', caseSensitive: false),
+  ]) {
+    final match = pattern.firstMatch(text);
+    if (match != null) {
+      final url = match.group(0)!.trim();
+      if (isYouTubeTeaUrl(url)) return url;
+    }
+  }
+  return null;
+}
+
+Future<List<Map<String, dynamic>>> _fetchHubGoogleNewsRssItems(
+  String query, {
+  int timeoutMs = 12000,
+}) =>
+    fetchLiveFromGoogleRssIndiaByQueryFast(query, timeoutMs: timeoutMs);
 
 NewsArticle hubNewsArticleFromYouTubeRow(Map<String, dynamic> row, {String? exploreTopic}) {
   final videoId = '${row['videoId'] ?? ''}'.trim();
@@ -149,7 +179,7 @@ Future<List<Map<String, dynamic>>> _fetchHubVerticalFromBackend(
       );
       final res = await http
           .get(url, headers: {'Accept': 'application/json', 'User-Agent': _newsApiUserAgent})
-          .timeout(const Duration(seconds: 18));
+          .timeout(const Duration(seconds: 8));
       if (res.statusCode != 200) continue;
       final body = jsonDecode(res.body);
       if (body is! Map || body['ok'] != true) continue;
@@ -367,8 +397,12 @@ Future<List<Map<String, dynamic>>> fetchHubVerticalYouTubeRows(
 Future<List<NewsArticle>> fetchSportsYouTubeTrending({int maxKeep = 12}) =>
     fetchSportsTrendingAll(maxKeep: maxKeep);
 
-NewsArticle _sportsArticleFromRssMap(Map<String, dynamic> raw) {
-  final url = '${raw['url'] ?? ''}'.trim();
+NewsArticle _hubArticleFromRssMap(
+  Map<String, dynamic> raw, {
+  String defaultSource = 'News',
+  String? resolvedUrl,
+}) {
+  final url = (resolvedUrl ?? '${raw['url'] ?? ''}').trim();
   final title = '${raw['title'] ?? ''}'.trim();
   var image = '${raw['image'] ?? ''}'.trim();
   if (isYouTubeTeaUrl(url)) {
@@ -376,82 +410,152 @@ NewsArticle _sportsArticleFromRssMap(Map<String, dynamic> raw) {
   }
   return NewsArticle(
     title: title,
-    source: isYouTubeTeaUrl(url) ? 'YouTube' : '${raw['source'] ?? 'Sports'}'.trim(),
-    url: url,
+    source: isYouTubeTeaUrl(url) ? 'YouTube' : '${raw['source'] ?? defaultSource}'.trim(),
+    url: url.isNotEmpty ? url : googleNewsSearchUrl(title),
     image: image.startsWith('http') ? image : null,
     description: '${raw['description'] ?? ''}'.trim(),
   );
 }
 
-Future<List<NewsArticle>> _fetchSportsYouTubeViaGoogleRss({int maxKeep = 10}) async {
-  const queries = [
-    'site:youtube.com IPL cricket india when:7d',
-    'site:youtube.com team india cricket when:7d',
-    'site:youtube.com ISL football india when:7d',
-    'site:youtube.com sports news india when:7d',
-  ];
+Future<List<NewsArticle>> _fetchHubYouTubeViaGoogleRss({
+  required List<String> queries,
+  required String logTag,
+  int maxKeep = 10,
+}) async {
   final seen = <String>{};
   final out = <NewsArticle>[];
   for (final query in queries) {
     try {
-      final items = await fetchLiveFromGoogleRssByQueryFast(query, timeoutMs: 9000);
+      final items = await _fetchHubGoogleNewsRssItems(query, timeoutMs: 12000);
       for (final raw in normalizeArticles(items)) {
-        final url = '${raw['url'] ?? ''}'.trim();
-        if (!isYouTubeTeaUrl(url) || seen.contains(url)) continue;
+        final blob = '${raw['url'] ?? ''} ${raw['description'] ?? ''} ${raw['title'] ?? ''}';
+        var url = '${raw['url'] ?? ''}'.trim();
+        if (!isYouTubeTeaUrl(url)) {
+          url = _extractYouTubeUrlFromBlob(blob) ?? url;
+        }
         final title = '${raw['title'] ?? ''}'.trim();
+        final isYoutube = isYouTubeTeaUrl(url);
+        final looksLikeVideo = isYoutube ||
+            title.toLowerCase().contains('youtube') ||
+            blob.toLowerCase().contains('youtube.com');
+        if (!looksLikeVideo || url.isEmpty || seen.contains(url)) continue;
         if (title.isEmpty || titleHasExcludedKeyword(title)) continue;
         seen.add(url);
-        out.add(_sportsArticleFromRssMap(raw));
+        out.add(_hubArticleFromRssMap(raw, defaultSource: 'YouTube', resolvedUrl: url));
         if (out.length >= maxKeep) return out;
       }
     } catch (e) {
-      debugPrint('[HubYouTube] sports YouTube RSS failed ($query): $e');
+      debugPrint('[HubYouTube] $logTag YouTube RSS failed ($query): $e');
     }
   }
   if (out.isNotEmpty) {
-    debugPrint('[HubYouTube] sports YouTube RSS returned ${out.length}');
+    debugPrint('[HubYouTube] $logTag YouTube RSS returned ${out.length}');
   }
   return out;
 }
 
-Future<List<NewsArticle>> _fetchSportsIndiaNewsRss({int maxKeep = 10}) async {
-  const queries = [
-    'cricket india when:5d',
-    'IPL india when:5d',
-    'india sports news when:5d',
-    'BCCI team india when:5d',
-  ];
+Future<List<NewsArticle>> _fetchHubNewsViaGoogleRss({
+  required List<String> queries,
+  required String logTag,
+  String defaultSource = 'News',
+  int maxKeep = 10,
+}) async {
   final seen = <String>{};
   final out = <NewsArticle>[];
   for (final query in queries) {
     try {
-      final items = await fetchLiveFromGoogleRssByQueryFast(query, timeoutMs: 9000);
+      final items = await _fetchHubGoogleNewsRssItems(query, timeoutMs: 12000);
       for (final raw in normalizeArticles(items)) {
         final url = '${raw['url'] ?? ''}'.trim();
         if (url.isEmpty || seen.contains(url)) continue;
         final title = '${raw['title'] ?? ''}'.trim();
         if (title.isEmpty || titleHasExcludedKeyword(title)) continue;
         seen.add(url);
-        out.add(_sportsArticleFromRssMap(raw));
+        out.add(_hubArticleFromRssMap(raw, defaultSource: defaultSource));
         if (out.length >= maxKeep) return out;
       }
     } catch (e) {
-      debugPrint('[HubYouTube] sports news RSS failed ($query): $e');
+      debugPrint('[HubYouTube] $logTag news RSS failed ($query): $e');
     }
   }
   return out;
 }
 
-/// India sports trending: YouTube API (if configured) + Google News RSS (always).
-Future<List<NewsArticle>> fetchSportsTrendingAll({int maxKeep = 10}) async {
-  final apiFuture = fetchHubVerticalTrendingArticles('sports', maxKeep: maxKeep);
-  final ytRssFuture = _fetchSportsYouTubeViaGoogleRss(maxKeep: maxKeep);
-  final newsRssFuture = _fetchSportsIndiaNewsRss(maxKeep: maxKeep);
+Future<List<NewsArticle>> _fetchSportsYouTubeViaGoogleRss({int maxKeep = 10}) =>
+    _fetchHubYouTubeViaGoogleRss(
+      logTag: 'sports',
+      maxKeep: maxKeep,
+      queries: const [
+        'site:youtube.com IPL cricket india when:7d',
+        'site:youtube.com team india cricket when:7d',
+        'site:youtube.com ISL football india when:7d',
+        'site:youtube.com sports news india when:7d',
+      ],
+    );
 
-  final parts = await Future.wait([apiFuture, ytRssFuture, newsRssFuture]);
-  final fromApi = parts[0];
-  final fromYtRss = parts[1];
-  final fromNewsRss = parts[2];
+Future<List<NewsArticle>> _fetchSportsIndiaNewsRss({int maxKeep = 10}) =>
+    _fetchHubNewsViaGoogleRss(
+      logTag: 'sports',
+      maxKeep: maxKeep,
+      defaultSource: 'Sports',
+      queries: const [
+        'cricket india when:5d',
+        'IPL india when:5d',
+        'india sports news when:5d',
+        'BCCI team india when:5d',
+      ],
+    );
+
+Future<List<NewsArticle>> _fetchAiTechYouTubeViaGoogleRss({int maxKeep = 10}) =>
+    _fetchHubYouTubeViaGoogleRss(
+      logTag: 'ai-tech',
+      maxKeep: maxKeep,
+      queries: const [
+        'youtube artificial intelligence news when:7d',
+        'youtube ChatGPT OpenAI when:7d',
+        'youtube Google Gemini AI when:7d',
+        'youtube tech review india when:7d',
+        'youtube coding programming tutorial when:7d',
+        'youtube Nvidia AI when:7d',
+      ],
+    );
+
+Future<List<NewsArticle>> _fetchAiTechNewsRss({int maxKeep = 10}) =>
+    _fetchHubNewsViaGoogleRss(
+      logTag: 'ai-tech',
+      maxKeep: maxKeep,
+      defaultSource: 'Tech',
+      queries: const [
+        'AI artificial intelligence when:5d',
+        'ChatGPT OpenAI when:5d',
+        'technology startup when:5d',
+        'Nvidia chip AI when:5d',
+        'Apple Google Microsoft tech when:5d',
+        'software developer programming when:5d',
+        'tech news india when:5d',
+      ],
+    );
+
+Future<List<NewsArticle>> _fetchHubVerticalTrendingMerged({
+  required String vertical,
+  required Future<List<NewsArticle>> Function() youtubeRss,
+  required Future<List<NewsArticle>> Function() newsRss,
+  int maxKeep = 10,
+}) async {
+  final rssParts = await Future.wait([
+    youtubeRss().catchError((_) => <NewsArticle>[]),
+    newsRss().catchError((_) => <NewsArticle>[]),
+  ]);
+  final fromYtRss = rssParts[0];
+  final fromNewsRss = rssParts[1];
+
+  List<NewsArticle> fromApi = [];
+  try {
+    fromApi = await fetchHubVerticalTrendingArticles(vertical, maxKeep: maxKeep).timeout(
+      const Duration(seconds: 8),
+      onTimeout: () => <NewsArticle>[],
+    );
+  } catch (_) {}
 
   final merged = mergeHubTrendingWithFallback(
     youtube: [...fromApi, ...fromYtRss],
@@ -459,11 +563,29 @@ Future<List<NewsArticle>> fetchSportsTrendingAll({int maxKeep = 10}) async {
     maxItems: maxKeep,
   );
   debugPrint(
-    '[HubYouTube] sports total=${merged.length} '
+    '[HubYouTube] $vertical total=${merged.length} '
     '(api=${fromApi.length} ytRss=${fromYtRss.length} newsRss=${fromNewsRss.length})',
   );
   return merged.where((a) => a.title.trim().isNotEmpty).toList();
 }
+
+/// India sports trending: YouTube API (if configured) + Google News RSS (always).
+Future<List<NewsArticle>> fetchSportsTrendingAll({int maxKeep = 10}) =>
+    _fetchHubVerticalTrendingMerged(
+      vertical: 'sports',
+      maxKeep: maxKeep,
+      youtubeRss: () => _fetchSportsYouTubeViaGoogleRss(maxKeep: maxKeep),
+      newsRss: () => _fetchSportsIndiaNewsRss(maxKeep: maxKeep),
+    );
+
+/// AI & Tech trending: YouTube API (if configured) + Google News RSS (always).
+Future<List<NewsArticle>> fetchAiTechTrendingAll({int maxKeep = 10}) =>
+    _fetchHubVerticalTrendingMerged(
+      vertical: 'ai-tech',
+      maxKeep: maxKeep,
+      youtubeRss: () => _fetchAiTechYouTubeViaGoogleRss(maxKeep: maxKeep),
+      newsRss: () => _fetchAiTechNewsRss(maxKeep: maxKeep),
+    );
 
 /// YouTube trending cards for a hub vertical (Sports, AI & Tech, etc.).
 Future<List<NewsArticle>> fetchHubVerticalTrendingArticles(
