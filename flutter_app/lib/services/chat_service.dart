@@ -208,40 +208,51 @@ LinkedIn (extra â€” every post):
 - For LinkedIn: one clear angle per post; strong hook in the first two lines; skimmable structure (short paragraphs and/or bullets); deliver on the hook; end with a CTA; never fabricate backstory not present in the reflection'''
         : '';
 
-    return '''You are turning a day's reflection into separate social posts. You MUST create one standalone post for EACH distinct event or moment mentioned in the reflection.
+    return '''You are turning a day's reflection into separate social posts for $platformLabel.
+
+QUANTITY (required):
+- Generate between 3 and 5 posts. Pick a natural count for this reflection.
+- Never output only one post unless the reflection is extremely short (under ~15 words).
+- Even when the reflection is about a single topic or moment, offer multiple distinct angles (reaction, insight, question, contrarian take, practical tip, story hook, etc.).
 
 PLATFORM: $platformLabel. Write EVERY post in that platform's native style so it reads like a real $platformLabel post.
 
 $styleGuide
 $linkedinReflectionExtra
-Step 1 â€“ List EVERY main event/moment in the reflection. Include ALL of these when present:
-- Embarrassing or funny moments (e.g. wrong door, mix-up, mistake)
-- Books, articles, or media mentioned by name (e.g. "The Three-Body Problem", "Source Code", "Crime and Punishment")
-- People you met or talked about
-- Places you went (e.g. library, office, college)
-- Work or projects you did (e.g. deep work, project in the library)
-Do not skip any major event. If the user mentions a book, there must be a post about that book. If they mention a mix-up and a book, output two posts (one per event).
+MULTIPLE EVENTS (when present):
+- If the reflection mentions several distinct events/moments (e.g. a mix-up AND a book), spread posts across them — do not merge unrelated events into one post.
+- Still output 3–5 posts total; you may use more than one angle on the same event when the reflection is mostly about one thing.
 
-Step 2 â€“ For EACH event you listed, write ONE complete, standalone post that:
-- Focuses only on that single event
-- Expands on the thoughts, emotions, or insights from that moment
+Step 1 – List distinct events/moments AND 3–5 different angles you will use (one line each). Include when present:
+- Embarrassing or funny moments, books/media by name, people, places, work/projects
+- For a single-topic reflection: plan different angles on that one topic (do not repeat the same framing)
+
+Step 2 – For EACH planned post, write ONE complete, standalone post that:
+- Uses exactly one angle from your plan
+- Focuses on one slice of the reflection (one event OR one angle on a single topic)
+- Expands on thoughts, emotions, or insights from that slice
 - Feels natural and reflective, like a real social post (not a dry summary)$linkedInPerEventLine
 - Is written EXACTLY in the $platformLabel style described above (tone, length, structure)
+- Uses a DIFFERENT hook and framing from your other posts — no near-duplicates
 
 Output format (strict):
-- For each post, first write exactly: EVENT: <short event label>
+- For each post, first write exactly: EVENT: <short angle or moment label, 3–6 words>
 - Then on the next lines write the full post text.
 - Separate each post with a line that contains only: ---
 - Do NOT use "Option 1", "Option 2", or any option labels. Only EVENT: and the post content.
 - Plain text only in post bodies: never use **, __, --, em dashes (—), or markdown bullets. Use a plain hyphen (-) when you need a dash. Write like a human typing directly into the app.
 
-Example format (reflection mentioned a mix-up AND a book):
-EVENT: The Director's office mix-up
-[Full post about that moment only.]
+Example format (single-topic reflection about a price shock — still output multiple angles):
+EVENT: Sticker shock at the store
+[Full post — personal reaction only.]
 
 ---
-EVENT: Reading The Three-Body Problem
-[Full post about the book and your thoughts only.]
+EVENT: Fitness on a budget
+[Full post — practical insight angle only.]
+
+---
+EVENT: Is premium protein worth it?
+[Full post — question or contrarian angle only.]
 
 Reflection:
 ${(reflection ?? '').trim()}''';

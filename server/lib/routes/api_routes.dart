@@ -63,16 +63,55 @@ Rules:
 
   final platformLabel =
       platform == 'x' ? 'X (Twitter)' : platform[0].toUpperCase() + platform.substring(1);
-  return '''You are turning a day's reflection into separate social posts. You MUST create one standalone post for EACH distinct event or moment mentioned in the reflection.
 
-PLATFORM: $platformLabel. Write EVERY post in that platform's native style.
+  if (platform == 'reddit') {
+    return '''You are generating Reddit post suggestions from someone's personal reflection.
 
-Cover every distinct event or moment from the reflection. Each post focuses on one event only.
+GOAL:
+Create 3–5 distinct, authentic Reddit-style posts the user could publish.
+
+QUANTITY (required):
+- Output between 3 and 5 posts. Never only one unless the reflection is under ~15 words.
+
+ANGLES (each post must feel different):
+- vent / rant, funny / self-deprecating, advice-seeking, thoughtful take, community discussion starter
+
+Each post:
+- First person, casual, conversational — like r/CasualConversation or a personal story sub
+- One clear angle per post; no corporate speak
+- Ground truth only — do not invent facts beyond the reflection
 
 Output format (strict):
-- For each post, first write exactly: EVENT: <short event label>
-- Then on the next lines write the full post text.
-- Separate each post with a line that contains only: ---
+- For each post: EVENT: <short angle label, 3–6 words>
+- Then the full post text on following lines
+- Separate posts with a line containing only: ---
+
+Reflection:
+$reflection''';
+  }
+
+  return '''You are generating $platformLabel post suggestions from someone's personal reflection.
+
+GOAL:
+Create 3–5 high-quality, diverse posts the user could publish on $platformLabel.
+
+QUANTITY (required):
+- Generate between 3 and 5 posts. Pick a natural count.
+- Never output only one post unless the reflection is extremely short (under ~15 words).
+- Even for a single topic, use different angles (personal reaction, insight/lesson, contrarian take, practical tip, question/CTA).
+
+MULTIPLE EVENTS:
+- If the reflection mentions several distinct moments, spread posts across them — do not merge unrelated events into one post.
+
+Each post MUST:
+- Use a distinct angle and hook — no near-duplicates
+- Sound like a real $platformLabel post (professional for LinkedIn; not meta like "here's my post")
+- Ground truth only — paraphrase facts from the reflection; do not invent personal history
+
+Output format (strict):
+- For each post: EVENT: <short angle or moment label, 3–6 words>
+- Then the full post text on following lines
+- Separate posts with a line containing only: ---
 
 Reflection:
 $reflection''';
