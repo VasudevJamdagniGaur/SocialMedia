@@ -66,6 +66,19 @@ class ServerConfig {
     return null;
   }
 
+  /// Firebase Storage bucket (e.g. deitedatabase.appspot.com or deitedatabase.firebasestorage.app).
+  static String get storageBucket {
+    for (final k in [
+      'FIREBASE_STORAGE_BUCKET',
+      'REACT_APP_FIREBASE_STORAGE_BUCKET',
+      'GCLOUD_STORAGE_BUCKET',
+    ]) {
+      final v = Platform.environment[k]?.trim();
+      if (v != null && v.isNotEmpty) return v;
+    }
+    return '${firestoreProjectId}.appspot.com';
+  }
+
   static String? get openAiApiKey {
     final v = Platform.environment['OPENAI_API_KEY']?.trim();
     if (v != null && v.isNotEmpty) return v;

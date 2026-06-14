@@ -421,12 +421,14 @@ class _HubTrendingFeedState extends State<HubTrendingFeed> {
       needsImage: (i) => !hubTrendingItemHasReliableImage(_items[i]),
       generateForIndex: (i) {
         final item = _items[i];
+        final existingImg = item.image.trim();
         return getOrGenerateHubCarouselImage(
           cacheKey: hubCarouselImageCacheKey(item.url, item.id),
           headline: item.title,
           storyText: stripHtmlBoilerplate(item.description),
           articleUrl: item.url,
           kind: HubCarouselImageKind.news,
+          sourceImageUrl: existingImg.startsWith('http') ? existingImg : null,
         );
       },
       applyImage: (i, imageUrl) {

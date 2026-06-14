@@ -8,6 +8,7 @@ import '../services/chat_service.dart';
 import '../services/cached_news_service.dart';
 import '../services/vertex_api_client.dart';
 import '../services/youtube_tea_service.dart';
+import '../services/youtube_tea_service.dart';
 import 'hub_carousel_image_store.dart';
 import 'share_news_cache.dart';
 
@@ -151,12 +152,48 @@ Future<String?> resolveCachedHubCarouselImage({
   );
 }
 
+/// Result from the centralized image pipeline containing both the AI-generated
+/// image URL and the optional original source thumbnail.
+class HubCarouselImageResult {
+  const HubCarouselImageResult({
+    required this.aiImageUrl,
+    this.sourceImageUrl,
+    this.fromCache = false,
+  });
+
+  final String aiImageUrl;
+  final String? sourceImageUrl;
+  final bool fromCache;
+}
+
 Future<String?> getOrGenerateHubCarouselImage({
   required String cacheKey,
   required String headline,
   String storyText = '',
   String articleUrl = '',
   HubCarouselImageKind kind = HubCarouselImageKind.news,
+  String? sourceImageUrl,
+}) async {
+  final result = await getOrGenerateHubCarouselImageFull(
+    cacheKey: cacheKey,
+    headline: headline,
+    storyText: storyText,
+    articleUrl: articleUrl,
+    kind: kind,
+    sourceImageUrl: sourceImageUrl,
+  );
+  return result?.aiImageUrl;
+}
+
+/// Full pipeline: always generates AI image immediately via the Render backend.
+/// Returns both the AI image URL and the original source image URL (if available).
+Future<HubCarouselImageResult?> getOrGenerateHubCarouselImageFull({
+  required String cacheKey,
+  required String headline,
+  String storyText = '',
+  String articleUrl = '',
+  HubCarouselImageKind kind = HubCarouselImageKind.news,
+  String? sourceImageUrl,
 }) async {
   final key = hubCarouselImageCacheKey('$cacheKey#refphoto1', headline);
   final title = headline.trim();
@@ -164,27 +201,74 @@ Future<String?> getOrGenerateHubCarouselImage({
 
   final url = articleUrl.trim().isNotEmpty ? articleUrl.trim() : key;
 
-  final cached = await resolveHubCarouselImageFast(
+  // 1. Check local memory + disk cache first (instant, no network).
+  final localCached = await resolveHubCarouselImageFast(
     url: url,
     title: title,
     fallbackId: key,
     kind: kind,
   );
-  if (cached != null) return cached;
+  if (localCached != null) {
+    // Even if locally cached, check Firestore for sourceImageUrl non-blocking.
+    final src = sourceImageUrl?.trim();
+    return HubCarouselImageResult(
+      aiImageUrl: localCached,
+      sourceImageUrl: src?.startsWith('http') == true ? src : null,
+      fromCache: true,
+    );
+  }
 
   if (!isVertexBackendConfigured()) return null;
 
+  // 2. Call /api/tea/ensure-image on the Render backend.
+  //    - Server checks Firestore first (cache hit) and returns instantly.
+  //    - On cache miss, generates AI image, uploads to Storage, persists, returns URL.
+  //    - sourceImageUrl is passed so the server can store it alongside the AI image.
+  //    - This is the *primary* path — AI generation happens here, not as a fallback.
   try {
-    debugPrint('[ImageGen] hub carousel generation start headlineLen=${title.length}');
+    debugPrint('[ImageGen] ensure-image: headlineLen=${title.length} url=${url.length > 60 ? url.substring(0, 60) : url}');
+    final effSource = sourceImageUrl?.trim();
+    final response = await VertexApiClient.instance.fetchJson(
+      '/api/tea/ensure-image',
+      body: {
+        'articleUrl': url,
+        'title': title,
+        if (storyText.trim().isNotEmpty) 'storyText': stripHtmlBoilerplate(storyText),
+        'kind': kind.name,
+        if (effSource != null && effSource.startsWith('http')) 'sourceImageUrl': effSource,
+      },
+      timeout: const Duration(seconds: 90),
+    );
+    final aiImageUrl = (response['aiImageUrl'] ?? response['imageUrl']) as String?;
+    final srcUrl = response['sourceImageUrl'] as String?;
+    final fromCache = response['cached'] == true;
+    debugPrint('[ImageGen] ensure-image done cached=$fromCache hasUrl=${aiImageUrl != null}');
+    if (aiImageUrl == null || aiImageUrl.isEmpty) return null;
+
+    // Persist the AI image locally for instant future loads.
+    await persistHubCarouselImage(
+      url: url,
+      title: title,
+      imageUrl: aiImageUrl,
+      kind: kind,
+      fallbackId: key,
+    );
+    return HubCarouselImageResult(
+      aiImageUrl: aiImageUrl,
+      sourceImageUrl: srcUrl?.isNotEmpty == true ? srcUrl : effSource,
+      fromCache: fromCache,
+    );
+  } catch (e) {
+    debugPrint('[ImageGen] ensure-image failed, falling back to local generation: $e');
+  }
+
+  // 3. Fallback: generate locally if Render server is unreachable.
+  try {
     final generated = await ChatService.instance.fetchSingleNewsShareIllustrationImage({
       'headline': title,
       if (storyText.trim().isNotEmpty) 'storyText': stripHtmlBoilerplate(storyText),
     });
-    debugPrint(
-      '[ImageGen] hub carousel generation done hasImage=${generated != null} len=${generated?.length ?? 0}',
-    );
     if (generated == null || !generated.startsWith('data:image')) return null;
-
     await persistHubCarouselImage(
       url: url,
       title: title,
@@ -192,9 +276,13 @@ Future<String?> getOrGenerateHubCarouselImage({
       kind: kind,
       fallbackId: key,
     );
-    return generated;
+    final src = sourceImageUrl?.trim();
+    return HubCarouselImageResult(
+      aiImageUrl: generated,
+      sourceImageUrl: src?.startsWith('http') == true ? src : null,
+    );
   } catch (e) {
-    debugPrint('[HubCarouselAI] image generation failed: $e');
+    debugPrint('[HubCarouselAI] fallback image generation failed: $e');
     return null;
   }
 }

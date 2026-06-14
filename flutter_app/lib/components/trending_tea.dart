@@ -547,12 +547,15 @@ class _TrendingTeaState extends State<TrendingTea> {
       needsImage: (i) => !teaHasReliableHeroImage(_items[i]),
       generateForIndex: (i) {
         final item = _items[i];
+        // Pass existing thumbnail as sourceImageUrl so server stores it alongside the AI image.
+        final existingThumb = item.thumbnail.trim();
         return getOrGenerateHubCarouselImage(
           cacheKey: hubCarouselImageCacheKey(item.url, item.id),
           headline: item.title,
           storyText: item.gossip,
           articleUrl: item.url,
           kind: HubCarouselImageKind.tea,
+          sourceImageUrl: existingThumb.startsWith('http') ? existingThumb : null,
         );
       },
       applyImage: (i, imageUrl) {

@@ -508,10 +508,33 @@ class FirestoreService {
       final key = hashForNewsUrlCache(url);
       if (key.isEmpty) return null;
       final snap = await _db.doc('hubCarouselImageCache/$key').get();
-      return snap.data()?['imageUrl'] as String?;
+      final data = snap.data();
+      // Prefer the dedicated aiImageUrl field; fall back to legacy imageUrl.
+      return (data?['aiImageUrl'] ?? data?['imageUrl']) as String?;
     } catch (error) {
       debugPrint('getHubCarouselImageUrl failed: $error');
       return null;
+    }
+  }
+
+  /// Reads both AI image URL and original source thumbnail URL from Firestore.
+  Future<({String? aiImageUrl, String? sourceImageUrl})> getHubCarouselBothUrls(String? articleUrl) async {
+    final url = (articleUrl ?? '').trim();
+    if (url.isEmpty) return (aiImageUrl: null, sourceImageUrl: null);
+    try {
+      final key = hashForNewsUrlCache(url);
+      if (key.isEmpty) return (aiImageUrl: null, sourceImageUrl: null);
+      final snap = await _db.doc('hubCarouselImageCache/$key').get();
+      final data = snap.data();
+      final ai = ((data?['aiImageUrl'] ?? data?['imageUrl']) as String?)?.trim();
+      final src = (data?['sourceImageUrl'] as String?)?.trim();
+      return (
+        aiImageUrl: (ai != null && ai.isNotEmpty) ? ai : null,
+        sourceImageUrl: (src != null && src.isNotEmpty) ? src : null,
+      );
+    } catch (error) {
+      debugPrint('getHubCarouselBothUrls failed: $error');
+      return (aiImageUrl: null, sourceImageUrl: null);
     }
   }
 
@@ -521,6 +544,7 @@ class FirestoreService {
     required String kind,
     String headline = '',
     String storagePath = '',
+    String? sourceImageUrl,
   }) async {
     final url = articleUrl.trim();
     if (url.isEmpty || imageUrl.isEmpty) return null;
@@ -539,12 +563,16 @@ class FirestoreService {
         if (finalUrl.isEmpty) return null;
       }
 
+      final src = (sourceImageUrl ?? '').trim();
       await _db.doc('hubCarouselImageCache/$key').set({
         'articleUrl': url.length > 1200 ? url.substring(0, 1200) : url,
-        'imageUrl': finalUrl,
+        'aiImageUrl': finalUrl,
+        'imageUrl': finalUrl, // legacy compat
         'kind': kind,
         if (headline.trim().isNotEmpty) 'headline': headline.trim(),
         if (finalPath.isNotEmpty) 'storagePath': finalPath,
+        if (src.startsWith('http')) 'sourceImageUrl': src,
+        'imageGenerated': true,
         'lastSeenAt': DateTime.now().millisecondsSinceEpoch,
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));

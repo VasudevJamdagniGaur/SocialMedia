@@ -1,14 +1,17 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 
 import '../config.dart';
+import '../services/firebase_admin_service.dart';
 import '../utils/http_utils.dart';
 import '../vertex/vertex_client.dart';
 
 Router buildVertexRouter(VertexClient vertex) {
   final router = Router();
+  final _firebase = FirebaseAdminService();
 
   router.get('/health', (Request req) {
     return jsonOk({
@@ -195,6 +198,84 @@ Router buildVertexRouter(VertexClient vertex) {
     } catch (e) {
       return jsonError(500, 'generatePost failed', details: '$e');
     }
+  });
+
+  router.post('/api/tea/ensure-image', (Request req) async {
+    final body = await readJsonBody(req);
+    if (body == null) return jsonError(400, 'Invalid JSON body');
+
+    final articleUrl = (body['articleUrl'] as String? ?? '').trim();
+    final title = (body['title'] as String? ?? '').trim();
+    if (articleUrl.isEmpty || title.isEmpty) {
+      return jsonError(400, 'articleUrl and title are required');
+    }
+    final storyText = (body['storyText'] as String? ?? '').trim();
+    final kind = (body['kind'] as String? ?? 'tea').trim();
+    // Optional source image (YouTube thumb / article image) supplied by client.
+    final sourceImageUrl = (body['sourceImageUrl'] as String? ?? '').trim();
+
+    // 1. Check Firestore — return both URLs immediately if the AI image was already generated.
+    final cached = await _firebase.getHubCarouselBothUrls(articleUrl);
+    if (cached.aiImageUrl != null) {
+      stdout.writeln('[EnsureImage] cache hit: ${articleUrl.substring(0, articleUrl.length.clamp(0, 80))}');
+      return jsonOk({
+        'ok': true,
+        'aiImageUrl': cached.aiImageUrl,
+        'imageUrl': cached.aiImageUrl, // legacy field
+        if (cached.sourceImageUrl != null) 'sourceImageUrl': cached.sourceImageUrl,
+        'cached': true,
+      });
+    }
+
+    // 2. Generate AI image via Vertex AI immediately — no waiting for source images.
+    final combined = storyText.isNotEmpty ? '$title\n\n$storyText' : title;
+    final prompt =
+        'Create one vivid editorial illustration for a trending social story.\n'
+        'Atmospheric, symbolic, tasteful. No embedded text, captions, logos, or identifiable private individuals.\n'
+        'Medium or wide shot when people appear; avoid face close-ups.\n\n'
+        '${combined.length > 5500 ? combined.substring(0, 5500) : combined}';
+
+    final String? dataUrl;
+    try {
+      dataUrl = await vertex.generateNewsIllustrationImage(prompt);
+    } catch (e) {
+      stderr.writeln('[EnsureImage] AI generation failed: $e');
+      return jsonError(502, 'Image generation failed', details: '$e');
+    }
+    if (dataUrl == null || !dataUrl.startsWith('data:image')) {
+      return jsonError(502, 'Image generation returned no image');
+    }
+
+    // 3. Upload AI image to Firebase Storage.
+    final key = FirebaseAdminService.hashForUrl(articleUrl);
+    final uploaded = await _firebase.uploadDataUrl(key: key, dataUrl: dataUrl);
+    final aiImageUrl = uploaded?.imageUrl ?? dataUrl;
+    final storagePath = uploaded?.storagePath ?? '';
+
+    // 4. Persist both AI image URL and source image URL to Firestore.
+    //    In parallel: source image URL may also arrive from the client.
+    final effectiveSourceUrl = sourceImageUrl.isNotEmpty ? sourceImageUrl : null;
+    if (uploaded != null) {
+      await _firebase.saveHubCarouselImageRecord(
+        articleUrl: articleUrl,
+        imageUrl: aiImageUrl,
+        kind: kind,
+        storagePath: storagePath,
+        headline: title,
+        sourceImageUrl: effectiveSourceUrl,
+      );
+      stdout.writeln('[EnsureImage] generated+persisted aiImage: ${articleUrl.substring(0, articleUrl.length.clamp(0, 80))}');
+    } else {
+      stderr.writeln('[EnsureImage] Storage upload failed; returning transient data URL for: ${articleUrl.substring(0, articleUrl.length.clamp(0, 80))}');
+    }
+
+    return jsonOk({
+      'ok': true,
+      'aiImageUrl': aiImageUrl,
+      'imageUrl': aiImageUrl, // legacy field for older clients
+      if (effectiveSourceUrl != null) 'sourceImageUrl': effectiveSourceUrl,
+      'cached': false,
+    });
   });
 
   return router;

@@ -67,7 +67,10 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
   bool _autoOpenSharePanel = false;
   String? _pendingShareText;
   String _editableShareText = '';
+  // AI-generated illustration (primary image for Tea/News shares).
   String? _generatedShareImageUrl;
+  // Original source thumbnail from YouTube / article (optional alternative).
+  String? _sourceImageUrl;
   bool _loadingShareImage = false;
   String? _lastImagePrompt;
 
@@ -320,6 +323,8 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
       if (headline.isEmpty) return;
 
       final kind = _isTeaArticleShare ? HubCarouselImageKind.tea : HubCarouselImageKind.news;
+
+      // 1. Fast path: try local cache first (no network).
       final cachedFast = await resolveHubCarouselImageFast(
         url: url,
         title: headline,
@@ -328,6 +333,12 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
       );
       if (cachedFast != null && isHubCarouselDisplayImage(cachedFast)) {
         if (!mounted) return;
+        // Also try to get sourceImageUrl from Firestore in background.
+        unawaited(FirestoreService.instance.getHubCarouselBothUrls(url).then((both) {
+          if (mounted && both.sourceImageUrl != null) {
+            setState(() => _sourceImageUrl = both.sourceImageUrl);
+          }
+        }));
         setState(() {
           _generatedShareImageUrl = cachedFast;
           _newsArticle = {
@@ -338,12 +349,30 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
         return;
       }
 
-      final storyParts = <String>[
-        if (_displayNewsSummary.trim().isNotEmpty) _displayNewsSummary.trim(),
-        stripHtmlBoilerplate('${_newsArticle?['description'] ?? ''}'),
-      ].where((s) => s.isNotEmpty).toList();
-      final storyText = storyParts.join('\n\n');
+      // 2. Try Firestore for both AI image and source image (one call).
+      if (url.isNotEmpty) {
+        final both = await FirestoreService.instance.getHubCarouselBothUrls(url);
+        if (both.aiImageUrl != null && isHubCarouselDisplayImage(both.aiImageUrl!)) {
+          await persistHubCarouselImage(
+            url: url,
+            title: headline,
+            imageUrl: both.aiImageUrl!,
+            kind: kind,
+          );
+          if (!mounted) return;
+          setState(() {
+            _generatedShareImageUrl = both.aiImageUrl;
+            _sourceImageUrl = both.sourceImageUrl;
+            _newsArticle = {
+              ...Map<String, dynamic>.from(_newsArticle ?? {}),
+              'image': both.aiImageUrl!,
+            };
+          });
+          return;
+        }
+      }
 
+      // 3. Per-user share image cache.
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid != null && url.isNotEmpty) {
         final cached = await FirestoreService.instance.getNewsShareImageUrl(uid, url);
@@ -366,30 +395,37 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
         }
       }
 
-      final generated = await getOrGenerateHubCarouselImage(
+      // 4. Generate AI image via the centralized server pipeline.
+      //    Pass the existing article image as sourceImageUrl so it gets stored alongside.
+      final storyParts = <String>[
+        if (_displayNewsSummary.trim().isNotEmpty) _displayNewsSummary.trim(),
+        stripHtmlBoilerplate('${_newsArticle?['description'] ?? ''}'),
+      ].where((s) => s.isNotEmpty).toList();
+      final storyText = storyParts.join('\n\n');
+
+      final existingImg = ('${_newsArticle?['image'] ?? ''}').trim();
+      final result = await getOrGenerateHubCarouselImageFull(
         cacheKey: hubCarouselImageCacheKey(url, headline),
         headline: headline,
         storyText: storyText,
         articleUrl: url,
         kind: _isTeaArticleShare ? HubCarouselImageKind.tea : HubCarouselImageKind.news,
+        sourceImageUrl: existingImg.startsWith('http') ? existingImg : null,
       );
-      if (generated == null || !mounted) return;
+      if (result == null || !mounted) return;
 
-      debugPrint('[ImageGen] news share image stored len=${generated.length}');
+      debugPrint('[ImageGen] news share image stored len=${result.aiImageUrl.length}');
       setState(() {
-        _generatedShareImageUrl = generated;
+        _generatedShareImageUrl = result.aiImageUrl;
+        if (result.sourceImageUrl != null) _sourceImageUrl = result.sourceImageUrl;
         _newsArticle = {
           ...Map<String, dynamic>.from(_newsArticle ?? {}),
-          'image': generated,
+          'image': result.aiImageUrl,
         };
       });
 
-      if (uid != null &&
-          url.isNotEmpty &&
-          generated.startsWith('http')) {
-        unawaited(
-          FirestoreService.instance.saveNewsShareImageUrl(uid, url, generated),
-        );
+      if (uid != null && url.isNotEmpty && result.aiImageUrl.startsWith('http')) {
+        unawaited(FirestoreService.instance.saveNewsShareImageUrl(uid, url, result.aiImageUrl));
       }
     } finally {
       if (mounted) setState(() => _loadingShareImage = false);
@@ -906,6 +942,10 @@ Plain text only: no **bold**, no markdown bullets, no em dashes (—). Use a pla
     final captionForImage = currentPostCaption.trim().isNotEmpty
         ? currentPostCaption.trim()
         : _selectedPostText.trim();
+
+    final hasSourceImage = isValidHubCarouselImageUrl(_sourceImageUrl);
+    final hasAiImage = isValidHubCarouselImageUrl(_generatedShareImageUrl);
+
     final action = await showModalBottomSheet<_ShareImageEditAction>(
       context: context,
       isDismissible: true,
@@ -919,6 +959,7 @@ Plain text only: no **bold**, no markdown bullets, no em dashes (—). Use a pla
       builder: (ctx) {
         final primary = isDarkMode ? HubColors.text : const Color(0xFF1A1A1A);
         final secondary = isDarkMode ? HubColors.textSecondary : const Color(0xFF666666);
+        final accent = HubColors.accent;
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(8, 12, 8, 8),
@@ -929,10 +970,34 @@ Plain text only: no **bold**, no markdown bullets, no em dashes (—). Use a pla
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                   child: Text(
-                    'Edit image',
+                    'Image options',
                     style: TextStyle(color: primary, fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                 ),
+                // Option 1 (default): Detea AI image
+                ListTile(
+                  leading: Icon(LucideIcons.sparkles, color: accent),
+                  title: Text('Detea AI image', style: TextStyle(color: primary)),
+                  subtitle: Text(
+                    'Use the unique AI-generated illustration',
+                    style: TextStyle(color: secondary, fontSize: 12),
+                  ),
+                  trailing: hasAiImage
+                      ? Icon(Icons.check_circle, color: accent, size: 18)
+                      : null,
+                  onTap: () => Navigator.pop(ctx, _ShareImageEditAction.useAiImage),
+                ),
+                // Option 2: Original source thumbnail (if available)
+                if (hasSourceImage)
+                  ListTile(
+                    leading: Icon(LucideIcons.image, color: primary),
+                    title: Text('Original thumbnail', style: TextStyle(color: primary)),
+                    subtitle: Text(
+                      'Use the source YouTube / article image',
+                      style: TextStyle(color: secondary, fontSize: 12),
+                    ),
+                    onTap: () => Navigator.pop(ctx, _ShareImageEditAction.useSourceImage),
+                  ),
                 ListTile(
                   leading: Icon(LucideIcons.pencil, color: primary),
                   title: Text('Change image', style: TextStyle(color: primary)),
@@ -960,11 +1025,12 @@ Plain text only: no **bold**, no markdown bullets, no em dashes (—). Use a pla
                   ),
                   onTap: () => Navigator.pop(ctx, _ShareImageEditAction.magicWand),
                 ),
+                // Option 3: Remove image
                 ListTile(
                   leading: Icon(LucideIcons.trash2, color: Colors.red.shade400),
-                  title: Text('Delete image', style: TextStyle(color: Colors.red.shade400)),
+                  title: Text('Remove image', style: TextStyle(color: Colors.red.shade400)),
                   subtitle: Text(
-                    'Remove the image from this post',
+                    'Share without any image',
                     style: TextStyle(color: secondary, fontSize: 12),
                   ),
                   onTap: () => Navigator.pop(ctx, _ShareImageEditAction.delete),
@@ -978,6 +1044,18 @@ Plain text only: no **bold**, no markdown bullets, no em dashes (—). Use a pla
 
     if (!mounted || action == null) return;
     switch (action) {
+      case _ShareImageEditAction.useAiImage:
+        // Already the default — no-op if AI image is showing; regenerate if missing.
+        if (!isValidHubCarouselImageUrl(_generatedShareImageUrl)) {
+          setState(() => _loadingShareImage = true);
+          await _ensureNewsShareImage();
+        }
+      case _ShareImageEditAction.useSourceImage:
+        if (isValidHubCarouselImageUrl(_sourceImageUrl)) {
+          setState(() {
+            _media = [_sourceImageUrl!];
+          });
+        }
       case _ShareImageEditAction.replace:
         await _pickShareImage();
       case _ShareImageEditAction.magicPencil:
@@ -994,6 +1072,7 @@ Plain text only: no **bold**, no markdown bullets, no em dashes (—). Use a pla
       _media = [];
       _generatedShareImageUrl = null;
       _lastImagePrompt = null;
+      _sourceImageUrl = null;
       if (_newsArticle != null) {
         final updated = Map<String, dynamic>.from(_newsArticle!);
         updated.remove('image');
@@ -2170,7 +2249,7 @@ class _SuggestionImage extends StatelessWidget {
   }
 }
 
-enum _ShareImageEditAction { replace, magicPencil, magicWand, delete }
+enum _ShareImageEditAction { useAiImage, useSourceImage, replace, magicPencil, magicWand, delete }
 
 class _SharePanelOverlay extends StatefulWidget {
   const _SharePanelOverlay({
