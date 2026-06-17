@@ -2,8 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
-/// Gap between Pod Tea / News carousel image calls (1 per second).
-const renderBackendCarouselGapMs = 1000;
+/// Gap between Pod Tea / News carousel image calls (5 per second).
+const renderBackendCarouselGapMs = 200;
 
 /// Global priority for all requests to detea-backend.onrender.com.
 enum RenderBackendPriority {
