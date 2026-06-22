@@ -149,9 +149,7 @@ class ChatService extends ChangeNotifier {
       prompt: prompt,
       temperature: temperature,
       maxOutputTokens: maxOutputTokens,
-      priority: RenderBackendQueue.instance.isPostCreationActive
-          ? RenderBackendPriority.postCreation
-          : RenderBackendPriority.background,
+      priority: RenderBackendPriority.postCreation,
     );
   }
 
@@ -1181,9 +1179,7 @@ Be thorough and detailed. This description will be used to generate a response.'
         return vertexGenerateContent(
           prompt: prompt,
           maxOutputTokens: maxTokens,
-          priority: RenderBackendQueue.instance.isPostCreationActive
-              ? RenderBackendPriority.postCreation
-              : RenderBackendPriority.background,
+          priority: RenderBackendPriority.postCreation,
         );
       }
       throw Exception('No AI provider configured.');
@@ -4704,9 +4700,7 @@ $contextSnippet''';
       final imageDataUrl = await vertexGenerateNewsImage(
         p,
         referenceImage: referenceImage,
-        priority: RenderBackendQueue.instance.isPostCreationActive
-            ? RenderBackendPriority.postCreation
-            : RenderBackendPriority.background,
+        priority: RenderBackendPriority.postCreation,
       );
       debugPrint('[ImageGen] _generateImageWithGemini received len=${imageDataUrl.length}');
       if (imageDataUrl.startsWith('data:image')) {

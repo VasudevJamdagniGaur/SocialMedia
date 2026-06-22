@@ -345,7 +345,6 @@ class _TrendingTeaState extends State<TrendingTea> {
   List<TeaItem> _items = _memoryTeaCache ?? [];
   bool _loading = _memoryTeaCache == null || _memoryTeaCache!.isEmpty;
   String? _error;
-  int _aiImageGen = 0;
 
   @override
   void initState() {
@@ -363,7 +362,6 @@ class _TrendingTeaState extends State<TrendingTea> {
       });
     }
     unawaited(_syncCachedAiImages());
-    unawaited(_enrichMissingAiImages());
   }
 
   Future<void> _load() async {
@@ -374,14 +372,12 @@ class _TrendingTeaState extends State<TrendingTea> {
         _error = null;
       });
       unawaited(_syncCachedAiImages());
-      unawaited(_enrichMissingAiImages());
       unawaited(_refreshFromNetwork());
       return;
     }
 
     if (_items.isNotEmpty && _memoryTeaCache != null && _memoryTeaCache!.isNotEmpty) {
       unawaited(_syncCachedAiImages());
-      unawaited(_enrichMissingAiImages());
       unawaited(_refreshFromNetwork());
       return;
     }
@@ -404,7 +400,6 @@ class _TrendingTeaState extends State<TrendingTea> {
         _memoryTeaCache = hydrated;
       }
       unawaited(_syncCachedAiImages());
-      unawaited(_enrichMissingAiImages());
       unawaited(_refreshFromNetwork());
       return;
     }
@@ -439,7 +434,6 @@ class _TrendingTeaState extends State<TrendingTea> {
       });
       _memoryTeaCache = hydrated;
       unawaited(_syncCachedAiImages());
-      unawaited(_enrichMissingAiImages());
     } catch (e) {
       if (!mounted) return;
       if (_items.isEmpty) {
@@ -557,33 +551,6 @@ class _TrendingTeaState extends State<TrendingTea> {
     return _saveTeaToDisk(_items);
   }
 
-  Future<void> _enrichMissingAiImages() async {
-    final token = ++_aiImageGen;
-    await enrichCarouselSlotsWithAiImages(
-      slotCount: _items.length,
-      needsImage: (i) => !teaHasDisplayableHeroImage(_items[i]),
-      generateForIndex: (i) {
-        final item = _items[i];
-        // Pass existing thumbnail as sourceImageUrl so server stores it alongside the AI image.
-        final existingThumb = item.thumbnail.trim();
-        return getOrGenerateHubCarouselImage(
-          cacheKey: hubCarouselImageCacheKey(item.url, item.id),
-          headline: item.title,
-          storyText: item.gossip,
-          articleUrl: item.url,
-          kind: HubCarouselImageKind.tea,
-          sourceImageUrl: existingThumb.startsWith('http') ? existingThumb : null,
-          priority: HubCarouselImagePriority.podTeaHome,
-        );
-      },
-      applyImage: (i, imageUrl) {
-        if (!mounted || token != _aiImageGen) return;
-        unawaited(_applyTeaImageAt(i, imageUrl));
-      },
-      maxGenerate: _items.length,
-    );
-  }
-
   void _openTeaFeed() {
     stashTeaFeedLaunchItems(_items);
     context.go(AppRoutes.teaFeed, extra: {
@@ -680,6 +647,7 @@ class _TrendingTeaState extends State<TrendingTea> {
                                           kind: HubCarouselImageKind.tea,
                                           tryYouTubeThumbnail: true,
                                           imagePriority: HubCarouselImagePriority.podTeaHome,
+                                          generateAiImage: false,
                                           errorWidget: _gradientFallback(idx),
                                           onResolved: (url) => unawaited(_applyTeaImageAt(idx, url)),
                                         ),

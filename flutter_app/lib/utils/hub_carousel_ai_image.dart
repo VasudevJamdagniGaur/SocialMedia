@@ -450,7 +450,7 @@ List<String> hubCarouselImageFallbackIds({
   return ids;
 }
 
-/// Carousel hero that retries YouTube thumbs, cache, and AI when the initial URL fails.
+/// Carousel hero that retries YouTube thumbs, cache, and optionally AI when the initial URL fails.
 class HubCarouselResolvingHero extends StatefulWidget {
   const HubCarouselResolvingHero({
     super.key,
@@ -466,6 +466,7 @@ class HubCarouselResolvingHero extends StatefulWidget {
     this.onResolved,
     this.tryYouTubeThumbnail = false,
     this.imagePriority = HubCarouselImagePriority.background,
+    this.generateAiImage = true,
   });
 
   final String? initialUrl;
@@ -480,6 +481,7 @@ class HubCarouselResolvingHero extends StatefulWidget {
   final ValueChanged<String>? onResolved;
   final bool tryYouTubeThumbnail;
   final HubCarouselImagePriority imagePriority;
+  final bool generateAiImage;
 
   @override
   State<HubCarouselResolvingHero> createState() => _HubCarouselResolvingHeroState();
@@ -576,6 +578,8 @@ class _HubCarouselResolvingHeroState extends State<HubCarouselResolvingHero> {
         return;
       }
     }
+
+    if (!widget.generateAiImage) return;
 
     final generated = await getOrGenerateHubCarouselImage(
       cacheKey: hubCarouselImageCacheKey(widget.articleUrl, widget.fallbackId),

@@ -189,32 +189,6 @@ class _TeaFeedPageState extends State<TeaFeedPage> {
       setState(() => _rawItems = updated);
     }
 
-    if (!mounted || token != _imageHydrateGen) return;
-    unawaited(_enrichMissingTeaFeedImages(token));
-  }
-
-  Future<void> _enrichMissingTeaFeedImages(int token) async {
-    for (var i = 0; i < _rawItems.length; i++) {
-      if (!mounted || token != _imageHydrateGen) return;
-      final item = _rawItems[i];
-      if (teaHeroImageUrl(item) != null) continue;
-
-      final generated = await getOrGenerateHubCarouselImage(
-        cacheKey: hubCarouselImageCacheKey(item.url, item.id),
-        headline: item.title,
-        storyText: item.gossip,
-        articleUrl: item.url,
-        kind: HubCarouselImageKind.tea,
-        priority: HubCarouselImagePriority.teaFeed,
-      );
-      if (generated == null || !mounted || token != _imageHydrateGen) continue;
-
-      setState(() {
-        final next = [..._rawItems];
-        next[i] = _copyTeaItem(item, thumbnail: generated);
-        _rawItems = next;
-      });
-    }
   }
 
   TeaItem _copyTeaItem(TeaItem item, {String? thumbnail}) {
@@ -631,20 +605,6 @@ class _TeaHeroBackgroundState extends State<_TeaHeroBackground> {
       }
     }
 
-    final generated = await getOrGenerateHubCarouselImage(
-      cacheKey: hubCarouselImageCacheKey(item.url, item.id),
-      headline: item.title,
-      storyText: item.gossip,
-      articleUrl: item.url,
-      kind: HubCarouselImageKind.tea,
-      priority: HubCarouselImagePriority.teaFeed,
-    );
-    if (!mounted || token != _resolveGen) return;
-    if (generated != null &&
-        isValidHubCarouselImageUrl(generated) &&
-        !_failedUrls.contains(generated)) {
-      setState(() => _resolvedUrl = generated);
-    }
   }
 
   @override
