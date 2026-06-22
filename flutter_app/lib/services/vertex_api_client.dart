@@ -148,6 +148,33 @@ class VertexApiClient {
       priority: priority,
     );
 
+    return _parseGenerateContentResponse(data);
+  }
+
+  /// Bypasses [RenderBackendQueue] — use only for user-interactive flows
+  /// (chat, reflections) where queuing behind image-gen jobs is unacceptable.
+  Future<String> vertexGenerateContentDirect({
+    required String prompt,
+    double temperature = 0.65,
+    int maxOutputTokens = 1024,
+    Duration? timeout,
+  }) async {
+    if (prompt.trim().isEmpty) {
+      throw Exception('vertexGenerateContentDirect: prompt is required');
+    }
+    final data = await _fetchJsonUnqueued(
+      '/generateContent',
+      body: {
+        'prompt': prompt.trim(),
+        'temperature': temperature,
+        'maxOutputTokens': maxOutputTokens,
+      },
+      timeout: timeout,
+    );
+    return _parseGenerateContentResponse(data);
+  }
+
+  String _parseGenerateContentResponse(Map<String, dynamic> data) {
     final candidates = data['candidates'];
     if (candidates is List &&
         candidates.isNotEmpty &&
@@ -286,6 +313,19 @@ Future<String> vertexGenerateContent({
       maxOutputTokens: maxOutputTokens,
       timeout: timeout,
       priority: priority,
+    );
+
+Future<String> vertexGenerateContentDirect({
+  required String prompt,
+  double temperature = 0.65,
+  int maxOutputTokens = 1024,
+  Duration? timeout,
+}) =>
+    _vertex.vertexGenerateContentDirect(
+      prompt: prompt,
+      temperature: temperature,
+      maxOutputTokens: maxOutputTokens,
+      timeout: timeout,
     );
 
 Future<String> vertexGenerateNewsImage(

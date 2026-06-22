@@ -145,11 +145,10 @@ class ChatService extends ChangeNotifier {
     int maxOutputTokens = 1024,
     Object? signal,
   }) async {
-    return vertexGenerateContent(
+    return vertexGenerateContentDirect(
       prompt: prompt,
       temperature: temperature,
       maxOutputTokens: maxOutputTokens,
-      priority: RenderBackendPriority.postCreation,
     );
   }
 
@@ -1176,10 +1175,9 @@ Be thorough and detailed. This description will be used to generate a response.'
     final key = apiProvider == 'openai' ? openaiApiKey : grokApiKey;
     if (key.trim().isEmpty) {
       if (isVertexBackendConfigured()) {
-        return vertexGenerateContent(
+        return vertexGenerateContentDirect(
           prompt: prompt,
           maxOutputTokens: maxTokens,
-          priority: RenderBackendPriority.postCreation,
         );
       }
       throw Exception('No AI provider configured.');

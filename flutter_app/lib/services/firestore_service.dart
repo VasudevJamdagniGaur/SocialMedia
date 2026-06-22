@@ -1,4 +1,5 @@
-﻿import 'dart:convert';
+﻿import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
@@ -1147,20 +1148,25 @@ class FirestoreService {
       debugPrint('ðŸ“– FIRESTORE NEW: Getting chat messages...');
       final snapshot = await _db
           .collection('users/$uid/days/$dateId/messages')
-          .orderBy('ts')
-          .get();
+          .get()
+          .timeout(const Duration(seconds: 10));
       final messages = snapshot.docs.map((doc) {
         final data = doc.data();
         final message = <String, dynamic>{
           'id': doc.id,
           'sender': data['role'] == 'user' ? 'user' : 'ai',
-          'text': data['text'],
+          'text': data['text'] ?? '',
           'timestamp': _toDate(data['ts']),
           'isWhisperSession': data['isWhisperSession'] ?? false,
         };
         if (data['image'] != null) message['image'] = data['image'];
         return message;
-      }).toList();
+      }).toList()
+        ..sort((a, b) {
+          final at = a['timestamp'] as DateTime;
+          final bt = b['timestamp'] as DateTime;
+          return at.compareTo(bt);
+        });
       return {'success': true, 'messages': messages};
     } catch (error) {
       debugPrint('âŒ FIRESTORE NEW: Error getting chat messages: $error');
