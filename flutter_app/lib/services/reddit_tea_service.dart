@@ -43,7 +43,29 @@ List<String> redditProxyBaseUrls() {
 
 bool isRedditTeaThreadUrl(String? url) => isRedditThreadUrl(url);
 
-/// Fill missing gossip text and hero images by scraping Reddit thread JSON.
+/// Fetches the OG/meta image for a non-Reddit article URL via the backend extractor.
+Future<String?> fetchArticleOgImage(String articleUrl) async {
+  for (final base in redditProxyBaseUrls()) {
+    try {
+      final url = Uri.parse('$base/api/linkedin/article').replace(
+        queryParameters: {'url': articleUrl},
+      );
+      final res = await http
+          .get(url, headers: {'Accept': 'application/json', 'User-Agent': _newsApiUserAgent})
+          .timeout(const Duration(seconds: 12));
+      if (res.statusCode != 200) continue;
+      final body = jsonDecode(res.body);
+      if (body is! Map) continue;
+      final image = '${body['image'] ?? ''}'.trim();
+      if (image.startsWith('http')) return image;
+    } catch (_) {}
+  }
+  return null;
+}
+
+/// Fill missing gossip text and hero images.
+/// Reddit thread URLs: enriched via thread JSON (gossip + image).
+/// Non-Reddit article URLs: OG image fetched via the backend article extractor.
 Future<List<Map<String, dynamic>>> enrichTeaRows(
   List<Map<String, dynamic>> rows, {
   int maxEnrich = 10,
@@ -57,7 +79,7 @@ Future<List<Map<String, dynamic>>> enrichTeaRows(
   for (var i = 0; i < out.length && queued < maxEnrich; i++) {
     final row = out[i];
     final url = '${row['url'] ?? ''}'.trim();
-    if (!isRedditTeaThreadUrl(url)) continue;
+    if (url.isEmpty) continue;
 
     final gossip = '${row['gossip'] ?? row['description'] ?? row['selftext'] ?? ''}'.trim();
     final image = '${row['image'] ?? row['thumbnail'] ?? ''}'.trim();
@@ -65,26 +87,39 @@ Future<List<Map<String, dynamic>>> enrichTeaRows(
     final needsImage = !RegExp(r'^https?://', caseSensitive: false).hasMatch(image);
     if (!needsGossip && !needsImage) continue;
 
+    final isReddit = isRedditTeaThreadUrl(url);
+    // Non-Reddit articles only benefit from image fetching, not gossip enrichment.
+    if (!isReddit && !needsImage) continue;
+
     final idx = i;
     queued++;
     tasks.add(() async {
       try {
-        final details = await fetchRedditThreadDetails(url, seed: out[idx]);
-        if (details == null) return;
-        final merged = out[idx];
-        final g = '${details['gossip'] ?? details['description'] ?? ''}'.trim();
-        if (needsGossip && g.isNotEmpty) {
-          merged['gossip'] = g;
-          merged['description'] = g;
-          merged['selftext'] = '${details['selftext'] ?? g}';
+        if (isReddit) {
+          final details = await fetchRedditThreadDetails(url, seed: out[idx]);
+          if (details == null) return;
+          final merged = out[idx];
+          final g = '${details['gossip'] ?? details['description'] ?? ''}'.trim();
+          if (needsGossip && g.isNotEmpty) {
+            merged['gossip'] = g;
+            merged['description'] = g;
+            merged['selftext'] = '${details['selftext'] ?? g}';
+          }
+          final img = '${details['image'] ?? ''}'.trim();
+          if (needsImage && img.startsWith('http')) {
+            merged['image'] = img;
+            merged['thumbnail'] = img;
+          }
+          final title = '${details['title'] ?? ''}'.trim();
+          if (title.isNotEmpty) merged['title'] = title;
+        } else {
+          // Non-Reddit article: fetch the real og:image from the article page.
+          final img = await fetchArticleOgImage(url);
+          if (img != null) {
+            out[idx]['image'] = img;
+            out[idx]['thumbnail'] = img;
+          }
         }
-        final img = '${details['image'] ?? ''}'.trim();
-        if (needsImage && img.startsWith('http')) {
-          merged['image'] = img;
-          merged['thumbnail'] = img;
-        }
-        final title = '${details['title'] ?? ''}'.trim();
-        if (title.isNotEmpty) merged['title'] = title;
       } catch (_) {}
     }());
   }
@@ -389,15 +424,43 @@ List<Map<String, dynamic>> _mergeTeaRowLists(
   return merged;
 }
 
-/// Trending Tea rows via YouTube Data API (replaces Reddit scraping).
+/// Reddit rows with backend-proxy → direct → PullPush fallback chain.
+Future<List<Map<String, dynamic>>> _fetchTeaRedditRows() async {
+  try {
+    final rows = await fetchTeaRowsFromBackendProxy(maxKeep: 12)
+        .timeout(const Duration(seconds: 8));
+    if (rows.isNotEmpty) return rows;
+  } catch (_) {}
+  try {
+    final rows = await fetchTeaRowsFromClassicReddit()
+        .timeout(const Duration(seconds: 8));
+    if (rows.isNotEmpty) return rows;
+  } catch (_) {}
+  try {
+    return await fetchTeaRowsFromPullPush(maxKeep: 12)
+        .timeout(const Duration(seconds: 8));
+  } catch (_) {
+    return [];
+  }
+}
+
+/// Trending Tea rows: Reddit + YouTube + Google RSS, merged and enriched.
 Future<List<Map<String, dynamic>>> fetchTrendingTeaRows({bool deferEnrich = true}) async {
   final rssFuture = _fetchTeaRssQuickRows();
   final ytFuture = fetchTeaRowsFromYouTube(maxKeep: 14).timeout(
     const Duration(seconds: 8),
     onTimeout: () => <Map<String, dynamic>>[],
   );
-  final parts = await Future.wait([rssFuture, ytFuture]);
-  var rows = _mergeTeaRowLists(parts[0], parts[1]);
+  final redditFuture = _fetchTeaRedditRows().timeout(
+    const Duration(seconds: 12),
+    onTimeout: () => <Map<String, dynamic>>[],
+  );
+  final parts = await Future.wait([rssFuture, ytFuture, redditFuture]);
+  // Reddit (images) → YouTube (images) → RSS; secondary items appear first.
+  var rows = _mergeTeaRowLists(
+    _mergeTeaRowLists(parts[0], parts[1]),
+    parts[2],
+  );
 
   if (rows.length < 6) {
     final fromRss = await _fetchTeaRssFallbackRows();

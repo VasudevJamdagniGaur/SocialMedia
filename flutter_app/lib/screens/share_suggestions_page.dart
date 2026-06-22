@@ -1,17 +1,21 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:image_picker_android/image_picker_android.dart';
 import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../components/skeleton/list_skeleton.dart';
@@ -32,6 +36,8 @@ import '../utils/share_news_cache.dart';
 
 class ShareSuggestionsPage extends StatefulWidget {
   const ShareSuggestionsPage({super.key});
+
+  static const _linkedInShareChannel = MethodChannel('therapist.deite.app/linkedin_share');
 
   @override
   State<ShareSuggestionsPage> createState() => _ShareSuggestionsPageState();
@@ -1244,45 +1250,240 @@ User changes: $instruction''',
     });
   }
 
-  Future<void> _openPlatformShare() async {
-    final text = _panelShareText;
-    if (text.isEmpty) return;
+  Future<bool> _tryLaunchShareUri(Uri uri) async {
+    try {
+      return await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      debugPrint('[Share] launchUrl failed for $uri: $e');
+      return false;
+    }
+  }
 
-    final encoded = Uri.encodeComponent(text);
-    late final Uri uri;
-    switch (_platform) {
-      case 'x':
-        uri = Uri.parse('https://twitter.com/intent/tweet?text=$encoded');
-        break;
-      case 'reddit':
-        uri = Uri.parse(
-          'https://www.reddit.com/submit?title=${Uri.encodeComponent('My reflection')}&selftext=$encoded',
-        );
-        break;
-      default:
-        const appUrl = 'https://deitedatabase.firebaseapp.com';
-        uri = Uri.parse(
-          'https://www.linkedin.com/sharing/share-offsite/?url=${Uri.encodeComponent(appUrl)}',
-        );
-        if (text.isNotEmpty) {
-          await Clipboard.setData(ClipboardData(text: text));
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Caption copied — paste it in LinkedIn')),
-            );
-          }
-        }
+  Future<({Uint8List bytes, String mimeType, String fileName})?> _resolveShareImagePayload() async {
+    final imageUrl = _shareSuggestionImageUrl?.trim();
+    if (imageUrl == null || imageUrl.isEmpty) return null;
+
+    if (imageUrl.startsWith('data:image')) {
+      final bytes = decodeDataImageUrlBytes(imageUrl, logTag: '[Share]');
+      if (bytes == null) return null;
+      final mimeType = imageUrl.contains('webp')
+          ? 'image/webp'
+          : imageUrl.contains('png')
+              ? 'image/png'
+              : 'image/jpeg';
+      final ext = mimeType == 'image/png'
+          ? 'png'
+          : mimeType == 'image/webp'
+              ? 'webp'
+              : 'jpg';
+      return (bytes: bytes, mimeType: mimeType, fileName: 'detea_share.$ext');
     }
 
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+      try {
+        final response = await http.get(Uri.parse(imageUrl));
+        if (response.statusCode != 200) return null;
+        final mimeType = (response.headers['content-type'] ?? 'image/jpeg').split(';').first.trim();
+        final ext = mimeType.contains('png')
+            ? 'png'
+            : mimeType.contains('webp')
+                ? 'webp'
+                : 'jpg';
+        return (bytes: response.bodyBytes, mimeType: mimeType, fileName: 'detea_share.$ext');
+      } catch (e) {
+        debugPrint('[Share] image download failed: $e');
+        return null;
+      }
+    }
+
+    return null;
+  }
+
+  Future<File?> _writeShareImageToTempFile() async {
+    final payload = await _resolveShareImagePayload();
+    if (payload == null) return null;
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/${payload.fileName}');
+    await file.writeAsBytes(payload.bytes, flush: true);
+    return file;
+  }
+
+  bool _hasShareableLinkedInImage() {
+    final url = _shareSuggestionImageUrl?.trim();
+    if (url == null || url.isEmpty) return false;
+    return url.startsWith('data:image') ||
+        url.startsWith('http://') ||
+        url.startsWith('https://');
+  }
+
+  /// Image posts: share image only (caption copied). Text-only posts: share text directly.
+  Future<bool> _openLinkedInNativeShare(String text) async {
+    final payload = await _resolveShareImagePayload();
+
+    if (payload == null) {
+      if (text.trim().isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Add some text before sharing')),
+          );
+        }
+        return false;
+      }
+
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+        try {
+          final opened = await ShareSuggestionsPage._linkedInShareChannel.invokeMethod<bool>(
+            'shareText',
+            {'text': text},
+          );
+          if (opened == true) return true;
+        } catch (e) {
+          debugPrint('[Share] LinkedIn direct text share failed: $e');
+        }
+      }
+
+      try {
+        await Share.share(text);
+        return true;
+      } catch (e) {
+        debugPrint('[Share] LinkedIn text share failed: $e');
+        return false;
+      }
+    }
+
+    if (text.trim().isNotEmpty) {
+      await Clipboard.setData(ClipboardData(text: text));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Caption copied — paste it after the image loads in LinkedIn'),
+          ),
+        );
+      }
+    }
+
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      try {
+        final file = await _writeShareImageToTempFile();
+        if (file != null) {
+          final opened = await ShareSuggestionsPage._linkedInShareChannel.invokeMethod<bool>(
+            'shareImage',
+            {
+              'path': file.path,
+              'mimeType': payload.mimeType,
+            },
+          );
+          if (opened == true) return true;
+        }
+      } catch (e) {
+        debugPrint('[Share] LinkedIn direct image share failed: $e');
+      }
+    }
+
+    try {
+      await Share.shareXFiles(
+        [XFile.fromData(payload.bytes, mimeType: payload.mimeType, name: payload.fileName)],
+      );
+      return true;
+    } catch (e) {
+      debugPrint('[Share] LinkedIn image share sheet failed: $e');
+      return false;
+    }
+  }
+
+  Future<void> _shareViaNativeSheet(String text) async {
+    final imageUrl = _shareSuggestionImageUrl?.trim();
+    if (imageUrl != null && imageUrl.startsWith('data:image')) {
+      final bytes = decodeDataImageUrlBytes(imageUrl, logTag: '[Share]');
+      if (bytes != null) {
+        await Share.shareXFiles(
+          [XFile.fromData(bytes, mimeType: 'image/png', name: 'detea_share.png')],
+          text: text,
+        );
+        return;
+      }
+    }
+    await Share.share(text);
+  }
+
+  Future<void> _openPlatformShare() async {
+    final text = _panelShareText;
+    final isLinkedIn = _platform != 'x' && _platform != 'reddit';
+
+    if (isLinkedIn) {
+      if (text.trim().isEmpty && !_hasShareableLinkedInImage()) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Add text or an image to share on LinkedIn')),
+          );
+        }
+        return;
+      }
+    } else if (text.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Add some text before sharing')),
+        );
+      }
+      return;
+    }
+
+    var opened = false;
+    try {
+      switch (_platform) {
+        case 'x':
+          opened = await _tryLaunchShareUri(
+            Uri.parse('https://twitter.com/intent/tweet?text=${Uri.encodeComponent(text)}'),
+          );
+          break;
+        case 'reddit':
+          opened = await _tryLaunchShareUri(
+            Uri.parse(
+              'https://www.reddit.com/submit?title=${Uri.encodeComponent('My reflection')}&selftext=${Uri.encodeComponent(text)}',
+            ),
+          );
+          break;
+        default:
+          opened = await _openLinkedInNativeShare(text);
+          break;
+      }
+    } catch (e) {
+      debugPrint('[Share] platform share failed: $e');
+    }
+
+    if (!opened && !isLinkedIn) {
+      try {
+        await _shareViaNativeSheet(text);
+        opened = true;
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Opened system share sheet')),
+          );
+        }
+      } catch (e) {
+        debugPrint('[Share] native share failed: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not share: $e')),
+          );
+        }
+        return;
+      }
+    }
+
+    if (!opened && isLinkedIn) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not share image to LinkedIn')),
+        );
+      }
+      return;
     }
 
     if (!mounted) return;
     setState(() {
       _pendingShareText = text;
       _shareConfirmOpen = true;
-      _sharePanelOpen = false;
     });
   }
 
