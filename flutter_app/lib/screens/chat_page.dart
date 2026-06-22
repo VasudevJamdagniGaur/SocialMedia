@@ -153,7 +153,7 @@ class _ChatPageState extends State<ChatPage> {
   void _setWelcomeMessage() {
     final welcomeText = _isWhisperMode
         ? 'Welcome to your Whisper Session. This is a private, fresh space just for you. What would you like to share in confidence today?'
-        : "Hi, I'm Socitea. How was your day?";
+        : "Hi, I'm SociTea. How was your day?";
     final messages = <ChatMessage>[
       ChatMessage(id: 'welcome', text: welcomeText, sender: 'ai', timestamp: DateTime.now()),
     ];
@@ -244,7 +244,7 @@ class _ChatPageState extends State<ChatPage> {
     if (isInstagramReel) {
       working.add(ChatMessage(
         id: 'instagram-loading-${DateTime.now().millisecondsSinceEpoch}',
-        text: '👀 Socitea is enjoying the reel',
+        text: '👀 SociTea is enjoying the reel',
         sender: 'ai',
         timestamp: DateTime.now(),
         isProcessingReel: true,
@@ -581,7 +581,7 @@ class _ChatPageState extends State<ChatPage> {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              _isWhisperMode ? 'Whisper Session' : 'Socitea',
+              _isWhisperMode ? 'Whisper Session' : 'SociTea',
               style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87, fontSize: 18, fontWeight: FontWeight.w600),
             ),
           ),

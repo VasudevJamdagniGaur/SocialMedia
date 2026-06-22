@@ -9,7 +9,7 @@ const cors = require('cors');
 
 const PORT = Number(process.env.PORT) || 3002;
 const REDDIT_UA = process.env.REDDIT_USER_AGENT ||
-  'SociteaRedditProxy/1.0 (+https://deitedatabase.web.app)';
+  'SociTeaRedditProxy/1.0 (+https://deitedatabase.web.app)';
 
 const app = express();
 app.use(cors());

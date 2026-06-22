@@ -3,7 +3,7 @@
     <!-- Required on Android 13+ when the app or Firebase/Google SDKs access the advertising ID. -->
     <uses-permission android:name="com.google.android.gms.permission.AD_ID"/>
     <application
-        android:label="SocialTea"
+        android:label="SociTea"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

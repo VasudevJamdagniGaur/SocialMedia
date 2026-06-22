@@ -674,7 +674,7 @@ class FirestoreService {
     }
   }
 
-  /// Create a Socitea social post: image in Storage, metadata + imageUrl in Firestore.
+  /// Create a SociTea social post: image in Storage, metadata + imageUrl in Firestore.
   Future<Map<String, dynamic>> createPostForShare({
     required String uid,
     required String caption,

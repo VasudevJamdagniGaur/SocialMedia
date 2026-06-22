@@ -6,7 +6,7 @@ void main() async {
       'https://www.reddit.com/r/BollyBlindsNGossip/comments/1tz4qrg/.rss';
   final client = HttpClient();
   final req = await client.getUrl(Uri.parse(url));
-  req.headers.set('User-Agent', 'SociteaRedditProxy/1.0');
+  req.headers.set('User-Agent', 'SociTeaRedditProxy/1.0');
   final res = await req.close();
   final xml = await res.transform(utf8.decoder).join();
   final blocks = RegExp(r'<entry>[\s\S]*?</entry>', multiLine: true).allMatches(xml);

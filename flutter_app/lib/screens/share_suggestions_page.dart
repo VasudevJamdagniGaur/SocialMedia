@@ -986,10 +986,10 @@ Plain text only: no **bold**, no markdown bullets, no em dashes (—). Use a pla
                     style: TextStyle(color: primary, fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                 ),
-                // Option 1 (default): Socitea AI image
+                // Option 1 (default): SociTea AI image
                 ListTile(
                   leading: Icon(LucideIcons.sparkles, color: accent),
-                  title: Text('Socitea AI image', style: TextStyle(color: primary)),
+                  title: Text('SociTea AI image', style: TextStyle(color: primary)),
                   subtitle: Text(
                     'Use the unique AI-generated illustration',
                     style: TextStyle(color: secondary, fontSize: 12),
@@ -1510,11 +1510,11 @@ User changes: $instruction''',
   Future<_TweetUserInfo> _loadTweetUserInfo() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      return const _TweetUserInfo(displayName: 'Socitea User', username: 'socitea_user');
+      return const _TweetUserInfo(displayName: 'SociTea User', username: 'socitea_user');
     }
     final prefs = await SharedPreferences.getInstance();
     final displayName =
-        prefs.getString('user_display_name_${user.uid}') ?? user.displayName ?? 'Socitea User';
+        prefs.getString('user_display_name_${user.uid}') ?? user.displayName ?? 'SociTea User';
     final username = (user.email ?? '').split('@').first;
     final profilePicture = prefs.getString('user_profile_picture_${user.uid}');
     return _TweetUserInfo(
@@ -1698,7 +1698,7 @@ User changes: $instruction''',
                                 builder: (context, userSnap) {
                                   final tweetUser = userSnap.data ??
                                       const _TweetUserInfo(
-                                        displayName: 'Socitea User',
+                                        displayName: 'SociTea User',
                                         username: 'socitea_user',
                                       );
                                   final imageUrl = _shareSuggestionImageUrl;

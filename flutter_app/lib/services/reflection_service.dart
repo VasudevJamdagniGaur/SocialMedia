@@ -44,14 +44,14 @@ class ReflectionService {
 
   Future<String> generateReflection(List<dynamic> messages) async {
     if (messages.isEmpty) {
-      return "Had a brief chat with Socitea today.";
+      return "Had a brief chat with SociTea today.";
     }
 
     final userMessages = _extractUserMessages(messages);
     final aiMessages = _extractAiMessages(messages);
 
     if (userMessages.isEmpty) {
-      return "Had a brief chat with Socitea today but didn't share much.";
+      return "Had a brief chat with SociTea today but didn't share much.";
     }
 
     try {
@@ -106,21 +106,21 @@ CRITICAL REQUIREMENTS:
 5. BE SPECIFIC - Mention real events, people, or activities that were discussed
 6. NATURAL STORYTELLING - Write like someone naturally reflecting on their day, not like an analysis or summary
 7. USE AS LITTLE TIME/SPACE AS APPROPRIATE - Keep it concise, focus on what matters most
-8. NO REPEATED "SOCITEA SAID..." - Do NOT repeatedly say "Socitea said..." or "Socitea told me..." - just mention what was discussed naturally
-9. NO "SOCITEA ASKED ME..." - Do NOT say "Socitea asked me..." - just write about the topics naturally
-10. NO LONG DESCRIPTIONS OF SOCITEA'S ACTIONS - Do NOT write long descriptions of what Socitea did or how Socitea responded - focus on YOUR experience and reflections
+8. NO REPEATED "SOCITEA SAID..." - Do NOT repeatedly say "SociTea said..." or "SociTea told me..." - just mention what was discussed naturally
+9. NO "SOCITEA ASKED ME..." - Do NOT say "SociTea asked me..." - just write about the topics naturally
+10. NO LONG DESCRIPTIONS OF SOCITEA'S ACTIONS - Do NOT write long descriptions of what SociTea did or how SociTea responded - focus on YOUR experience and reflections
 11. FEEL LIKE A PERSONAL REFLECTION - The diary should feel natural and personal, like you're reflecting on your own day, not describing an AI conversation
 12. AVOID DRAMATIC LINES - Do NOT use overly dramatic phrases like "It was crazy", "it gave me all the feels", "it was absolutely amazing", etc. UNLESS something truly extraordinary or life-changing happened. Keep the tone grounded and realistic - avoid too much dramatic storytelling for ordinary days.
 13. NO REFLECTIVE CLOSING SENTENCES - Do NOT include reflective or moral closing sentences such as "it lifted my mood", "it made me feel seen", "it reminded me of something", "it was a good day", "it helped me realize", etc. End the diary naturally after describing the events or thoughts of the day, without summarizing emotions or giving life lessons. Just describe what happened and stop - no need to wrap it up with emotional conclusions.
-14. NO POSITIVITY ABOUT TALKING TO SOCITEA - Do NOT add statements like "talking to Socitea made me feel better", "chatting with Socitea helped", "Socitea made me feel", or any positive statements about the conversation itself. ONLY summarize what the user expressed and how their day emotionally felt - do NOT comment on the conversation or its effects.
-15. ONLY SUMMARIZE USER'S EXPRESSION - Focus ONLY on summarizing what the user expressed in their messages and how their day emotionally felt. Do NOT add commentary about the conversation, Socitea's responses, or how talking to Socitea affected them.
+14. NO POSITIVITY ABOUT TALKING TO SOCITEA - Do NOT add statements like "talking to SociTea made me feel better", "chatting with SociTea helped", "SociTea made me feel", or any positive statements about the conversation itself. ONLY summarize what the user expressed and how their day emotionally felt - do NOT comment on the conversation or its effects.
+15. ONLY SUMMARIZE USER'S EXPRESSION - Focus ONLY on summarizing what the user expressed in their messages and how their day emotionally felt. Do NOT add commentary about the conversation, SociTea's responses, or how talking to SociTea affected them.
 $sizeInstructions
 $characterLimitInstruction
 
-Conversation with Socitea:
+Conversation with SociTea:
 $conversationContext
 
-Write a natural diary entry about this day in first person. Just tell the story of what happened and how it felt. Focus ONLY on summarizing what the user expressed and how their day emotionally felt. Do NOT add any statements about talking to Socitea, how Socitea helped, or how the conversation made you feel. Keep it grounded and realistic, avoiding dramatic language unless something truly extraordinary happened. End naturally after describing events - do NOT add reflective closing sentences about how things made you feel or what you learned.
+Write a natural diary entry about this day in first person. Just tell the story of what happened and how it felt. Focus ONLY on summarizing what the user expressed and how their day emotionally felt. Do NOT add any statements about talking to SociTea, how SociTea helped, or how the conversation made you feel. Keep it grounded and realistic, avoiding dramatic language unless something truly extraordinary happened. End naturally after describing events - do NOT add reflective closing sentences about how things made you feel or what you learned.
 
 CRITICAL: The reflection must NEVER exceed $maxReflectionCharacters characters (2x the $userCharacterCount characters the user wrote). Always stay within this strict character limit.''';
 
@@ -144,7 +144,7 @@ CRITICAL: The reflection must NEVER exceed $maxReflectionCharacters characters (
     final firstUser = userMessages.isNotEmpty ? userMessages.first : '';
     final base = firstUser != lastUser ? '$firstUser ... $lastUser' : lastUser;
     final trimmed = base.length > 220 ? '${base.substring(0, 220)}...' : base;
-    return 'Today I chatted with Socitea about: "$trimmed". It was nice to talk through my day and get some perspective.';
+    return 'Today I chatted with SociTea about: "$trimmed". It was nice to talk through my day and get some perspective.';
   }
 
   String buildConversationContext(
@@ -158,7 +158,7 @@ CRITICAL: The reflection must NEVER exceed $maxReflectionCharacters characters (
         final aiResponse = aiMessages[i];
         final truncated = aiResponse.length > 300 ? aiResponse.substring(0, 300) : aiResponse;
         buf.writeln(
-          'Socitea: "$truncated${aiResponse.length > 300 ? '...' : ''}"',
+          'SociTea: "$truncated${aiResponse.length > 300 ? '...' : ''}"',
         );
         buf.writeln();
       }
@@ -231,14 +231,14 @@ CRITICAL REQUIREMENTS:
 6. INCLUDE EMOTIONS - Naturally weave in how things felt (sad, happy, excited, etc.) without being explicit about it
 7. NATURAL STORYTELLING - Write like someone naturally reflecting on their day in a brief way
 8. BE SPECIFIC BUT CONCISE - Mention real events, people, or activities, but keep descriptions brief
-9. NO REPEATED "SOCITEA SAID..." - Do NOT repeatedly say "Socitea said..." or "Socitea told me..." - just mention what was discussed naturally
-10. NO "SOCITEA ASKED ME..." - Do NOT say "Socitea asked me..." - just write about the topics naturally
-11. NO LONG DESCRIPTIONS OF SOCITEA'S ACTIONS - Do NOT write long descriptions of what Socitea did or how Socitea responded - focus on YOUR experience and reflections
+9. NO REPEATED "SOCITEA SAID..." - Do NOT repeatedly say "SociTea said..." or "SociTea told me..." - just mention what was discussed naturally
+10. NO "SOCITEA ASKED ME..." - Do NOT say "SociTea asked me..." - just write about the topics naturally
+11. NO LONG DESCRIPTIONS OF SOCITEA'S ACTIONS - Do NOT write long descriptions of what SociTea did or how SociTea responded - focus on YOUR experience and reflections
 12. FEEL LIKE A PERSONAL REFLECTION - The diary should feel natural and personal, like you're reflecting on your own day, not describing an AI conversation
 13. AVOID DRAMATIC LINES - Do NOT use overly dramatic phrases unless something truly extraordinary happened
 14. NO REFLECTIVE CLOSING SENTENCES - End naturally after describing events
 
-Conversation with Socitea:
+Conversation with SociTea:
 $conversationContext
 
 Write a SHORT, natural diary entry about this day in first person. Write $sentenceGuidance maximum, briefly covering all key topics and emotions.''';

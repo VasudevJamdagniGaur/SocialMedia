@@ -92,7 +92,7 @@ Router buildRedditProxyRouter() {
       Uri.parse(target),
       headers: {
         'Accept': 'application/json',
-        'User-Agent': 'SociteaRedditProxy/1.0 (+https://deitedatabase.web.app)',
+        'User-Agent': 'SociTeaRedditProxy/1.0 (+https://deitedatabase.web.app)',
       },
     );
     if (res.statusCode != 200) {
@@ -150,7 +150,7 @@ Router buildRedditProxyRouter() {
         Uri.parse(jsonUrl),
         headers: {
           'Accept': 'application/json',
-          'User-Agent': 'SociteaRedditProxy/1.0 (+https://deitedatabase.web.app)',
+          'User-Agent': 'SociTeaRedditProxy/1.0 (+https://deitedatabase.web.app)',
         },
       );
       if (res.statusCode != 200) {

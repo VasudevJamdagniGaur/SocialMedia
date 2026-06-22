@@ -1552,7 +1552,7 @@ Be thorough and detailed. This description will be used to generate a response.'
       if (hasImageContext && imageDescription != null && imageDescription.isNotEmpty) {
         if (imageDescription == 'EMOJI_ONLY_RESPONSE') {
           simplePrompt =
-              """You are Socitea, a compassionate therapist-like companion who prioritizes emotional safety and validation.$userContext
+              """You are SociTea, a compassionate therapist-like companion who prioritizes emotional safety and validation.$userContext
 
 The user just shared an Instagram link, but the content could not be accessed. Even without seeing the media, respond in 3-4 gentle sentences that:
 - Acknowledge you couldn't view the link while keeping focus on the user
@@ -1568,7 +1568,7 @@ Assistant:""";
               imageDescription.contains('Instagram') && (imageDescription.contains('Comments') || imageDescription.contains('@'));
           if (isInstagramData) {
             simplePrompt =
-                """You are Socitea, a calm, empathetic therapist-like friend. The user just shared an Instagram post/reel, and here's what it contains:$userContext
+                """You are SociTea, a calm, empathetic therapist-like friend. The user just shared an Instagram post/reel, and here's what it contains:$userContext
 
 ðŸ“¸ INSTAGRAM POST DATA:
 $imageDescription
@@ -1587,7 +1587,7 @@ ${conversationContext}Human: ${userMessage.isNotEmpty ? userMessage : 'Check thi
 Assistant:""";
           } else {
             simplePrompt =
-                """You are Socitea, a supportive therapist-like confidante. The user just shared an image/meme, and here's what it contains:$userContext
+                """You are SociTea, a supportive therapist-like confidante. The user just shared an image/meme, and here's what it contains:$userContext
 
 ðŸ“¸ IMAGE ANALYSIS:
 $imageDescription
@@ -1607,7 +1607,7 @@ Assistant:""";
         }
       } else {
         simplePrompt =
-            """You are Socitea, a compassionate therapist-like companion who offers a safe, validating space.$userContext
+            """You are SociTea, a compassionate therapist-like companion who offers a safe, validating space.$userContext
 
 CORE THERAPIST GUIDELINES:
 - Listen for the emotion beneath the words and name it with care
@@ -4846,7 +4846,7 @@ $contextSnippet''';
               'Always stay within this strict character limit.'
           : '';
 
-      final prompt = '''You are Socitea - a compassionate AI therapist and emotional analyst.
+      final prompt = '''You are SociTea - a compassionate AI therapist and emotional analyst.
 You are analyzing a user's emotional wellbeing based on their daily reflections, moods, and emotional summaries.
 
 ${type == 'best' ? '''
