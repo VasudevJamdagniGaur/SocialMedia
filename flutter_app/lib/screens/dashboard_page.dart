@@ -1362,7 +1362,7 @@ class _PostSuggestionsPlaceholder extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = hasReflection
         ? "Couldn't load suggestions right now. Tap View all to try again."
-        : "Spill some tea with Detea today to build your Day's Reflect — post suggestions will show up here.";
+        : "Spill some tea with Socitea today to build your Day's Reflect — post suggestions will show up here.";
 
     return Container(
       padding: const EdgeInsets.all(20),

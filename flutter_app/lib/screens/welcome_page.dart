@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 import '../contexts/theme_context.dart';
 import '../router/app_router.dart';
 
-const _kDeteaAvatar = 'assets/images/DEITECIrc-192.webp';
+const _kSociteaAvatar = 'assets/images/DEITECIrc-192.webp';
 
 class WelcomePage extends StatefulWidget {
   const WelcomePage({super.key});
@@ -69,7 +69,7 @@ class _WelcomePageState extends State<WelcomePage> with SingleTickerProviderStat
                       ),
                       child: ClipOval(
                         child: Image.asset(
-                          _kDeteaAvatar,
+                          _kSociteaAvatar,
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) =>
                               const Icon(Icons.psychology, color: AppColors.accentPurple, size: 40),
@@ -78,7 +78,7 @@ class _WelcomePageState extends State<WelcomePage> with SingleTickerProviderStat
                     ),
                     const SizedBox(height: 32),
                     const Text(
-                      'Welcome to Detea',
+                      'Welcome to Socitea',
                       style: TextStyle(
                         fontSize: 30,
                         fontWeight: FontWeight.bold,

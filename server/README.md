@@ -1,6 +1,6 @@
 # Deite Dart server
 
-Unified backend in **Dart** — replaces `backend-vertex/` (Node), `detea-proxy/` (Node), and HTTP routes from `functions/` (TypeScript).
+Unified backend in **Dart** — replaces `backend-vertex/` (Node), `socitea-proxy/` (Node), and HTTP routes from `functions/` (TypeScript).
 
 ## Endpoints
 
@@ -11,7 +11,7 @@ Unified backend in **Dart** — replaces `backend-vertex/` (Node), `detea-proxy/
 | POST | `/generateContent`, `/generatePost`, `/generate-news-image` | backend-vertex |
 | GET | `/api/news/everything`, `/api/news/top-headlines` | functions/newsApi.ts |
 | GET | `/api/reddit/hot?sub=&limit=` | Reddit hot listing (Tea, Pod) |
-| GET | `/api/news` | detea-proxy (Reddit URL passthrough) |
+| GET | `/api/news` | socitea-proxy (Reddit URL passthrough) |
 | GET | `/api/linkedin/article?url=` | functions/index.ts article extract |
 | POST | `/api/linkedin/suggestions?stream=1` | SSE streaming suggestions |
 | POST | `/deleteAccountRequest` | functions/deleteAccountRequest.ts |

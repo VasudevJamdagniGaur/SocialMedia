@@ -2,15 +2,15 @@
 
 import '../utils/hub_carousel_ai_image.dart';
 
-const _kDeteaLogo = 'assets/images/DEITECIrc-192.webp';
+const _kSociteaLogo = 'assets/images/DEITECIrc-192.webp';
 
 /// Tweet-style card used only for X sharing. Rendered off-screen and converted to an image.
 class TweetShareCard extends StatelessWidget {
   const TweetShareCard({
     super.key,
     required this.text,
-    this.displayName = 'Detea User',
-    this.username = 'detea_user',
+    this.displayName = 'Socitea User',
+    this.username = 'socitea_user',
     this.imageUrl,
     this.profileImageUrl,
     this.width = 1080,
@@ -80,7 +80,7 @@ class TweetShareCard extends StatelessWidget {
                         const SizedBox(width: 6),
                         ClipOval(
                           child: Image.asset(
-                            _kDeteaLogo,
+                            _kSociteaLogo,
                             width: 18,
                             height: 18,
                             fit: BoxFit.cover,

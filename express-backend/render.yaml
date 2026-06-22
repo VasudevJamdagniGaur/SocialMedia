@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: detea-reddit-proxy
+    name: socitea-reddit-proxy
     runtime: node
     plan: free
     rootDir: express-backend

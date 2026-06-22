@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 /// Gap between Pod Tea / News carousel image calls (5 per second).
 const renderBackendCarouselGapMs = 200;
 
-/// Global priority for all requests to detea-backend.onrender.com.
+/// Global priority for all requests to socitea-backend.onrender.com.
 enum RenderBackendPriority {
   postCreation,
   podTeaHome,

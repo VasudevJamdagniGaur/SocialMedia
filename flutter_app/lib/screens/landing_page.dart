@@ -66,7 +66,7 @@ class _LandingPageState extends State<LandingPage> {
                     ),
                   ),
                   const SizedBox(height: 32),
-                  const Text('Detea', style: TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.bold)),
+                  const Text('Socitea', style: TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 16),
                   const Text('Your Social Tea', style: TextStyle(color: Color(0xFFD1D5DB), fontSize: 18)),
                   const SizedBox(height: 48),

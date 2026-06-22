@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import '../config/env.dart';
 
 /// Mirrors src/services/apiClient.js
-const defaultBaseUrl = 'https://detea-backend.onrender.com';
+const defaultBaseUrl = 'https://socitea-backend.onrender.com';
 
 String get baseUrl => Env.baseUrl;
 

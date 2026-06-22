@@ -270,7 +270,7 @@ Future<Map<String, dynamic>?> fetchRedditThreadViaRss(
           Uri.parse(rssUrl),
           headers: const {
             'Accept': 'application/atom+xml, application/xml, text/xml',
-            'User-Agent': 'DeteaRedditProxy/1.0 (+https://deitedatabase.web.app)',
+            'User-Agent': 'SociteaRedditProxy/1.0 (+https://deitedatabase.web.app)',
           },
         )
         .timeout(const Duration(seconds: 20));

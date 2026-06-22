@@ -9,7 +9,7 @@ const cors = require('cors');
 
 const PORT = Number(process.env.PORT) || 3002;
 const REDDIT_UA = process.env.REDDIT_USER_AGENT ||
-  'DeteaRedditProxy/1.0 (+https://deitedatabase.web.app)';
+  'SociteaRedditProxy/1.0 (+https://deitedatabase.web.app)';
 
 const app = express();
 app.use(cors());
@@ -50,7 +50,7 @@ async function fetchReddit(targetUrl) {
 }
 
 app.get('/health', (_req, res) => {
-  res.json({ ok: true, service: 'detea-reddit-proxy' });
+  res.json({ ok: true, service: 'socitea-reddit-proxy' });
 });
 
 function parseRedditHotRss(xml) {

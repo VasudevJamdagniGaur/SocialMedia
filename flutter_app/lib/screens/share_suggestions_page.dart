@@ -986,10 +986,10 @@ Plain text only: no **bold**, no markdown bullets, no em dashes (—). Use a pla
                     style: TextStyle(color: primary, fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                 ),
-                // Option 1 (default): Detea AI image
+                // Option 1 (default): Socitea AI image
                 ListTile(
                   leading: Icon(LucideIcons.sparkles, color: accent),
-                  title: Text('Detea AI image', style: TextStyle(color: primary)),
+                  title: Text('Socitea AI image', style: TextStyle(color: primary)),
                   subtitle: Text(
                     'Use the unique AI-generated illustration',
                     style: TextStyle(color: secondary, fontSize: 12),
@@ -1276,7 +1276,7 @@ User changes: $instruction''',
           : mimeType == 'image/webp'
               ? 'webp'
               : 'jpg';
-      return (bytes: bytes, mimeType: mimeType, fileName: 'detea_share.$ext');
+      return (bytes: bytes, mimeType: mimeType, fileName: 'socitea_share.$ext');
     }
 
     if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
@@ -1289,7 +1289,7 @@ User changes: $instruction''',
             : mimeType.contains('webp')
                 ? 'webp'
                 : 'jpg';
-        return (bytes: response.bodyBytes, mimeType: mimeType, fileName: 'detea_share.$ext');
+        return (bytes: response.bodyBytes, mimeType: mimeType, fileName: 'socitea_share.$ext');
       } catch (e) {
         debugPrint('[Share] image download failed: $e');
         return null;
@@ -1397,7 +1397,7 @@ User changes: $instruction''',
       final bytes = decodeDataImageUrlBytes(imageUrl, logTag: '[Share]');
       if (bytes != null) {
         await Share.shareXFiles(
-          [XFile.fromData(bytes, mimeType: 'image/png', name: 'detea_share.png')],
+          [XFile.fromData(bytes, mimeType: 'image/png', name: 'socitea_share.png')],
           text: text,
         );
         return;
@@ -1510,16 +1510,16 @@ User changes: $instruction''',
   Future<_TweetUserInfo> _loadTweetUserInfo() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      return const _TweetUserInfo(displayName: 'Detea User', username: 'detea_user');
+      return const _TweetUserInfo(displayName: 'Socitea User', username: 'socitea_user');
     }
     final prefs = await SharedPreferences.getInstance();
     final displayName =
-        prefs.getString('user_display_name_${user.uid}') ?? user.displayName ?? 'Detea User';
+        prefs.getString('user_display_name_${user.uid}') ?? user.displayName ?? 'Socitea User';
     final username = (user.email ?? '').split('@').first;
     final profilePicture = prefs.getString('user_profile_picture_${user.uid}');
     return _TweetUserInfo(
       displayName: displayName,
-      username: username.isNotEmpty ? username : 'detea_user',
+      username: username.isNotEmpty ? username : 'socitea_user',
       profilePicture: profilePicture,
     );
   }
@@ -1698,8 +1698,8 @@ User changes: $instruction''',
                                 builder: (context, userSnap) {
                                   final tweetUser = userSnap.data ??
                                       const _TweetUserInfo(
-                                        displayName: 'Detea User',
-                                        username: 'detea_user',
+                                        displayName: 'Socitea User',
+                                        username: 'socitea_user',
                                       );
                                   final imageUrl = _shareSuggestionImageUrl;
 

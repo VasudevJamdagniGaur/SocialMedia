@@ -1,5 +1,5 @@
 {
-  "name": "detea-reddit-proxy",
+  "name": "socitea-reddit-proxy",
   "version": "1.0.0",
   "description": "Express proxy: Flutter/web → Reddit API (Tea, Pod feeds)",
   "main": "server.js",

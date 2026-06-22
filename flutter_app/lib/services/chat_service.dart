@@ -58,7 +58,7 @@ class ChatService extends ChangeNotifier {
 
   static const String _providerKey = 'chat_api_provider';
 
-  /// Prefer Gemini via detea-backend when available (same path as share suggestions).
+  /// Prefer Gemini via socitea-backend when available (same path as share suggestions).
   String _preferredChatProvider() {
     if (isVertexBackendConfigured()) return 'gemini';
     if (openaiApiKey.trim().isNotEmpty) return 'openai';
@@ -1258,7 +1258,7 @@ Be thorough and detailed. This description will be used to generate a response.'
     final apiKey = '${getApiKey() ?? ''}';
     if (apiProvider == 'gemini' && !vertexForGemini) {
       throw Exception(
-        'Gemini uses your backend only. Set BACKEND_URL to https://detea-backend.onrender.com and rebuild.',
+        'Gemini uses your backend only. Set BACKEND_URL to https://socitea-backend.onrender.com and rebuild.',
       );
     }
     if (!vertexForGemini && apiKey.trim().isEmpty) {
@@ -1552,7 +1552,7 @@ Be thorough and detailed. This description will be used to generate a response.'
       if (hasImageContext && imageDescription != null && imageDescription.isNotEmpty) {
         if (imageDescription == 'EMOJI_ONLY_RESPONSE') {
           simplePrompt =
-              """You are Detea, a compassionate therapist-like companion who prioritizes emotional safety and validation.$userContext
+              """You are Socitea, a compassionate therapist-like companion who prioritizes emotional safety and validation.$userContext
 
 The user just shared an Instagram link, but the content could not be accessed. Even without seeing the media, respond in 3-4 gentle sentences that:
 - Acknowledge you couldn't view the link while keeping focus on the user
@@ -1568,7 +1568,7 @@ Assistant:""";
               imageDescription.contains('Instagram') && (imageDescription.contains('Comments') || imageDescription.contains('@'));
           if (isInstagramData) {
             simplePrompt =
-                """You are Detea, a calm, empathetic therapist-like friend. The user just shared an Instagram post/reel, and here's what it contains:$userContext
+                """You are Socitea, a calm, empathetic therapist-like friend. The user just shared an Instagram post/reel, and here's what it contains:$userContext
 
 ðŸ“¸ INSTAGRAM POST DATA:
 $imageDescription
@@ -1587,7 +1587,7 @@ ${conversationContext}Human: ${userMessage.isNotEmpty ? userMessage : 'Check thi
 Assistant:""";
           } else {
             simplePrompt =
-                """You are Detea, a supportive therapist-like confidante. The user just shared an image/meme, and here's what it contains:$userContext
+                """You are Socitea, a supportive therapist-like confidante. The user just shared an image/meme, and here's what it contains:$userContext
 
 ðŸ“¸ IMAGE ANALYSIS:
 $imageDescription
@@ -1607,7 +1607,7 @@ Assistant:""";
         }
       } else {
         simplePrompt =
-            """You are Detea, a compassionate therapist-like companion who offers a safe, validating space.$userContext
+            """You are Socitea, a compassionate therapist-like companion who offers a safe, validating space.$userContext
 
 CORE THERAPIST GUIDELINES:
 - Listen for the emotion beneath the words and name it with care
@@ -1668,7 +1668,7 @@ Assistant:""";
           final msg = fetchError.toString();
           if (msg.contains('Failed to fetch') || msg.contains('NetworkError')) {
             throw Exception(
-              'Unable to connect to the backend. Check BACKEND_URL (https://detea-backend.onrender.com).',
+              'Unable to connect to the backend. Check BACKEND_URL (https://socitea-backend.onrender.com).',
             );
           }
           rethrow;
@@ -4846,7 +4846,7 @@ $contextSnippet''';
               'Always stay within this strict character limit.'
           : '';
 
-      final prompt = '''You are Detea - a compassionate AI therapist and emotional analyst.
+      final prompt = '''You are Socitea - a compassionate AI therapist and emotional analyst.
 You are analyzing a user's emotional wellbeing based on their daily reflections, moods, and emotional summaries.
 
 ${type == 'best' ? '''

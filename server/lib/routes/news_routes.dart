@@ -81,7 +81,7 @@ int _clampRedditLimit(String? limit) {
   return n.clamp(1, 100);
 }
 
-/// Reddit proxy — port of detea-proxy/server.js + express-backend/server.js
+/// Reddit proxy — port of socitea-proxy/server.js + express-backend/server.js
 Router buildRedditProxyRouter() {
   final router = Router();
   const upstream =
@@ -92,7 +92,7 @@ Router buildRedditProxyRouter() {
       Uri.parse(target),
       headers: {
         'Accept': 'application/json',
-        'User-Agent': 'DeteaRedditProxy/1.0 (+https://deitedatabase.web.app)',
+        'User-Agent': 'SociteaRedditProxy/1.0 (+https://deitedatabase.web.app)',
       },
     );
     if (res.statusCode != 200) {
@@ -150,7 +150,7 @@ Router buildRedditProxyRouter() {
         Uri.parse(jsonUrl),
         headers: {
           'Accept': 'application/json',
-          'User-Agent': 'DeteaRedditProxy/1.0 (+https://deitedatabase.web.app)',
+          'User-Agent': 'SociteaRedditProxy/1.0 (+https://deitedatabase.web.app)',
         },
       );
       if (res.statusCode != 200) {

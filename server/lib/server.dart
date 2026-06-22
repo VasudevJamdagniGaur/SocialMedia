@@ -13,7 +13,7 @@ import 'routes/vertex_routes.dart';
 import 'routes/youtube_routes.dart';
 import 'vertex/vertex_client.dart';
 
-/// Unified Deite Dart backend — replaces backend-vertex, detea-proxy, and HTTP functions.
+/// Unified Deite Dart backend — replaces backend-vertex, socitea-proxy, and HTTP functions.
 Future<void> runServer() async {
   final vertex = VertexClient();
   final app = Router()

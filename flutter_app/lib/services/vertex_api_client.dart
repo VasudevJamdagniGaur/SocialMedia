@@ -15,7 +15,7 @@ class VertexApiClient {
 
   static final VertexApiClient instance = VertexApiClient._();
 
-  static const String defaultBaseUrl = 'https://detea-backend.onrender.com';
+  static const String defaultBaseUrl = 'https://socitea-backend.onrender.com';
 
   String get baseUrl {
     final candidates = [

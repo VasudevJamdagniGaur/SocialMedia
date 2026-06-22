@@ -292,7 +292,7 @@ class _EmotionalWellbeingPageState extends State<EmotionalWellbeingPage> {
             _highlightsPeak = {
               'title': 'Best Mood Day',
               'description':
-                  'Start chatting with Detea to track your emotional journey!',
+                  'Start chatting with Socitea to track your emotional journey!',
               'date': 'No data',
             };
             _highlightsToughest = {
@@ -462,7 +462,7 @@ class _EmotionalWellbeingPageState extends State<EmotionalWellbeingPage> {
 
       final transcript = (messages['messages'] as List)
           .map((m) =>
-              '${m['sender'] == 'user' ? 'User' : 'Detea'}: ${m['text']}')
+              '${m['sender'] == 'user' ? 'User' : 'Socitea'}: ${m['text']}')
           .join('\n\n');
 
       final prompt = '''Based on this conversation, explain why each emotion score makes sense in one short sentence each.
@@ -1360,7 +1360,7 @@ Return JSON only:
       _fallbackGuidance(
         LucideIcons.sun,
         'Continue Chatting',
-        'Keep engaging with Detea to build more comprehensive emotional insights and patterns.',
+        'Keep engaging with Socitea to build more comprehensive emotional insights and patterns.',
         () => context.go('/chat'),
       ),
         const SizedBox(height: 12),

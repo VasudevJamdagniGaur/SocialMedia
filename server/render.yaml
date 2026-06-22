@@ -2,7 +2,7 @@
 # Set Root Directory to `server` in Render dashboard.
 services:
   - type: web
-    name: detea-backend
+    name: socitea-backend
     runtime: docker
     plan: free
     dockerfilePath: ./Dockerfile
