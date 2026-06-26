@@ -21,19 +21,96 @@ Future<void> main() async {
     debugPrint('FlutterError: ${details.exceptionAsString()}');
   };
 
-  await pruneSharedPreferencesOnStartup();
+  // Paint something immediately instead of a blank native window while Firebase boots.
+  runApp(const SociTeaBootstrap());
+}
 
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  await FirebaseAnalytics.instance.setAnalyticsCollectionEnabled(true);
-  initAuthRefreshNotifier();
+/// Boots Firebase + router, showing a visible loader until the real app is ready.
+class SociTeaBootstrap extends StatefulWidget {
+  const SociTeaBootstrap({super.key});
 
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(statusBarColor: Colors.transparent),
-  );
-  final themeNotifier = await ThemeNotifier.load();
-  final router = createAppRouter();
-  unawaited(prefetchPodHubContent());
-  runApp(DeiteApp(themeNotifier: themeNotifier, router: router));
+  @override
+  State<SociTeaBootstrap> createState() => _SociTeaBootstrapState();
+}
+
+class _SociTeaBootstrapState extends State<SociTeaBootstrap> {
+  ThemeNotifier? _themeNotifier;
+  GoRouter? _router;
+  Object? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_boot());
+  }
+
+  Future<void> _boot() async {
+    try {
+      await pruneSharedPreferencesOnStartup();
+      await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+      await FirebaseAnalytics.instance.setAnalyticsCollectionEnabled(true);
+      initAuthRefreshNotifier();
+
+      SystemChrome.setSystemUIOverlayStyle(
+        const SystemUiOverlayStyle(statusBarColor: Colors.transparent),
+      );
+
+      final themeNotifier = await ThemeNotifier.load();
+      final router = createAppRouter();
+      if (!mounted) return;
+
+      setState(() {
+        _themeNotifier = themeNotifier;
+        _router = router;
+      });
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(prefetchPodHubContent());
+      });
+    } catch (e, st) {
+      debugPrint('Bootstrap failed: $e\n$st');
+      if (!mounted) return;
+      setState(() => _error = e);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_error != null) {
+      return MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: Scaffold(
+          backgroundColor: AppColors.scaffoldBackground,
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                'Failed to start app.\n$_error',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white70),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final theme = _themeNotifier;
+    final router = _router;
+    if (theme == null || router == null) {
+      return const MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: Scaffold(
+          backgroundColor: AppColors.scaffoldBackground,
+          body: Center(
+            child: CircularProgressIndicator(color: AppColors.accentPurple),
+          ),
+        ),
+      );
+    }
+
+    return DeiteApp(themeNotifier: theme, router: router);
+  }
 }
 
 class DeiteApp extends StatelessWidget {

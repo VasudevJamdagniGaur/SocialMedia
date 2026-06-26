@@ -176,23 +176,6 @@ class _AppShellState extends State<_AppShell> {
         location == AppRoutes.community ||
         location == AppRoutes.wellbeing;
 
-    final instantRoute = location == AppRoutes.teaFeed ||
-        location == AppRoutes.shareSuggestions ||
-        location == AppRoutes.shareReflection;
-    final routeChild = instantRoute
-        ? widget.child
-        : AnimatedSwitcher(
-            duration: const Duration(milliseconds: 200),
-            switchInCurve: Curves.easeInOut,
-            switchOutCurve: Curves.easeInOut,
-            transitionBuilder: (child, animation) =>
-                FadeTransition(opacity: animation, child: child),
-            child: KeyedSubtree(
-              key: ValueKey(location),
-              child: widget.child,
-            ),
-          );
-
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
@@ -204,7 +187,7 @@ class _AppShellState extends State<_AppShell> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            Positioned.fill(child: routeChild),
+            Positioned.fill(child: widget.child),
             if (showBottomNav) const Positioned(left: 0, right: 0, bottom: 0, child: BottomNavigation()),
           ],
         ),
