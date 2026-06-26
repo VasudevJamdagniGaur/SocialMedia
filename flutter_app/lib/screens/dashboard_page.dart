@@ -516,74 +516,117 @@ class _DashboardHeader extends StatelessWidget {
   final VoidCallback onHelp;
   final VoidCallback onProfile;
 
+  static const double _headerHeight = 64;
+  static const double _logoSize = 40;
+  static const double _profileSize = 40;
+
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(greeting, style: const TextStyle(color: _muted, fontSize: 15, height: 1.2)),
-              const SizedBox(height: 2),
-              Text(
-                '$name ✨',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 26,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.5,
-                  height: 1.1,
-                ),
-              ),
-            ],
-          ),
-        ),
-        IconButton(
-          onPressed: onHelp,
-          tooltip: 'Help improve Deite',
-          icon: const Text('✨', style: TextStyle(fontSize: 18)),
-        ),
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onProfile,
-            customBorder: const CircleBorder(),
-            child: Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: HubTheme.accent.withValues(alpha: 0.35)),
-                boxShadow: [
-                  BoxShadow(
-                    color: HubTheme.accent.withValues(alpha: 0.2),
-                    blurRadius: 12,
-                  ),
-                ],
-              ),
-              child: ClipOval(
-                child: profilePicture != null
-                    ? buildProfilePicture(
-                        picture: profilePicture,
-                        size: 48,
-                        backgroundColor: _cardBg,
-                      )
-                    : Image.asset(
-                        'assets/images/DEITECIrc-192.webp',
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const Icon(
-                          LucideIcons.coffee,
-                          color: HubTheme.accent,
-                          size: 22,
-                        ),
-                      ),
+    return SizedBox(
+      height: _headerHeight,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Center(
+            child: Image.asset(
+              'assets/images/DEITECIrc-192.webp',
+              width: _logoSize,
+              height: _logoSize,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => const Icon(
+                LucideIcons.coffee,
+                color: HubTheme.accent,
+                size: 28,
               ),
             ),
           ),
-        ),
-      ],
+          Positioned.fill(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        greeting,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: _muted, fontSize: 15, height: 1.2),
+                      ),
+                      Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 26,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.5,
+                          height: 1.1,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(width: _logoSize + 8),
+                Expanded(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: onProfile,
+                          customBorder: const CircleBorder(),
+                          child: Container(
+                            width: _profileSize,
+                            height: _profileSize,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(color: HubTheme.accent.withValues(alpha: 0.35)),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: HubTheme.accent.withValues(alpha: 0.2),
+                                  blurRadius: 12,
+                                ),
+                              ],
+                            ),
+                            child: ClipOval(
+                              child: profilePicture != null
+                                  ? buildProfilePicture(
+                                      picture: profilePicture,
+                                      size: _profileSize,
+                                      backgroundColor: _cardBg,
+                                    )
+                                  : const ColoredBox(
+                                      color: _cardBg,
+                                      child: Icon(
+                                        LucideIcons.user,
+                                        color: HubTheme.accent,
+                                        size: 22,
+                                      ),
+                                    ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: onHelp,
+                        tooltip: 'Help improve SociTea',
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                        icon: const Text('✨', style: TextStyle(fontSize: 18)),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
