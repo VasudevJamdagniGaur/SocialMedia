@@ -56,11 +56,37 @@ class VertexClient {
     return _authClient!;
   }
 
-  Uri _modelUri(String modelId) => Uri.parse(
-        'https://${ServerConfig.vertexLocation}-aiplatform.googleapis.com/v1/'
-        'projects/${ServerConfig.projectId}/locations/${ServerConfig.vertexLocation}/'
-        'publishers/google/models/$modelId:generateContent',
-      );
+  Uri _modelUri(String modelId, {bool useBeta = false}) {
+    final version = useBeta ? 'v1beta1' : 'v1';
+    return Uri.parse(
+      'https://${ServerConfig.vertexLocation}-aiplatform.googleapis.com/$version/'
+      'projects/${ServerConfig.projectId}/locations/${ServerConfig.vertexLocation}/'
+      'publishers/google/models/$modelId:generateContent',
+    );
+  }
+
+  String? _responseFinishReason(Map<String, dynamic> data) {
+    final candidates = data['candidates'];
+    if (candidates is! List || candidates.isEmpty) return null;
+    final c0 = candidates[0];
+    if (c0 is! Map) return null;
+    final reason = c0['finishReason'] ?? c0['finish_reason'];
+    return reason?.toString();
+  }
+
+  List<String> _responseTextParts(Map<String, dynamic> data) {
+    final candidates = data['candidates'];
+    if (candidates is! List || candidates.isEmpty) return const [];
+    final content = candidates[0] is Map ? candidates[0]['content'] : null;
+    if (content is! Map) return const [];
+    final parts = content['parts'];
+    if (parts is! List) return const [];
+    final out = <String>[];
+    for (final p in parts) {
+      if (p is Map && p['text'] is String) out.add(p['text'] as String);
+    }
+    return out;
+  }
 
   bool _isNotFoundModel(Object err) {
     final msg = err.toString().toLowerCase();
@@ -164,6 +190,18 @@ class VertexClient {
         ));
   }
 
+  /// Share/reflection posts — scene-focused, not wire-service news tone.
+  Future<String?> generateShareSceneImage(String prompt) async {
+    return _imageGenQueue.run(() => _generateIllustrationImage(
+          prompt,
+          prefix:
+              'Create one vivid editorial photograph or illustration for a social media post. '
+              'Depict the SCENE, objects, and mood described below — environment and situation are the focus. '
+              'Medium or wide shot; avoid face close-ups and identifiable celebrities. '
+              'No text, captions, or logos in the image.\n\n',
+        ));
+  }
+
   Future<String?> generatePublicFigureIllustrationImage(
     String prompt, {
     required String referenceImageBase64,
@@ -210,33 +248,64 @@ class VertexClient {
         },
       });
 
-      return _postImagePayload(payload);
+      return _postImagePayload(payload, debugLabel: 'public-figure');
     });
   }
 
-  Future<String?> _postImagePayload(String payload) async {
+  Future<String?> _postImagePayload(String payload, {String? debugLabel}) async {
     final client = await _client();
     Object? lastErr;
-    for (var attempt = 0; attempt < 4; attempt++) {
-      if (attempt > 0) {
-        final delaySec = 2 << (attempt - 1);
-        await Future<void>.delayed(Duration(seconds: delaySec));
+    final models = ServerConfig.vertexImageModelFallbacks;
+
+    for (final modelId in models) {
+      for (var attempt = 0; attempt < 3; attempt++) {
+        if (attempt > 0) {
+          final delaySec = 2 << (attempt - 1);
+          await Future<void>.delayed(Duration(seconds: delaySec));
+        }
+
+        for (final useBeta in [true, false]) {
+          try {
+            final res = await client.post(
+              _modelUri(modelId, useBeta: useBeta),
+              headers: {'Content-Type': 'application/json'},
+              body: payload,
+            );
+            if (_isVertexRateLimited(res)) {
+              lastErr = HttpException('Vertex image ${res.statusCode}: ${res.body}');
+              continue;
+            }
+            if (res.statusCode == 404 && useBeta) continue;
+            if (res.statusCode < 200 || res.statusCode >= 300) {
+              lastErr = HttpException('Vertex image ${res.statusCode}: ${res.body}');
+              if (res.statusCode == 404) break;
+              continue;
+            }
+
+            final data = jsonDecode(res.body) as Map<String, dynamic>;
+            final image = _extractImageDataUrl(data);
+            if (image != null) return image;
+
+            final finish = _responseFinishReason(data);
+            final textParts = _responseTextParts(data);
+            stderr.writeln(
+              '[VertexImage] no image from $modelId beta=$useBeta '
+              '${debugLabel ?? ''} finish=$finish textParts=${textParts.length}',
+            );
+            if (textParts.isNotEmpty) {
+              stderr.writeln(
+                '[VertexImage] model text: ${textParts.first.substring(0, textParts.first.length.clamp(0, 240))}',
+              );
+            }
+            lastErr = Exception('Model $modelId returned no image part (finish=$finish)');
+          } catch (e) {
+            lastErr = e;
+            if (_isNotFoundModel(e)) break;
+          }
+        }
       }
-      final res = await client.post(
-        _modelUri(ServerConfig.vertexImageModel),
-        headers: {'Content-Type': 'application/json'},
-        body: payload,
-      );
-      if (_isVertexRateLimited(res)) {
-        lastErr = HttpException('Vertex image ${res.statusCode}: ${res.body}');
-        continue;
-      }
-      if (res.statusCode < 200 || res.statusCode >= 300) {
-        throw HttpException('Vertex image ${res.statusCode}: ${res.body}');
-      }
-      final data = jsonDecode(res.body) as Map<String, dynamic>;
-      return _extractImageDataUrl(data);
     }
+
     throw lastErr ?? Exception('Vertex image generation failed after retries');
   }
 
@@ -262,7 +331,30 @@ class VertexClient {
       },
     });
 
-    return _postImagePayload(payload);
+    try {
+      return await _postImagePayload(payload, debugLabel: 'illustration');
+    } catch (_) {
+      final shortened = body.length > 900 ? body.substring(body.length - 900) : body;
+      final simple = '$prefix'
+          'Scene to illustrate (medium wide shot, no face close-up, no text in image):\n'
+          '${shortened.length > 1200 ? shortened.substring(0, 1200) : shortened}';
+      final retryPayload = jsonEncode({
+        'contents': [
+          {
+            'role': 'user',
+            'parts': [
+              {'text': simple},
+            ],
+          },
+        ],
+        'generationConfig': {
+          'temperature': 0.85,
+          'maxOutputTokens': 8192,
+          'responseModalities': ['TEXT', 'IMAGE'],
+        },
+      });
+      return _postImagePayload(retryPayload, debugLabel: 'illustration-retry');
+    }
   }
 
   void close() {

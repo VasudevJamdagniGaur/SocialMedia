@@ -124,7 +124,7 @@ Router buildVertexRouter(VertexClient vertex) {
               : 'image/jpeg',
         );
       } else {
-        imageDataUrl = await vertex.generateNewsIllustrationImage(prompt);
+        imageDataUrl = await vertex.generateShareSceneImage(prompt);
       }
       if (imageDataUrl == null) {
         return jsonError(502, 'Image generation returned no image', details: 'Model did not return an image part');

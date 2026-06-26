@@ -101,4 +101,16 @@ class ServerConfig {
         'gemini-1.5-flash-002',
         'gemini-1.5-flash',
       ];
+
+  /// Image models tried in order when the primary model returns no image bytes.
+  static List<String> get vertexImageModelFallbacks {
+    final primary = vertexImageModel;
+    final fallbacks = <String>[
+      primary,
+      'gemini-2.5-flash-image',
+      'gemini-2.0-flash-preview-image-generation',
+    ];
+    final seen = <String>{};
+    return fallbacks.where((m) => seen.add(m)).toList();
+  }
 }

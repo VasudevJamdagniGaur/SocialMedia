@@ -1885,6 +1885,7 @@ $text""";
   }
 
   Future<List<Map<String, String>>> generateSocialPostSuggestions(String reflection, String platform) async {
+    Exception? lastErr;
     try {
       final trimmed = reflection.trim();
       if (trimmed.isEmpty) return [];
@@ -1898,22 +1899,37 @@ $text""";
         );
       }
 
+      final sharePrompt = _buildReflectionShareSuggestionsPrompt(reflection, platform);
+
+      // Primary path: Vertex /generateContent (deployed on detea-backend).
+      if (isVertexBackendConfigured()) {
+        try {
+          final raw = await callVertexGenerateContent(
+            prompt: sharePrompt,
+            temperature: 0.5,
+            maxOutputTokens: 4096,
+          ).timeout(const Duration(seconds: 75));
+          final parsed = _parseShareSuggestionModelOutput(raw.trim(), reflection);
+          if (parsed.isNotEmpty) return parsed;
+          lastErr = Exception('Vertex returned empty share suggestions');
+        } catch (vertexErr) {
+          lastErr = vertexErr is Exception ? vertexErr : Exception(vertexErr.toString());
+        }
+      }
+
+      // Optional: dedicated suggestions API when the full Dart server exposes it.
       final candidates = _shareSuggestionsApiBases();
 
-      Exception? lastErr;
       for (final apiBase in candidates) {
         if (apiBase.isEmpty) continue;
         try {
-          final res = await RenderBackendQueue.instance.runPostCreation(
-            () => http
-                .post(
-                  Uri.parse('$apiBase/api/linkedin/suggestions'),
-                  headers: {'Content-Type': 'application/json'},
-                  body: jsonEncode({'reflection': reflection.trim(), 'platform': platform}),
-                )
-                .timeout(const Duration(seconds: 45)),
-            debugLabel: '/api/linkedin/suggestions',
-          );
+          final res = await http
+              .post(
+                Uri.parse('$apiBase/api/linkedin/suggestions'),
+                headers: {'Content-Type': 'application/json'},
+                body: jsonEncode({'reflection': reflection.trim(), 'platform': platform}),
+              )
+              .timeout(const Duration(seconds: 20));
 
           if (res.statusCode >= 200 && res.statusCode < 300) {
             Map<String, dynamic>? data;
@@ -1963,24 +1979,8 @@ $text""";
         }
       }
 
-      if (getVertexGeminiUrl().isNotEmpty) {
-        try {
-          final sharePrompt = _buildReflectionShareSuggestionsPrompt(reflection, platform);
-          final raw = await callVertexGenerateContent(
-            prompt: sharePrompt,
-            temperature: 0.5,
-            maxOutputTokens: 4096,
-          ).timeout(const Duration(seconds: 45));
-          return _parseShareSuggestionModelOutput(raw.trim(), reflection);
-        } catch (vertexErr) {
-          lastErr = vertexErr is Exception ? vertexErr : Exception(vertexErr.toString());
-        }
-      }
-
-      // In native/local: backend can be unreachable due to network/CORS.
-      // Do NOT immediately fall back to echoing the reflection â€” try Vertex/OpenAI fallback below first.
       if (lastErr != null) {
-        // Keep parity with JS flow by continuing to OpenAI fallback.
+        // Continue to OpenAI fallback below.
       }
     } catch (e) {
       final msg = e.toString();
@@ -1991,13 +1991,14 @@ $text""";
     final apiKey = openaiApiKey.trim();
     if (apiKey.isEmpty) {
       final trimmed = reflection.trim();
-      if (trimmed.isNotEmpty) {
-        return [
-          {'eventLabel': 'Reflection', 'post': trimmed},
-        ];
+      if (lastErr != null) throw lastErr;
+      if (trimmed.isEmpty) {
+        throw Exception(
+          'Share suggestions need a working backend (BACKEND_URL) or OPENAI_API_KEY.',
+        );
       }
       throw Exception(
-        'OpenAI API key is not set. Add REACT_APP_OPENAI_API_KEY to .env for share suggestions, or set REACT_APP_BACKEND_URL (preferred) / REACT_APP_VERTEX_BACKEND_URL / REACT_APP_VERTEX_GEMINI_URL to use your backend instead.',
+        'Could not generate share suggestions. Set BACKEND_URL to https://detea-backend.onrender.com and rebuild, or add OPENAI_API_KEY.',
       );
     }
 
@@ -3744,7 +3745,7 @@ Post:
 ${text.substring(0, text.length > 2000 ? 2000 : text.length)}''';
 
     try {
-      var raw = (await vertexGenerateContent(
+      var raw = (await callVertexGenerateContent(
         prompt: extractPrompt,
         temperature: 0.2,
         maxOutputTokens: 350,
@@ -3768,68 +3769,22 @@ ${text.substring(0, text.length > 2000 ? 2000 : text.length)}''';
           ? context['contextualOutfit'].toString().trim()
           : clothingStyle;
 
-      final instructions = '''You are generating a realistic, context-aware photograph based strictly on the story provided.
+      final instructions = '''Depict this social post as one editorial scene for an image.
 
-PRIORITY - DEPICT THE SITUATION; SAME LOGIC FOR ALL PLATFORMS (LINKEDIN AND X):
-- Do NOT focus on or center the user's face. Do NOT generate a face-close-up, headshot, or portrait-style image.
-- Use the same composition for every platform: show the SCENE and SITUATION with the person in context (medium or wide shot). The environment, location, and activity are the focus - not the face.
-- The image MUST describe the SITUATION from the post: show the environment, the location, and the moment. Examples: "Director's office mix-up" -> corridor with two doors, person in that hallway; "Reading The Three-Body Problem" -> person reading that book in a setting (e.g. by a window, at a table), book and environment visible - not a face close-up.
-- Extract and use the full post text. Include specific titles (e.g. book names), places, and the actual story. Same calculations and extraction as used for X post creation.
+Focus on the situation, environment, and objects — not a face close-up.
+Medium or wide shot. No text overlay. No logos unless mentioned.
 
-Your only priority is to visually represent the events, emotions, and environment described in the text.
-
-CRITICAL: The image must reflect the SPECIFIC story and setting from the post. Use the full content below:
-- If the post describes a mix-up (e.g. wrong door, director's office vs college office), show that setting (e.g. corridor, doors, moment of realization).
-- If it names a place (library, office, college), show that environment.
-- If it describes an emotion (embarrassed, relieved, laughing at myself), show that in expression and body language within the situation.
-Do NOT create a generic or unrelated scene. The photograph must look like a candid moment from THIS story.
-
-Do NOT consider:
-- The platform where this will be posted
-- Social media aesthetics
-- Branding
-- Marketing tone
-
-Focus only on accurately visualizing the story.
-
-Post (use entire content for context):
+Post:
 """
 ${text.substring(0, text.length > 2800 ? 2800 : text.length)}
-"""
-
-User profile:
-- Age: $age
-- Gender: $gender
-- Skin tone: $skinTone
-- Hairstyle: $hairstyle
-- Clothing style preference: $clothingStyle
-- Profession (if known): $profession
-- Profile image URL (if available): ${profileImageUrl.isEmpty ? 'none' : profileImageUrl}
-
-IMAGE GENERATION RULES:
-
-1. If the story implies the user is the subject, generate a person resembling the user.
-2. If a profile image is available, use it as visual reference for appearance consistency.
-3. Do NOT replicate the face exactly.
-4. Do NOT generate any celebrity resemblance.
-5. The scene must directly reflect the narrative.
-6. No random animals or unrelated objects.
-7. Avoid generic stock-photo style.
-8. Use natural lighting.
-9. Use subtle, realistic expressions.
-10. No text overlay in the image.
-11. No logos unless explicitly mentioned in the story.
-
-Output strictly as a detailed photographic scene description in this format:''';
+"""''';
 
       final structuredPrompt =
-          'A realistic high-detail photograph of a $age-year-old $gender with $skinTone skin tone and $hairstyle, '
-          'resembling the user\'s profile appearance, wearing $outfit, $activity, in a $environment, natural body language '
-          'reflecting $tone, natural lighting, shallow depth of field, realistic proportions, authentic candid moment, '
-          'not staged, not stock photo style. Medium or wide shot showing the scene and environment; do not crop to face '
-          'only or create a portrait.';
+          'Scene: $activity. Setting: $environment. Mood: $tone. '
+          'Wardrobe: $outfit. Editorial photograph or illustration, natural lighting, '
+          'medium wide shot showing the environment; not a portrait.';
 
-      return '$instructions\n\n"$structuredPrompt"';
+      return '$instructions\n\n$structuredPrompt';
     } catch (e) {
       debugPrint('[Image] Context extraction failed: $e');
       return null;
@@ -4390,7 +4345,7 @@ $contextSnippet''';
       final nationality = (userContext?['nationality']?.toString().trim().isNotEmpty ?? false)
           ? userContext!['nationality'].toString().trim()
           : 'Indian';
-      return 'A realistic photograph of a $age year old $gender ($nationality), $clipped, natural lighting, high detail, not a celebrity, not stock.';
+      return 'Editorial scene illustration: $clipped. Medium wide shot showing the situation and environment, natural lighting, no text overlay.';
     }
 
     const strictRules =
@@ -4642,14 +4597,37 @@ $contextSnippet''';
     String prompt,
     Map<String, String>? referenceImage,
   ) async {
-    final generated = await _generateImageWithGemini(prompt, referenceImage);
+    var generated = await _generateImageWithGemini(prompt, referenceImage);
     if (generated != null && generated.isNotEmpty) return generated;
+
+    final simplified = _simplifyImagePromptForRetry(prompt);
+    if (simplified != prompt.trim()) {
+      debugPrint('[ImageGen] retrying with simplified scene prompt');
+      generated = await _generateImageWithGemini(simplified, referenceImage);
+      if (generated != null && generated.isNotEmpty) return generated;
+    }
+
     if (referenceImage != null && (referenceImage['base64'] ?? '').trim().isNotEmpty) {
       final mime = referenceImage['mimeType'] ?? 'image/jpeg';
       debugPrint('[ImageGen] AI failed; using reference photo directly');
       return 'data:$mime;base64,${referenceImage['base64']}';
     }
     return null;
+  }
+
+  String _simplifyImagePromptForRetry(String prompt) {
+    final trimmed = prompt.trim();
+    if (trimmed.isEmpty) return trimmed;
+    final sceneMatch = RegExp(r'Scene:\s*([^\n.]+)', caseSensitive: false).firstMatch(trimmed);
+    final settingMatch = RegExp(r'Setting:\s*([^\n.]+)', caseSensitive: false).firstMatch(trimmed);
+    final scene = sceneMatch?.group(1)?.trim();
+    final setting = settingMatch?.group(1)?.trim();
+    if (scene != null && scene.isNotEmpty) {
+      return 'Editorial illustration: $scene${setting != null && setting.isNotEmpty ? ', setting: $setting' : ''}. '
+          'Medium wide shot, vivid lighting, no text in image.';
+    }
+    final clipped = trimmed.length > 500 ? trimmed.substring(trimmed.length - 500) : trimmed;
+    return 'Editorial illustration for social media: $clipped. Medium wide shot, no text in image.';
   }
 
   Future<Map<String, String>?> _getProfileImageAsBase64(String urlOrDataUrl) async {
@@ -4695,10 +4673,9 @@ $contextSnippet''';
         '[ImageGen] _generateImageWithGemini promptLen=${p.length} '
         'hasReference=${referenceImage != null}',
       );
-      final imageDataUrl = await vertexGenerateNewsImage(
+      final imageDataUrl = await vertexGenerateNewsImageDirect(
         p,
         referenceImage: referenceImage,
-        priority: RenderBackendPriority.postCreation,
       );
       debugPrint('[ImageGen] _generateImageWithGemini received len=${imageDataUrl.length}');
       if (imageDataUrl.startsWith('data:image')) {

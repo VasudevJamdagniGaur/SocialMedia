@@ -811,18 +811,9 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
           }
         }
       } else {
-        try {
-          items = await ChatService.instance
-              .generateSocialPostSuggestions(_reflection, _platform)
-              .timeout(const Duration(seconds: 25));
-        } catch (_) {
-          items = [
-            {
-              'eventLabel': 'Reflection',
-              'post': _reflection,
-            },
-          ];
-        }
+        items = await ChatService.instance
+            .generateSocialPostSuggestions(_reflection, _platform)
+            .timeout(const Duration(seconds: 90));
       }
 
       if (!mounted) return;

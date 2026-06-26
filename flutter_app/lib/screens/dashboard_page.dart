@@ -278,7 +278,7 @@ class _DashboardPageState extends State<DashboardPage> {
     try {
       final items = await ChatService.instance
           .generateSocialPostSuggestions(reflection, _platform)
-          .timeout(const Duration(seconds: 35));
+          .timeout(const Duration(seconds: 90));
       String? imageUrl;
       try {
         imageUrl = await ChatService.instance

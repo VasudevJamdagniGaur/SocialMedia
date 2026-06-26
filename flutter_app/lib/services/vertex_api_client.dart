@@ -15,7 +15,7 @@ class VertexApiClient {
 
   static final VertexApiClient instance = VertexApiClient._();
 
-  static const String defaultBaseUrl = 'https://socitea-backend.onrender.com';
+  static const String defaultBaseUrl = 'https://detea-backend.onrender.com';
 
   String get baseUrl {
     final candidates = [
@@ -187,6 +187,21 @@ class VertexApiClient {
     throw Exception('Unexpected response from Vertex /generateContent');
   }
 
+  /// Bypasses [RenderBackendQueue] — use for share/reflection images so carousel jobs do not block.
+  Future<String> vertexGenerateNewsImageDirect(
+    String prompt, {
+    Duration? timeout,
+    Map<String, String>? referenceImage,
+  }) async {
+    final p = prompt.trim();
+    if (p.isEmpty) throw Exception('vertexGenerateNewsImageDirect: prompt is required');
+    return _vertexGenerateNewsImageUnqueued(
+      p,
+      timeout: timeout,
+      referenceImage: referenceImage,
+    );
+  }
+
   Future<String> vertexGenerateNewsImage(
     String prompt, {
     Duration? timeout,
@@ -326,6 +341,17 @@ Future<String> vertexGenerateContentDirect({
       temperature: temperature,
       maxOutputTokens: maxOutputTokens,
       timeout: timeout,
+    );
+
+Future<String> vertexGenerateNewsImageDirect(
+  String prompt, {
+  Duration? timeout,
+  Map<String, String>? referenceImage,
+}) =>
+    _vertex.vertexGenerateNewsImageDirect(
+      prompt,
+      timeout: timeout,
+      referenceImage: referenceImage,
     );
 
 Future<String> vertexGenerateNewsImage(

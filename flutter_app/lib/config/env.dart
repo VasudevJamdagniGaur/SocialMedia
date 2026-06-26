@@ -8,7 +8,7 @@ class Env {
   static const String grokApiKey = String.fromEnvironment('GROK_API_KEY');
   static const String backendUrl = String.fromEnvironment(
     'BACKEND_URL',
-    defaultValue: 'https://socitea-backend.onrender.com',
+    defaultValue: 'https://detea-backend.onrender.com',
   );
   static const String vertexBackendUrl = String.fromEnvironment(
     'VERTEX_BACKEND_URL',
@@ -51,6 +51,6 @@ class Env {
         return 'http://localhost:3002';
       }
     }
-    return 'https://socitea-backend.onrender.com';
+    return 'https://detea-backend.onrender.com';
   }
 }
