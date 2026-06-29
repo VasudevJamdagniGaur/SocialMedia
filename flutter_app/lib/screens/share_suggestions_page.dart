@@ -882,8 +882,16 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
 
   void _onPlatformChanged(String platform) {
     if (_platform == platform) return;
-    setState(() => _platform = platform);
-    _loadSuggestions();
+    setState(() {
+      _platform = platform;
+      _generatedShareImageUrl = null;
+      _invalidateXShareAssets();
+    });
+    unawaited(() async {
+      await _loadSuggestions();
+      if (!mounted || _isNewsMode) return;
+      await _ensureReflectionShareImage();
+    }());
   }
 
   Future<void> _onReflectionRegenerate() async {

@@ -1921,6 +1921,82 @@ $text""";
     throw Exception('Suggestions API unreachable: $uri');
   }
 
+  List<Map<String, String>> _parseSuggestionsApiPosts(
+    String body,
+    String platform,
+  ) {
+    try {
+      final decoded = jsonDecode(body);
+      final data = decoded is Map<String, dynamic>
+          ? decoded
+          : (decoded is Map ? Map<String, dynamic>.from(decoded) : null);
+      final posts = data?['posts'];
+      if (posts is! List || posts.isEmpty) return [];
+
+      if (platform == 'x') {
+        final normalized = <Map<String, String>>[];
+        for (final item in posts) {
+          if (item is! Map) continue;
+          final row = Map<String, dynamic>.from(item);
+          final content = '${row['content'] ?? ''}'.trim();
+          final legacy = '${row['post'] ?? ''}'.trim();
+          var post = content.isNotEmpty ? content : legacy;
+          if (post.contains(r'\n')) post = post.replaceAll(r'\n', '\n');
+          if (post.length > 220) post = post.substring(0, 220).trimRight();
+          post = sanitizeSocialPostText(post);
+          if (post.length < 5) continue;
+          normalized.add({
+            'eventLabel': '${row['eventLabel'] ?? 'Moment'}',
+            'post': post,
+          });
+        }
+        return normalized;
+      }
+
+      final normalized = <Map<String, String>>[];
+      for (final item in posts) {
+        if (item is! Map) continue;
+        final row = Map<String, dynamic>.from(item);
+        final post = '${row['post'] ?? row['content'] ?? ''}'.trim();
+        if (post.isEmpty) continue;
+        normalized.add({
+          'eventLabel': '${row['eventLabel'] ?? 'Moment'}',
+          'post': sanitizeSocialPostText(post),
+        });
+      }
+      return normalized;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<List<Map<String, String>>> _fetchShareSuggestionsFromApi(
+    String reflection,
+    String platform,
+  ) async {
+    final trimmed = reflection.trim();
+    if (trimmed.isEmpty) return [];
+
+    for (final apiBase in _shareSuggestionsApiBases()) {
+      if (apiBase.isEmpty) continue;
+      try {
+        final res = await _postShareSuggestionsApi(apiBase, trimmed, platform);
+        if (res.statusCode < 200 || res.statusCode >= 300) continue;
+        final posts = _parseSuggestionsApiPosts(res.body, platform);
+        if (posts.isNotEmpty) return posts;
+      } catch (_) {
+        continue;
+      }
+    }
+    return [];
+  }
+
+  bool _isSingleReflectionFallback(List<ShareSuggestion> items, String reflection) {
+    if (items.length != 1) return false;
+    final post = (items.first['post'] ?? '').trim();
+    return post == sanitizeSocialPostText(reflection.trim());
+  }
+
   List<Map<String, String>> _reflectionSuggestionFallback(String reflection) {
     final trimmed = reflection.trim();
     if (trimmed.isEmpty) return [];
@@ -1936,12 +2012,19 @@ $text""";
       if (trimmed.isEmpty) return [];
 
       if (platform == 'x') {
-        return _generateXContentSuggestions(
+        final fallback = [
+          {'eventLabel': 'Reflection', 'post': sanitizeSocialPostText(trimmed)},
+        ];
+        var items = await _generateXContentSuggestions(
           userContent: _buildXReflectionSuggestionsUserContent(trimmed),
-          fallback: [
-            {'eventLabel': 'Reflection', 'post': trimmed},
-          ],
+          fallback: fallback,
+          reflectionForApi: trimmed,
         );
+        if (_isSingleReflectionFallback(items, trimmed)) {
+          final apiItems = await _fetchShareSuggestionsFromApi(trimmed, 'x');
+          if (apiItems.isNotEmpty) items = apiItems;
+        }
+        return items;
       }
 
       final sharePrompt = _buildReflectionShareSuggestionsPrompt(reflection, platform);
@@ -2859,23 +2942,29 @@ Rules:
   }) async {
     var raw = '';
     if (getVertexGeminiUrl().trim().isNotEmpty) {
-      try {
-        raw = await callVertexGenerateContent(
-          prompt: userContent,
-          temperature: isLinkedInNews
-              ? 0.68
-              : isXNews
-                  ? 0.78
-                  : 0.62,
-          maxOutputTokens: isLinkedInNews
-              ? 8192
-              : isXNews
-                  ? 6144
-                  : 4096,
-        ).timeout(const Duration(seconds: 45));
-      } catch (e) {
-        debugPrint('Vertex suggestions failed: $e');
-        raw = '';
+      for (var attempt = 0; attempt < 2; attempt++) {
+        try {
+          raw = await callVertexGenerateContent(
+            prompt: userContent,
+            temperature: isLinkedInNews
+                ? 0.68
+                : isXNews
+                    ? 0.78
+                    : 0.62,
+            maxOutputTokens: isLinkedInNews
+                ? 8192
+                : isXNews
+                    ? 6144
+                    : 4096,
+          ).timeout(Duration(seconds: attempt == 0 ? 60 : 90));
+          if (raw.trim().isNotEmpty) break;
+        } catch (e) {
+          debugPrint('Vertex suggestions failed: $e');
+          raw = '';
+          if (attempt == 0) {
+            await Future<void>.delayed(const Duration(seconds: 3));
+          }
+        }
       }
     }
 
@@ -3046,10 +3135,23 @@ Rules:
   Future<List<ShareSuggestion>> _generateXContentSuggestions({
     required String userContent,
     required List<ShareSuggestion> fallback,
+    String? reflectionForApi,
     bool isTea = false,
   }) async {
-    final raw = await _fetchSuggestionContentRaw(userContent, isXNews: true);
-    return _parseXContentSuggestionsJson(raw, 'x', fallback: fallback, isTea: isTea);
+    var raw = await _fetchSuggestionContentRaw(userContent, isXNews: true);
+    if (raw.isEmpty && reflectionForApi != null && reflectionForApi.trim().isNotEmpty) {
+      final apiPosts = await _fetchShareSuggestionsFromApi(reflectionForApi.trim(), 'x');
+      if (apiPosts.isNotEmpty) return apiPosts;
+    }
+
+    var parsed = _parseXContentSuggestionsJson(raw, 'x', fallback: fallback, isTea: isTea);
+    if (_isSingleReflectionFallback(parsed, reflectionForApi ?? fallback.first['post'] ?? '') &&
+        reflectionForApi != null &&
+        reflectionForApi.trim().isNotEmpty) {
+      final apiPosts = await _fetchShareSuggestionsFromApi(reflectionForApi.trim(), 'x');
+      if (apiPosts.isNotEmpty) parsed = apiPosts;
+    }
+    return parsed;
   }
 
   Future<List<ShareSuggestion>> generateNewsArticleShareSuggestions(
@@ -3174,9 +3276,11 @@ Return ONLY valid JSON with this exact shape (no markdown fences):
 {"posts":[{"eventLabel":"News","post":"..."}]}''';
 
     if (isXNews) {
+      final reflectionForApi = (fallback.first['post'] ?? '').trim();
       return _generateXContentSuggestions(
         userContent: userContent,
         fallback: fallback,
+        reflectionForApi: reflectionForApi.isNotEmpty ? reflectionForApi : title,
         isTea: isTea,
       );
     }
