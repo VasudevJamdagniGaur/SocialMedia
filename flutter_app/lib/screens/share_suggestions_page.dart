@@ -16,6 +16,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:screenshot/screenshot.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -34,7 +35,6 @@ import '../utils/hub_carousel_ai_image.dart';
 import '../utils/hub_carousel_image_store.dart';
 import '../utils/reddit_thread_comments.dart';
 import '../utils/share_news_cache.dart';
-import '../utils/widget_capture.dart';
 
 class ShareSuggestionsPage extends StatefulWidget {
   const ShareSuggestionsPage({super.key});
@@ -75,6 +75,7 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
   bool _sharePanelOpen = false;
   bool _savedToMyDeeds = false;
   bool _xSharePreparing = false;
+  final _xShareScreenshotController = ScreenshotController();
   bool _autoOpenSharePanel = false;
   String? _pendingShareText;
   String _editableShareText = '';
@@ -1428,39 +1429,83 @@ User changes: $instruction''',
     }
   }
 
+  Future<Uint8List?> _captureXCardPng(String text) async {
+    if (_sharePanelOpen) {
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+      await WidgetsBinding.instance.endOfFrame;
+      await WidgetsBinding.instance.endOfFrame;
+      final fromPanel = await _xShareScreenshotController.capture(
+        pixelRatio: 3.0,
+        delay: const Duration(milliseconds: 80),
+      );
+      if (fromPanel != null && fromPanel.isNotEmpty) return fromPanel;
+    }
+    return _renderXCardOffscreen(text);
+  }
+
+  Future<Uint8List?> _renderXCardOffscreen(String text) async {
+    final tweetUser = await _loadTweetUserInfo();
+    final imageDataUrl = await _imageDataUrlForCapture();
+    if (imageDataUrl == null) return null;
+
+    final profileDataUrl = await _profileImageDataUrl(tweetUser.profilePicture);
+    if (!mounted) return null;
+
+    try {
+      await precacheImage(
+        const AssetImage('assets/images/DEITECIrc-192.webp'),
+        context,
+      );
+    } catch (_) {}
+
+    final controller = ScreenshotController();
+    final overlayState = Overlay.of(context, rootOverlay: true);
+    late OverlayEntry entry;
+
+    entry = OverlayEntry(
+      builder: (_) => IgnorePointer(
+        child: Opacity(
+          opacity: 0.01,
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: Material(
+              type: MaterialType.transparency,
+              child: Screenshot(
+                controller: controller,
+                child: TweetShareCard(
+                  width: 360,
+                  displayName: tweetUser.displayName,
+                  username: tweetUser.username,
+                  text: text,
+                  imageUrl: imageDataUrl,
+                  profileImageUrl: profileDataUrl ?? tweetUser.profilePicture,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    overlayState.insert(entry);
+    try {
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      await WidgetsBinding.instance.endOfFrame;
+      await WidgetsBinding.instance.endOfFrame;
+      return controller.capture(
+        pixelRatio: 3,
+        delay: const Duration(milliseconds: 100),
+      );
+    } finally {
+      entry.remove();
+    }
+  }
+
   Future<bool> _openXCardShare(String text) async {
     if (!mounted) return false;
     setState(() => _xSharePreparing = true);
     try {
-      final tweetUser = await _loadTweetUserInfo();
-      final imageDataUrl = await _imageDataUrlForCapture();
-      if (imageDataUrl == null) return false;
-
-      final profileDataUrl = await _profileImageDataUrl(tweetUser.profilePicture);
-      if (!mounted) return false;
-
-      try {
-        await precacheImage(
-          const AssetImage('assets/images/DEITECIrc-192.webp'),
-          context,
-        );
-      } catch (_) {}
-
-      final card = TweetShareCard(
-        width: 1080,
-        displayName: tweetUser.displayName,
-        username: tweetUser.username,
-        text: text,
-        imageUrl: imageDataUrl,
-        profileImageUrl: profileDataUrl ?? tweetUser.profilePicture,
-      );
-
-      final pngBytes = await captureWidgetToPng(
-        context,
-        card,
-        settleDelay: const Duration(milliseconds: 200),
-        pixelRatio: 2,
-      );
+      final pngBytes = await _captureXCardPng(text);
       if (pngBytes == null || pngBytes.isEmpty) return false;
 
       await Share.shareXFiles(
@@ -1893,6 +1938,8 @@ User changes: $instruction''',
                   text: _editableShareText,
                   imageUrl: _shareSuggestionImageUrl,
                   imageLoading: _loadingShareImage,
+                  xScreenshotController: _xShareScreenshotController,
+                  loadTweetUser: _loadTweetUserInfo,
                   onTextChanged: (v) => setState(() {
                     _editableShareText = v;
                     _syncSelectedSuggestionPost(v);
@@ -2626,6 +2673,8 @@ class _SharePanelOverlay extends StatefulWidget {
     required this.text,
     required this.imageUrl,
     required this.imageLoading,
+    required this.xScreenshotController,
+    required this.loadTweetUser,
     required this.onTextChanged,
     required this.onMagicPencilText,
     required this.onEditImage,
@@ -2638,6 +2687,8 @@ class _SharePanelOverlay extends StatefulWidget {
   final String text;
   final String? imageUrl;
   final bool imageLoading;
+  final ScreenshotController xScreenshotController;
+  final Future<_TweetUserInfo> Function() loadTweetUser;
   final ValueChanged<String> onTextChanged;
   final Future<String> Function(String text, String instruction) onMagicPencilText;
   final void Function(String currentCaption) onEditImage;
@@ -2722,6 +2773,150 @@ class _SharePanelOverlayState extends State<_SharePanelOverlay> {
     }
   }
 
+  bool get _isXCardShare =>
+      widget.platform == 'x' &&
+      widget.imageUrl != null &&
+      widget.imageUrl!.trim().isNotEmpty;
+
+  Widget _buildCaptionEditor(Color primary) {
+    return Stack(
+      children: [
+        TextField(
+          controller: _controller,
+          onChanged: widget.onTextChanged,
+          maxLines: _isXCardShare ? 4 : null,
+          expands: !_isXCardShare,
+          readOnly: _textMagicPencilLoading,
+          style: TextStyle(color: primary, fontSize: 15, height: 1.45),
+          decoration: InputDecoration(
+            hintText: 'Your post...',
+            filled: true,
+            fillColor: widget.isDarkMode ? HubColors.bg : const Color(0xFFF5F5F5),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: widget.isDarkMode ? HubColors.divider : const Color(0x1F000000),
+              ),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: widget.isDarkMode ? HubColors.divider : const Color(0x1F000000),
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: HubColors.accent, width: 2),
+            ),
+          ),
+        ),
+        Positioned(
+          top: 8,
+          right: 8,
+          child: Material(
+            color: Colors.black.withValues(alpha: 0.55),
+            shape: const CircleBorder(),
+            clipBehavior: Clip.antiAlias,
+            child: IconButton(
+              onPressed: _textMagicPencilLoading ? null : _openTextMagicPencil,
+              tooltip: 'Magic pencil',
+              icon: const Icon(LucideIcons.penLine, color: Colors.white, size: 18),
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.all(8),
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            ),
+          ),
+        ),
+        if (_textMagicPencilLoading)
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.35),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              alignment: Alignment.center,
+              child: const SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildXCardPreview(_TweetUserInfo tweetUser, Color primary) {
+    return Expanded(
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'This is what will be shared to X',
+              style: TextStyle(color: primary, fontSize: 13, fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: 12),
+            Stack(
+              alignment: Alignment.topRight,
+              children: [
+                Center(
+                  child: Screenshot(
+                    controller: widget.xScreenshotController,
+                    child: TweetShareCard(
+                      width: 360,
+                      displayName: tweetUser.displayName,
+                      username: tweetUser.username,
+                      text: _controller.text,
+                      imageUrl: widget.imageUrl,
+                      profileImageUrl: tweetUser.profilePicture,
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Material(
+                    color: Colors.black.withValues(alpha: 0.55),
+                    shape: const CircleBorder(),
+                    clipBehavior: Clip.antiAlias,
+                    child: IconButton(
+                      onPressed: widget.imageLoading
+                          ? null
+                          : () => widget.onEditImage(_controller.text),
+                      tooltip: 'Edit image',
+                      icon: const Icon(LucideIcons.pencil, color: Colors.white, size: 18),
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.all(8),
+                      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                    ),
+                  ),
+                ),
+                if (widget.imageLoading)
+                  Positioned.fill(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.35),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      alignment: Alignment.center,
+                      child: const SizedBox(
+                        width: 28,
+                        height: 28,
+                        child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _buildCaptionEditor(primary),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bg = widget.isDarkMode ? HubColors.bgSecondary : Colors.white;
@@ -2745,7 +2940,7 @@ class _SharePanelOverlayState extends State<_SharePanelOverlay> {
                     icon: Icon(LucideIcons.arrowLeft, color: primary),
                   ),
                   Text(
-                    'Edit before sharing',
+                    _isXCardShare ? 'Preview before sharing' : 'Edit before sharing',
                     style: TextStyle(
                       color: primary,
                       fontSize: 14,
@@ -2754,126 +2949,74 @@ class _SharePanelOverlayState extends State<_SharePanelOverlay> {
                   ),
                 ],
               ),
-              if (widget.imageUrl != null && widget.imageUrl!.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Stack(
-                  alignment: Alignment.topRight,
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxHeight: 220),
-                        child: _SuggestionImage(
-                          url: widget.imageUrl!,
-                          isDarkMode: widget.isDarkMode,
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Material(
-                        color: Colors.black.withValues(alpha: 0.55),
-                        shape: const CircleBorder(),
-                        clipBehavior: Clip.antiAlias,
-                        child: IconButton(
-                          onPressed: widget.imageLoading
-                              ? null
-                              : () => widget.onEditImage(_controller.text),
-                          tooltip: 'Edit image',
-                          icon: const Icon(LucideIcons.pencil, color: Colors.white, size: 18),
-                          visualDensity: VisualDensity.compact,
-                          padding: const EdgeInsets.all(8),
-                          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                        ),
-                      ),
-                    ),
-                    if (widget.imageLoading)
-                      Positioned.fill(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.45),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          alignment: Alignment.center,
-                          child: const SizedBox(
-                            width: 28,
-                            height: 28,
-                            child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+              if (_isXCardShare)
+                FutureBuilder<_TweetUserInfo>(
+                  future: widget.loadTweetUser(),
+                  builder: (context, snap) {
+                    final tweetUser = snap.data ??
+                        const _TweetUserInfo(
+                          displayName: 'SociTea User',
+                          username: 'socitea_user',
+                        );
+                    return _buildXCardPreview(tweetUser, primary);
+                  },
+                )
+              else ...[
+                if (widget.imageUrl != null && widget.imageUrl!.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Stack(
+                    alignment: Alignment.topRight,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxHeight: 220),
+                          child: _SuggestionImage(
+                            url: widget.imageUrl!,
+                            isDarkMode: widget.isDarkMode,
                           ),
                         ),
                       ),
-                  ],
-                ),
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Material(
+                          color: Colors.black.withValues(alpha: 0.55),
+                          shape: const CircleBorder(),
+                          clipBehavior: Clip.antiAlias,
+                          child: IconButton(
+                            onPressed: widget.imageLoading
+                                ? null
+                                : () => widget.onEditImage(_controller.text),
+                            tooltip: 'Edit image',
+                            icon: const Icon(LucideIcons.pencil, color: Colors.white, size: 18),
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.all(8),
+                            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                          ),
+                        ),
+                      ),
+                      if (widget.imageLoading)
+                        Positioned.fill(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.45),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            alignment: Alignment.center,
+                            child: const SizedBox(
+                              width: 28,
+                              height: 28,
+                              child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 12),
+                Expanded(child: _buildCaptionEditor(primary)),
               ],
-              const SizedBox(height: 12),
-              Expanded(
-                child: Stack(
-                  children: [
-                    TextField(
-                      controller: _controller,
-                      onChanged: widget.onTextChanged,
-                      maxLines: null,
-                      expands: true,
-                      readOnly: _textMagicPencilLoading,
-                      style: TextStyle(color: primary, fontSize: 15, height: 1.45),
-                      decoration: InputDecoration(
-                        hintText: 'Your post...',
-                        filled: true,
-                        fillColor: widget.isDarkMode ? HubColors.bg : const Color(0xFFF5F5F5),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(
-                            color: widget.isDarkMode ? HubColors.divider : const Color(0x1F000000),
-                          ),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(
-                            color: widget.isDarkMode ? HubColors.divider : const Color(0x1F000000),
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: HubColors.accent, width: 2),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Material(
-                        color: Colors.black.withValues(alpha: 0.55),
-                        shape: const CircleBorder(),
-                        clipBehavior: Clip.antiAlias,
-                        child: IconButton(
-                          onPressed: _textMagicPencilLoading ? null : _openTextMagicPencil,
-                          tooltip: 'Magic pencil',
-                          icon: const Icon(LucideIcons.penLine, color: Colors.white, size: 18),
-                          visualDensity: VisualDensity.compact,
-                          padding: const EdgeInsets.all(8),
-                          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                        ),
-                      ),
-                    ),
-                    if (_textMagicPencilLoading)
-                      Positioned.fill(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.35),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          alignment: Alignment.center,
-                          child: const SizedBox(
-                            width: 28,
-                            height: 28,
-                            child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
               const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
@@ -2883,7 +3026,7 @@ class _SharePanelOverlayState extends State<_SharePanelOverlay> {
                     backgroundColor: _shareButtonColor,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   child: const Text('Share', style: TextStyle(fontWeight: FontWeight.w500)),
                 ),

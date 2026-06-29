@@ -4,11 +4,11 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
-/// Renders [child] in an off-screen overlay and returns a PNG snapshot.
+/// Renders [child] in a nearly invisible on-screen overlay and returns a PNG snapshot.
 Future<Uint8List?> captureWidgetToPng(
   BuildContext context,
   Widget child, {
-  Duration settleDelay = const Duration(milliseconds: 100),
+  Duration settleDelay = const Duration(milliseconds: 150),
   double pixelRatio = 2.0,
 }) async {
   final key = GlobalKey();
@@ -16,14 +16,18 @@ Future<Uint8List?> captureWidgetToPng(
   late OverlayEntry entry;
 
   entry = OverlayEntry(
-    builder: (_) => Positioned(
-      left: -20000,
-      top: 0,
-      child: Material(
-        type: MaterialType.transparency,
-        child: RepaintBoundary(
-          key: key,
-          child: child,
+    builder: (_) => IgnorePointer(
+      child: Opacity(
+        opacity: 0.01,
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: Material(
+            type: MaterialType.transparency,
+            child: RepaintBoundary(
+              key: key,
+              child: child,
+            ),
+          ),
         ),
       ),
     ),
