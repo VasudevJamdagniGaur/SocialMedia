@@ -2386,6 +2386,7 @@ class FirestoreService {
               'createdAt': p.createdAt,
               'image': p.image,
               'profilePicture': p.profilePicture,
+              'sharedPlatform': p.sharedPlatform,
               'likes': p.likes,
               'likedBy': p.likedBy,
             },
@@ -2418,6 +2419,7 @@ class CommunityPost {
     this.createdAt,
     this.image,
     this.profilePicture,
+    this.sharedPlatform,
     this.likes = 0,
     this.likedBy = const [],
   });
@@ -2431,6 +2433,7 @@ class CommunityPost {
       createdAt: data['createdAt'] is DateTime ? data['createdAt'] as DateTime : null,
       image: data['image'] as String?,
       profilePicture: data['profilePicture'] as String?,
+      sharedPlatform: data['sharedPlatform'] as String?,
       likes: (data['likes'] as num?)?.toInt() ?? 0,
       likedBy: (data['likedBy'] as List?)?.cast<String>() ?? const [],
     );
@@ -2443,6 +2446,7 @@ class CommunityPost {
   final DateTime? createdAt;
   final String? image;
   final String? profilePicture;
+  final String? sharedPlatform;
   final int likes;
   final List<String> likedBy;
 }

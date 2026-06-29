@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -71,6 +72,7 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
   String? _routeInitError;
   bool _shareConfirmOpen = false;
   bool _sharePanelOpen = false;
+  bool _savedToMyDeeds = false;
   bool _autoOpenSharePanel = false;
   String? _pendingShareText;
   String _editableShareText = '';
@@ -1476,6 +1478,53 @@ User changes: $instruction''',
       _pendingShareText = text;
       _shareConfirmOpen = true;
     });
+    unawaited(_savePostToMyDeeds(text));
+  }
+
+  Future<String?> _resolveMyDeedsImageUrl(String uid) async {
+    final rawImage = _shareSuggestionImageUrl?.trim();
+    if (rawImage == null || rawImage.isEmpty) return null;
+    if (rawImage.startsWith('data:image')) {
+      final uploaded = await FirestoreService.instance.uploadPostImage(uid, rawImage);
+      return uploaded ?? rawImage;
+    }
+    if (rawImage.startsWith('http://') || rawImage.startsWith('https://')) {
+      return rawImage;
+    }
+    return null;
+  }
+
+  Future<void> _savePostToMyDeeds(String text) async {
+    if (_savedToMyDeeds) return;
+
+    final user = FirebaseAuth.instance.currentUser;
+    final content = text.trim();
+    final hasImage = _hasShareableLinkedInImage();
+    if (user == null || (content.isEmpty && !hasImage)) return;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final displayName =
+          prefs.getString('user_display_name_${user.uid}') ?? user.displayName ?? 'Anonymous';
+      final profilePicture = prefs.getString('user_profile_picture_${user.uid}');
+      final imageUrl = await _resolveMyDeedsImageUrl(user.uid);
+
+      await FirestoreService.instance.addCommunityPost({
+        'author': displayName,
+        'authorId': user.uid,
+        'content': content,
+        'createdAt': FieldValue.serverTimestamp(),
+        'likes': 0,
+        'comments': [],
+        'profilePicture': profilePicture,
+        'image': imageUrl,
+        'sharedPlatform': _platform,
+        'source': _suggestionsOnly ? 'create_post' : 'share_suggestions',
+      });
+      _savedToMyDeeds = true;
+    } catch (e) {
+      debugPrint('[Share] Failed to save post to My Deeds: $e');
+    }
   }
 
   Future<void> _confirmShareRecorded() async {
@@ -1488,14 +1537,22 @@ User changes: $instruction''',
         'reflectionSnippet': text.length > 200 ? text.substring(0, 200) : text,
       });
     }
+    await _savePostToMyDeeds(text);
     if (!mounted) return;
     setState(() {
       _shareConfirmOpen = false;
       _pendingShareText = null;
     });
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Share recorded')),
+      SnackBar(
+        content: Text(
+          _returnTo == AppRoutes.community ? 'Post saved to My Deeds' : 'Share recorded',
+        ),
+      ),
     );
+    if (_returnTo == AppRoutes.community) {
+      context.go(AppRoutes.community);
+    }
   }
 
   Future<_TweetUserInfo> _loadTweetUserInfo() async {
