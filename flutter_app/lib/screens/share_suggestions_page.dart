@@ -75,6 +75,9 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
   bool _sharePanelOpen = false;
   bool _savedToMyDeeds = false;
   bool _xSharePreparing = false;
+  bool _xShareAssetsLoading = false;
+  String? _xShareImageDataUrl;
+  String? _xShareProfileDataUrl;
   final _xShareScreenshotController = ScreenshotController();
   bool _autoOpenSharePanel = false;
   String? _pendingShareText;
@@ -911,7 +914,63 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
     setState(() {
       _editableShareText = sanitizeSocialPostText(text);
       _sharePanelOpen = true;
+      if (_platform == 'x' && _hasShareableLinkedInImage()) {
+        _xShareImageDataUrl = null;
+        _xShareProfileDataUrl = null;
+      }
     });
+    if (_platform == 'x' && _hasShareableLinkedInImage()) {
+      unawaited(_prepareXShareAssets());
+    }
+  }
+
+  void _invalidateXShareAssets() {
+    _xShareImageDataUrl = null;
+    _xShareProfileDataUrl = null;
+  }
+
+  Future<void> _prepareXShareAssets() async {
+    if (!mounted) return;
+    setState(() => _xShareAssetsLoading = true);
+    try {
+      final imageDataUrl = await _imageDataUrlForCapture();
+      final tweetUser = await _loadTweetUserInfo();
+      final profileDataUrl = await _profileImageDataUrl(tweetUser.profilePicture);
+      if (!mounted) return;
+
+      if (imageDataUrl != null && imageDataUrl.startsWith('data:image')) {
+        final bytes = decodeDataImageUrlBytes(imageDataUrl, logTag: '[XShare]');
+        if (bytes != null) {
+          try {
+            await precacheImage(MemoryImage(bytes), context);
+          } catch (_) {}
+        }
+      }
+
+      if (profileDataUrl != null && profileDataUrl.startsWith('data:image')) {
+        final bytes = decodeDataImageUrlBytes(profileDataUrl, logTag: '[XShare]');
+        if (bytes != null) {
+          try {
+            await precacheImage(MemoryImage(bytes), context);
+          } catch (_) {}
+        }
+      }
+
+      try {
+        await precacheImage(const AssetImage('assets/images/DEITECIrc-192.webp'), context);
+      } catch (_) {}
+
+      if (!mounted) return;
+      setState(() {
+        _xShareImageDataUrl = imageDataUrl;
+        _xShareProfileDataUrl = profileDataUrl ?? tweetUser.profilePicture;
+      });
+
+      await WidgetsBinding.instance.endOfFrame;
+      await WidgetsBinding.instance.endOfFrame;
+    } finally {
+      if (mounted) setState(() => _xShareAssetsLoading = false);
+    }
   }
 
   void _syncSelectedSuggestionPost(String text) {
@@ -1430,25 +1489,36 @@ User changes: $instruction''',
   }
 
   Future<Uint8List?> _captureXCardPng(String text) async {
-    if (_sharePanelOpen) {
-      await Future<void>.delayed(const Duration(milliseconds: 120));
-      await WidgetsBinding.instance.endOfFrame;
-      await WidgetsBinding.instance.endOfFrame;
-      final fromPanel = await _xShareScreenshotController.capture(
-        pixelRatio: 3.0,
-        delay: const Duration(milliseconds: 80),
-      );
-      if (fromPanel != null && fromPanel.isNotEmpty) return fromPanel;
-    }
+    await _prepareXShareAssets();
+    if (!mounted || _xShareImageDataUrl == null) return null;
+
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    await WidgetsBinding.instance.endOfFrame;
+    await WidgetsBinding.instance.endOfFrame;
+    await WidgetsBinding.instance.endOfFrame;
+
     return _renderXCardOffscreen(text);
+  }
+
+  Future<File?> _writeXCardPngToTempFile(Uint8List bytes) async {
+    try {
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/deite_x_post_${DateTime.now().millisecondsSinceEpoch}.png');
+      await file.writeAsBytes(bytes, flush: true);
+      return file;
+    } catch (e) {
+      debugPrint('[Share] failed to write X card temp file: $e');
+      return null;
+    }
   }
 
   Future<Uint8List?> _renderXCardOffscreen(String text) async {
     final tweetUser = await _loadTweetUserInfo();
-    final imageDataUrl = await _imageDataUrlForCapture();
+    final imageDataUrl = _xShareImageDataUrl ?? await _imageDataUrlForCapture();
     if (imageDataUrl == null) return null;
 
-    final profileDataUrl = await _profileImageDataUrl(tweetUser.profilePicture);
+    final profileDataUrl =
+        _xShareProfileDataUrl ?? await _profileImageDataUrl(tweetUser.profilePicture);
     if (!mounted) return null;
 
     try {
@@ -1489,12 +1559,13 @@ User changes: $instruction''',
 
     overlayState.insert(entry);
     try {
-      await Future<void>.delayed(const Duration(milliseconds: 300));
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      await WidgetsBinding.instance.endOfFrame;
       await WidgetsBinding.instance.endOfFrame;
       await WidgetsBinding.instance.endOfFrame;
       return controller.capture(
         pixelRatio: 3,
-        delay: const Duration(milliseconds: 100),
+        delay: const Duration(milliseconds: 150),
       );
     } finally {
       entry.remove();
@@ -1508,9 +1579,16 @@ User changes: $instruction''',
       final pngBytes = await _captureXCardPng(text);
       if (pngBytes == null || pngBytes.isEmpty) return false;
 
-      await Share.shareXFiles(
-        [XFile.fromData(pngBytes, mimeType: 'image/png', name: 'deite_x_post.png')],
-      );
+      final file = await _writeXCardPngToTempFile(pngBytes);
+      if (file != null) {
+        await Share.shareXFiles(
+          [XFile(file.path, mimeType: 'image/png', name: 'deite_x_post.png')],
+        );
+      } else {
+        await Share.shareXFiles(
+          [XFile.fromData(pngBytes, mimeType: 'image/png', name: 'deite_x_post.png')],
+        );
+      }
       return true;
     } catch (e) {
       debugPrint('[Share] X card share failed: $e');
@@ -1550,6 +1628,9 @@ User changes: $instruction''',
       switch (_platform) {
         case 'x':
           if (_hasShareableLinkedInImage()) {
+            if (_xShareAssetsLoading) {
+              await _prepareXShareAssets();
+            }
             opened = await _openXCardShare(text);
           } else {
             opened = await _tryLaunchShareUri(
@@ -1937,7 +2018,9 @@ User changes: $instruction''',
                   isDarkMode: isDarkMode,
                   text: _editableShareText,
                   imageUrl: _shareSuggestionImageUrl,
-                  imageLoading: _loadingShareImage,
+                  xCardImageUrl: _xShareImageDataUrl ?? _shareSuggestionImageUrl,
+                  xCardProfileUrl: _xShareProfileDataUrl,
+                  imageLoading: _loadingShareImage || _xShareAssetsLoading,
                   xScreenshotController: _xShareScreenshotController,
                   loadTweetUser: _loadTweetUserInfo,
                   onTextChanged: (v) => setState(() {
@@ -2672,6 +2755,8 @@ class _SharePanelOverlay extends StatefulWidget {
     required this.isDarkMode,
     required this.text,
     required this.imageUrl,
+    required this.xCardImageUrl,
+    required this.xCardProfileUrl,
     required this.imageLoading,
     required this.xScreenshotController,
     required this.loadTweetUser,
@@ -2686,6 +2771,8 @@ class _SharePanelOverlay extends StatefulWidget {
   final bool isDarkMode;
   final String text;
   final String? imageUrl;
+  final String? xCardImageUrl;
+  final String? xCardProfileUrl;
   final bool imageLoading;
   final ScreenshotController xScreenshotController;
   final Future<_TweetUserInfo> Function() loadTweetUser;
@@ -2868,8 +2955,8 @@ class _SharePanelOverlayState extends State<_SharePanelOverlay> {
                       displayName: tweetUser.displayName,
                       username: tweetUser.username,
                       text: _controller.text,
-                      imageUrl: widget.imageUrl,
-                      profileImageUrl: tweetUser.profilePicture,
+                      imageUrl: widget.xCardImageUrl,
+                      profileImageUrl: widget.xCardProfileUrl ?? tweetUser.profilePicture,
                     ),
                   ),
                 ),
@@ -2958,6 +3045,24 @@ class _SharePanelOverlayState extends State<_SharePanelOverlay> {
                           displayName: 'SociTea User',
                           username: 'socitea_user',
                         );
+                    if (widget.imageLoading &&
+                        (widget.xCardImageUrl == null || !widget.xCardImageUrl!.startsWith('data:image'))) {
+                      return const Expanded(
+                        child: Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              CircularProgressIndicator(color: HubColors.accent),
+                              SizedBox(height: 12),
+                              Text(
+                                'Loading image for share preview…',
+                                style: TextStyle(color: HubColors.textSecondary, fontSize: 13),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }
                     return _buildXCardPreview(tweetUser, primary);
                   },
                 )
