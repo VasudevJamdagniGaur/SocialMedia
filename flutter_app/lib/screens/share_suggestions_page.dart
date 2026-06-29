@@ -34,6 +34,7 @@ import '../utils/hub_carousel_ai_image.dart';
 import '../utils/hub_carousel_image_store.dart';
 import '../utils/reddit_thread_comments.dart';
 import '../utils/share_news_cache.dart';
+import '../utils/widget_capture.dart';
 
 class ShareSuggestionsPage extends StatefulWidget {
   const ShareSuggestionsPage({super.key});
@@ -73,6 +74,7 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
   bool _shareConfirmOpen = false;
   bool _sharePanelOpen = false;
   bool _savedToMyDeeds = false;
+  bool _xSharePreparing = false;
   bool _autoOpenSharePanel = false;
   String? _pendingShareText;
   String _editableShareText = '';
@@ -1399,6 +1401,80 @@ User changes: $instruction''',
     await Share.share(text);
   }
 
+  Future<String?> _imageDataUrlForCapture() async {
+    final imageUrl = _shareSuggestionImageUrl?.trim();
+    if (imageUrl == null || imageUrl.isEmpty) return null;
+    if (imageUrl.startsWith('data:image')) return imageUrl;
+
+    final payload = await _resolveShareImagePayload();
+    if (payload == null) return null;
+    return 'data:${payload.mimeType};base64,${base64Encode(payload.bytes)}';
+  }
+
+  Future<String?> _profileImageDataUrl(String? profileUrl) async {
+    final url = profileUrl?.trim();
+    if (url == null || url.isEmpty) return null;
+    if (url.startsWith('data:image')) return url;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) return null;
+
+    try {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode != 200) return null;
+      final mimeType = (response.headers['content-type'] ?? 'image/jpeg').split(';').first.trim();
+      return 'data:$mimeType;base64,${base64Encode(response.bodyBytes)}';
+    } catch (e) {
+      debugPrint('[Share] profile image download failed: $e');
+      return null;
+    }
+  }
+
+  Future<bool> _openXCardShare(String text) async {
+    if (!mounted) return false;
+    setState(() => _xSharePreparing = true);
+    try {
+      final tweetUser = await _loadTweetUserInfo();
+      final imageDataUrl = await _imageDataUrlForCapture();
+      if (imageDataUrl == null) return false;
+
+      final profileDataUrl = await _profileImageDataUrl(tweetUser.profilePicture);
+      if (!mounted) return false;
+
+      try {
+        await precacheImage(
+          const AssetImage('assets/images/DEITECIrc-192.webp'),
+          context,
+        );
+      } catch (_) {}
+
+      final card = TweetShareCard(
+        width: 1080,
+        displayName: tweetUser.displayName,
+        username: tweetUser.username,
+        text: text,
+        imageUrl: imageDataUrl,
+        profileImageUrl: profileDataUrl ?? tweetUser.profilePicture,
+      );
+
+      final pngBytes = await captureWidgetToPng(
+        context,
+        card,
+        settleDelay: const Duration(milliseconds: 200),
+        pixelRatio: 2,
+      );
+      if (pngBytes == null || pngBytes.isEmpty) return false;
+
+      await Share.shareXFiles(
+        [XFile.fromData(pngBytes, mimeType: 'image/png', name: 'deite_x_post.png')],
+      );
+      return true;
+    } catch (e) {
+      debugPrint('[Share] X card share failed: $e');
+      return false;
+    } finally {
+      if (mounted) setState(() => _xSharePreparing = false);
+    }
+  }
+
   Future<void> _openPlatformShare() async {
     final text = _panelShareText;
     final isLinkedIn = _platform != 'x' && _platform != 'reddit';
@@ -1413,21 +1489,28 @@ User changes: $instruction''',
         return;
       }
     } else if (text.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Add some text before sharing')),
-        );
+      final allowImageOnly = _platform == 'x' && _hasShareableLinkedInImage();
+      if (!allowImageOnly) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Add some text before sharing')),
+          );
+        }
+        return;
       }
-      return;
     }
 
     var opened = false;
     try {
       switch (_platform) {
         case 'x':
-          opened = await _tryLaunchShareUri(
-            Uri.parse('https://twitter.com/intent/tweet?text=${Uri.encodeComponent(text)}'),
-          );
+          if (_hasShareableLinkedInImage()) {
+            opened = await _openXCardShare(text);
+          } else {
+            opened = await _tryLaunchShareUri(
+              Uri.parse('https://twitter.com/intent/tweet?text=${Uri.encodeComponent(text)}'),
+            );
+          }
           break;
         case 'reddit':
           opened = await _tryLaunchShareUri(
@@ -1446,9 +1529,13 @@ User changes: $instruction''',
 
     if (!opened && !isLinkedIn) {
       try {
-        await _shareViaNativeSheet(text);
-        opened = true;
-        if (mounted) {
+        if (_platform == 'x' && _hasShareableLinkedInImage()) {
+          opened = await _openXCardShare(text);
+        } else {
+          await _shareViaNativeSheet(text);
+          opened = true;
+        }
+        if (opened && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Opened system share sheet')),
           );
@@ -1468,6 +1555,15 @@ User changes: $instruction''',
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Could not share image to LinkedIn')),
+        );
+      }
+      return;
+    }
+
+    if (!opened && _platform == 'x' && _hasShareableLinkedInImage()) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not prepare X post image')),
         );
       }
       return;
@@ -1815,6 +1911,23 @@ User changes: $instruction''',
                 }),
                 onConfirm: _confirmShareRecorded,
               ),
+              if (_xSharePreparing)
+                const ColoredBox(
+                  color: Color(0x88000000),
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircularProgressIndicator(color: HubColors.accent),
+                        SizedBox(height: 16),
+                        Text(
+                          'Preparing X post…',
+                          style: TextStyle(color: Colors.white, fontSize: 14),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
             ],
           ),
         ),

@@ -1,4 +1,6 @@
-﻿import 'package:flutter/material.dart';
+﻿import 'dart:convert';
+
+import 'package:flutter/material.dart';
 
 import '../utils/hub_carousel_ai_image.dart';
 
@@ -25,6 +27,25 @@ class TweetShareCard extends StatelessWidget {
   final double width;
   final double? height;
 
+  Widget _buildProfileAvatar() {
+    final url = profileImageUrl?.trim();
+    if (url != null && url.startsWith('data:image')) {
+      try {
+        final bytes = base64Decode(url.split(',').last);
+        return Image.memory(bytes, fit: BoxFit.cover, width: 48, height: 48);
+      } catch (_) {}
+    }
+    if (url != null && url.isNotEmpty) {
+      return Image.network(url, fit: BoxFit.cover, width: 48, height: 48);
+    }
+    return Center(
+      child: Text(
+        displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
+        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF0F1419)),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final h = height ?? (width * 10 / 7);
@@ -49,14 +70,7 @@ class TweetShareCard extends StatelessWidget {
                   width: 48,
                   height: 48,
                   color: const Color(0xFFEFF3F4),
-                  child: profileImageUrl != null
-                      ? Image.network(profileImageUrl!, fit: BoxFit.cover, width: 48, height: 48)
-                      : Center(
-                          child: Text(
-                            displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF0F1419)),
-                          ),
-                        ),
+                  child: _buildProfileAvatar(),
                 ),
               ),
               const SizedBox(width: 12),
@@ -109,9 +123,12 @@ class TweetShareCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(16),
               child: SizedBox(
                 width: width - 40,
-                child: HubCarouselHeroImage(
-                  imageUrl: imageUrl,
-                  fit: BoxFit.cover,
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: HubCarouselHeroImage(
+                    imageUrl: imageUrl,
+                    fit: BoxFit.cover,
+                  ),
                 ),
               ),
             ),
