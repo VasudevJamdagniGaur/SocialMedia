@@ -1851,7 +1851,7 @@ $text""";
     return edited.trim();
   }
 
-  /// Prefer Deitea Render backend, then Firebase Hosting rewrites, then web origin.
+  /// Real API backends only — Firebase Hosting does not serve `/api/linkedin/suggestions`.
   List<String> _shareSuggestionsApiBases() {
     final seen = <String>{};
     final bases = <String>[];
@@ -1859,6 +1859,7 @@ $text""";
     void add(String? raw) {
       final b = (raw ?? '').trim().replaceAll(RegExp(r'/$'), '');
       if (b.isEmpty || !seen.add(b)) return;
+      if (b.contains('firebaseapp.com') || b.contains('web.app')) return;
       bases.add(b);
     }
 
@@ -1879,9 +1880,53 @@ $text""";
         origin.startsWith('ionic://') ||
         origin.startsWith('file://');
     if (!originLooksLocal) add(origin);
-    add('https://deitedatabase.web.app');
-    add('https://deitedatabase.firebaseapp.com');
     return bases;
+  }
+
+  Future<http.Response> _postShareSuggestionsApi(
+    String apiBase,
+    String reflection,
+    String platform, {
+    bool stream = false,
+  }) async {
+    final uri = Uri.parse(
+      stream
+          ? '$apiBase/api/linkedin/suggestions?stream=1'
+          : '$apiBase/api/linkedin/suggestions',
+    );
+    final body = jsonEncode({'reflection': reflection.trim(), 'platform': platform});
+
+    for (var attempt = 0; attempt < 2; attempt++) {
+      try {
+        final res = await http
+            .post(
+              uri,
+              headers: {'Content-Type': 'application/json'},
+              body: body,
+            )
+            .timeout(Duration(seconds: attempt == 0 ? 50 : 75));
+        if (res.statusCode >= 500 && attempt == 0) {
+          await Future<void>.delayed(const Duration(seconds: 4));
+          continue;
+        }
+        return res;
+      } catch (e) {
+        if (attempt == 0) {
+          await Future<void>.delayed(const Duration(seconds: 4));
+          continue;
+        }
+        rethrow;
+      }
+    }
+    throw Exception('Suggestions API unreachable: $uri');
+  }
+
+  List<Map<String, String>> _reflectionSuggestionFallback(String reflection) {
+    final trimmed = reflection.trim();
+    if (trimmed.isEmpty) return [];
+    return [
+      {'eventLabel': 'Reflection', 'post': sanitizeSocialPostText(trimmed)},
+    ];
   }
 
   Future<List<Map<String, String>>> generateSocialPostSuggestions(String reflection, String platform) async {
@@ -1903,33 +1948,33 @@ $text""";
 
       // Primary path: Vertex /generateContent (deployed on detea-backend).
       if (isVertexBackendConfigured()) {
-        try {
-          final raw = await callVertexGenerateContent(
-            prompt: sharePrompt,
-            temperature: 0.5,
-            maxOutputTokens: 4096,
-          ).timeout(const Duration(seconds: 75));
-          final parsed = _parseShareSuggestionModelOutput(raw.trim(), reflection);
-          if (parsed.isNotEmpty) return parsed;
-          lastErr = Exception('Vertex returned empty share suggestions');
-        } catch (vertexErr) {
-          lastErr = vertexErr is Exception ? vertexErr : Exception(vertexErr.toString());
+        for (var attempt = 0; attempt < 2; attempt++) {
+          try {
+            final raw = await callVertexGenerateContent(
+              prompt: sharePrompt,
+              temperature: 0.5,
+              maxOutputTokens: 4096,
+            ).timeout(Duration(seconds: attempt == 0 ? 75 : 90));
+            final parsed = _parseShareSuggestionModelOutput(raw.trim(), reflection);
+            if (parsed.isNotEmpty) return parsed;
+            lastErr = Exception('Vertex returned empty share suggestions');
+          } catch (vertexErr) {
+            lastErr = vertexErr is Exception ? vertexErr : Exception(vertexErr.toString());
+            if (attempt == 0) {
+              await Future<void>.delayed(const Duration(seconds: 3));
+              continue;
+            }
+          }
         }
       }
 
-      // Optional: dedicated suggestions API when the full Dart server exposes it.
+      // Dedicated suggestions API on the Dart backend.
       final candidates = _shareSuggestionsApiBases();
 
       for (final apiBase in candidates) {
         if (apiBase.isEmpty) continue;
         try {
-          final res = await http
-              .post(
-                Uri.parse('$apiBase/api/linkedin/suggestions'),
-                headers: {'Content-Type': 'application/json'},
-                body: jsonEncode({'reflection': reflection.trim(), 'platform': platform}),
-              )
-              .timeout(const Duration(seconds: 20));
+          final res = await _postShareSuggestionsApi(apiBase, reflection, platform);
 
           if (res.statusCode >= 200 && res.statusCode < 300) {
             Map<String, dynamic>? data;
@@ -1990,13 +2035,9 @@ $text""";
     openaiApiKey = Env.openAiApiKey.trim().isNotEmpty ? Env.openAiApiKey.trim() : openaiApiKey;
     final apiKey = openaiApiKey.trim();
     if (apiKey.isEmpty) {
-      final trimmed = reflection.trim();
+      final fallback = _reflectionSuggestionFallback(reflection);
+      if (fallback.isNotEmpty) return fallback;
       if (lastErr != null) throw lastErr;
-      if (trimmed.isEmpty) {
-        throw Exception(
-          'Share suggestions need a working backend (BACKEND_URL) or OPENAI_API_KEY.',
-        );
-      }
       throw Exception(
         'Could not generate share suggestions. Set BACKEND_URL to https://detea-backend.onrender.com and rebuild, or add OPENAI_API_KEY.',
       );

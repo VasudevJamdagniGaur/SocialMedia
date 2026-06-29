@@ -843,13 +843,13 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.toString();
         _suggestions = _sanitizeSuggestionItems([
           {
             'eventLabel': _isNewsMode ? 'News' : 'Reflection',
             'post': _baselineText,
           },
         ]);
+        _selectedIndex = 0;
         _loading = false;
       });
       _maybeAutoOpenSharePanel();
