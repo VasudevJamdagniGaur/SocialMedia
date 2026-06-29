@@ -14,5 +14,6 @@
     "flutter_app/build": true,
     "flutter_app/.dart_tool": true,
     "server/.dart_tool": true
-  }
+  },
+  "java.configuration.updateBuildConfiguration": "interactive"
 }
