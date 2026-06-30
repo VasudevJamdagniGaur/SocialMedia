@@ -36,6 +36,7 @@ import '../utils/hub_carousel_ai_image.dart';
 import '../utils/hub_carousel_image_store.dart';
 import '../utils/reddit_thread_comments.dart';
 import '../utils/share_news_cache.dart';
+import '../utils/widget_capture.dart';
 
 enum _XShareMode {
   cardImage,
@@ -1513,16 +1514,76 @@ User changes: $instruction''',
     }
   }
 
+  Future<String?> _resolveXCardImageDataUrl() async {
+    final cached = _xShareImageDataUrl?.trim();
+    if (cached != null && cached.isNotEmpty) return cached;
+
+    final fromSuggestion = _shareSuggestionImageUrl?.trim();
+    if (fromSuggestion != null && fromSuggestion.startsWith('data:image')) {
+      return fromSuggestion;
+    }
+
+    return _imageDataUrlForCapture();
+  }
+
+  Future<void> _precacheXCardImage(String? imageDataUrl) async {
+    if (!mounted || imageDataUrl == null || !imageDataUrl.startsWith('data:image')) return;
+    final bytes = decodeDataImageUrlBytes(imageDataUrl, logTag: '[XShare]');
+    if (bytes == null) return;
+    try {
+      await precacheImage(MemoryImage(bytes), context);
+    } catch (_) {}
+  }
+
+  Future<Uint8List?> _captureVisibleXCardPreview() async {
+    if (!_sharePanelOpen) return null;
+
+    for (var i = 0; i < 4; i++) {
+      await WidgetsBinding.instance.endOfFrame;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+
+    try {
+      final png = await _xShareScreenshotController.capture(
+        pixelRatio: 3,
+        delay: const Duration(milliseconds: 200),
+      );
+      if (png != null && png.isNotEmpty) {
+        debugPrint('[Share] X card captured from preview (${png.length} bytes)');
+        return png;
+      }
+    } catch (e) {
+      debugPrint('[Share] preview X card capture failed: $e');
+    }
+    return null;
+  }
+
   Future<Uint8List?> _captureXCardPng(String text) async {
-    await _prepareXShareAssets();
-    if (!mounted || _xShareImageDataUrl == null) return null;
+    if (!mounted) return null;
+
+    final previewPng = await _captureVisibleXCardPreview();
+    if (previewPng != null) return previewPng;
+
+    final imageDataUrl = await _resolveXCardImageDataUrl();
+    if (!mounted || imageDataUrl == null || imageDataUrl.trim().isEmpty) {
+      debugPrint('[Share] X card capture: no image URL available');
+      return null;
+    }
+
+    await _precacheXCardImage(imageDataUrl);
+    if (_xShareImageDataUrl == null) {
+      await _prepareXShareAssets();
+    }
 
     await Future<void>.delayed(const Duration(milliseconds: 250));
     await WidgetsBinding.instance.endOfFrame;
     await WidgetsBinding.instance.endOfFrame;
     await WidgetsBinding.instance.endOfFrame;
 
-    return _renderXCardOffscreen(text);
+    return _renderXCardOffscreen(
+      text,
+      imageDataUrl: _xShareImageDataUrl ?? imageDataUrl,
+    );
   }
 
   Future<File?> _writeXCardPngToTempFile(Uint8List bytes) async {
@@ -1537,14 +1598,13 @@ User changes: $instruction''',
     }
   }
 
-  Future<Uint8List?> _renderXCardOffscreen(String text) async {
+  Future<Uint8List?> _renderXCardOffscreen(String text, {required String imageDataUrl}) async {
     final tweetUser = await _loadTweetUserInfo();
-    final imageDataUrl = _xShareImageDataUrl ?? await _imageDataUrlForCapture();
-    if (imageDataUrl == null) return null;
-
     final profileDataUrl =
         _xShareProfileDataUrl ?? await _profileImageDataUrl(tweetUser.profilePicture);
     if (!mounted) return null;
+
+    await _precacheXCardImage(imageDataUrl);
 
     try {
       await precacheImage(
@@ -1552,6 +1612,24 @@ User changes: $instruction''',
         context,
       );
     } catch (_) {}
+
+    if (profileDataUrl != null && profileDataUrl.startsWith('data:image')) {
+      final bytes = decodeDataImageUrlBytes(profileDataUrl, logTag: '[XShare]');
+      if (bytes != null) {
+        try {
+          await precacheImage(MemoryImage(bytes), context);
+        } catch (_) {}
+      }
+    }
+
+    final card = TweetShareCard(
+      width: 360,
+      displayName: tweetUser.displayName,
+      username: tweetUser.username,
+      text: text,
+      imageUrl: imageDataUrl,
+      profileImageUrl: profileDataUrl ?? tweetUser.profilePicture,
+    );
 
     final controller = ScreenshotController();
     final overlayState = Overlay.of(context, rootOverlay: true);
@@ -1567,14 +1645,7 @@ User changes: $instruction''',
               type: MaterialType.transparency,
               child: Screenshot(
                 controller: controller,
-                child: TweetShareCard(
-                  width: 360,
-                  displayName: tweetUser.displayName,
-                  username: tweetUser.username,
-                  text: text,
-                  imageUrl: imageDataUrl,
-                  profileImageUrl: profileDataUrl ?? tweetUser.profilePicture,
-                ),
+                child: card,
               ),
             ),
           ),
@@ -1584,26 +1655,43 @@ User changes: $instruction''',
 
     overlayState.insert(entry);
     try {
-      await Future<void>.delayed(const Duration(milliseconds: 400));
+      await Future<void>.delayed(const Duration(milliseconds: 500));
       await WidgetsBinding.instance.endOfFrame;
       await WidgetsBinding.instance.endOfFrame;
       await WidgetsBinding.instance.endOfFrame;
-      return controller.capture(
+
+      final png = await controller.capture(
         pixelRatio: 3,
-        delay: const Duration(milliseconds: 150),
+        delay: const Duration(milliseconds: 200),
       );
+      if (png != null && png.isNotEmpty) {
+        debugPrint('[Share] X card captured offscreen (${png.length} bytes)');
+        return png;
+      }
+    } catch (e) {
+      debugPrint('[Share] offscreen screenshot capture failed: $e');
     } finally {
       entry.remove();
     }
+
+    if (!mounted) return null;
+    debugPrint('[Share] falling back to RepaintBoundary capture');
+    return captureWidgetToPng(
+      context,
+      card,
+      settleDelay: const Duration(milliseconds: 500),
+      pixelRatio: 3,
+    );
   }
 
   Future<bool> _openXCardShare(String text) async {
     if (!mounted) return false;
+
+    final pngBytes = await _captureXCardPng(text);
+    if (pngBytes == null || pngBytes.isEmpty) return false;
+
     setState(() => _xSharePreparing = true);
     try {
-      final pngBytes = await _captureXCardPng(text);
-      if (pngBytes == null || pngBytes.isEmpty) return false;
-
       final file = await _writeXCardPngToTempFile(pngBytes);
       if (file != null) {
         await Share.shareXFiles(
@@ -1655,6 +1743,8 @@ User changes: $instruction''',
           if (_hasShareableLinkedInImage()) {
             if (_xShareAssetsLoading) {
               await _prepareXShareAssets();
+            } else if (_xShareImageDataUrl == null) {
+              unawaited(_prepareXShareAssets());
             }
             if (xShareMode == _XShareMode.imageAndCaption) {
               opened = await _openXImageAndCaptionShare(text);
