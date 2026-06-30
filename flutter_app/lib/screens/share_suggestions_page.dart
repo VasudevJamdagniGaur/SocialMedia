@@ -1202,7 +1202,7 @@ Plain text only: no **bold**, no markdown bullets, no em dashes (—). Use a pla
       if (mounted) setState(() => _loadingShareImage = false);
     }
 
-    if (updatedPrompt == null || updatedPrompt.trim().isEmpty || !mounted) return;
+    if (updatedPrompt.trim().isEmpty || !mounted) return;
     await _applyGeneratedShareImage(customPrompt: updatedPrompt.trim());
   }
 
@@ -2781,6 +2781,8 @@ class _SuggestionImage extends StatelessWidget {
 
 enum _ShareImageEditAction { useAiImage, useSourceImage, replace, magicPencil, magicWand, delete }
 
+enum _ShareTextEditAction { edit, magicPencil }
+
 class _SharePanelOverlay extends StatefulWidget {
   const _SharePanelOverlay({
     required this.platform,
@@ -2873,6 +2875,219 @@ class _SharePanelOverlayState extends State<_SharePanelOverlay> {
     }
   }
 
+  Future<void> _openDirectTextEditDialog() async {
+    final updated = await showDialog<String>(
+      context: context,
+      builder: (ctx) => _ShareTextEditDialog(
+        isDarkMode: widget.isDarkMode,
+        initialText: _controller.text,
+      ),
+    );
+    if (updated == null || !mounted) return;
+    final trimmed = updated.trim();
+    if (trimmed.isEmpty) return;
+    _controller.text = trimmed;
+    _controller.selection = TextSelection.collapsed(offset: trimmed.length);
+    widget.onTextChanged(trimmed);
+  }
+
+  Future<void> _showShareTextEditOptions() async {
+    final action = await showModalBottomSheet<_ShareTextEditAction>(
+      context: context,
+      isDismissible: true,
+      enableDrag: true,
+      backgroundColor: widget.isDarkMode ? HubColors.bgSecondary : Colors.white,
+      barrierColor: Colors.black54,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        final primary = widget.isDarkMode ? HubColors.text : const Color(0xFF1A1A1A);
+        final secondary = widget.isDarkMode ? HubColors.textSecondary : const Color(0xFF666666);
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(8, 12, 8, 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  child: Text(
+                    'Text options',
+                    style: TextStyle(color: primary, fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                ListTile(
+                  leading: Icon(LucideIcons.pencil, color: primary),
+                  title: Text('Edit text', style: TextStyle(color: primary)),
+                  subtitle: Text(
+                    'Type your caption directly',
+                    style: TextStyle(color: secondary, fontSize: 12),
+                  ),
+                  onTap: () => Navigator.pop(ctx, _ShareTextEditAction.edit),
+                ),
+                ListTile(
+                  leading: Icon(LucideIcons.penLine, color: primary),
+                  title: Text('Magic pencil', style: TextStyle(color: primary)),
+                  subtitle: Text(
+                    'Rewrite with AI instructions',
+                    style: TextStyle(color: secondary, fontSize: 12),
+                  ),
+                  onTap: () => Navigator.pop(ctx, _ShareTextEditAction.magicPencil),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (!mounted || action == null) return;
+    switch (action) {
+      case _ShareTextEditAction.edit:
+        await _openDirectTextEditDialog();
+      case _ShareTextEditAction.magicPencil:
+        await _openTextMagicPencil();
+    }
+  }
+
+  Widget _buildXCardEditButton({
+    required VoidCallback? onPressed,
+    required String tooltip,
+    required IconData icon,
+    double iconRotation = 0,
+  }) {
+    return Material(
+      color: Colors.black.withValues(alpha: 0.55),
+      shape: const CircleBorder(),
+      clipBehavior: Clip.antiAlias,
+      child: IconButton(
+        onPressed: onPressed,
+        tooltip: tooltip,
+        icon: Transform.rotate(
+          angle: iconRotation,
+          child: Icon(icon, color: Colors.white, size: 18),
+        ),
+        visualDensity: VisualDensity.compact,
+        padding: const EdgeInsets.all(8),
+        constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+      ),
+    );
+  }
+
+  double _xCardTextHeight(String text, double cardWidth) {
+    const textStyle = TextStyle(fontSize: 16, height: 1.45, color: Color(0xFF0F1419));
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: textStyle),
+      textDirection: TextDirection.ltr,
+      maxLines: null,
+    )..layout(maxWidth: cardWidth - 40);
+    return painter.height;
+  }
+
+  Widget _buildXCardPreview(_TweetUserInfo tweetUser) {
+    const cardWidth = 360.0;
+    const cardPadding = 20.0;
+    const headerHeight = 48.0;
+    const headerTextGap = 12.0;
+    const textImageGap = 16.0;
+    const textTop = cardPadding + headerHeight + headerTextGap;
+    final textHeight = _xCardTextHeight(_controller.text, cardWidth);
+    final hasImage = widget.xCardImageUrl != null && widget.xCardImageUrl!.trim().isNotEmpty;
+    final imageWidth = cardWidth - 40;
+    final imageHeight = imageWidth * 9 / 16;
+    final imageTop = textTop + textHeight + (hasImage ? textImageGap : 0);
+
+    return Expanded(
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Screenshot(
+                    controller: widget.xScreenshotController,
+                    child: TweetShareCard(
+                      width: cardWidth,
+                      displayName: tweetUser.displayName,
+                      username: tweetUser.username,
+                      text: _controller.text,
+                      imageUrl: widget.xCardImageUrl,
+                      profileImageUrl: widget.xCardProfileUrl ?? tweetUser.profilePicture,
+                    ),
+                  ),
+                  Positioned(
+                    top: textTop,
+                    right: 8,
+                    child: _buildXCardEditButton(
+                      onPressed: _textMagicPencilLoading ? null : _showShareTextEditOptions,
+                      tooltip: 'Edit text',
+                      icon: LucideIcons.pencil,
+                    ),
+                  ),
+                  if (hasImage)
+                    Positioned(
+                      top: imageTop + 10,
+                      right: 28,
+                      child: _buildXCardEditButton(
+                        onPressed: widget.imageLoading
+                            ? null
+                            : () => widget.onEditImage(_controller.text),
+                        tooltip: 'Edit image',
+                        icon: LucideIcons.pencil,
+                        iconRotation: -0.45,
+                      ),
+                    ),
+                  if (_textMagicPencilLoading)
+                    Positioned(
+                      top: textTop,
+                      left: cardPadding,
+                      right: cardPadding,
+                      height: textHeight,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.25),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        alignment: Alignment.center,
+                        child: const SizedBox(
+                          width: 28,
+                          height: 28,
+                          child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  if (widget.imageLoading && hasImage)
+                    Positioned(
+                      top: imageTop,
+                      left: cardPadding,
+                      width: imageWidth,
+                      height: imageHeight,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.35),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        alignment: Alignment.center,
+                        child: const SizedBox(
+                          width: 28,
+                          height: 28,
+                          child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _controller.dispose();
@@ -2962,70 +3177,6 @@ class _SharePanelOverlayState extends State<_SharePanelOverlay> {
             ),
           ),
       ],
-    );
-  }
-
-  Widget _buildXCardPreview(_TweetUserInfo tweetUser) {
-    return Expanded(
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Stack(
-              alignment: Alignment.topRight,
-              children: [
-                Center(
-                  child: Screenshot(
-                    controller: widget.xScreenshotController,
-                    child: TweetShareCard(
-                      width: 360,
-                      displayName: tweetUser.displayName,
-                      username: tweetUser.username,
-                      text: _controller.text,
-                      imageUrl: widget.xCardImageUrl,
-                      profileImageUrl: widget.xCardProfileUrl ?? tweetUser.profilePicture,
-                    ),
-                  ),
-                ),
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: Material(
-                    color: Colors.black.withValues(alpha: 0.55),
-                    shape: const CircleBorder(),
-                    clipBehavior: Clip.antiAlias,
-                    child: IconButton(
-                      onPressed: widget.imageLoading
-                          ? null
-                          : () => widget.onEditImage(_controller.text),
-                      tooltip: 'Edit image',
-                      icon: const Icon(LucideIcons.pencil, color: Colors.white, size: 18),
-                      visualDensity: VisualDensity.compact,
-                      padding: const EdgeInsets.all(8),
-                      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                    ),
-                  ),
-                ),
-                if (widget.imageLoading)
-                  Positioned.fill(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.35),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      alignment: Alignment.center,
-                      child: const SizedBox(
-                        width: 28,
-                        height: 28,
-                        child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -3403,6 +3554,79 @@ class _TextMagicPencilDialogState extends State<_TextMagicPencilDialog> {
           onPressed: () => Navigator.pop(context, _controller.text),
           style: FilledButton.styleFrom(backgroundColor: HubColors.accent),
           child: const Text('Apply'),
+        ),
+      ],
+    );
+  }
+}
+
+class _ShareTextEditDialog extends StatefulWidget {
+  const _ShareTextEditDialog({
+    required this.isDarkMode,
+    required this.initialText,
+  });
+
+  final bool isDarkMode;
+  final String initialText;
+
+  @override
+  State<_ShareTextEditDialog> createState() => _ShareTextEditDialogState();
+}
+
+class _ShareTextEditDialogState extends State<_ShareTextEditDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialText);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = widget.isDarkMode ? HubColors.text : const Color(0xFF1A1A1A);
+    final fill = widget.isDarkMode ? HubColors.bg : const Color(0xFFF5F5F5);
+    final border = widget.isDarkMode ? HubColors.divider : const Color(0x1F000000);
+
+    return AlertDialog(
+      backgroundColor: widget.isDarkMode ? HubColors.bgSecondary : Colors.white,
+      title: Text('Edit text', style: TextStyle(color: primary, fontSize: 18)),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: TextField(
+          controller: _controller,
+          autofocus: true,
+          maxLines: 6,
+          minLines: 3,
+          style: TextStyle(color: primary, fontSize: 15, height: 1.45),
+          decoration: InputDecoration(
+            hintText: 'Your post...',
+            filled: true,
+            fillColor: fill,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: border)),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: border)),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: HubColors.accent, width: 2),
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text('Cancel', style: TextStyle(color: primary.withValues(alpha: 0.7))),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, _controller.text),
+          style: FilledButton.styleFrom(backgroundColor: HubColors.accent),
+          child: const Text('Save'),
         ),
       ],
     );
