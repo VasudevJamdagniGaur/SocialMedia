@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 
-import '../utils/hub_carousel_ai_image.dart';
+import 'pixelated_image_transition.dart';
 
 const _kSociTeaLogo = 'assets/images/DEITECIrc-192.webp';
 
@@ -15,6 +15,7 @@ class TweetShareCard extends StatelessWidget {
     this.username = 'socitea_user',
     this.imageUrl,
     this.profileImageUrl,
+    this.imageLoading = false,
     this.width = 1080,
     this.height,
   });
@@ -24,6 +25,7 @@ class TweetShareCard extends StatelessWidget {
   final String text;
   final String? imageUrl;
   final String? profileImageUrl;
+  final bool imageLoading;
   final double width;
   final double? height;
 
@@ -125,8 +127,9 @@ class TweetShareCard extends StatelessWidget {
                 width: width - 40,
                 child: AspectRatio(
                   aspectRatio: 16 / 9,
-                  child: HubCarouselHeroImage(
+                  child: PixelatedImageTransition(
                     imageUrl: imageUrl,
+                    isLoading: imageLoading,
                     fit: BoxFit.cover,
                   ),
                 ),

@@ -20,6 +20,7 @@ import 'package:screenshot/screenshot.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../components/pixelated_image_transition.dart';
 import '../components/skeleton/list_skeleton.dart';
 import '../components/skeleton/skeleton.dart';
 import '../components/tweet_share_card.dart';
@@ -2050,9 +2051,10 @@ User changes: $instruction''',
                   isDarkMode: isDarkMode,
                   text: _editableShareText,
                   imageUrl: _shareSuggestionImageUrl,
-                  xCardImageUrl: _xShareImageDataUrl ?? _shareSuggestionImageUrl,
+                  xCardImageUrl: _shareSuggestionImageUrl,
                   xCardProfileUrl: _xShareProfileDataUrl,
                   imageLoading: _loadingShareImage || _xShareAssetsLoading,
+                  imageRegenerating: _loadingShareImage,
                   xScreenshotController: _xShareScreenshotController,
                   loadTweetUser: _loadTweetUserInfo,
                   onTextChanged: (v) => setState(() {
@@ -2792,6 +2794,7 @@ class _SharePanelOverlay extends StatefulWidget {
     required this.xCardImageUrl,
     required this.xCardProfileUrl,
     required this.imageLoading,
+    required this.imageRegenerating,
     required this.xScreenshotController,
     required this.loadTweetUser,
     required this.onTextChanged,
@@ -2808,6 +2811,7 @@ class _SharePanelOverlay extends StatefulWidget {
   final String? xCardImageUrl;
   final String? xCardProfileUrl;
   final bool imageLoading;
+  final bool imageRegenerating;
   final ScreenshotController xScreenshotController;
   final Future<_TweetUserInfo> Function() loadTweetUser;
   final ValueChanged<String> onTextChanged;
@@ -3016,6 +3020,7 @@ class _SharePanelOverlayState extends State<_SharePanelOverlay> {
                       username: tweetUser.username,
                       text: _controller.text,
                       imageUrl: widget.xCardImageUrl,
+                      imageLoading: widget.imageRegenerating,
                       profileImageUrl: widget.xCardProfileUrl ?? tweetUser.profilePicture,
                     ),
                   ),
@@ -3051,25 +3056,6 @@ class _SharePanelOverlayState extends State<_SharePanelOverlay> {
                         decoration: BoxDecoration(
                           color: Colors.black.withValues(alpha: 0.25),
                           borderRadius: BorderRadius.circular(8),
-                        ),
-                        alignment: Alignment.center,
-                        child: const SizedBox(
-                          width: 28,
-                          height: 28,
-                          child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
-                        ),
-                      ),
-                    ),
-                  if (widget.imageLoading && hasImage)
-                    Positioned(
-                      top: imageTop,
-                      left: cardPadding,
-                      width: imageWidth,
-                      height: imageHeight,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.35),
-                          borderRadius: BorderRadius.circular(16),
                         ),
                         alignment: Alignment.center,
                         child: const SizedBox(
@@ -3221,8 +3207,7 @@ class _SharePanelOverlayState extends State<_SharePanelOverlay> {
                           displayName: 'SociTea User',
                           username: 'socitea_user',
                         );
-                    if (widget.imageLoading &&
-                        (widget.xCardImageUrl == null || !widget.xCardImageUrl!.startsWith('data:image'))) {
+                    if (widget.xCardImageUrl == null || widget.xCardImageUrl!.trim().isEmpty) {
                       return const Expanded(
                         child: Center(
                           child: Column(
@@ -3250,11 +3235,12 @@ class _SharePanelOverlayState extends State<_SharePanelOverlay> {
                     children: [
                       ClipRRect(
                         borderRadius: BorderRadius.circular(12),
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxHeight: 220),
-                          child: _SuggestionImage(
-                            url: widget.imageUrl!,
-                            isDarkMode: widget.isDarkMode,
+                        child: AspectRatio(
+                          aspectRatio: 16 / 9,
+                          child: PixelatedImageTransition(
+                            imageUrl: widget.imageUrl,
+                            isLoading: widget.imageRegenerating,
+                            fit: BoxFit.cover,
                           ),
                         ),
                       ),
@@ -3277,21 +3263,6 @@ class _SharePanelOverlayState extends State<_SharePanelOverlay> {
                           ),
                         ),
                       ),
-                      if (widget.imageLoading)
-                        Positioned.fill(
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.45),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            alignment: Alignment.center,
-                            child: const SizedBox(
-                              width: 28,
-                              height: 28,
-                              child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
-                            ),
-                          ),
-                        ),
                     ],
                   ),
                 ],
