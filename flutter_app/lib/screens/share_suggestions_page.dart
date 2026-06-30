@@ -2965,22 +2965,12 @@ class _SharePanelOverlayState extends State<_SharePanelOverlay> {
     );
   }
 
-  Widget _buildXCardPreview(_TweetUserInfo tweetUser, Color primary) {
+  Widget _buildXCardPreview(_TweetUserInfo tweetUser) {
     return Expanded(
       child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'Choose how to share on X',
-              style: TextStyle(color: primary, fontSize: 13, fontWeight: FontWeight.w500),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Card image: shares the white preview as one photo. Image + text: shares the photo and copies your caption.',
-              style: TextStyle(color: primary.withValues(alpha: 0.65), fontSize: 12, height: 1.4),
-            ),
-            const SizedBox(height: 12),
             Stack(
               alignment: Alignment.topRight,
               children: [
@@ -3033,8 +3023,6 @@ class _SharePanelOverlayState extends State<_SharePanelOverlay> {
                   ),
               ],
             ),
-            const SizedBox(height: 12),
-            _buildCaptionEditor(primary),
           ],
         ),
       ),
@@ -3100,7 +3088,7 @@ class _SharePanelOverlayState extends State<_SharePanelOverlay> {
                         ),
                       );
                     }
-                    return _buildXCardPreview(tweetUser, primary);
+                    return _buildXCardPreview(tweetUser);
                   },
                 )
               else ...[
