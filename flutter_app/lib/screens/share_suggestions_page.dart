@@ -36,6 +36,11 @@ import '../utils/hub_carousel_image_store.dart';
 import '../utils/reddit_thread_comments.dart';
 import '../utils/share_news_cache.dart';
 
+enum _XShareMode {
+  cardImage,
+  imageAndCaption,
+}
+
 class ShareSuggestionsPage extends StatefulWidget {
   const ShareSuggestionsPage({super.key});
 
@@ -1379,8 +1384,11 @@ User changes: $instruction''',
         url.startsWith('https://');
   }
 
-  /// Image posts: share image only (caption copied). Text-only posts: share text directly.
-  Future<bool> _openLinkedInNativeShare(String text) async {
+  /// Share image via native sheet; copy caption to clipboard when present.
+  Future<bool> _openImageWithCaptionShare(
+    String text, {
+    required String platformLabel,
+  }) async {
     final payload = await _resolveShareImagePayload();
 
     if (payload == null) {
@@ -1401,7 +1409,7 @@ User changes: $instruction''',
           );
           if (opened == true) return true;
         } catch (e) {
-          debugPrint('[Share] LinkedIn direct text share failed: $e');
+          debugPrint('[Share] direct text share failed: $e');
         }
       }
 
@@ -1409,7 +1417,7 @@ User changes: $instruction''',
         await Share.share(text);
         return true;
       } catch (e) {
-        debugPrint('[Share] LinkedIn text share failed: $e');
+        debugPrint('[Share] text share failed: $e');
         return false;
       }
     }
@@ -1418,8 +1426,8 @@ User changes: $instruction''',
       await Clipboard.setData(ClipboardData(text: text));
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Caption copied — paste it after the image loads in LinkedIn'),
+          SnackBar(
+            content: Text('Caption copied — paste it after the image loads in $platformLabel'),
           ),
         );
       }
@@ -1439,7 +1447,7 @@ User changes: $instruction''',
           if (opened == true) return true;
         }
       } catch (e) {
-        debugPrint('[Share] LinkedIn direct image share failed: $e');
+        debugPrint('[Share] direct image share failed: $e');
       }
     }
 
@@ -1449,9 +1457,17 @@ User changes: $instruction''',
       );
       return true;
     } catch (e) {
-      debugPrint('[Share] LinkedIn image share sheet failed: $e');
+      debugPrint('[Share] image share sheet failed: $e');
       return false;
     }
+  }
+
+  Future<bool> _openLinkedInNativeShare(String text) async {
+    return _openImageWithCaptionShare(text, platformLabel: 'LinkedIn');
+  }
+
+  Future<bool> _openXImageAndCaptionShare(String text) async {
+    return _openImageWithCaptionShare(text, platformLabel: 'X');
   }
 
   Future<void> _shareViaNativeSheet(String text) async {
@@ -1606,7 +1622,7 @@ User changes: $instruction''',
     }
   }
 
-  Future<void> _openPlatformShare() async {
+  Future<void> _openPlatformShare([_XShareMode xShareMode = _XShareMode.cardImage]) async {
     final text = _panelShareText;
     final isLinkedIn = _platform != 'x' && _platform != 'reddit';
 
@@ -1639,7 +1655,11 @@ User changes: $instruction''',
             if (_xShareAssetsLoading) {
               await _prepareXShareAssets();
             }
-            opened = await _openXCardShare(text);
+            if (xShareMode == _XShareMode.imageAndCaption) {
+              opened = await _openXImageAndCaptionShare(text);
+            } else {
+              opened = await _openXCardShare(text);
+            }
           } else {
             opened = await _tryLaunchShareUri(
               Uri.parse('https://twitter.com/intent/tweet?text=${Uri.encodeComponent(text)}'),
@@ -1664,7 +1684,11 @@ User changes: $instruction''',
     if (!opened && !isLinkedIn) {
       try {
         if (_platform == 'x' && _hasShareableLinkedInImage()) {
-          opened = await _openXCardShare(text);
+          if (xShareMode == _XShareMode.imageAndCaption) {
+            opened = await _openXImageAndCaptionShare(text);
+          } else {
+            opened = await _openXCardShare(text);
+          }
         } else {
           await _shareViaNativeSheet(text);
           opened = true;
@@ -2788,7 +2812,7 @@ class _SharePanelOverlay extends StatefulWidget {
   final Future<String> Function(String text, String instruction) onMagicPencilText;
   final void Function(String currentCaption) onEditImage;
   final VoidCallback onClose;
-  final VoidCallback onSharePlatform;
+  final void Function([_XShareMode mode]) onSharePlatform;
 
   @override
   State<_SharePanelOverlay> createState() => _SharePanelOverlayState();
@@ -2948,8 +2972,13 @@ class _SharePanelOverlayState extends State<_SharePanelOverlay> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'This is what will be shared to X',
+              'Choose how to share on X',
               style: TextStyle(color: primary, fontSize: 13, fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Card image: shares the white preview as one photo. Image + text: shares the photo and copies your caption.',
+              style: TextStyle(color: primary.withValues(alpha: 0.65), fontSize: 12, height: 1.4),
             ),
             const SizedBox(height: 12),
             Stack(
@@ -3131,19 +3160,54 @@ class _SharePanelOverlayState extends State<_SharePanelOverlay> {
                 Expanded(child: _buildCaptionEditor(primary)),
               ],
               const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: widget.onSharePlatform,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _shareButtonColor,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              if (_isXCardShare) ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => widget.onSharePlatform(_XShareMode.cardImage),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _shareButtonColor,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text(
+                      'Share as card image',
+                      style: TextStyle(fontWeight: FontWeight.w500),
+                    ),
                   ),
-                  child: const Text('Share', style: TextStyle(fontWeight: FontWeight.w500)),
                 ),
-              ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: () => widget.onSharePlatform(_XShareMode.imageAndCaption),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _shareButtonColor,
+                      side: BorderSide(color: _shareButtonColor),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text(
+                      'Share image + copy text',
+                      style: TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                ),
+              ] else
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => widget.onSharePlatform(),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _shareButtonColor,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text('Share', style: TextStyle(fontWeight: FontWeight.w500)),
+                  ),
+                ),
             ],
           ),
         ),
