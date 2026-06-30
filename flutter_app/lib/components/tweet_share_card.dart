@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 
-import 'pixelated_image_transition.dart';
+import 'share_card_hero_image.dart';
 
 const _kSociTeaLogo = 'assets/images/DEITECIrc-192.webp';
 
@@ -124,13 +124,9 @@ class TweetShareCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(16),
               child: SizedBox(
                 width: width - 40,
-                child: AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: PixelatedImageTransition(
-                    imageUrl: imageUrl,
-                    isLoading: imageLoading,
-                    fit: BoxFit.cover,
-                  ),
+                child: ShareCardHeroImage(
+                  imageUrl: imageUrl,
+                  isLoading: imageLoading,
                 ),
               ),
             ),

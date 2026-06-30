@@ -3089,8 +3089,6 @@ class _SharePanelOverlayState extends State<_SharePanelOverlay> {
     const textTop = cardPadding + headerHeight + headerTextGap;
     final textHeight = _xCardTextHeight(_controller.text, cardWidth);
     final hasImage = widget.xCardImageUrl != null && widget.xCardImageUrl!.trim().isNotEmpty;
-    final imageWidth = cardWidth - 40;
-    final imageHeight = imageWidth * 9 / 16;
     final imageTop = textTop + textHeight + (hasImage ? textImageGap : 0);
 
     return Expanded(

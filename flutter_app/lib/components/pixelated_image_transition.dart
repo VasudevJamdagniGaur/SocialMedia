@@ -9,11 +9,13 @@ class PixelatedImageTransition extends StatefulWidget {
     required this.imageUrl,
     required this.isLoading,
     this.fit = BoxFit.cover,
+    this.alignment = Alignment.center,
   });
 
   final String? imageUrl;
   final bool isLoading;
   final BoxFit fit;
+  final Alignment alignment;
 
   @override
   State<PixelatedImageTransition> createState() => _PixelatedImageTransitionState();
@@ -130,14 +132,22 @@ class _PixelatedImageTransitionState extends State<PixelatedImageTransition>
         final width = constraints.maxWidth;
         final height = constraints.maxHeight;
         if (!width.isFinite || !height.isFinite || width <= 0 || height <= 0) {
-          return HubCarouselHeroImage(imageUrl: url, fit: widget.fit);
+          return HubCarouselHeroImage(
+            imageUrl: url,
+            fit: widget.fit,
+            alignment: widget.alignment,
+          );
         }
 
         return AnimatedBuilder(
           animation: _controller,
           builder: (context, _) {
             return _pixelatedChild(
-              HubCarouselHeroImage(imageUrl: url, fit: widget.fit),
+              HubCarouselHeroImage(
+                imageUrl: url,
+                fit: widget.fit,
+                alignment: widget.alignment,
+              ),
               _controller.value,
               width,
               height,

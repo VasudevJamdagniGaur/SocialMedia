@@ -385,11 +385,13 @@ class HubCarouselHeroImage extends StatelessWidget {
     super.key,
     required this.imageUrl,
     this.fit = BoxFit.cover,
+    this.alignment = Alignment.center,
     this.errorWidget,
   });
 
   final String? imageUrl;
   final BoxFit fit;
+  final Alignment alignment;
   final Widget? errorWidget;
 
   @override
@@ -407,7 +409,7 @@ class HubCarouselHeroImage extends StatelessWidget {
           fit: fit,
           width: double.infinity,
           height: double.infinity,
-          alignment: Alignment.center,
+          alignment: alignment,
         );
       }
       return errorWidget ?? const SizedBox.shrink();
@@ -417,7 +419,7 @@ class HubCarouselHeroImage extends StatelessWidget {
       fit: fit,
       width: double.infinity,
       height: double.infinity,
-      alignment: Alignment.center,
+      alignment: alignment,
       gaplessPlayback: true,
       loadingBuilder: (context, child, progress) {
         if (progress == null) return child;
