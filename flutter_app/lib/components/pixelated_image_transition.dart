@@ -31,7 +31,12 @@ class _PixelatedImageTransitionState extends State<PixelatedImageTransition>
   void initState() {
     super.initState();
     _displayUrl = _normalizedUrl(widget.imageUrl);
-    _controller = AnimationController(vsync: this, duration: _duration);
+    _controller = AnimationController(vsync: this, duration: _duration)
+      ..addStatusListener((status) {
+        if (status == AnimationStatus.dismissed) {
+          _controller.value = 0;
+        }
+      });
   }
 
   @override
@@ -85,21 +90,28 @@ class _PixelatedImageTransitionState extends State<PixelatedImageTransition>
   }
 
   Widget _pixelatedChild(Widget child, double amount, double width, double height) {
-    if (amount <= 0.001) return child;
+    final framed = SizedBox(
+      width: width,
+      height: height,
+      child: ClipRect(child: child),
+    );
+    if (amount <= 0.001) return framed;
 
     final blocks = 1 + amount * 31;
     return SizedBox(
       width: width,
       height: height,
-      child: FittedBox(
-        fit: widget.fit,
-        clipBehavior: Clip.hardEdge,
-        child: SizedBox(
-          width: width / blocks,
-          height: height / blocks,
-          child: FittedBox(
-            fit: widget.fit,
-            child: SizedBox(width: width, height: height, child: child),
+      child: ClipRect(
+        child: FittedBox(
+          fit: BoxFit.fill,
+          clipBehavior: Clip.hardEdge,
+          child: SizedBox(
+            width: width / blocks,
+            height: height / blocks,
+            child: FittedBox(
+              fit: BoxFit.fill,
+              child: SizedBox(width: width, height: height, child: child),
+            ),
           ),
         ),
       ),

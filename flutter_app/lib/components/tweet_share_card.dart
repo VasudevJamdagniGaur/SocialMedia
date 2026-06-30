@@ -50,10 +50,9 @@ class TweetShareCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final h = height ?? (width * 10 / 7);
     return Container(
       width: width,
-      constraints: BoxConstraints(minHeight: h),
+      constraints: height != null ? BoxConstraints(minHeight: height!) : null,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,

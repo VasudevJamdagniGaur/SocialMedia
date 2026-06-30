@@ -402,13 +402,22 @@ class HubCarouselHeroImage extends StatelessWidget {
       final bytes = decodeDataImageUrlBytes(url, logTag: '[ImageGen] render');
       if (bytes != null) {
         debugPrint('[ImageGen] widget render success (HubCarouselHeroImage)');
-        return Image.memory(bytes, fit: fit);
+        return Image.memory(
+          bytes,
+          fit: fit,
+          width: double.infinity,
+          height: double.infinity,
+          alignment: Alignment.center,
+        );
       }
       return errorWidget ?? const SizedBox.shrink();
     }
     return Image.network(
       url,
       fit: fit,
+      width: double.infinity,
+      height: double.infinity,
+      alignment: Alignment.center,
       gaplessPlayback: true,
       loadingBuilder: (context, child, progress) {
         if (progress == null) return child;

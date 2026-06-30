@@ -3043,7 +3043,6 @@ class _SharePanelOverlayState extends State<_SharePanelOverlay> {
                             : () => widget.onEditImage(_controller.text),
                         tooltip: 'Edit image',
                         icon: LucideIcons.pencil,
-                        iconRotation: -0.45,
                       ),
                     ),
                   if (_textMagicPencilLoading)
