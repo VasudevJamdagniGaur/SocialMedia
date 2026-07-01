@@ -158,9 +158,11 @@ class ChatService extends ChangeNotifier {
   ) {
     final platformLabel = platform == 'x'
         ? 'X (Twitter)'
-        : (platform.isEmpty
-              ? ''
-              : '${platform.substring(0, 1).toUpperCase()}${platform.substring(1)}');
+        : platform == 'instagram' || platform == 'reddit'
+            ? 'Instagram'
+            : (platform.isEmpty
+                  ? ''
+                  : '${platform.substring(0, 1).toUpperCase()}${platform.substring(1)}');
 
     final platformStyleGuide = <String, String>{
       'linkedin': '''LINKEDIN STYLE (strict â€” follow all):
@@ -193,9 +195,14 @@ POLISH:
 - Casual, conversational, like r/CasualConversation or a personal story sub.
 - First-person, relatable, authentic. Can be self-deprecating or funny.
 - Natural paragraph flow. No corporate speak. Feels like talking to a friend.''',
+      'instagram': '''INSTAGRAM CAPTION STYLE (strict):
+- Caption voice: personal, visual, and authentic — like you're posting to your feed.
+- First person, relatable, conversational. Short lines or 1-2 tight paragraphs.
+- Emoji sparingly when natural. End with 0-5 relevant hashtags.''',
     };
 
-    final styleGuide = platformStyleGuide[platform] ?? platformStyleGuide['linkedin']!;
+    final normalizedPlatform = platform == 'reddit' ? 'instagram' : platform;
+    final styleGuide = platformStyleGuide[normalizedPlatform] ?? platformStyleGuide['linkedin']!;
     final linkedinReflectionExtra = platform == 'linkedin'
         ? '''
 LinkedIn (extra â€” every post):
@@ -3222,8 +3229,11 @@ Rules:
       'x': 'X: First person. You\'re reacting to something you saw in the news - hot take or quick gut reaction, not a summary. Under 280 characters. 0-2 hashtags. No "breaking:" headline voice.',
       'reddit':
           'REDDIT: You read the story / thread and you\'re chiming in like a real user - opinion + vibe, not a Wikipedia summary. Casual, first-person, can be blunt or funny.',
+      'instagram':
+          'INSTAGRAM: Caption-style reaction to what you saw — personal, visual, conversational. First person, 0-5 hashtags, emoji sparingly.',
     };
-    final style = platformStyleGuide[platform] ?? platformStyleGuide['linkedin']!;
+    final normalizedPlatform = platform == 'reddit' ? 'instagram' : platform;
+    final style = platformStyleGuide[normalizedPlatform] ?? platformStyleGuide['linkedin']!;
 
     final isLinkedInNews = platform == 'linkedin';
     final isXNews = platform == 'x';

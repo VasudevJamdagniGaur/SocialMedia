@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../utils/hub_colors.dart';
 
-/// LinkedIn / X / Reddit selector — matches Share Suggestions styling.
+/// LinkedIn / X / Instagram selector — matches Share Suggestions styling.
 class SharePlatformSelector extends StatelessWidget {
   const SharePlatformSelector({
     super.key,
@@ -53,29 +53,14 @@ class SharePlatformSelector extends StatelessWidget {
         ),
         SizedBox(width: gap),
         SharePlatformButton(
-          id: 'reddit',
-          selected: platform == 'reddit',
+          id: 'instagram',
+          selected: platform == 'instagram' || platform == 'reddit',
           compact: compact,
           isDarkMode: isDarkMode,
-          onTap: () => onChanged('reddit'),
-          child: ColorFiltered(
-            colorFilter: const ColorFilter.matrix([
-              0.2126, 0.7152, 0.0722, 0, 0,
-              0.2126, 0.7152, 0.0722, 0, 0,
-              0.2126, 0.7152, 0.0722, 0, 0,
-              0, 0, 0, 0.92, 0,
-            ]),
-            child: Image.asset(
-              'assets/images/reddit-logo-mono.webp',
-              width: compact ? 24 : 31,
-              height: compact ? 24 : 31,
-              fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) => Icon(
-                Icons.forum,
-                color: Colors.white.withValues(alpha: 0.85),
-                size: compact ? 18 : 22,
-              ),
-            ),
+          onTap: () => onChanged('instagram'),
+          child: CustomPaint(
+            size: Size(compact ? 20 : 24, compact ? 20 : 24),
+            painter: ShareInstagramLogoPainter(color: Colors.white.withValues(alpha: 0.92)),
           ),
         ),
       ],
@@ -143,6 +128,40 @@ class SharePlatformButton extends StatelessWidget {
   }
 }
 
+class ShareInstagramLogoPainter extends CustomPainter {
+  ShareInstagramLogoPainter({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final stroke = size.width * 0.09;
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final pad = size.width * 0.1;
+    final outer = RRect.fromRectAndRadius(
+      Rect.fromLTWH(pad, pad, size.width - pad * 2, size.height - pad * 2),
+      Radius.circular(size.width * 0.24),
+    );
+    canvas.drawRRect(outer, paint);
+    canvas.drawCircle(Offset(size.width / 2, size.height / 2), size.width * 0.19, paint);
+    canvas.drawCircle(
+      Offset(size.width * 0.73, size.height * 0.27),
+      size.width * 0.045,
+      Paint()..color = color,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant ShareInstagramLogoPainter oldDelegate) =>
+      oldDelegate.color != color;
+}
+
 class ShareXLogoPainter extends CustomPainter {
   ShareXLogoPainter({required this.color});
 
@@ -181,8 +200,9 @@ String sharePlatformLabel(String platform) {
     case 'x':
     case 'twitter':
       return 'X';
+    case 'instagram':
     case 'reddit':
-      return 'Reddit';
+      return 'Instagram';
     default:
       return platform;
   }

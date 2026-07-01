@@ -21,6 +21,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../components/pixelated_image_transition.dart';
+import '../components/share_platform_selector.dart';
 import '../components/skeleton/list_skeleton.dart';
 import '../components/skeleton/skeleton.dart';
 import '../components/tweet_share_card.dart';
@@ -56,7 +57,8 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
   static const _platformLabels = {
     'linkedin': 'LinkedIn',
     'x': 'X',
-    'reddit': 'Reddit',
+    'instagram': 'Instagram',
+    'reddit': 'Instagram',
   };
 
   String _platform = 'linkedin';
@@ -216,6 +218,7 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
       _reflection = (extra['reflection'] as String? ?? '').trim();
       _syncReflectionController(force: true);
       _platform = extra['platform'] as String? ?? 'linkedin';
+      if (_platform == 'reddit') _platform = 'instagram';
       _returnTo = extra['returnTo'] as String? ?? AppRoutes.dashboard;
       _suggestionsOnly = extra['suggestionsOnly'] == true;
       _autoOpenSharePanel = extra['autoOpenSharePanel'] == true;
@@ -888,9 +891,10 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
   }
 
   void _onPlatformChanged(String platform) {
-    if (_platform == platform) return;
+    final next = platform == 'reddit' ? 'instagram' : platform;
+    if (_platform == next) return;
     setState(() {
-      _platform = platform;
+      _platform = next;
       _generatedShareImageUrl = null;
       _invalidateXShareAssets();
     });
@@ -1713,7 +1717,7 @@ User changes: $instruction''',
 
   Future<void> _openPlatformShare([_XShareMode xShareMode = _XShareMode.cardImage]) async {
     final text = _panelShareText;
-    final isLinkedIn = _platform != 'x' && _platform != 'reddit';
+    final isLinkedIn = _platform != 'x' && _platform != 'reddit' && _platform != 'instagram';
 
     if (isLinkedIn) {
       if (text.trim().isEmpty && !_hasShareableLinkedInImage()) {
@@ -1757,12 +1761,9 @@ User changes: $instruction''',
             );
           }
           break;
+        case 'instagram':
         case 'reddit':
-          opened = await _tryLaunchShareUri(
-            Uri.parse(
-              'https://www.reddit.com/submit?title=${Uri.encodeComponent('My reflection')}&selftext=${Uri.encodeComponent(text)}',
-            ),
-          );
+          opened = await _openImageWithCaptionShare(text, platformLabel: 'Instagram');
           break;
         default:
           opened = await _openLinkedInNativeShare(text);
@@ -2052,10 +2053,12 @@ User changes: $instruction''',
                           suggestionsOnly: _suggestionsOnly,
                         ),
                             const SizedBox(height: 24),
-                        _PlatformSelector(
-                          platform: _platform,
-                          isDarkMode: isDarkMode,
-                          onChanged: _onPlatformChanged,
+                        Center(
+                          child: SharePlatformSelector(
+                            platform: _platform,
+                            isDarkMode: isDarkMode,
+                            onChanged: _onPlatformChanged,
+                          ),
                         ),
                             const SizedBox(height: 12),
                         Text(
@@ -2509,170 +2512,6 @@ class _EditableReflectionFieldState extends State<_EditableReflectionField> {
       ),
     );
   }
-}
-
-class _PlatformSelector extends StatelessWidget {
-  const _PlatformSelector({
-    required this.platform,
-    required this.isDarkMode,
-    required this.onChanged,
-  });
-
-  final String platform;
-  final bool isDarkMode;
-  final ValueChanged<String> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _PlatformButton(
-          id: 'linkedin',
-          selected: platform == 'linkedin',
-          isDarkMode: isDarkMode,
-          onTap: () => onChanged('linkedin'),
-          child: Text(
-            'in',
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.92),
-              fontSize: 24,
-              fontWeight: FontWeight.w600,
-              height: 1,
-            ),
-          ),
-        ),
-        const SizedBox(width: 20),
-        _PlatformButton(
-          id: 'x',
-          selected: platform == 'x',
-          isDarkMode: isDarkMode,
-          onTap: () => onChanged('x'),
-          child: CustomPaint(
-            size: const Size(18, 18),
-            painter: _XLogoPainter(color: Colors.white.withValues(alpha: 0.92)),
-          ),
-        ),
-        const SizedBox(width: 20),
-        _PlatformButton(
-          id: 'reddit',
-          selected: platform == 'reddit',
-          isDarkMode: isDarkMode,
-          onTap: () => onChanged('reddit'),
-          child: ColorFiltered(
-            colorFilter: const ColorFilter.matrix([
-              0.2126, 0.7152, 0.0722, 0, 0,
-              0.2126, 0.7152, 0.0722, 0, 0,
-              0.2126, 0.7152, 0.0722, 0, 0,
-              0, 0, 0, 0.92, 0,
-            ]),
-            child: Image.asset(
-              'assets/images/reddit-logo-mono.webp',
-              width: 31,
-              height: 31,
-              fit: BoxFit.contain,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _PlatformButton extends StatelessWidget {
-  const _PlatformButton({
-    required this.id,
-    required this.selected,
-    required this.isDarkMode,
-    required this.onTap,
-    required this.child,
-  });
-
-  final String id;
-  final bool selected;
-  final bool isDarkMode;
-  final VoidCallback onTap;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          width: 48,
-          height: 48,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: selected
-                ? HubColors.accent.withValues(alpha: 0.16)
-                : Colors.white.withValues(alpha: isDarkMode ? 0.04 : 0.8),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: selected
-                  ? HubColors.accent
-                  : Colors.white.withValues(alpha: isDarkMode ? 0.06 : 0.12),
-              width: 2,
-            ),
-            boxShadow: selected
-                ? [
-                    BoxShadow(
-                      color: HubColors.accent.withValues(alpha: 0.18),
-                      blurRadius: 0,
-                      spreadRadius: 3,
-                    ),
-                  ]
-                : null,
-          ),
-          child: Opacity(
-            opacity: selected ? 1 : 0.72,
-            child: child,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _XLogoPainter extends CustomPainter {
-  _XLogoPainter({required this.color});
-
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = color;
-    final scale = size.width / 24;
-    final path = Path()
-      ..moveTo(18.244 * scale, 2 * scale)
-      ..lineTo(21.62 * scale, 2 * scale)
-      ..lineTo(14.24 * scale, 10.436 * scale)
-      ..lineTo(22.92 * scale, 22 * scale)
-      ..lineTo(16.12 * scale, 22 * scale)
-      ..lineTo(10.8 * scale, 15.04 * scale)
-      ..lineTo(4.69 * scale, 22 * scale)
-      ..lineTo(1.31 * scale, 22 * scale)
-      ..lineTo(9.21 * scale, 12.96 * scale)
-      ..lineTo(1.08 * scale, 2 * scale)
-      ..lineTo(8.05 * scale, 2 * scale)
-      ..lineTo(12.86 * scale, 8.3 * scale)
-      ..close();
-    canvas.drawPath(path, paint);
-
-    final path2 = Path()
-      ..moveTo(17.054 * scale, 20 * scale)
-      ..lineTo(18.924 * scale, 20 * scale)
-      ..lineTo(6.99 * scale, 3.95 * scale)
-      ..lineTo(4.98 * scale, 3.95 * scale)
-      ..close();
-    canvas.drawPath(path2, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _XLogoPainter oldDelegate) => oldDelegate.color != color;
 }
 
 class _SuggestionCard extends StatelessWidget {
@@ -3173,8 +3012,9 @@ class _SharePanelOverlayState extends State<_SharePanelOverlay> {
         return const Color(0xFF0A66C2);
       case 'x':
         return const Color(0xFF1D9BF0);
+      case 'instagram':
       case 'reddit':
-        return const Color(0xFFFF4500);
+        return const Color(0xFFE1306C);
       default:
         return HubColors.divider;
     }
@@ -3430,8 +3270,9 @@ class _ShareConfirmBanner extends StatelessWidget {
         return 'LinkedIn';
       case 'x':
         return 'X';
+      case 'instagram':
       case 'reddit':
-        return 'Reddit';
+        return 'Instagram';
       default:
         return platform;
     }
