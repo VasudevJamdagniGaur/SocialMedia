@@ -831,7 +831,7 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
       } else {
         items = await ChatService.instance
             .generateSocialPostSuggestions(_reflection, _platform)
-            .timeout(const Duration(seconds: 90));
+            .timeout(const Duration(seconds: 100));
       }
 
       if (!mounted) return;

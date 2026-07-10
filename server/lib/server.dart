@@ -21,7 +21,7 @@ Future<void> runServer() async {
     ..mount('/', buildNewsRouter().call)
     ..mount('/', buildRedditProxyRouter().call)
     ..mount('/', buildYouTubeRouter().call)
-    ..mount('/', buildSuggestionsRouter().call)
+    ..mount('/', buildSuggestionsRouter(vertex).call)
     ..mount('/', buildArticleRouter().call)
     ..mount('/', buildAccountRouter().call);
 

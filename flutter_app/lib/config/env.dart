@@ -56,9 +56,10 @@ class Env {
       vertexBackendUrl.trim(),
       vertexGeminiUrl.trim(),
     ]) {
-      if (candidate.isNotEmpty) {
-        return candidate.replaceAll(RegExp(r'/$'), '');
-      }
+      if (candidate.isEmpty) continue;
+      // Legacy Render service stuck on broken GCP project — never use it.
+      if (candidate.contains('detea-backend.onrender.com')) continue;
+      return candidate.replaceAll(RegExp(r'/$'), '');
     }
     // Local Flutter web → Express reddit proxy (see express-backend/)
     if (kIsWeb) {

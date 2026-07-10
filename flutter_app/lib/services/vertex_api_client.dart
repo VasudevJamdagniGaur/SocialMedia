@@ -20,12 +20,19 @@ class VertexApiClient {
   static const String _googleTextModel = 'gemini-2.5-flash';
   static const String _googleImageModel = 'gemini-2.0-flash-preview-image-generation';
   static const String _brokenGcpProject = 'offgrid-492919';
+  static const String _legacyBrokenHost = 'detea-backend.onrender.com';
 
   String get _googleApiKey => Env.googleApiKey.trim();
   bool get _hasGoogleApiKey => _googleApiKey.isNotEmpty;
 
   /// Always [Env.baseUrl] — set via `BACKEND_URL` / `--dart-define-from-file`.
-  String get baseUrl => Env.baseUrl;
+  String get baseUrl {
+    final raw = Env.baseUrl;
+    if (raw.contains(_legacyBrokenHost)) {
+      return 'https://socitea.onrender.com';
+    }
+    return raw;
+  }
 
   bool get isConfigured => true; // Firebase AI always available as last resort
 
@@ -382,9 +389,11 @@ ${jsonEncode(chatData ?? const [])}''';
       Env.backendUrl.trim(),
       Env.vertexBackendUrl.trim(),
       Env.vertexGeminiUrl.trim(),
-      Env.baseUrl,
+      baseUrl,
+      'https://socitea.onrender.com',
     ]) {
       if (candidate.isEmpty) continue;
+      if (candidate.contains(_legacyBrokenHost)) continue;
       final normalized = candidate.replaceAll(RegExp(r'/$'), '');
       if (seen.add(normalized)) urls.add(normalized);
     }

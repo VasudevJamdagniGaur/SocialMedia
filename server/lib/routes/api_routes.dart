@@ -9,16 +9,19 @@ import 'package:shelf_router/shelf_router.dart';
 import '../config.dart';
 import '../services/firestore_client.dart';
 import '../utils/http_utils.dart';
+import '../vertex/vertex_client.dart';
 import 'news_routes.dart' show apiCorsHeaders;
 
 final _firestore = FirestoreClient();
 
-/// OpenAI share suggestions — port of handleLinkedInSuggestions in functions/src/index.ts
-Router buildSuggestionsRouter() {
+/// Share suggestions via OpenAI when configured, otherwise Vertex Gemini.
+Router buildSuggestionsRouter(VertexClient vertex) {
   final router = Router();
 
-  router.post('/api/linkedin/suggestions', _handleSuggestions);
-  router.post('/suggestions', _handleSuggestions);
+  Future<Response> handle(Request req) => _handleSuggestions(req, vertex);
+
+  router.post('/api/linkedin/suggestions', handle);
+  router.post('/suggestions', handle);
 
   return router;
 }
@@ -211,7 +214,24 @@ List<Map<String, String>> _parseSuggestionPosts(String raw, String reflection) {
         ];
 }
 
-Future<Response> _handleSuggestions(Request req) async {
+Future<List<Map<String, String>>> _generateSuggestionsWithVertex(
+  VertexClient vertex,
+  String reflection,
+  String platform,
+) async {
+  final prompt = _buildSuggestionsPrompt(reflection, platform);
+  final isX = platform == 'x';
+  final raw = await vertex.generateText(
+    prompt,
+    temperature: isX ? 0.78 : 0.5,
+    maxOutputTokens: isX ? 3500 : 2400,
+  );
+  return isX
+      ? _parseXContentSuggestionsJson(raw, reflection)
+      : _parseSuggestionPosts(raw, reflection);
+}
+
+Future<Response> _handleSuggestions(Request req, VertexClient vertex) async {
   if (req.method == 'OPTIONS') return Response(204, headers: apiCorsHeaders);
   if (req.method != 'POST') return jsonError(405, 'Method not allowed');
 
@@ -221,18 +241,28 @@ Future<Response> _handleSuggestions(Request req) async {
   final reflection = (body['reflection'] as String? ?? '').trim();
   final platform = (body['platform'] as String? ?? 'linkedin').toLowerCase();
   if (reflection.isEmpty) return jsonError(400, 'Missing reflection');
-  if (!['linkedin', 'x', 'reddit'].contains(platform)) {
+  if (!['linkedin', 'x', 'reddit', 'instagram'].contains(platform)) {
     return jsonError(400, 'Invalid platform');
   }
 
   final apiKey = ServerConfig.openAiApiKey;
-  if (apiKey == null || apiKey.isEmpty) {
-    return jsonError(500, 'OPENAI_API_KEY is not set on backend');
-  }
-
   final wantsStream = req.url.queryParameters['stream'] == '1';
   final prompt = _buildSuggestionsPrompt(reflection, platform);
   final isX = platform == 'x';
+  final hasOpenAi = apiKey != null && apiKey.isNotEmpty;
+
+  // Prefer Vertex when OpenAI is not configured (Render socitea setup).
+  if (!hasOpenAi) {
+    try {
+      final posts = await _generateSuggestionsWithVertex(vertex, reflection, platform);
+      if (wantsStream && !isX) {
+        return _streamVertexSuggestionsResult(posts);
+      }
+      return jsonOk({'posts': posts, 'provider': 'vertex'});
+    } catch (e) {
+      return jsonError(500, 'Suggestions failed', details: '$e');
+    }
+  }
 
   if (wantsStream && !isX) {
     return _streamSuggestions(apiKey, prompt);
@@ -256,11 +286,17 @@ Future<Response> _handleSuggestions(Request req) async {
       }),
     );
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      return jsonError(
-        500,
-        'OpenAI error ${res.statusCode}',
-        details: res.body.substring(0, res.body.length.clamp(0, 150)),
-      );
+      // Fall back to Vertex if OpenAI fails.
+      try {
+        final posts = await _generateSuggestionsWithVertex(vertex, reflection, platform);
+        return jsonOk({'posts': posts, 'provider': 'vertex'});
+      } catch (_) {
+        return jsonError(
+          500,
+          'OpenAI error ${res.statusCode}',
+          details: res.body.substring(0, res.body.length.clamp(0, 150)),
+        );
+      }
     }
     final data = jsonDecode(res.body) as Map<String, dynamic>;
     final raw =
@@ -268,10 +304,47 @@ Future<Response> _handleSuggestions(Request req) async {
     final posts = isX
         ? _parseXContentSuggestionsJson(raw, reflection)
         : _parseSuggestionPosts(raw, reflection);
-    return jsonOk({'posts': posts});
+    return jsonOk({'posts': posts, 'provider': 'openai'});
   } catch (e) {
-    return jsonError(500, 'Suggestions failed', details: '$e');
+    try {
+      final posts = await _generateSuggestionsWithVertex(vertex, reflection, platform);
+      return jsonOk({'posts': posts, 'provider': 'vertex'});
+    } catch (_) {
+      return jsonError(500, 'Suggestions failed', details: '$e');
+    }
   }
+}
+
+Response _streamVertexSuggestionsResult(List<Map<String, String>> posts) {
+  final controller = StreamController<List<int>>();
+
+  Future<void> run() async {
+    try {
+      controller.add(utf8.encode('event: ready\ndata: ${jsonEncode({'ok': true})}\n\n'));
+      final raw = posts
+          .map((p) => 'EVENT: ${p['eventLabel'] ?? 'Moment'}\n${p['post'] ?? ''}')
+          .join('\n\n---\n\n');
+      controller.add(utf8.encode('event: delta\ndata: ${jsonEncode({'text': raw})}\n\n'));
+      controller.add(utf8.encode('event: done\ndata: ${jsonEncode({'posts': posts})}\n\n'));
+    } catch (e) {
+      controller.add(
+        utf8.encode('event: error\ndata: ${jsonEncode({'error': '$e'})}\n\n'),
+      );
+    } finally {
+      await controller.close();
+    }
+  }
+
+  run();
+  return Response.ok(
+    controller.stream,
+    headers: {
+      ...apiCorsHeaders,
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    },
+  );
 }
 
 Response _streamSuggestions(String apiKey, String prompt) {

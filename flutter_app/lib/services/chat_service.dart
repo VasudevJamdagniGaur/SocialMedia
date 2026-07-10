@@ -144,11 +144,13 @@ class ChatService extends ChangeNotifier {
     double temperature = 0.65,
     int maxOutputTokens = 1024,
     Object? signal,
+    Duration? timeout,
   }) async {
     return vertexGenerateContentDirect(
       prompt: prompt,
       temperature: temperature,
       maxOutputTokens: maxOutputTokens,
+      timeout: timeout ?? const Duration(seconds: 75),
     );
   }
 
@@ -1886,6 +1888,7 @@ $text""";
     add(Env.backendUrl.trim());
     add(Env.baseUrl);
     add(getVertexBackendBaseUrl());
+    add('https://socitea.onrender.com');
 
     var origin = '';
     if (kIsWeb) {
@@ -1901,7 +1904,7 @@ $text""";
         origin.startsWith('ionic://') ||
         origin.startsWith('file://');
     if (!originLooksLocal) add(origin);
-    return bases;
+    return bases.where((b) => !b.contains('detea-backend.onrender.com')).toList();
   }
 
   Future<http.Response> _postShareSuggestionsApi(
@@ -1917,29 +1920,32 @@ $text""";
     );
     final body = jsonEncode({'reflection': reflection.trim(), 'platform': platform});
 
-    for (var attempt = 0; attempt < 2; attempt++) {
-      try {
-        final res = await http
+    try {
+      final res = await http
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: body,
+          )
+          .timeout(const Duration(seconds: 90));
+      // Do not retry permanent config errors (e.g. missing OPENAI before Vertex fallback deploy).
+      final errBody = res.body.toLowerCase();
+      if (res.statusCode >= 500 &&
+          !errBody.contains('openai_api_key') &&
+          !errBody.contains('invalid platform')) {
+        await Future<void>.delayed(const Duration(seconds: 2));
+        return http
             .post(
               uri,
               headers: {'Content-Type': 'application/json'},
               body: body,
             )
-            .timeout(Duration(seconds: attempt == 0 ? 50 : 75));
-        if (res.statusCode >= 500 && attempt == 0) {
-          await Future<void>.delayed(const Duration(seconds: 4));
-          continue;
-        }
-        return res;
-      } catch (e) {
-        if (attempt == 0) {
-          await Future<void>.delayed(const Duration(seconds: 4));
-          continue;
-        }
-        rethrow;
+            .timeout(const Duration(seconds: 90));
       }
+      return res;
+    } catch (e) {
+      rethrow;
     }
-    throw Exception('Suggestions API unreachable: $uri');
   }
 
   List<Map<String, String>> _parseSuggestionsApiPosts(
@@ -2021,8 +2027,21 @@ $text""";
   List<Map<String, String>> _reflectionSuggestionFallback(String reflection) {
     final trimmed = reflection.trim();
     if (trimmed.isEmpty) return [];
+    final clean = sanitizeSocialPostText(trimmed);
     return [
-      {'eventLabel': 'Reflection', 'post': sanitizeSocialPostText(trimmed)},
+      {'eventLabel': 'What happened', 'post': clean},
+      {
+        'eventLabel': 'Quick take',
+        'post': sanitizeSocialPostText(
+          'Quick take: $clean\n\nWhat stood out to you?',
+        ),
+      },
+      {
+        'eventLabel': 'Share-ready',
+        'post': sanitizeSocialPostText(
+          '$clean\n\nCurious what others think — drop a comment.',
+        ),
+      },
     ];
   }
 
@@ -2033,9 +2052,7 @@ $text""";
       if (trimmed.isEmpty) return [];
 
       if (platform == 'x') {
-        final fallback = [
-          {'eventLabel': 'Reflection', 'post': sanitizeSocialPostText(trimmed)},
-        ];
+        final fallback = _reflectionSuggestionFallback(trimmed);
         var items = await _generateXContentSuggestions(
           userContent: _buildXReflectionSuggestionsUserContent(trimmed),
           fallback: fallback,
@@ -2045,38 +2062,33 @@ $text""";
           final apiItems = await _fetchShareSuggestionsFromApi(trimmed, 'x');
           if (apiItems.isNotEmpty) items = apiItems;
         }
-        return items;
+        return items.isNotEmpty ? items : fallback;
       }
 
       final sharePrompt = _buildReflectionShareSuggestionsPrompt(reflection, platform);
 
       // Primary path: Vertex /generateContent on BACKEND_URL.
       if (isVertexBackendConfigured()) {
-        for (var attempt = 0; attempt < 2; attempt++) {
-          try {
-            final raw = await callVertexGenerateContent(
-              prompt: sharePrompt,
-              temperature: 0.5,
-              maxOutputTokens: 4096,
-            ).timeout(Duration(seconds: attempt == 0 ? 75 : 90));
-            final parsed = _parseShareSuggestionModelOutput(raw.trim(), reflection);
-            if (parsed.isNotEmpty) return parsed;
-            lastErr = Exception('Vertex returned empty share suggestions');
-          } catch (vertexErr) {
-            lastErr = vertexErr is Exception ? vertexErr : Exception(vertexErr.toString());
-            if (attempt == 0) {
-              await Future<void>.delayed(const Duration(seconds: 3));
-              continue;
-            }
-          }
+        try {
+          final raw = await callVertexGenerateContent(
+            prompt: sharePrompt,
+            temperature: 0.5,
+            maxOutputTokens: 4096,
+          ).timeout(const Duration(seconds: 75));
+          final parsed = _parseShareSuggestionModelOutput(raw.trim(), reflection);
+          if (parsed.isNotEmpty) return parsed;
+          lastErr = Exception('Vertex returned empty share suggestions');
+        } catch (vertexErr) {
+          lastErr = vertexErr is Exception ? vertexErr : Exception(vertexErr.toString());
         }
       }
 
-      // Dedicated suggestions API on the Dart backend.
+      // Dedicated suggestions API on the Dart backend (Vertex or OpenAI).
       final candidates = _shareSuggestionsApiBases();
 
       for (final apiBase in candidates) {
         if (apiBase.isEmpty) continue;
+        if (apiBase.contains('detea-backend.onrender.com')) continue;
         try {
           final res = await _postShareSuggestionsApi(apiBase, reflection, platform);
 
