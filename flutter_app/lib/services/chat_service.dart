@@ -1669,7 +1669,7 @@ Assistant:""";
           final msg = fetchError.toString();
           if (msg.contains('Failed to fetch') || msg.contains('NetworkError')) {
             throw Exception(
-              'Unable to connect to the backend. Check BACKEND_URL (https://detea-backend.onrender.com).',
+              'Unable to connect to the backend. Check BACKEND_URL (${Env.baseUrl}).',
             );
           }
           if (msg.contains('depleted') || msg.contains('RESOURCE_EXHAUSTED')) {
@@ -1883,8 +1883,9 @@ $text""";
       bases.add(b);
     }
 
-    add(getVertexBackendBaseUrl());
+    add(Env.backendUrl.trim());
     add(Env.baseUrl);
+    add(getVertexBackendBaseUrl());
 
     var origin = '';
     if (kIsWeb) {
@@ -2597,6 +2598,7 @@ $text""";
     }
 
     final apiBases = <String>[
+      Env.baseUrl,
       Env.backendUrl.trim(),
       'https://deitedatabase.web.app',
       'https://deitedatabase.firebaseapp.com',

@@ -2,9 +2,7 @@
 import 'package:http/http.dart' as http;
 import '../config/env.dart';
 
-/// Mirrors src/services/apiClient.js
-const defaultBaseUrl = 'https://detea-backend.onrender.com';
-
+/// Mirrors src/services/apiClient.js — always uses [Env.baseUrl] (`BACKEND_URL`).
 String get baseUrl => Env.baseUrl;
 
 Future<Map<String, dynamic>> fetchJson(

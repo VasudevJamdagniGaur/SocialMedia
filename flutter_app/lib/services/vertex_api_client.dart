@@ -15,7 +15,6 @@ class VertexApiClient {
 
   static final VertexApiClient instance = VertexApiClient._();
 
-  static const String defaultBaseUrl = 'https://socitea-backend.onrender.com';
   static const String _googleApiBase = 'https://generativelanguage.googleapis.com';
   static const String _googleTextModel = 'gemini-2.5-flash';
   static const String _googleImageModel = 'gemini-2.0-flash-preview-image-generation';
@@ -23,24 +22,14 @@ class VertexApiClient {
   String get _googleApiKey => Env.googleApiKey.trim();
   bool get _hasGoogleApiKey => _googleApiKey.isNotEmpty;
 
-  String get baseUrl {
-    final candidates = [
-      Env.backendUrl.trim(),
-      Env.vertexBackendUrl.trim(),
-      Env.vertexGeminiUrl.trim(),
-      defaultBaseUrl,
-    ];
-    for (final c in candidates) {
-      if (c.isNotEmpty) return c.replaceAll(RegExp(r'/$'), '');
-    }
-    return defaultBaseUrl;
-  }
+  /// Always [Env.baseUrl] — set via `BACKEND_URL` / `--dart-define-from-file`.
+  String get baseUrl => Env.baseUrl;
 
   bool get isConfigured => _hasBackend || _hasGoogleApiKey;
 
   bool get _hasBackend => baseUrl.isNotEmpty;
 
-  String getVertexBackendBaseUrl() => _hasBackend ? baseUrl : (_hasGoogleApiKey ? _googleApiBase : defaultBaseUrl);
+  String getVertexBackendBaseUrl() => baseUrl;
 
   bool isVertexBackendConfigured() => isConfigured;
 
@@ -290,13 +279,11 @@ ${jsonEncode(chatData ?? const [])}''';
       Env.backendUrl.trim(),
       Env.vertexBackendUrl.trim(),
       Env.vertexGeminiUrl.trim(),
+      Env.baseUrl,
     ]) {
       if (candidate.isEmpty) continue;
       final normalized = candidate.replaceAll(RegExp(r'/$'), '');
       if (seen.add(normalized)) urls.add(normalized);
-    }
-    if (urls.isEmpty && seen.add(defaultBaseUrl)) {
-      urls.add(defaultBaseUrl);
     }
     return urls;
   }

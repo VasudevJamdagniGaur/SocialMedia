@@ -1,16 +1,23 @@
 ﻿import 'package:flutter/foundation.dart';
 
 /// Compile-time environment configuration via `--dart-define`.
+///
+/// Backend host comes only from [backendUrl] (`BACKEND_URL`). Use:
+/// `flutter run --dart-define-from-file=../.env`
 class Env {
   Env._();
 
   static const String openAiApiKey = String.fromEnvironment('OPENAI_API_KEY');
   static const String grokApiKey = String.fromEnvironment('GROK_API_KEY');
   static const String googleApiKey = String.fromEnvironment('GOOGLE_API_KEY');
+
+  /// Primary backend for chat, images, news proxy, suggestions, etc.
   static const String backendUrl = String.fromEnvironment(
     'BACKEND_URL',
-    defaultValue: 'https://socitea-backend.onrender.com',
+    defaultValue: 'https://detea-backend.onrender.com',
   );
+
+  /// Optional overrides; empty means "use [backendUrl]".
   static const String vertexBackendUrl = String.fromEnvironment(
     'VERTEX_BACKEND_URL',
     defaultValue: '',
@@ -42,9 +49,17 @@ class Env {
   );
   static const String youtubeApiKey = String.fromEnvironment('YOUTUBE_API_KEY');
 
+  /// Normalized backend origin used by all HTTP clients.
   static String get baseUrl {
-    final configured = backendUrl.trim();
-    if (configured.isNotEmpty) return configured;
+    for (final candidate in [
+      backendUrl.trim(),
+      vertexBackendUrl.trim(),
+      vertexGeminiUrl.trim(),
+    ]) {
+      if (candidate.isNotEmpty) {
+        return candidate.replaceAll(RegExp(r'/$'), '');
+      }
+    }
     // Local Flutter web → Express reddit proxy (see express-backend/)
     if (kIsWeb) {
       final host = Uri.base.host;
@@ -52,6 +67,6 @@ class Env {
         return 'http://localhost:3002';
       }
     }
-    return 'https://socitea-backend.onrender.com';
+    return 'https://detea-backend.onrender.com';
   }
 }
