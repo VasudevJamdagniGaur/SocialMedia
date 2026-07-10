@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:deite_server/server.dart';
@@ -25,6 +26,28 @@ Future<void> main() async {
   final creds = ServerConfig.env('GOOGLE_CREDENTIALS');
   if (creds != null && creds.isNotEmpty) {
     await File('service-account.json').writeAsString(creds);
+    try {
+      final decoded = jsonDecode(creds);
+      if (decoded is Map) {
+        final projectId = '${decoded['project_id'] ?? ''}'.trim();
+        if (projectId.isNotEmpty && projectId != 'offgrid-492919') {
+          // Override stale Render GOOGLE_CLOUD_PROJECT with the SA's real project.
+          ServerConfig.setLocalEnv('GOOGLE_CLOUD_PROJECT', projectId);
+        }
+      }
+    } catch (e) {
+      stderr.writeln('[boot] Could not parse GOOGLE_CREDENTIALS project_id: $e');
+    }
+  }
+
+  final resolved = ServerConfig.projectId;
+  final envProject = Platform.environment['GOOGLE_CLOUD_PROJECT']?.trim();
+  if (envProject != null &&
+      envProject.isNotEmpty &&
+      envProject != resolved) {
+    stdout.writeln(
+      '[boot] Ignoring GOOGLE_CLOUD_PROJECT=$envProject; using $resolved from service account',
+    );
   }
 
   await runServer();

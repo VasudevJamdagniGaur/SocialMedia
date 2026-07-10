@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 /// Server configuration from environment (mirrors backend-vertex/lib/config.js + functions env).
@@ -5,6 +6,10 @@ class ServerConfig {
   ServerConfig._();
 
   static final Map<String, String> _localEnv = {};
+
+  /// Stale GCP project that must never be used for Vertex (broken / invalid consumer).
+  static const String _legacyBrokenProjectId = 'offgrid-492919';
+  static const String _defaultVertexProjectId = 'my-socitea';
 
   /// Local `.env` overrides (dev only). Render/production uses [Platform.environment].
   static void setLocalEnv(String key, String value) {
@@ -19,7 +24,32 @@ class ServerConfig {
     return null;
   }
 
-  static String get projectId => env('GOOGLE_CLOUD_PROJECT') ?? 'my-socitea';
+  static String? _sanitizeProjectId(String? raw) {
+    final id = raw?.trim() ?? '';
+    if (id.isEmpty) return null;
+    if (id == _legacyBrokenProjectId) return null;
+    return id;
+  }
+
+  /// Prefer `project_id` from the service-account JSON so a stale Render
+  /// `GOOGLE_CLOUD_PROJECT=offgrid-492919` cannot keep breaking Vertex.
+  static String? projectIdFromCredentialsFile() {
+    try {
+      final path = credentialsPath;
+      final file = File(path);
+      if (!file.existsSync()) return null;
+      final decoded = jsonDecode(file.readAsStringSync());
+      if (decoded is! Map) return null;
+      return _sanitizeProjectId('${decoded['project_id'] ?? ''}');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static String get projectId =>
+      projectIdFromCredentialsFile() ??
+      _sanitizeProjectId(env('GOOGLE_CLOUD_PROJECT')) ??
+      _defaultVertexProjectId;
 
   /// Firebase / Firestore project (deitedatabase) — may differ from Vertex GCP project.
   static String get firestoreProjectId {
