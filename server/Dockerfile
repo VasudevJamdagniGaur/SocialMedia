@@ -11,5 +11,7 @@ RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/
 WORKDIR /app
 COPY --from=build /app/bin/server /app/server
 ENV PORT=3002
+ENV GOOGLE_CLOUD_PROJECT=my-socitea
+ENV GOOGLE_APPLICATION_CREDENTIALS=/app/service-account.json
 EXPOSE 3002
 CMD ["/app/server"]

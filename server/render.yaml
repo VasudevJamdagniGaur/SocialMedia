@@ -1,12 +1,14 @@
-# Render — Dart backend (replaces backend-vertex Node service)
-# Set Root Directory to `server` in Render dashboard.
-# Required env on Render:
-#   GOOGLE_CLOUD_PROJECT=my-socitea
-#   GOOGLE_CREDENTIALS=<full service-account JSON>  (written to service-account.json at boot)
-#   FIREBASE_PROJECT_ID=deitedatabase
+# Render — Dart backend
+# IMPORTANT: For detea-backend.onrender.com, set in Render dashboard:
+#   Root Directory = server
+#   Runtime = Docker
+#   Branch = THE-GREAT-FLUTTER-DIVERSION (or main, whichever you deploy)
+#   GOOGLE_CLOUD_PROJECT = my-socitea
+#   GOOGLE_CREDENTIALS = <full my-socitea service-account JSON>
+# After deploy, /health MUST include "runtime":"dart" and "project":"my-socitea"
 services:
   - type: web
-    name: socitea-backend
+    name: detea-backend
     runtime: docker
     plan: free
     dockerfilePath: ./Dockerfile
@@ -20,3 +22,8 @@ services:
         value: us-central1
       - key: VERTEX_GEMINI_MODEL
         value: gemini-2.5-flash
+      - key: GOOGLE_APPLICATION_CREDENTIALS
+        value: /app/service-account.json
+      # Set GOOGLE_CREDENTIALS in the Render dashboard (secret) — do not commit JSON here.
+      - key: GOOGLE_CREDENTIALS
+        sync: false

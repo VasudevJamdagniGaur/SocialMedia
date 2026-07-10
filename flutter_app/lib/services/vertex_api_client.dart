@@ -5,11 +5,12 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../config/env.dart';
+import 'firebase_gemini_client.dart';
 import 'render_backend_queue.dart';
 
 /// HTTP client for the Vertex AI Express backend (Render).
-/// AI text/image goes through [baseUrl] when configured; [GOOGLE_API_KEY] is optional fallback.
-/// All backend requests are serialized globally via [RenderBackendQueue].
+/// AI text: BACKEND_URL first, then Google API key, then Firebase AI Logic.
+/// Skips backends stuck on the broken `offgrid-492919` project.
 class VertexApiClient {
   VertexApiClient._();
 
@@ -18,6 +19,7 @@ class VertexApiClient {
   static const String _googleApiBase = 'https://generativelanguage.googleapis.com';
   static const String _googleTextModel = 'gemini-2.5-flash';
   static const String _googleImageModel = 'gemini-2.0-flash-preview-image-generation';
+  static const String _brokenGcpProject = 'offgrid-492919';
 
   String get _googleApiKey => Env.googleApiKey.trim();
   bool get _hasGoogleApiKey => _googleApiKey.isNotEmpty;
@@ -25,13 +27,63 @@ class VertexApiClient {
   /// Always [Env.baseUrl] — set via `BACKEND_URL` / `--dart-define-from-file`.
   String get baseUrl => Env.baseUrl;
 
-  bool get isConfigured => _hasBackend || _hasGoogleApiKey;
+  bool get isConfigured => true; // Firebase AI always available as last resort
 
   bool get _hasBackend => baseUrl.isNotEmpty;
 
   String getVertexBackendBaseUrl() => baseUrl;
 
   bool isVertexBackendConfigured() => isConfigured;
+
+  /// Cached health: null = unknown, true = usable, false = skip (offgrid / down).
+  final Map<String, bool> _backendUsableCache = {};
+  final Map<String, DateTime> _backendHealthCheckedAt = {};
+
+  Future<bool> _isBackendUsable(String origin) async {
+    final cached = _backendUsableCache[origin];
+    final checkedAt = _backendHealthCheckedAt[origin];
+    if (cached != null &&
+        checkedAt != null &&
+        DateTime.now().difference(checkedAt) < const Duration(minutes: 5)) {
+      return cached;
+    }
+
+    final client = http.Client();
+    try {
+      final res = await client
+          .get(Uri.parse('$origin/health'))
+          .timeout(const Duration(seconds: 12));
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        _backendUsableCache[origin] = false;
+        _backendHealthCheckedAt[origin] = DateTime.now();
+        return false;
+      }
+      final body = res.body.toLowerCase();
+      final broken = body.contains(_brokenGcpProject) ||
+          body.contains('consumer_invalid');
+      if (broken) {
+        debugPrint(
+          '[VertexApiClient] Skipping $origin — health still on $_brokenGcpProject',
+        );
+      }
+      _backendUsableCache[origin] = !broken;
+      _backendHealthCheckedAt[origin] = DateTime.now();
+      return !broken;
+    } catch (e) {
+      debugPrint('[VertexApiClient] Health check failed for $origin: $e');
+      // Don't permanently skip on transient network errors.
+      return true;
+    } finally {
+      client.close();
+    }
+  }
+
+  bool _isBrokenBackendError(Object error) {
+    final msg = error.toString().toLowerCase();
+    return msg.contains(_brokenGcpProject) ||
+        msg.contains('consumer_invalid') ||
+        (msg.contains('permission denied') && msg.contains('offgrid'));
+  }
 
   Uri _googleModelUri(String model, String action) => Uri.parse(
     '$_googleApiBase/v1beta/models/$model:$action',
@@ -44,7 +96,8 @@ class VertexApiClient {
 
   bool _shouldFallbackToGoogle(Object error) {
     final msg = error.toString().toLowerCase();
-    return msg.contains('http 404') ||
+    return _isBrokenBackendError(error) ||
+        msg.contains('http 404') ||
         msg.contains('http 500') ||
         msg.contains('http 502') ||
         msg.contains('http 503') ||
@@ -52,6 +105,18 @@ class VertexApiClient {
         msg.contains('network error') ||
         msg.contains('permission_denied') ||
         msg.contains('consumer_invalid');
+  }
+
+  Future<String> _firebaseGenerateText({
+    required String prompt,
+    double temperature = 0.65,
+    int maxOutputTokens = 1024,
+  }) {
+    return FirebaseGeminiClient.instance.generateText(
+      prompt: prompt,
+      temperature: temperature,
+      maxOutputTokens: maxOutputTokens,
+    );
   }
 
   Future<Map<String, dynamic>> _googleGenerateContentJson({
@@ -199,34 +264,72 @@ class VertexApiClient {
     bool bypassQueue = false,
     RenderBackendPriority priority = RenderBackendPriority.background,
   }) async {
+    Object? lastErr;
+
     if (_hasBackend) {
-      try {
-        return await _backendGenerateText(
-          prompt: prompt,
-          temperature: temperature,
-          maxOutputTokens: maxOutputTokens,
-          timeout: timeout,
-          bypassQueue: bypassQueue,
-          priority: priority,
+      final usable = await _isBackendUsable(baseUrl);
+      if (!usable) {
+        debugPrint(
+          '[VertexApiClient] Backend $baseUrl unusable (offgrid/broken); skipping',
         );
-      } catch (e) {
-        if (!_hasGoogleApiKey || !_shouldFallbackToGoogle(e)) rethrow;
-        debugPrint('[VertexApiClient] Backend text failed, trying Google API: $e');
+        lastErr = Exception(
+          'Backend $baseUrl is stuck on $_brokenGcpProject. Redeploy server/ with my-socitea.',
+        );
+      } else {
+        try {
+          return await _backendGenerateText(
+            prompt: prompt,
+            temperature: temperature,
+            maxOutputTokens: maxOutputTokens,
+            timeout: timeout,
+            bypassQueue: bypassQueue,
+            priority: priority,
+          );
+        } catch (e) {
+          lastErr = e;
+          if (_isBrokenBackendError(e)) {
+            _backendUsableCache[baseUrl] = false;
+            _backendHealthCheckedAt[baseUrl] = DateTime.now();
+          }
+          if (!_shouldFallbackToGoogle(e) && !_hasGoogleApiKey) {
+            // Still try Firebase below.
+            debugPrint('[VertexApiClient] Backend text failed: $e');
+          } else {
+            debugPrint('[VertexApiClient] Backend text failed, trying fallbacks: $e');
+          }
+        }
       }
     }
 
     if (_hasGoogleApiKey) {
-      return _googleGenerateText(
+      try {
+        return await _googleGenerateText(
+          prompt: prompt,
+          temperature: temperature,
+          maxOutputTokens: maxOutputTokens,
+          timeout: timeout,
+        );
+      } catch (e) {
+        lastErr = e;
+        debugPrint('[VertexApiClient] Google API text failed, trying Firebase AI: $e');
+      }
+    }
+
+    try {
+      return await _firebaseGenerateText(
         prompt: prompt,
         temperature: temperature,
         maxOutputTokens: maxOutputTokens,
-        timeout: timeout,
+      );
+    } catch (e) {
+      debugPrint('[VertexApiClient] Firebase AI text failed: $e');
+      throw Exception(
+        'All AI providers failed. '
+        'Render backend is on $_brokenGcpProject (redeploy server/ with my-socitea), '
+        'GOOGLE_API_KEY credits may be depleted, and Firebase AI failed: $e. '
+        'Last backend error: $lastErr',
       );
     }
-
-    throw Exception(
-      'No AI provider configured. Set BACKEND_URL or GOOGLE_API_KEY in .env and rebuild.',
-    );
   }
 
   String _patternAnalysisPromptFromBody(Map<String, dynamic>? body) {
@@ -371,24 +474,6 @@ ${jsonEncode(chatData ?? const [])}''';
     int? maxOutputTokens,
     RenderBackendPriority priority = RenderBackendPriority.background,
   }) async {
-    if (_hasBackend) {
-      try {
-        final body = <String, dynamic>{'message': message};
-        if (temperature != null) body['temperature'] = temperature;
-        if (maxOutputTokens != null) body['maxOutputTokens'] = maxOutputTokens;
-
-        final data = await fetchJson('/chat', body: body, timeout: timeout, priority: priority);
-        final reply = data['reply'];
-        if (reply is String && reply.trim().isNotEmpty) {
-          return reply;
-        }
-        throw Exception('Vertex /chat: response missing reply');
-      } catch (e) {
-        if (!_hasGoogleApiKey || !_shouldFallbackToGoogle(e)) rethrow;
-        debugPrint('[VertexApiClient] Backend /chat failed, trying generateContent/Google: $e');
-      }
-    }
-
     return _generateTextResolvingProvider(
       prompt: message,
       temperature: temperature ?? 0.65,

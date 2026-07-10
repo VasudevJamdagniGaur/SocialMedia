@@ -82,7 +82,14 @@ class ServerConfig {
     return null;
   }
 
-  static String get credentialsPath => env('GOOGLE_APPLICATION_CREDENTIALS') ?? 'service-account.json';
+  static String get credentialsPath {
+    final fromEnv = env('GOOGLE_APPLICATION_CREDENTIALS');
+    if (fromEnv != null && fromEnv.isNotEmpty) return fromEnv;
+    // Absolute path preferred in Docker (/app); relative works for local `dart run`.
+    final absolute = File('/app/service-account.json');
+    if (absolute.existsSync()) return absolute.path;
+    return 'service-account.json';
+  }
 
   static String? get newsApiKey {
     for (final k in [

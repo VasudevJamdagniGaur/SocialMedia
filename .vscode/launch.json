@@ -2,6 +2,27 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "SociTea (Android / .env)",
+      "request": "launch",
+      "type": "dart",
+      "program": "flutter_app/lib/main.dart",
+      "cwd": "${workspaceFolder}/flutter_app",
+      "toolArgs": [
+        "--dart-define-from-file=${workspaceFolder}/.env"
+      ]
+    },
+    {
+      "name": "SociTea (Chrome / .env)",
+      "request": "launch",
+      "type": "dart",
+      "program": "flutter_app/lib/main.dart",
+      "cwd": "${workspaceFolder}/flutter_app",
+      "deviceId": "chrome",
+      "toolArgs": [
+        "--dart-define-from-file=${workspaceFolder}/.env"
+      ]
+    },
+    {
       "type": "pwa-chrome",
       "request": "launch",
       "name": "Debug Detea App",

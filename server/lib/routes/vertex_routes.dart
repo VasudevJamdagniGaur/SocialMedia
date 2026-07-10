@@ -14,12 +14,29 @@ Router buildVertexRouter(VertexClient vertex) {
   final _firebase = FirebaseAdminService();
 
   router.get('/health', (Request req) {
+    final credsPath = ServerConfig.credentialsPath;
+    final credsFile = File(credsPath);
+    String? credsProject;
+    String? credsEmail;
+    if (credsFile.existsSync()) {
+      try {
+        final decoded = jsonDecode(credsFile.readAsStringSync());
+        if (decoded is Map) {
+          credsProject = '${decoded['project_id'] ?? ''}'.trim();
+          credsEmail = '${decoded['client_email'] ?? ''}'.trim();
+        }
+      } catch (_) {}
+    }
     return jsonOk({
       'ok': true,
       'project': ServerConfig.projectId,
       'location': ServerConfig.vertexLocation,
       'model': ServerConfig.vertexModel,
       'runtime': 'dart',
+      'credentialsPath': credsPath,
+      'credentialsPresent': credsFile.existsSync(),
+      if (credsProject != null && credsProject.isNotEmpty) 'credentialsProject': credsProject,
+      if (credsEmail != null && credsEmail.isNotEmpty) 'credentialsEmail': credsEmail,
     });
   });
 
