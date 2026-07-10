@@ -2159,7 +2159,7 @@ ${reflection.trim()}''';
     if (apiKey.isEmpty) {
       final fallback = _reflectionSuggestionFallback(reflection);
       if (fallback.isNotEmpty) return fallback;
-      if (lastErr != null) throw lastErr;
+      if (lastErr != null) throw lastErr!;
       throw Exception(
         'Could not generate share suggestions. Set BACKEND_URL and rebuild, or add OPENAI_API_KEY.',
       );
