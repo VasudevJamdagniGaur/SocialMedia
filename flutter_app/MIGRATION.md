@@ -73,7 +73,7 @@ Example run:
 flutter run \
   --dart-define=OPENAI_API_KEY=sk-... \
   --dart-define=GROK_API_KEY=xai-... \
-  --dart-define=BACKEND_URL=https://detea-backend.onrender.com \
+  --dart-define=BACKEND_URL=https://socitea.onrender.com \
   --dart-define=NEWSAPI_KEY=...
 ```
 
@@ -81,7 +81,7 @@ For release builds, pass the same defines to `flutter build apk`.
 
 ### 4. Backend (unchanged)
 
-- **Vertex Express:** `backend-vertex/` on Render (`https://detea-backend.onrender.com`)
+- **Vertex Express:** `backend-vertex/` on Render (`https://socitea.onrender.com`)
 - **Firebase Functions:** `functions/` (LinkedIn, NewsAPI proxy, ingest)
 - **Firestore rules:** `firestore.rules` (unchanged)
 
@@ -190,7 +190,7 @@ Firebase Functions: LinkedIn API, NewsAPI proxy, news ingest, delete account, po
 ```bash
 flutter build apk --release \
   --dart-define=OPENAI_API_KEY=... \
-  --dart-define=BACKEND_URL=https://detea-backend.onrender.com
+  --dart-define=BACKEND_URL=https://socitea.onrender.com
 ```
 
 Sign with the same keystore as the Capacitor app (`android/app/my-release-key.jks`) for Google Sign-In continuity.

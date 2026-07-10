@@ -30,7 +30,7 @@ chmod +x start-cors-proxy.sh
 node cors-proxy-server.js
 ```
 
-The backend used by the frontend is `https://detea-backend.onrender.com`
+The backend used by the frontend is `https://socitea.onrender.com`
 
 ## How It Works
 

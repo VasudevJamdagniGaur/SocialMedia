@@ -41,4 +41,4 @@ Deploy to Render/Railway/Fly (set `PORT`). Point Flutter builds at the deployed 
 flutter build web --dart-define=BACKEND_URL=https://your-reddit-proxy.onrender.com
 ```
 
-The Dart server in `server/` also exposes the same routes when you deploy `socitea-backend` on Render.
+The Dart server in `server/` also exposes the same routes when you deploy `socitea` on Render.

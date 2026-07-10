@@ -143,7 +143,7 @@ Update your frontend services to use the new backend endpoints:
 
 ```javascript
 // In your ChatService.js
-const baseURL = 'https://detea-backend.onrender.com'; // Your deployed backend server
+const baseURL = 'https://socitea.onrender.com'; // Your deployed backend server
 
 // Replace Ollama calls with backend API calls
 const response = await fetch(`${baseURL}/chat`, {

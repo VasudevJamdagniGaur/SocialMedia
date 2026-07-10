@@ -4,7 +4,7 @@ Run the app:
 ```bash
 cd flutter_app
 flutter run -d emulator-5554 \
-  --dart-define=BACKEND_URL=https://detea-backend.onrender.com \
+  --dart-define=BACKEND_URL=https://socitea.onrender.com \
   --dart-define=OPENAI_API_KEY=your_key \
   --dart-define=GROK_API_KEY=your_key
 ```

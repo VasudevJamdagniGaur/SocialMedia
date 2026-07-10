@@ -1,5 +1,5 @@
 # Render — Dart backend
-# IMPORTANT: For detea-backend.onrender.com, set in Render dashboard:
+# IMPORTANT: For socitea.onrender.com, set in Render dashboard:
 #   Root Directory = server
 #   Runtime = Docker
 #   Branch = THE-GREAT-FLUTTER-DIVERSION (or main, whichever you deploy)
@@ -8,7 +8,7 @@
 # After deploy, /health MUST include "runtime":"dart" and "project":"my-socitea"
 services:
   - type: web
-    name: detea-backend
+    name: socitea
     runtime: docker
     plan: free
     dockerfilePath: ./Dockerfile

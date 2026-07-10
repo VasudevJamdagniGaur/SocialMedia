@@ -14,7 +14,7 @@ class Env {
   /// Primary backend for chat, images, news proxy, suggestions, etc.
   static const String backendUrl = String.fromEnvironment(
     'BACKEND_URL',
-    defaultValue: 'https://detea-backend.onrender.com',
+    defaultValue: 'https://socitea.onrender.com',
   );
 
   /// Optional overrides; empty means "use [backendUrl]".
@@ -67,6 +67,6 @@ class Env {
         return 'http://localhost:3002';
       }
     }
-    return 'https://detea-backend.onrender.com';
+    return 'https://socitea.onrender.com';
   }
 }
