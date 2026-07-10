@@ -281,9 +281,55 @@ Future<HubCarouselImageResult?> _getOrGenerateHubCarouselImageFullImpl({
 
   if (!isVertexBackendConfigured()) return null;
 
-  // 2. Generate via GOOGLE_API_KEY (direct Gemini image API).
+  // 2. Call /api/tea/ensure-image on the Render backend.
+  //    - Server checks Firestore first (cache hit) and returns instantly.
+  //    - On cache miss, generates AI image, uploads to Storage, persists, returns URL.
   try {
-    debugPrint('[ImageGen] google-api: headlineLen=${title.length} url=${url.length > 60 ? url.substring(0, 60) : url}');
+    debugPrint('[ImageGen] ensure-image: headlineLen=${title.length} url=${url.length > 60 ? url.substring(0, 60) : url}');
+    final effSource = sourceImageUrl?.trim();
+    final response = await VertexApiClient.instance.fetchJson(
+      '/api/tea/ensure-image',
+      body: {
+        'articleUrl': url,
+        'title': title,
+        if (storyText.trim().isNotEmpty) 'storyText': stripHtmlBoilerplate(storyText),
+        'kind': kind.name,
+        if (effSource != null && effSource.startsWith('http')) 'sourceImageUrl': effSource,
+      },
+      timeout: const Duration(seconds: 90),
+      priority: RenderBackendQueue.instance.isPostCreationActive
+          ? RenderBackendPriority.postCreation
+          : hubCarouselPriorityToRender(priority),
+    );
+    final aiImageUrl = (response['aiImageUrl'] ?? response['imageUrl']) as String?;
+    final srcUrl = response['sourceImageUrl'] as String?;
+    final fromCache = response['cached'] == true;
+    debugPrint('[ImageGen] ensure-image done cached=$fromCache hasUrl=${aiImageUrl != null}');
+    if (aiImageUrl == null || aiImageUrl.isEmpty) return null;
+
+    await persistHubCarouselImage(
+      url: url,
+      title: title,
+      imageUrl: aiImageUrl,
+      kind: kind,
+      fallbackId: key,
+    );
+    return HubCarouselImageResult(
+      aiImageUrl: aiImageUrl,
+      sourceImageUrl: srcUrl?.isNotEmpty == true ? srcUrl : effSource,
+      fromCache: fromCache,
+    );
+  } catch (e) {
+    debugPrint('[ImageGen] ensure-image failed: $e');
+    if (isVertexRateLimitError(e)) {
+      debugPrint('[ImageGen] rate limited — skipping duplicate fallback generation');
+      return null;
+    }
+    debugPrint('[ImageGen] ensure-image failed, falling back to local generation: $e');
+  }
+
+  // 3. Fallback when the server is unreachable — not when quota is exhausted.
+  try {
     final generated = await ChatService.instance.fetchSingleNewsShareIllustrationImage({
       'headline': title,
       if (storyText.trim().isNotEmpty) 'storyText': stripHtmlBoilerplate(storyText),
@@ -302,14 +348,9 @@ Future<HubCarouselImageResult?> _getOrGenerateHubCarouselImageFullImpl({
       sourceImageUrl: src?.startsWith('http') == true ? src : null,
     );
   } catch (e) {
-    debugPrint('[ImageGen] google-api image generation failed: $e');
-    if (isVertexRateLimitError(e)) {
-      debugPrint('[ImageGen] rate limited — skipping duplicate generation');
-      return null;
-    }
+    debugPrint('[HubCarouselAI] fallback image generation failed: $e');
+    return null;
   }
-
-  return null;
 }
 
 /// Generate AI illustrations for carousel slots that lack a hero image.

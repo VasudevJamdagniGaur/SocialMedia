@@ -7,7 +7,9 @@ import 'package:http/http.dart' as http;
 import '../config/env.dart';
 import 'render_backend_queue.dart';
 
-/// HTTP client for Google Gemini (direct API key) and non-AI backend routes.
+/// HTTP client for the Vertex AI Express backend (Render).
+/// AI text/image goes through [baseUrl] when configured; [GOOGLE_API_KEY] is optional fallback.
+/// All backend requests are serialized globally via [RenderBackendQueue].
 class VertexApiClient {
   VertexApiClient._();
 
@@ -34,20 +36,13 @@ class VertexApiClient {
     return defaultBaseUrl;
   }
 
-  bool get isConfigured => _hasGoogleApiKey;
+  bool get isConfigured => _hasBackend || _hasGoogleApiKey;
 
-  String getVertexBackendBaseUrl() =>
-      _hasGoogleApiKey ? _googleApiBase : 'NOT SET (GOOGLE_API_KEY)';
+  bool get _hasBackend => baseUrl.isNotEmpty;
 
-  bool isVertexBackendConfigured() => _hasGoogleApiKey;
+  String getVertexBackendBaseUrl() => _hasBackend ? baseUrl : (_hasGoogleApiKey ? _googleApiBase : defaultBaseUrl);
 
-  void _requireGoogleApiKey(String operation) {
-    if (!_hasGoogleApiKey) {
-      throw Exception(
-        '$operation requires GOOGLE_API_KEY. Add it to .env and rebuild with --dart-define-from-file=../.env',
-      );
-    }
-  }
+  bool isVertexBackendConfigured() => isConfigured;
 
   Uri _googleModelUri(String model, String action) => Uri.parse(
     '$_googleApiBase/v1beta/models/$model:$action',
@@ -58,6 +53,18 @@ class VertexApiClient {
     'x-goog-api-key': _googleApiKey,
   };
 
+  bool _shouldFallbackToGoogle(Object error) {
+    final msg = error.toString().toLowerCase();
+    return msg.contains('http 404') ||
+        msg.contains('http 500') ||
+        msg.contains('http 502') ||
+        msg.contains('http 503') ||
+        msg.contains('network timeout') ||
+        msg.contains('network error') ||
+        msg.contains('permission_denied') ||
+        msg.contains('consumer_invalid');
+  }
+
   Future<Map<String, dynamic>> _googleGenerateContentJson({
     required String prompt,
     required String model,
@@ -66,7 +73,9 @@ class VertexApiClient {
     Duration? timeout,
     Map<String, dynamic>? extraGenerationConfig,
   }) async {
-    _requireGoogleApiKey('Google Gemini');
+    if (!_hasGoogleApiKey) {
+      throw Exception('GOOGLE_API_KEY is not configured');
+    }
     final client = http.Client();
     try {
       final res = await client
@@ -174,6 +183,63 @@ class VertexApiClient {
     return _parseGoogleImageResponse(data);
   }
 
+  Future<String> _backendGenerateText({
+    required String prompt,
+    double temperature = 0.65,
+    int maxOutputTokens = 1024,
+    Duration? timeout,
+    bool bypassQueue = false,
+    RenderBackendPriority priority = RenderBackendPriority.background,
+  }) async {
+    final body = {
+      'prompt': prompt.trim(),
+      'temperature': temperature,
+      'maxOutputTokens': maxOutputTokens,
+    };
+    final data = bypassQueue
+        ? await _fetchJsonUnqueued('/generateContent', body: body, timeout: timeout)
+        : await fetchJson('/generateContent', body: body, timeout: timeout, priority: priority);
+    return _parseGenerateContentResponse(data);
+  }
+
+  Future<String> _generateTextResolvingProvider({
+    required String prompt,
+    double temperature = 0.65,
+    int maxOutputTokens = 1024,
+    Duration? timeout,
+    bool bypassQueue = false,
+    RenderBackendPriority priority = RenderBackendPriority.background,
+  }) async {
+    if (_hasBackend) {
+      try {
+        return await _backendGenerateText(
+          prompt: prompt,
+          temperature: temperature,
+          maxOutputTokens: maxOutputTokens,
+          timeout: timeout,
+          bypassQueue: bypassQueue,
+          priority: priority,
+        );
+      } catch (e) {
+        if (!_hasGoogleApiKey || !_shouldFallbackToGoogle(e)) rethrow;
+        debugPrint('[VertexApiClient] Backend text failed, trying Google API: $e');
+      }
+    }
+
+    if (_hasGoogleApiKey) {
+      return _googleGenerateText(
+        prompt: prompt,
+        temperature: temperature,
+        maxOutputTokens: maxOutputTokens,
+        timeout: timeout,
+      );
+    }
+
+    throw Exception(
+      'No AI provider configured. Set BACKEND_URL or GOOGLE_API_KEY in .env and rebuild.',
+    );
+  }
+
   String _patternAnalysisPromptFromBody(Map<String, dynamic>? body) {
     final instruction =
         (body?['instruction'] as String?)?.trim() ??
@@ -196,11 +262,12 @@ ${jsonEncode(chatData ?? const [])}''';
     RenderBackendPriority priority = RenderBackendPriority.background,
   }) async {
     if (path == '/analyze-pattern') {
-      final result = await _googleGenerateText(
+      final result = await _generateTextResolvingProvider(
         prompt: _patternAnalysisPromptFromBody(body),
         temperature: 0.3,
         maxOutputTokens: 2048,
         timeout: timeout,
+        priority: priority,
       );
       return {'result': result};
     }
@@ -315,11 +382,31 @@ ${jsonEncode(chatData ?? const [])}''';
     int? maxOutputTokens,
     RenderBackendPriority priority = RenderBackendPriority.background,
   }) async {
-    return _googleGenerateText(
+    if (_hasBackend) {
+      try {
+        final body = <String, dynamic>{'message': message};
+        if (temperature != null) body['temperature'] = temperature;
+        if (maxOutputTokens != null) body['maxOutputTokens'] = maxOutputTokens;
+
+        final data = await fetchJson('/chat', body: body, timeout: timeout, priority: priority);
+        final reply = data['reply'];
+        if (reply is String && reply.trim().isNotEmpty) {
+          return reply;
+        }
+        throw Exception('Vertex /chat: response missing reply');
+      } catch (e) {
+        if (!_hasGoogleApiKey || !_shouldFallbackToGoogle(e)) rethrow;
+        debugPrint('[VertexApiClient] Backend /chat failed, trying generateContent/Google: $e');
+      }
+    }
+
+    return _generateTextResolvingProvider(
       prompt: message,
       temperature: temperature ?? 0.65,
       maxOutputTokens: maxOutputTokens ?? 1024,
       timeout: timeout,
+      bypassQueue: true,
+      priority: priority,
     );
   }
 
@@ -335,12 +422,13 @@ ${jsonEncode(chatData ?? const [])}''';
     }
     return RenderBackendQueue.instance.run(
       priority: priority,
-      debugLabel: 'google-generateContent',
-      work: () => _googleGenerateText(
+      debugLabel: '/generateContent',
+      work: () => _generateTextResolvingProvider(
         prompt: prompt,
         temperature: temperature,
         maxOutputTokens: maxOutputTokens,
         timeout: timeout,
+        priority: priority,
       ),
     );
   }
@@ -356,12 +444,26 @@ ${jsonEncode(chatData ?? const [])}''';
     if (prompt.trim().isEmpty) {
       throw Exception('vertexGenerateContentDirect: prompt is required');
     }
-    return _googleGenerateText(
+    return _generateTextResolvingProvider(
       prompt: prompt,
       temperature: temperature,
       maxOutputTokens: maxOutputTokens,
       timeout: timeout,
+      bypassQueue: true,
     );
+  }
+
+  String _parseGenerateContentResponse(Map<String, dynamic> data) {
+    final candidates = data['candidates'];
+    if (candidates is List &&
+        candidates.isNotEmpty &&
+        candidates[0] is Map &&
+        candidates[0]['content'] is Map &&
+        candidates[0]['content']['parts'] is List) {
+      final parts = candidates[0]['content']['parts'] as List;
+      return parts.map((p) => (p is Map ? p['text'] : null) ?? '').join('');
+    }
+    throw Exception('Unexpected response from Vertex /generateContent');
   }
 
   /// Bypasses [RenderBackendQueue] — use for share/reflection images so carousel jobs do not block.
@@ -372,10 +474,27 @@ ${jsonEncode(chatData ?? const [])}''';
   }) async {
     final p = prompt.trim();
     if (p.isEmpty) throw Exception('vertexGenerateNewsImageDirect: prompt is required');
-    if (referenceImage != null && (referenceImage['base64'] ?? '').trim().isNotEmpty) {
-      debugPrint('[ImageGen] reference images are not supported with direct Google API yet');
+
+    if (_hasBackend) {
+      try {
+        return await _vertexGenerateNewsImageUnqueued(
+          p,
+          timeout: timeout,
+          referenceImage: referenceImage,
+        );
+      } catch (e) {
+        if (!_hasGoogleApiKey || !_shouldFallbackToGoogle(e)) rethrow;
+        debugPrint('[VertexApiClient] Backend image failed, trying Google API: $e');
+      }
     }
-    return _googleGenerateImage(p, timeout: timeout);
+
+    if (_hasGoogleApiKey) {
+      return _googleGenerateImage(p, timeout: timeout);
+    }
+
+    throw Exception(
+      'No image provider configured. Set BACKEND_URL or GOOGLE_API_KEY in .env and rebuild.',
+    );
   }
 
   Future<String> vertexGenerateNewsImage(
@@ -388,13 +507,83 @@ ${jsonEncode(chatData ?? const [])}''';
     if (p.isEmpty) throw Exception('vertexGenerateNewsImage: prompt is required');
     return RenderBackendQueue.instance.run(
       priority: priority,
-      debugLabel: 'google-generate-image',
+      debugLabel: '/generate-news-image',
       work: () => vertexGenerateNewsImageDirect(
         p,
         timeout: timeout,
         referenceImage: referenceImage,
       ),
     );
+  }
+
+  Future<String> _vertexGenerateNewsImageUnqueued(
+    String p, {
+    Duration? timeout,
+    Map<String, String>? referenceImage,
+  }) async {
+    final base = baseUrl.replaceAll(RegExp(r'/$'), '');
+    final fallback = Env.generateNewsImageFallbackUrl.trim().replaceAll(RegExp(r'/$'), '');
+
+    final urls = <String>[
+      if (base.isNotEmpty) '$base/generate-news-image',
+      if (fallback.isNotEmpty) '$fallback/generate-news-image',
+    ];
+
+    final requestBody = <String, dynamic>{'prompt': p};
+    if (referenceImage != null &&
+        (referenceImage['base64'] ?? '').trim().isNotEmpty) {
+      requestBody['referenceImage'] = {
+        'base64': referenceImage['base64'],
+        'mimeType': referenceImage['mimeType'] ?? 'image/jpeg',
+      };
+    }
+
+    Exception? lastErr;
+    for (final url in urls.toSet()) {
+      try {
+        debugPrint(
+          '[ImageGen] API request sent url=$url promptLen=${p.length} '
+          'hasReference=${requestBody.containsKey('referenceImage')}',
+        );
+        final client = http.Client();
+        final res = await client
+            .post(
+              Uri.parse(url),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode(requestBody),
+            )
+            .timeout(timeout ?? const Duration(seconds: 120));
+        client.close();
+
+        debugPrint(
+          '[ImageGen] API response received url=$url status=${res.statusCode} bodyLen=${res.body.length}',
+        );
+
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          lastErr = Exception(
+            'HTTP ${res.statusCode} from $url: ${res.body.substring(0, res.body.length.clamp(0, 200))}',
+          );
+          continue;
+        }
+
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        final ok = data['ok'];
+        if (ok == false) {
+          lastErr = Exception('Backend returned ok=false');
+          continue;
+        }
+        final imageDataUrl = data['imageDataUrl'];
+        if (imageDataUrl is String && imageDataUrl.startsWith('data:image')) {
+          debugPrint('[ImageGen] imageDataUrl length=${imageDataUrl.length}');
+          return imageDataUrl;
+        }
+        lastErr = Exception('Response missing imageDataUrl');
+        debugPrint('[ImageGen] response keys=${data.keys.toList()}');
+      } catch (e) {
+        lastErr = e is Exception ? e : Exception(e.toString());
+      }
+    }
+    throw lastErr ?? Exception('vertexGenerateNewsImage: all backends failed');
   }
 }
 

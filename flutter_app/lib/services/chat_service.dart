@@ -32,7 +32,7 @@ class ChatService extends ChangeNotifier {
       '  OpenAI: ${openaiApiKey.isNotEmpty ? '${openaiApiKey.substring(0, openaiApiKey.length < 10 ? openaiApiKey.length : 10)}... (${openaiApiKey.length} chars)' : 'NOT SET'}',
     );
     debugPrint(
-      '  Gemini: ${isVertexBackendConfigured() ? getVertexBackendBaseUrl() : 'NOT SET (GOOGLE_API_KEY)'}',
+      '  Gemini: ${isVertexBackendConfigured() ? getVertexBackendBaseUrl() : 'NOT SET (BACKEND_URL / GOOGLE_API_KEY)'}',
     );
     debugPrint(
       '  Grok: ${grokApiKey.isNotEmpty ? '${grokApiKey.substring(0, grokApiKey.length < 10 ? grokApiKey.length : 10)}... (${grokApiKey.length} chars)' : 'NOT SET'}',
@@ -58,7 +58,7 @@ class ChatService extends ChangeNotifier {
 
   static const String _providerKey = 'chat_api_provider';
 
-  /// Prefer Gemini when GOOGLE_API_KEY is configured.
+  /// Prefer Gemini when BACKEND_URL or GOOGLE_API_KEY is configured.
   String _preferredChatProvider() {
     if (isVertexBackendConfigured()) return 'gemini';
     if (openaiApiKey.trim().isNotEmpty) return 'openai';
@@ -1259,7 +1259,7 @@ Be thorough and detailed. This description will be used to generate a response.'
     final apiKey = '${getApiKey() ?? ''}';
     if (apiProvider == 'gemini' && !vertexForGemini) {
       throw Exception(
-        'Gemini is not configured. Add GOOGLE_API_KEY to .env and rebuild.',
+        'Gemini is not configured. Add BACKEND_URL or GOOGLE_API_KEY to .env and rebuild.',
       );
     }
     if (!vertexForGemini && apiKey.trim().isEmpty) {
@@ -1657,19 +1657,19 @@ Assistant:""";
             maxOutputTokens: 1024,
           );
           if (aiText.trim().isEmpty) {
-            throw Exception('Empty response from Google Gemini.');
+            throw Exception('Empty response from Vertex backend.');
           }
           if (onToken != null) {
             onToken(aiText.trim());
           }
           return aiText.trim();
         } on TimeoutException {
-          throw Exception('Request timed out calling Google Gemini. Please try again.');
+          throw Exception('Request timed out. The Vertex backend may be slow or unavailable. Please try again.');
         } catch (fetchError) {
           final msg = fetchError.toString();
           if (msg.contains('Failed to fetch') || msg.contains('NetworkError')) {
             throw Exception(
-              'Unable to connect to Google Gemini. Check GOOGLE_API_KEY in .env and rebuild.',
+              'Unable to connect to the backend. Check BACKEND_URL (https://detea-backend.onrender.com).',
             );
           }
           if (msg.contains('depleted') || msg.contains('RESOURCE_EXHAUSTED')) {
@@ -1789,7 +1789,7 @@ Assistant:""";
     final apiKey = '${getApiKey() ?? ''}';
     if (apiProvider == 'gemini' && !vertexForGemini) {
       throw Exception(
-        'Gemini is not configured. Add GOOGLE_API_KEY in .env.',
+        'Gemini is not configured. Add BACKEND_URL or GOOGLE_API_KEY in .env.',
       );
     }
     if (!vertexForGemini && apiKey.trim().isEmpty) {
@@ -2049,7 +2049,7 @@ $text""";
 
       final sharePrompt = _buildReflectionShareSuggestionsPrompt(reflection, platform);
 
-      // Primary path: direct Google Gemini via GOOGLE_API_KEY.
+      // Primary path: Vertex /generateContent on BACKEND_URL.
       if (isVertexBackendConfigured()) {
         for (var attempt = 0; attempt < 2; attempt++) {
           try {
@@ -2142,7 +2142,7 @@ $text""";
       if (fallback.isNotEmpty) return fallback;
       if (lastErr != null) throw lastErr;
       throw Exception(
-        'Could not generate share suggestions. Add GOOGLE_API_KEY and rebuild, or add OPENAI_API_KEY.',
+        'Could not generate share suggestions. Set BACKEND_URL and rebuild, or add OPENAI_API_KEY.',
       );
     }
 
@@ -4581,7 +4581,7 @@ $contextSnippet''';
     }
 
     if (!isVertexBackendConfigured()) {
-      debugPrint('[Image] Gemini is not configured; image generation requires GOOGLE_API_KEY.');
+      debugPrint('[Image] Vertex backend URL not set; image generation requires BACKEND_URL or GOOGLE_API_KEY.');
       return null;
     }
 
