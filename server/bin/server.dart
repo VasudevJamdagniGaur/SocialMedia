@@ -2,8 +2,10 @@ import 'dart:io';
 
 import 'package:deite_server/server.dart';
 
+import '../lib/config.dart';
+
 Future<void> main() async {
-  // Optional: load server/.env for local dev
+  // Optional: load server/.env for local dev (Platform.environment is read-only).
   final envFile = File('.env');
   if (await envFile.exists()) {
     for (final line in await envFile.readAsLines()) {
@@ -16,13 +18,13 @@ Future<void> main() async {
       if (val.startsWith('"') && val.endsWith('"')) {
         val = val.substring(1, val.length - 1);
       }
-      Platform.environment[key] = val;
+      ServerConfig.setLocalEnv(key, val);
     }
   }
 
-  if (Platform.environment['GOOGLE_CREDENTIALS']?.trim().isNotEmpty == true) {
-    await File('service-account.json')
-        .writeAsString(Platform.environment['GOOGLE_CREDENTIALS']!);
+  final creds = ServerConfig.env('GOOGLE_CREDENTIALS');
+  if (creds != null && creds.isNotEmpty) {
+    await File('service-account.json').writeAsString(creds);
   }
 
   await runServer();

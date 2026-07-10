@@ -1,5 +1,9 @@
 # Render — Dart backend (replaces backend-vertex Node service)
 # Set Root Directory to `server` in Render dashboard.
+# Required env on Render:
+#   GOOGLE_CLOUD_PROJECT=my-socitea
+#   GOOGLE_CREDENTIALS=<full service-account JSON>  (written to service-account.json at boot)
+#   FIREBASE_PROJECT_ID=deitedatabase
 services:
   - type: web
     name: socitea-backend
@@ -7,3 +11,12 @@ services:
     plan: free
     dockerfilePath: ./Dockerfile
     healthCheckPath: /health
+    envVars:
+      - key: GOOGLE_CLOUD_PROJECT
+        value: my-socitea
+      - key: FIREBASE_PROJECT_ID
+        value: deitedatabase
+      - key: VERTEX_LOCATION
+        value: us-central1
+      - key: VERTEX_GEMINI_MODEL
+        value: gemini-2.5-flash
