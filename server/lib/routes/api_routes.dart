@@ -224,7 +224,7 @@ Future<List<Map<String, String>>> _generateSuggestionsWithVertex(
   final raw = await vertex.generateText(
     prompt,
     temperature: isX ? 0.78 : 0.5,
-    maxOutputTokens: isX ? 3500 : 2400,
+    maxOutputTokens: isX ? 1600 : 1400,
   );
   return isX
       ? _parseXContentSuggestionsJson(raw, reflection)

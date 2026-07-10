@@ -131,42 +131,36 @@ class VertexClient {
     return null;
   }
 
-  Future<String> generateText(
+  Map<String, dynamic> _textGenerationConfig({
+    required double temperature,
+    required int maxOutputTokens,
+  }) {
+    return {
+      'temperature': temperature,
+      'maxOutputTokens': maxOutputTokens.clamp(1, 8192),
+      // Gemini 2.5 Flash thinks by default (~8k tokens) — disable for latency.
+      'thinkingConfig': {'thinkingBudget': 0},
+    };
+  }
+
+  Future<String> _generateTextViaVertex(
     String prompt, {
-    double temperature = 0.65,
-    int maxOutputTokens = 2048,
+    required double temperature,
+    required int maxOutputTokens,
   }) async {
-    final trimmed = prompt.trim();
-    if (trimmed.isEmpty) throw ArgumentError('prompt must be non-empty');
-
-    final apiKey = ServerConfig.googleApiKey;
-    if (apiKey != null) {
-      try {
-        return await _generateTextViaGeminiApi(
-          trimmed,
-          apiKey: apiKey,
-          temperature: temperature,
-          maxOutputTokens: maxOutputTokens,
-        );
-      } catch (e) {
-        stderr.writeln('[VertexClient] Gemini API key failed, trying Vertex SA: $e');
-      }
-    }
-
-    final capped = maxOutputTokens.clamp(1, 8192);
     final body = jsonEncode({
       'contents': [
         {
           'role': 'user',
           'parts': [
-            {'text': trimmed},
+            {'text': prompt},
           ],
         },
       ],
-      'generationConfig': {
-        'temperature': temperature,
-        'maxOutputTokens': capped,
-      },
+      'generationConfig': _textGenerationConfig(
+        temperature: temperature,
+        maxOutputTokens: maxOutputTokens,
+      ),
     });
 
     Object? lastErr;
@@ -193,13 +187,55 @@ class VertexClient {
     throw Exception('Vertex generateContent failed: $lastErr');
   }
 
+  Future<String> generateText(
+    String prompt, {
+    double temperature = 0.65,
+    int maxOutputTokens = 2048,
+  }) async {
+    final trimmed = prompt.trim();
+    if (trimmed.isEmpty) throw ArgumentError('prompt must be non-empty');
+
+    final hasCreds = File(ServerConfig.credentialsPath).existsSync();
+    // Prefer service-account Vertex first — API keys often fail slowly (429/depleted).
+    if (hasCreds) {
+      try {
+        return await _generateTextViaVertex(
+          trimmed,
+          temperature: temperature,
+          maxOutputTokens: maxOutputTokens,
+        );
+      } catch (e) {
+        stderr.writeln('[VertexClient] Vertex SA failed, trying Gemini API key: $e');
+      }
+    }
+
+    final apiKey = ServerConfig.googleApiKey;
+    if (apiKey != null) {
+      return _generateTextViaGeminiApi(
+        trimmed,
+        apiKey: apiKey,
+        temperature: temperature,
+        maxOutputTokens: maxOutputTokens,
+      );
+    }
+
+    if (hasCreds) {
+      // Re-throw last Vertex path by retrying once for a clear error.
+      return _generateTextViaVertex(
+        trimmed,
+        temperature: temperature,
+        maxOutputTokens: maxOutputTokens,
+      );
+    }
+    throw StateError('No Vertex credentials or GOOGLE_API_KEY configured');
+  }
+
   Future<String> _generateTextViaGeminiApi(
     String prompt, {
     required String apiKey,
     double temperature = 0.65,
     int maxOutputTokens = 2048,
   }) async {
-    final capped = maxOutputTokens.clamp(1, 8192);
     final models = ServerConfig.vertexTextModelFallbacks;
     Object? lastErr;
 
@@ -222,10 +258,10 @@ class VertexClient {
                 ],
               },
             ],
-            'generationConfig': {
-              'temperature': temperature,
-              'maxOutputTokens': capped,
-            },
+            'generationConfig': _textGenerationConfig(
+              temperature: temperature,
+              maxOutputTokens: maxOutputTokens,
+            ),
           }),
         );
         if (res.statusCode == 404) continue;

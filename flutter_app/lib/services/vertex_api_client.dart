@@ -47,11 +47,18 @@ class VertexApiClient {
   final Map<String, DateTime> _backendHealthCheckedAt = {};
 
   Future<bool> _isBackendUsable(String origin) async {
+    // Known-good production host — skip the extra /health round-trip.
+    if (origin.contains('socitea.onrender.com')) {
+      _backendUsableCache[origin] = true;
+      _backendHealthCheckedAt[origin] = DateTime.now();
+      return true;
+    }
+
     final cached = _backendUsableCache[origin];
     final checkedAt = _backendHealthCheckedAt[origin];
     if (cached != null &&
         checkedAt != null &&
-        DateTime.now().difference(checkedAt) < const Duration(minutes: 5)) {
+        DateTime.now().difference(checkedAt) < const Duration(minutes: 15)) {
       return cached;
     }
 
@@ -59,7 +66,7 @@ class VertexApiClient {
     try {
       final res = await client
           .get(Uri.parse('$origin/health'))
-          .timeout(const Duration(seconds: 12));
+          .timeout(const Duration(seconds: 3));
       if (res.statusCode < 200 || res.statusCode >= 300) {
         _backendUsableCache[origin] = false;
         _backendHealthCheckedAt[origin] = DateTime.now();

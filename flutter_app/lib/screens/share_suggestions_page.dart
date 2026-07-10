@@ -284,7 +284,7 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
 
   Future<void> _bootstrapSharePage() async {
     try {
-      await _bootstrapSharePageInner().timeout(const Duration(seconds: 90));
+      await _bootstrapSharePageInner().timeout(const Duration(seconds: 60));
     } catch (_) {
       if (mounted) {
         setState(() => _loading = false);
@@ -300,8 +300,11 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
       ]);
       await _ensureNewsShareImage();
     } else {
-      await _loadSuggestions();
-      await _ensureReflectionShareImage();
+      // Load posts and kick off image in parallel for snappier UX.
+      await Future.wait([
+        _loadSuggestions(),
+        _ensureReflectionShareImage(),
+      ]);
     }
   }
 
