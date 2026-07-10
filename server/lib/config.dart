@@ -40,6 +40,14 @@ class ServerConfig {
   static int get port =>
       int.tryParse(Platform.environment['PORT'] ?? '') ?? 3002;
 
+  static String? get googleApiKey {
+    for (final k in ['GOOGLE_API_KEY', 'GEMINI_API_KEY']) {
+      final v = Platform.environment[k]?.trim();
+      if (v != null && v.isNotEmpty) return v;
+    }
+    return null;
+  }
+
   static String get credentialsPath {
     final fromEnv = Platform.environment['GOOGLE_APPLICATION_CREDENTIALS']?.trim();
     if (fromEnv != null && fromEnv.isNotEmpty) return fromEnv;

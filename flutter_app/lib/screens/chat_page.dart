@@ -341,6 +341,7 @@ class _ChatPageState extends State<ChatPage> {
         unawaited(_generateEmotionalBackground(finalMessages));
       }
     } catch (e) {
+      debugPrint('Chat sendMessage failed: $e');
       final errMsg = ChatMessage(
         id: DateTime.now().millisecondsSinceEpoch + 2,
         text: "I'm sorry, I'm having trouble responding right now. Please try again in a moment.",

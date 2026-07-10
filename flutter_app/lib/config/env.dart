@@ -6,6 +6,7 @@ class Env {
 
   static const String openAiApiKey = String.fromEnvironment('OPENAI_API_KEY');
   static const String grokApiKey = String.fromEnvironment('GROK_API_KEY');
+  static const String googleApiKey = String.fromEnvironment('GOOGLE_API_KEY');
   static const String backendUrl = String.fromEnvironment(
     'BACKEND_URL',
     defaultValue: 'https://detea-backend.onrender.com',

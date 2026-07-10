@@ -32,7 +32,7 @@ class ChatService extends ChangeNotifier {
       '  OpenAI: ${openaiApiKey.isNotEmpty ? '${openaiApiKey.substring(0, openaiApiKey.length < 10 ? openaiApiKey.length : 10)}... (${openaiApiKey.length} chars)' : 'NOT SET'}',
     );
     debugPrint(
-      '  Gemini (Vertex backend): ${isVertexBackendConfigured() ? getVertexBackendBaseUrl() : 'NOT SET (REACT_APP_BACKEND_URL / REACT_APP_VERTEX_BACKEND_URL / REACT_APP_VERTEX_GEMINI_URL)'}',
+      '  Gemini: ${isVertexBackendConfigured() ? getVertexBackendBaseUrl() : 'NOT SET (GOOGLE_API_KEY)'}',
     );
     debugPrint(
       '  Grok: ${grokApiKey.isNotEmpty ? '${grokApiKey.substring(0, grokApiKey.length < 10 ? grokApiKey.length : 10)}... (${grokApiKey.length} chars)' : 'NOT SET'}',
@@ -52,13 +52,13 @@ class ChatService extends ChangeNotifier {
   String openaiBaseURL = 'https://api.openai.com/v1';
   String grokBaseURL = 'https://api.x.ai/v1';
   String openaiModelName = 'gpt-4o';
-  String geminiModelName = 'vertex-backend';
+  String geminiModelName = 'google-gemini';
   String grokModelName = 'grok-3';
   String visionModelName = 'gpt-4o';
 
   static const String _providerKey = 'chat_api_provider';
 
-  /// Prefer Gemini via socitea-backend when available (same path as share suggestions).
+  /// Prefer Gemini when GOOGLE_API_KEY is configured.
   String _preferredChatProvider() {
     if (isVertexBackendConfigured()) return 'gemini';
     if (openaiApiKey.trim().isNotEmpty) return 'openai';
@@ -1259,7 +1259,7 @@ Be thorough and detailed. This description will be used to generate a response.'
     final apiKey = '${getApiKey() ?? ''}';
     if (apiProvider == 'gemini' && !vertexForGemini) {
       throw Exception(
-        'Gemini uses your backend only. Set BACKEND_URL to https://socitea-backend.onrender.com and rebuild.',
+        'Gemini is not configured. Add GOOGLE_API_KEY to .env and rebuild.',
       );
     }
     if (!vertexForGemini && apiKey.trim().isEmpty) {
@@ -1657,19 +1657,32 @@ Assistant:""";
             maxOutputTokens: 1024,
           );
           if (aiText.trim().isEmpty) {
-            throw Exception('Empty response from Vertex backend.');
+            throw Exception('Empty response from Google Gemini.');
           }
           if (onToken != null) {
             onToken(aiText.trim());
           }
           return aiText.trim();
         } on TimeoutException {
-          throw Exception('Request timed out. The Vertex backend may be slow or unavailable. Please try again.');
+          throw Exception('Request timed out calling Google Gemini. Please try again.');
         } catch (fetchError) {
           final msg = fetchError.toString();
           if (msg.contains('Failed to fetch') || msg.contains('NetworkError')) {
             throw Exception(
-              'Unable to connect to the backend. Check BACKEND_URL (https://socitea-backend.onrender.com).',
+              'Unable to connect to Google Gemini. Check GOOGLE_API_KEY in .env and rebuild.',
+            );
+          }
+          if (msg.contains('depleted') || msg.contains('RESOURCE_EXHAUSTED')) {
+            throw Exception(
+              'Google AI credits are depleted. Add billing or credits at https://ai.studio/projects',
+            );
+          }
+          if (msg.contains('API has not been used') ||
+              msg.contains('API is disabled') ||
+              msg.contains('generativelanguage.googleapis.com')) {
+            throw Exception(
+              'Google Gemini API is not enabled for your API key project. '
+              'Enable the Generative Language API in Google Cloud Console, then rebuild the app.',
             );
           }
           rethrow;
@@ -1776,7 +1789,7 @@ Assistant:""";
     final apiKey = '${getApiKey() ?? ''}';
     if (apiProvider == 'gemini' && !vertexForGemini) {
       throw Exception(
-        'Gemini uses your backend only. Set REACT_APP_BACKEND_URL (preferred) or REACT_APP_VERTEX_BACKEND_URL / REACT_APP_VERTEX_GEMINI_URL in .env.',
+        'Gemini is not configured. Add GOOGLE_API_KEY in .env.',
       );
     }
     if (!vertexForGemini && apiKey.trim().isEmpty) {
@@ -2036,7 +2049,7 @@ $text""";
 
       final sharePrompt = _buildReflectionShareSuggestionsPrompt(reflection, platform);
 
-      // Primary path: Vertex /generateContent (deployed on detea-backend).
+      // Primary path: direct Google Gemini via GOOGLE_API_KEY.
       if (isVertexBackendConfigured()) {
         for (var attempt = 0; attempt < 2; attempt++) {
           try {
@@ -2129,7 +2142,7 @@ $text""";
       if (fallback.isNotEmpty) return fallback;
       if (lastErr != null) throw lastErr;
       throw Exception(
-        'Could not generate share suggestions. Set BACKEND_URL to https://detea-backend.onrender.com and rebuild, or add OPENAI_API_KEY.',
+        'Could not generate share suggestions. Add GOOGLE_API_KEY and rebuild, or add OPENAI_API_KEY.',
       );
     }
 
@@ -4568,7 +4581,7 @@ $contextSnippet''';
     }
 
     if (!isVertexBackendConfigured()) {
-      debugPrint('[Image] Vertex backend URL not set; image generation requires the backend.');
+      debugPrint('[Image] Gemini is not configured; image generation requires GOOGLE_API_KEY.');
       return null;
     }
 
@@ -4854,7 +4867,7 @@ $contextSnippet''';
     final instr = instruction.trim();
     if (instr.isEmpty) return null;
     if (!isVertexBackendConfigured()) {
-      debugPrint('[Image edit] Vertex backend URL not set');
+      debugPrint('[Image edit] Gemini is not configured');
       return null;
     }
 

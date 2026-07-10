@@ -139,6 +139,20 @@ class VertexClient {
     final trimmed = prompt.trim();
     if (trimmed.isEmpty) throw ArgumentError('prompt must be non-empty');
 
+    final apiKey = ServerConfig.googleApiKey;
+    if (apiKey != null) {
+      try {
+        return await _generateTextViaGeminiApi(
+          trimmed,
+          apiKey: apiKey,
+          temperature: temperature,
+          maxOutputTokens: maxOutputTokens,
+        );
+      } catch (e) {
+        stderr.writeln('[VertexClient] Gemini API key failed, trying Vertex SA: $e');
+      }
+    }
+
     final capped = maxOutputTokens.clamp(1, 8192);
     final body = jsonEncode({
       'contents': [
@@ -177,6 +191,60 @@ class VertexClient {
       }
     }
     throw Exception('Vertex generateContent failed: $lastErr');
+  }
+
+  Future<String> _generateTextViaGeminiApi(
+    String prompt, {
+    required String apiKey,
+    double temperature = 0.65,
+    int maxOutputTokens = 2048,
+  }) async {
+    final capped = maxOutputTokens.clamp(1, 8192);
+    final models = ServerConfig.vertexTextModelFallbacks;
+    Object? lastErr;
+
+    for (final modelId in models) {
+      try {
+        final res = await _http.post(
+          Uri.parse(
+            'https://generativelanguage.googleapis.com/v1beta/models/$modelId:generateContent',
+          ),
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': apiKey,
+          },
+          body: jsonEncode({
+            'contents': [
+              {
+                'role': 'user',
+                'parts': [
+                  {'text': prompt},
+                ],
+              },
+            ],
+            'generationConfig': {
+              'temperature': temperature,
+              'maxOutputTokens': capped,
+            },
+          }),
+        );
+        if (res.statusCode == 404) continue;
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          throw HttpException('Gemini API ${res.statusCode}: ${res.body}');
+        }
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        final text = _extractText(data);
+        if (text.isEmpty) {
+          throw HttpException('Gemini API returned empty text');
+        }
+        return text;
+      } catch (e) {
+        lastErr = e;
+        if (_isNotFoundModel(e)) continue;
+        rethrow;
+      }
+    }
+    throw Exception('Gemini API generateContent failed: $lastErr');
   }
 
   Future<String?> generateNewsIllustrationImage(String prompt) async {
