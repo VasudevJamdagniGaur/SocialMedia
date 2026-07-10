@@ -9,7 +9,7 @@ class Env {
   static const String googleApiKey = String.fromEnvironment('GOOGLE_API_KEY');
   static const String backendUrl = String.fromEnvironment(
     'BACKEND_URL',
-    defaultValue: 'https://detea-backend.onrender.com',
+    defaultValue: 'https://socitea-backend.onrender.com',
   );
   static const String vertexBackendUrl = String.fromEnvironment(
     'VERTEX_BACKEND_URL',
@@ -52,6 +52,6 @@ class Env {
         return 'http://localhost:3002';
       }
     }
-    return 'https://detea-backend.onrender.com';
+    return 'https://socitea-backend.onrender.com';
   }
 }

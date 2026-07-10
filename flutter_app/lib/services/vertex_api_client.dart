@@ -15,7 +15,7 @@ class VertexApiClient {
 
   static final VertexApiClient instance = VertexApiClient._();
 
-  static const String defaultBaseUrl = 'https://detea-backend.onrender.com';
+  static const String defaultBaseUrl = 'https://socitea-backend.onrender.com';
   static const String _googleApiBase = 'https://generativelanguage.googleapis.com';
   static const String _googleTextModel = 'gemini-2.5-flash';
   static const String _googleImageModel = 'gemini-2.0-flash-preview-image-generation';
@@ -290,11 +290,13 @@ ${jsonEncode(chatData ?? const [])}''';
       Env.backendUrl.trim(),
       Env.vertexBackendUrl.trim(),
       Env.vertexGeminiUrl.trim(),
-      defaultBaseUrl,
     ]) {
       if (candidate.isEmpty) continue;
       final normalized = candidate.replaceAll(RegExp(r'/$'), '');
       if (seen.add(normalized)) urls.add(normalized);
+    }
+    if (urls.isEmpty && seen.add(defaultBaseUrl)) {
+      urls.add(defaultBaseUrl);
     }
     return urls;
   }
