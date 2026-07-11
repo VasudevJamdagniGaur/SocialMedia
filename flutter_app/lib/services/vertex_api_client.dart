@@ -200,21 +200,52 @@ class VertexApiClient {
     if (candidates is! List || candidates.isEmpty) {
       throw Exception('Unexpected image response from Google Gemini');
     }
+    final partTypes = <String>[];
     for (final candidate in candidates.whereType<Map>()) {
       final content = candidate['content'];
       if (content is! Map) continue;
       final parts = content['parts'];
       if (parts is! List) continue;
       for (final part in parts.whereType<Map>()) {
-        final inlineData = part['inlineData'];
+        if (part['text'] is String && (part['text'] as String).isNotEmpty) {
+          partTypes.add('text');
+        }
+        final inlineData = part['inlineData'] ?? part['inline_data'];
         if (inlineData is! Map) continue;
-        final dataString = inlineData['data'];
-        final mimeType = (inlineData['mimeType'] as String?) ?? 'image/png';
-        if (dataString is String && dataString.isNotEmpty) {
+        partTypes.add('inlineData');
+        final raw = inlineData['data'];
+        final mimeType =
+            (inlineData['mimeType'] ?? inlineData['mime_type'] ?? 'image/png')
+                .toString();
+        String? dataString;
+        if (raw is String && raw.trim().isNotEmpty) {
+          dataString = raw.replaceAll(RegExp(r'\s'), '');
+        } else if (raw is List && raw.isNotEmpty) {
+          try {
+            dataString = base64Encode(
+              raw.map((e) => e is int ? e : (e as num).toInt()).toList(),
+            );
+          } catch (_) {
+            dataString = null;
+          }
+        }
+        if (dataString != null && dataString.isNotEmpty) {
+          debugPrint(
+            '[ImageGen] Google inlineData ok mime=$mimeType '
+            'b64Len=${dataString.length} partTypes=$partTypes',
+          );
           return 'data:$mimeType;base64,$dataString';
         }
+        debugPrint(
+          '[ImageGen] inlineData present but empty/unusable '
+          'rawType=${raw.runtimeType} partTypes=$partTypes',
+        );
       }
     }
+    debugPrint(
+      '[ImageGen] missing inline image data partTypes=$partTypes '
+      'keys=${data.keys.toList()}',
+    );
     throw Exception('Google Gemini response missing inline image data');
   }
 
@@ -242,13 +273,21 @@ class VertexApiClient {
       prompt: prompt,
       model: _googleImageModel,
       temperature: 0.8,
-      maxOutputTokens: 2048,
+      maxOutputTokens: 32768,
       timeout: timeout ?? const Duration(seconds: 120),
       extraGenerationConfig: const {
         'responseModalities': ['TEXT', 'IMAGE'],
       },
     );
     return _parseGoogleImageResponse(data);
+  }
+
+  /// Accept data-URI or raw base64 from backend image fields.
+  String? _coerceBackendImageField(Object? value) {
+    if (value is! String) return null;
+    final s = value.trim();
+    if (s.isEmpty) return null;
+    return s;
   }
 
   Future<String> _backendGenerateText({
@@ -563,7 +602,14 @@ ${jsonEncode(chatData ?? const [])}''';
     Map<String, String>? referenceImage,
   }) async {
     final p = prompt.trim();
-    if (p.isEmpty) throw Exception('vertexGenerateNewsImageDirect: prompt is required');
+    if (p.isEmpty) {
+      throw Exception('vertexGenerateNewsImageDirect: prompt is required');
+    }
+
+    debugPrint(
+      '[ImageGen] E2E start backend=$baseUrl promptLen=${p.length} '
+      'hasReference=${referenceImage != null}',
+    );
 
     if (_hasBackend) {
       try {
@@ -572,14 +618,24 @@ ${jsonEncode(chatData ?? const [])}''';
           timeout: timeout,
           referenceImage: referenceImage,
         );
-      } catch (e) {
+      } catch (e, st) {
+        debugPrint('[ImageGen] E2E backend path failed: $e');
+        debugPrint('[ImageGen] E2E stack:\n$st');
         if (!_hasGoogleApiKey || !_shouldFallbackToGoogle(e)) rethrow;
-        debugPrint('[VertexApiClient] Backend image failed, trying Google API: $e');
+        debugPrint('[ImageGen] E2E falling back to Google API key…');
       }
     }
 
     if (_hasGoogleApiKey) {
-      return _googleGenerateImage(p, timeout: timeout);
+      try {
+        final img = await _googleGenerateImage(p, timeout: timeout);
+        debugPrint('[ImageGen] E2E Google API success len=${img.length}');
+        return img;
+      } catch (e, st) {
+        debugPrint('[ImageGen] E2E Google API failed: $e');
+        debugPrint('[ImageGen] E2E stack:\n$st');
+        rethrow;
+      }
     }
 
     throw Exception(
@@ -611,6 +667,18 @@ ${jsonEncode(chatData ?? const [])}''';
     Duration? timeout,
     Map<String, String>? referenceImage,
   }) async {
+    final sw = Stopwatch()..start();
+    void checkpoint(String stage) {
+      final ms = sw.elapsedMilliseconds;
+      debugPrint('[ImageGen] checkpoint stage=$stage elapsedMs=$ms');
+      if (ms > 5000) {
+        debugPrint(
+          '[ImageGen] SLOW (>5s) still at stage=$stage elapsedMs=$ms — '
+          'execution has not finished yet',
+        );
+      }
+    }
+
     final base = baseUrl.replaceAll(RegExp(r'/$'), '');
     final fallback = Env.generateNewsImageFallbackUrl.trim().replaceAll(RegExp(r'/$'), '');
 
@@ -618,6 +686,10 @@ ${jsonEncode(chatData ?? const [])}''';
       if (base.isNotEmpty) '$base/generate-news-image',
       if (fallback.isNotEmpty) '$fallback/generate-news-image',
     ];
+
+    if (urls.isEmpty) {
+      throw Exception('[ImageGen] no backend URL configured for image generation');
+    }
 
     final requestBody = <String, dynamic>{'prompt': p};
     if (referenceImage != null &&
@@ -630,12 +702,16 @@ ${jsonEncode(chatData ?? const [])}''';
 
     Exception? lastErr;
     for (final url in urls.toSet()) {
+      checkpoint('before_http_post');
+      debugPrint('[ImageGen] EXACT URL being called: $url');
+      debugPrint(
+        '[ImageGen] request promptLen=${p.length} '
+        'hasReference=${requestBody.containsKey('referenceImage')} '
+        'timeoutSec=${(timeout ?? const Duration(seconds: 120)).inSeconds}',
+      );
+
+      final client = http.Client();
       try {
-        debugPrint(
-          '[ImageGen] API request sent url=$url promptLen=${p.length} '
-          'hasReference=${requestBody.containsKey('referenceImage')}',
-        );
-        final client = http.Client();
         final res = await client
             .post(
               Uri.parse(url),
@@ -643,37 +719,111 @@ ${jsonEncode(chatData ?? const [])}''';
               body: jsonEncode(requestBody),
             )
             .timeout(timeout ?? const Duration(seconds: 120));
-        client.close();
 
+        checkpoint('after_http_response');
+        debugPrint('[ImageGen] HTTP status returned: ${res.statusCode}');
         debugPrint(
-          '[ImageGen] API response received url=$url status=${res.statusCode} bodyLen=${res.body.length}',
+          '[ImageGen] response bodyLen=${res.body.length} '
+          'elapsedMs=${sw.elapsedMilliseconds}',
+        );
+        debugPrint(
+          '[ImageGen] response body preview: '
+          '${res.body.substring(0, res.body.length.clamp(0, 500))}',
         );
 
         if (res.statusCode < 200 || res.statusCode >= 300) {
           lastErr = Exception(
-            'HTTP ${res.statusCode} from $url: ${res.body.substring(0, res.body.length.clamp(0, 200))}',
+            'HTTP ${res.statusCode} from $url: '
+            '${res.body.substring(0, res.body.length.clamp(0, 500))}',
           );
+          debugPrint('[ImageGen] non-2xx: $lastErr');
           continue;
         }
 
-        final data = jsonDecode(res.body) as Map<String, dynamic>;
-        final ok = data['ok'];
-        if (ok == false) {
-          lastErr = Exception('Backend returned ok=false');
+        late Map<String, dynamic> data;
+        try {
+          final decoded = jsonDecode(res.body);
+          if (decoded is! Map) {
+            throw Exception('Backend image response was not a JSON object');
+          }
+          data = Map<String, dynamic>.from(decoded);
+        } catch (e, st) {
+          debugPrint('[ImageGen] JSON parse failed: $e');
+          debugPrint('[ImageGen] stack:\n$st');
+          lastErr = e is Exception ? e : Exception('$e');
           continue;
         }
-        final imageDataUrl = data['imageDataUrl'];
-        if (imageDataUrl is String && imageDataUrl.startsWith('data:image')) {
-          debugPrint('[ImageGen] imageDataUrl length=${imageDataUrl.length}');
+
+        checkpoint('after_json_parse');
+        debugPrint('[ImageGen] response keys=${data.keys.toList()} ok=${data['ok']}');
+
+        if (data['ok'] == false) {
+          lastErr = Exception(
+            'Backend returned ok=false error=${data['error']} details=${data['details']} body=${res.body}',
+          );
+          debugPrint('[ImageGen] $lastErr');
+          continue;
+        }
+
+        String? imageDataUrl = _coerceBackendImageField(data['imageDataUrl']) ??
+            _coerceBackendImageField(data['image']) ??
+            _coerceBackendImageField(data['dataUrl']);
+
+        debugPrint(
+          '[ImageGen] imageDataUrl field present=${data.containsKey('imageDataUrl')} '
+          'coercedLen=${imageDataUrl?.length ?? 0}',
+        );
+
+        if (imageDataUrl == null && data['candidates'] is List) {
+          try {
+            imageDataUrl = _parseGoogleImageResponse(data);
+            debugPrint(
+              '[ImageGen] extracted from candidates/inlineData len=${imageDataUrl.length}',
+            );
+          } catch (e, st) {
+            debugPrint('[ImageGen] candidates present but no usable inlineData: $e');
+            debugPrint('[ImageGen] stack:\n$st');
+          }
+        }
+
+        if (imageDataUrl != null && imageDataUrl.isNotEmpty) {
+          if (!imageDataUrl.startsWith('data:')) {
+            imageDataUrl = 'data:image/png;base64,$imageDataUrl';
+          }
+          checkpoint('success');
+          debugPrint(
+            '[ImageGen] E2E SUCCESS url=$url len=${imageDataUrl.length} '
+            'elapsedMs=${sw.elapsedMilliseconds} '
+            'prefix=${imageDataUrl.substring(0, imageDataUrl.length.clamp(0, 48))}',
+          );
           return imageDataUrl;
         }
-        lastErr = Exception('Response missing imageDataUrl');
-        debugPrint('[ImageGen] response keys=${data.keys.toList()}');
-      } catch (e) {
-        lastErr = e is Exception ? e : Exception(e.toString());
+
+        lastErr = Exception(
+          'Response missing non-empty imageDataUrl/inlineData from $url. '
+          'keys=${data.keys.toList()} body=${res.body.substring(0, res.body.length.clamp(0, 800))}',
+        );
+        debugPrint('[ImageGen] $lastErr');
+      } on TimeoutException catch (e, st) {
+        checkpoint('timeout');
+        debugPrint('[ImageGen] TIMEOUT url=$url after ${sw.elapsedMilliseconds}ms: $e');
+        debugPrint('[ImageGen] stack:\n$st');
+        lastErr = Exception('ImageGen timeout calling $url after ${sw.elapsedMilliseconds}ms: $e');
+      } catch (e, st) {
+        checkpoint('exception');
+        debugPrint('[ImageGen] exception url=$url: $e');
+        debugPrint('[ImageGen] full stack trace:\n$st');
+        lastErr = e is Exception ? e : Exception('$e');
+      } finally {
+        client.close();
       }
     }
-    throw lastErr ?? Exception('vertexGenerateNewsImage: all backends failed');
+
+    checkpoint('all_urls_failed');
+    throw lastErr ??
+        Exception(
+          'vertexGenerateNewsImage: all backends failed elapsedMs=${sw.elapsedMilliseconds}',
+        );
   }
 }
 

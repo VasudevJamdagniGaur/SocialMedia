@@ -124,18 +124,73 @@ Router buildVertexRouter(VertexClient vertex) {
   });
 
   router.post('/generate-news-image', (Request req) async {
+    final sw = Stopwatch()..start();
+    void checkpoint(String stage) {
+      final ms = sw.elapsedMilliseconds;
+      stderr.writeln('[generate-news-image] checkpoint stage=$stage elapsedMs=$ms');
+      if (ms > 5000) {
+        stderr.writeln(
+          '[generate-news-image] SLOW (>5s) execution still at stage=$stage '
+          'elapsedMs=$ms',
+        );
+      }
+    }
+
+    stderr.writeln('[generate-news-image] ========== ENDPOINT ENTERED ==========');
+    checkpoint('entered');
+
     final body = await readJsonBody(req);
-    if (body == null) return jsonError(400, 'Invalid JSON body');
+    checkpoint('after_read_body');
+    if (body == null) {
+      stderr.writeln('[generate-news-image] ERROR: Invalid JSON body');
+      return jsonError(400, 'Invalid JSON body');
+    }
     final prompt = body['prompt'];
     if (prompt is! String || prompt.trim().isEmpty) {
+      stderr.writeln('[generate-news-image] ERROR: Missing or invalid prompt');
       return jsonError(400, 'Missing or invalid "prompt" (non-empty string required)');
     }
+
+    final modelId = ServerConfig.normalizeVertexModelId(ServerConfig.vertexImageModel);
+    final referenceImage = body['referenceImage'];
+    final hasReference = referenceImage is Map &&
+        referenceImage['base64'] is String &&
+        '${referenceImage['base64']}'.trim().isNotEmpty;
+
+    stderr.writeln('[generate-news-image] ========== BEFORE VERTEX REQUEST ==========');
+    stderr.writeln('[generate-news-image] modelId=$modelId');
+    stderr.writeln(
+      '[generate-news-image] project=${ServerConfig.projectId} '
+      'location=${ServerConfig.vertexLocation} '
+      'resource=publishers/google/models/$modelId',
+    );
     try {
-      final referenceImage = body['referenceImage'];
-      final String? imageDataUrl;
-      if (referenceImage is Map &&
-          referenceImage['base64'] is String &&
-          '${referenceImage['base64']}'.trim().isNotEmpty) {
+      final logBody = Map<String, dynamic>.from(body);
+      if (logBody['referenceImage'] is Map) {
+        final ref = Map<String, dynamic>.from(logBody['referenceImage'] as Map);
+        final b64 = ref['base64'];
+        if (b64 is String) {
+          ref['base64'] = '<base64 omitted len=${b64.length}>';
+        }
+        logBody['referenceImage'] = ref;
+      }
+      const encoder = JsonEncoder.withIndent('  ');
+      stderr.writeln(
+        '[generate-news-image] request body (no credentials):\n${encoder.convert(logBody)}',
+      );
+    } catch (e, st) {
+      stderr.writeln('[generate-news-image] failed to log request body: $e');
+      stderr.writeln('[generate-news-image] full stack trace:\n$st');
+    }
+    stderr.writeln(
+      '[generate-news-image] promptLen=${prompt.trim().length} hasReference=$hasReference',
+    );
+    checkpoint('before_vertex_call');
+
+    try {
+      final String imageDataUrl;
+      if (hasReference) {
+        stderr.writeln('[generate-news-image] calling generatePublicFigureIllustrationImage…');
         imageDataUrl = await vertex.generatePublicFigureIllustrationImage(
           prompt,
           referenceImageBase64: '${referenceImage['base64']}',
@@ -144,13 +199,35 @@ Router buildVertexRouter(VertexClient vertex) {
               : 'image/jpeg',
         );
       } else {
+        stderr.writeln('[generate-news-image] calling generateShareSceneImage…');
         imageDataUrl = await vertex.generateShareSceneImage(prompt);
       }
-      if (imageDataUrl == null) {
-        return jsonError(502, 'Image generation returned no image', details: 'Model did not return an image part');
+
+      checkpoint('after_vertex_response');
+      stderr.writeln('[generate-news-image] ========== AFTER VERTEX RESPONSE ==========');
+      stderr.writeln(
+        '[generate-news-image] imageDataUrl len=${imageDataUrl.length} '
+        'prefix=${imageDataUrl.substring(0, imageDataUrl.length.clamp(0, 48))} '
+        'elapsedMs=${sw.elapsedMilliseconds}',
+      );
+
+      if (imageDataUrl.isEmpty || !imageDataUrl.startsWith('data:image')) {
+        throw StateError(
+          'Image generation returned empty/invalid imageDataUrl '
+          '(len=${imageDataUrl.length}) — see [VertexImage] logs for full JSON',
+        );
       }
-      return jsonOk({'imageDataUrl': imageDataUrl});
-    } catch (e) {
+
+      checkpoint('success');
+      return jsonOk({
+        'imageDataUrl': imageDataUrl,
+        'model': modelId,
+      });
+    } catch (e, st) {
+      checkpoint('exception');
+      stderr.writeln('[generate-news-image] ========== EXCEPTION ==========');
+      stderr.writeln('[generate-news-image] exception: $e');
+      stderr.writeln('[generate-news-image] full stack trace:\n$st');
       final details = '$e';
       final rateLimited = details.contains('429') ||
           details.toLowerCase().contains('resource exhausted');
@@ -261,11 +338,12 @@ Router buildVertexRouter(VertexClient vertex) {
         'Medium or wide shot when people appear; avoid face close-ups.\n\n'
         '${combined.length > 5500 ? combined.substring(0, 5500) : combined}';
 
-    final String? dataUrl;
+    final String dataUrl;
     try {
       dataUrl = await vertex.generateNewsIllustrationImage(prompt);
-    } catch (e) {
+    } catch (e, st) {
       stderr.writeln('[EnsureImage] AI generation failed: $e');
+      stderr.writeln('[EnsureImage] full stack trace:\n$st');
       final details = '$e';
       final rateLimited = details.contains('429') ||
           details.toLowerCase().contains('resource exhausted');
@@ -274,7 +352,7 @@ Router buildVertexRouter(VertexClient vertex) {
       }
       return jsonError(502, 'Image generation failed', details: details);
     }
-    if (dataUrl == null || !dataUrl.startsWith('data:image')) {
+    if (!dataUrl.startsWith('data:image')) {
       return jsonError(502, 'Image generation returned no image');
     }
 
