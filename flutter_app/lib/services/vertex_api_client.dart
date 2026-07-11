@@ -25,14 +25,8 @@ class VertexApiClient {
   String get _googleApiKey => Env.googleApiKey.trim();
   bool get _hasGoogleApiKey => _googleApiKey.isNotEmpty;
 
-  /// Always [Env.baseUrl] — set via `BACKEND_URL` / `--dart-define-from-file`.
-  String get baseUrl {
-    final raw = Env.baseUrl;
-    if (raw.contains(_legacyBrokenHost)) {
-      return 'https://socitea.onrender.com';
-    }
-    return raw;
-  }
+  /// Always [Env.aiBackendUrl] for Vertex text/image (never Express :3002).
+  String get baseUrl => Env.aiBackendUrl;
 
   bool get isConfigured => true; // Firebase AI always available as last resort
 
@@ -432,14 +426,17 @@ ${jsonEncode(chatData ?? const [])}''';
     final seen = <String>{};
     final urls = <String>[];
     for (final candidate in [
+      Env.aiBackendUrl,
       Env.backendUrl.trim(),
       Env.vertexBackendUrl.trim(),
       Env.vertexGeminiUrl.trim(),
-      baseUrl,
       'https://socitea.onrender.com',
     ]) {
       if (candidate.isEmpty) continue;
       if (candidate.contains(_legacyBrokenHost)) continue;
+      if (candidate.contains('localhost') || candidate.contains('127.0.0.1')) {
+        continue; // Express has no Vertex image/text routes
+      }
       final normalized = candidate.replaceAll(RegExp(r'/$'), '');
       if (seen.add(normalized)) urls.add(normalized);
     }

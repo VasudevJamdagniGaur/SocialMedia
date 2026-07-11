@@ -4574,8 +4574,12 @@ $contextSnippet''';
   Future<String?> generateShareImageFromPrompt(String prompt) async {
     final trimmed = prompt.trim();
     if (trimmed.isEmpty || !isVertexBackendConfigured()) return null;
-    final referencePhoto = await _resolveShareImageReferencePhoto(trimmed);
-    return _generateImageWithGeminiOrReferenceFallback(trimmed, referencePhoto);
+    // Direct image call — skip reference-photo / entity pipeline that can stall.
+    debugPrint(
+      '[ImageGen] generateShareImageFromPrompt len=${trimmed.length} '
+      'aiBackend=${Env.aiBackendUrl}',
+    );
+    return _generateImageWithGemini(trimmed, null);
   }
 
   Future<String?> fetchImageForReflection(
@@ -4584,8 +4588,14 @@ $contextSnippet''';
     String platform = 'x',
     bool skipCache = false,
   ]) async {
-    if (postText.trim().isEmpty) return null;
-    debugPrint('[ImageGen] fetchImageForReflection start platform=$platform textLen=${postText.trim().length}');
+    if (postText.trim().isEmpty) {
+      debugPrint('[ImageGen] fetchImageForReflection aborted: empty text');
+      return null;
+    }
+    debugPrint(
+      '[ImageGen] fetchImageForReflection start platform=$platform '
+      'textLen=${postText.trim().length} aiBackend=${Env.aiBackendUrl}',
+    );
     final fullText = postText.trim();
     final keyText = fullText.length > 300 ? fullText.substring(0, 300) : fullText;
     final cacheKey = 'post_image_cache_v5::$keyText';
@@ -4606,6 +4616,7 @@ $contextSnippet''';
                   (parsed['image'] as String).isNotEmpty) {
                 final image = parsed['image'] as String;
                 if (shouldPersistGeneratedImageCache(image)) {
+                  debugPrint('[ImageGen] cache hit — skipping network image request');
                   return image;
                 }
               }
@@ -4618,25 +4629,48 @@ $contextSnippet''';
     }
 
     if (!isVertexBackendConfigured()) {
-      debugPrint('[Image] Vertex backend URL not set; image generation requires BACKEND_URL or GOOGLE_API_KEY.');
+      debugPrint(
+        '[ImageGen] Vertex backend URL not set; image generation requires BACKEND_URL',
+      );
       return null;
     }
 
-    final platformName = platform.trim().isEmpty ? 'x' : platform.trim().toLowerCase();
-    Map<String, String>? referenceImage = await _resolveShareImageReferencePhoto(fullText);
-    if (referenceImage == null &&
-        (userContext?['profileImageUrl']?.toString().trim().isNotEmpty ?? false)) {
-      referenceImage = await _getProfileImageAsBase64(userContext!['profileImageUrl'].toString().trim());
-    }
+    // FAST PATH: build a local prompt and call /generate-news-image immediately.
+    // Do NOT wait on entity detection / structured prompt Vertex text calls —
+    // those were stalling the Future so the image HTTP request never started.
+    final prompt = _buildFastShareImagePrompt(fullText, platform);
+    debugPrint(
+      '[ImageGen] fast-path prompt ready len=${prompt.length} — '
+      'sending image HTTP now (no pre-Vertex text pipeline)',
+    );
 
-    final prompt = await _resolveShareImagePrompt(fullText, platformName, userContext);
-    if (prompt == null || prompt.trim().isEmpty) return null;
-
-    final generated = await _generateImageWithGeminiOrReferenceFallback(prompt, referenceImage);
-    if (generated != null && generated.isNotEmpty && !skipCache) {
-      _cacheReflectionImageIfPersistable(prefs, cacheKey, fullText, generated);
+    try {
+      final generated = await _generateImageWithGemini(prompt, null)
+          .timeout(const Duration(seconds: 90));
+      if (generated != null && generated.isNotEmpty && !skipCache) {
+        _cacheReflectionImageIfPersistable(prefs, cacheKey, fullText, generated);
+      }
+      return generated;
+    } catch (e, st) {
+      debugPrint('[ImageGen] fetchImageForReflection failed: $e');
+      debugPrint('[ImageGen] stack:\n$st');
+      return null;
     }
-    return generated;
+  }
+
+  /// Local prompt — no network. Ensures the image HTTP request can start immediately.
+  String _buildFastShareImagePrompt(String postText, String platform) {
+    final clipped = postText.trim();
+    final body = clipped.length > 900 ? clipped.substring(0, 900) : clipped;
+    final platformHint = platform == 'linkedin'
+        ? 'professional LinkedIn-style editorial scene'
+        : platform == 'instagram'
+            ? 'authentic Instagram feed scene'
+            : 'vivid social media editorial scene';
+    return 'Create one $platformHint illustration for this post.\n'
+        'Depict the SITUATION, environment, and objects — medium or wide shot.\n'
+        'No face close-ups, no embedded text, captions, or logos.\n\n'
+        'Post:\n$body';
   }
 
   void _cacheReflectionImageIfPersistable(

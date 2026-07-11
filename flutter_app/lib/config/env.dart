@@ -70,4 +70,19 @@ class Env {
     }
     return 'https://socitea.onrender.com';
   }
+
+  /// Backend that serves Vertex AI (`/generateContent`, `/generate-news-image`).
+  /// Never use the local Express reddit proxy — it has no image routes.
+  static String get aiBackendUrl {
+    final b = baseUrl;
+    if (b.contains('localhost') ||
+        b.contains('127.0.0.1') ||
+        b.contains(':3002')) {
+      return 'https://socitea.onrender.com';
+    }
+    if (b.contains('detea-backend.onrender.com')) {
+      return 'https://socitea.onrender.com';
+    }
+    return b;
+  }
 }

@@ -337,20 +337,32 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
           text = (_suggestions.first['post'] ?? '').trim();
         }
       }
-      if (text.isEmpty) return;
+      if (text.isEmpty) {
+        debugPrint('[ImageGen] reflection share image skipped: empty text');
+        return;
+      }
 
-      debugPrint('[ImageGen] reflection share image request textLen=${text.length}');
-      final prompt = await ChatService.instance.resolveShareImagePrompt(text, platform: _platform);
-      final generated = await ChatService.instance.fetchImageForReflection(text, null, _platform);
       debugPrint(
-        '[ImageGen] reflection share image stored hasImage=${generated != null} len=${generated?.length ?? 0}',
+        '[ImageGen] reflection share image START textLen=${text.length} '
+        'platform=$_platform aiBackend=${Env.aiBackendUrl}',
+      );
+      // Do not await resolveShareImagePrompt first — that stalled before any HTTP.
+      final generated = await ChatService.instance
+          .fetchImageForReflection(text, null, _platform)
+          .timeout(const Duration(seconds: 100));
+      debugPrint(
+        '[ImageGen] reflection share image DONE hasImage=${generated != null} '
+        'len=${generated?.length ?? 0}',
       );
       if (generated == null || !mounted) return;
 
       setState(() {
         _generatedShareImageUrl = generated;
-        if (prompt != null && prompt.trim().isNotEmpty) _lastImagePrompt = prompt.trim();
+        _lastImagePrompt = text.length > 200 ? text.substring(0, 200) : text;
       });
+    } catch (e, st) {
+      debugPrint('[ImageGen] reflection share image FAILED: $e');
+      debugPrint('[ImageGen] stack:\n$st');
     } finally {
       if (mounted) setState(() => _loadingShareImage = false);
     }
@@ -1274,10 +1286,14 @@ Plain text only: no **bold**, no markdown bullets, no em dashes (—). Use a pla
     String? updatedPrompt;
     try {
       var basePrompt = _lastImagePrompt?.trim();
-      basePrompt ??= await ChatService.instance.resolveShareImagePrompt(
-        _imagePromptSourceText,
-        platform: _platform,
-      );
+      if (basePrompt == null || basePrompt.isEmpty) {
+        // Local fallback — do not stall on resolveShareImagePrompt Vertex text calls.
+        final src = _imagePromptSourceText.trim();
+        basePrompt = src.isEmpty
+            ? null
+            : 'Create one social media editorial scene for this post. '
+                'Depict the situation and environment, medium or wide shot, no text.\n\n$src';
+      }
       if (basePrompt == null || basePrompt.trim().isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1345,7 +1361,10 @@ User changes: $instruction''',
         promptUsed = customPrompt.trim();
         image = await ChatService.instance.generateShareImageFromPrompt(promptUsed);
       } else if (sourceText != null && sourceText.trim().isNotEmpty) {
-        promptUsed = await ChatService.instance.resolveShareImagePrompt(sourceText, platform: _platform);
+        // Fast path: do not await resolveShareImagePrompt (can stall before HTTP).
+        promptUsed = sourceText.trim().length > 200
+            ? sourceText.trim().substring(0, 200)
+            : sourceText.trim();
         image = await ChatService.instance.fetchImageForReflection(
           sourceText,
           null,
