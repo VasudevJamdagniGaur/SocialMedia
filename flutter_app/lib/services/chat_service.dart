@@ -4579,7 +4579,7 @@ $contextSnippet''';
       '[ImageGen] generateShareImageFromPrompt len=${trimmed.length} '
       'aiBackend=${Env.aiBackendUrl}',
     );
-    return _generateImageWithGemini(trimmed, null);
+    return _generateImageWithGemini(trimmed);
   }
 
   Future<String?> fetchImageForReflection(
@@ -4598,7 +4598,9 @@ $contextSnippet''';
     );
     final fullText = postText.trim();
     final keyText = fullText.length > 300 ? fullText.substring(0, 300) : fullText;
-    final cacheKey = 'post_image_cache_v5::$keyText';
+    final platformKey = platform.trim().isEmpty ? 'x' : platform.trim().toLowerCase();
+    // v6: Instagram Story prompts + 9:16 — invalidate older unrelated caches.
+    final cacheKey = 'post_image_cache_v6::$platformKey::$keyText';
     final prefs = await SharedPreferences.getInstance();
 
     if (!skipCache) {
@@ -4638,14 +4640,19 @@ $contextSnippet''';
     // FAST PATH: build a local prompt and call /generate-news-image immediately.
     // Do NOT wait on entity detection / structured prompt Vertex text calls —
     // those were stalling the Future so the image HTTP request never started.
-    final prompt = _buildFastShareImagePrompt(fullText, platform);
+    final prompt = _buildFastShareImagePrompt(fullText, platformKey);
+    final aspectRatio = _shareImageAspectRatio(platformKey);
     debugPrint(
-      '[ImageGen] fast-path prompt ready len=${prompt.length} — '
+      '[ImageGen] fast-path prompt ready len=${prompt.length} '
+      'aspectRatio=$aspectRatio platform=$platformKey — '
       'sending image HTTP now (no pre-Vertex text pipeline)',
     );
 
     try {
-      final generated = await _generateImageWithGemini(prompt, null);
+      final generated = await _generateImageWithGemini(
+        prompt,
+        aspectRatio: aspectRatio,
+      );
       if (generated != null && generated.isNotEmpty && !skipCache) {
         _cacheReflectionImageIfPersistable(prefs, cacheKey, fullText, generated);
       }
@@ -4661,15 +4668,60 @@ $contextSnippet''';
   String _buildFastShareImagePrompt(String postText, String platform) {
     final clipped = postText.trim();
     final body = clipped.length > 900 ? clipped.substring(0, 900) : clipped;
-    final platformHint = platform == 'linkedin'
+    final p = platform.trim().toLowerCase();
+
+    if (p == 'instagram' || p == 'reddit') {
+      return _buildInstagramStoryImagePrompt(body);
+    }
+
+    final platformHint = p == 'linkedin'
         ? 'professional LinkedIn-style editorial scene'
-        : platform == 'instagram'
-            ? 'authentic Instagram feed scene'
-            : 'vivid social media editorial scene';
-    return 'Create one $platformHint illustration for this post.\n'
-        'Depict the SITUATION, environment, and objects — medium or wide shot.\n'
-        'No face close-ups, no embedded text, captions, or logos.\n\n'
+        : 'vivid social media editorial scene';
+    return 'Create one $platformHint photograph for this post.\n'
+        'Visually tell the story in the text — infer scene, mood, setting, lighting, '
+        'people, and objects from the words. Do not invent an unrelated scene.\n'
+        'Medium or wide shot. No face close-ups, logos, or watermarks.\n\n'
         'Post:\n$body';
+  }
+
+  /// Instagram Story (9:16) — story-first, premium aesthetic, optional short overlay.
+  String _buildInstagramStoryImagePrompt(String body) {
+    return '''
+Create ONE vertical Instagram Story image (9:16, 1080x1920 style).
+
+PRIMARY CONTEXT (must drive the entire visual — do not invent an unrelated scene):
+"""
+$body
+"""
+
+REQUIREMENTS:
+- Visually tell the story described above. Infer scene, mood, setting, lighting, emotions, people, and objects from the text automatically.
+- Premium aesthetic Instagram Story design: cinematic lighting, subtle gradients, social-media quality composition, clean modern look.
+- Leave safe margins near edges so UI chrome will not cover important content.
+- If appropriate, overlay ONE short impactful headline or quote (5–10 words max) taken from or inspired by the text. Typography must be minimal, modern, highly readable. Prefer no text if the scene alone is stronger.
+- Do NOT look like a poster, flyer, advertisement, presentation slide, or collage template.
+- Avoid excessive text. The image itself should communicate the message.
+- Use realistic, high-quality photography unless the text clearly implies illustration or art.
+- Every story must feel unique and match the emotional tone of the text — no fixed template.
+
+LAYOUT BY CONTEXT (pick what fits the text):
+- Sports → action shot, energetic atmosphere, stadium/pitch energy.
+- Travel → scenic immersive environment.
+- Motivation → minimal aesthetic with symbolic visuals.
+- Personal achievements → celebratory and inspiring.
+- Technology → futuristic, clean visuals.
+- News/current events → editorial-style storytelling.
+- Emotional reflections → cinematic, expressive scenes.
+
+Output a single vertical Story frame only.
+'''.trim();
+  }
+
+  String _shareImageAspectRatio(String platform) {
+    final p = platform.trim().toLowerCase();
+    if (p == 'instagram' || p == 'reddit') return '9:16';
+    if (p == 'linkedin') return '1:1';
+    return '16:9';
   }
 
   void _cacheReflectionImageIfPersistable(
@@ -4835,13 +4887,19 @@ $contextSnippet''';
     String prompt,
     Map<String, String>? referenceImage,
   ) async {
-    var generated = await _generateImageWithGemini(prompt, referenceImage);
+    var generated = await _generateImageWithGemini(
+      prompt,
+      referenceImage: referenceImage,
+    );
     if (generated != null && generated.isNotEmpty) return generated;
 
     final simplified = _simplifyImagePromptForRetry(prompt);
     if (simplified != prompt.trim()) {
       debugPrint('[ImageGen] retrying with simplified scene prompt');
-      generated = await _generateImageWithGemini(simplified, referenceImage);
+      generated = await _generateImageWithGemini(
+        simplified,
+        referenceImage: referenceImage,
+      );
       if (generated != null && generated.isNotEmpty) return generated;
     }
 
@@ -4901,19 +4959,21 @@ $contextSnippet''';
   }
 
   Future<String?> _generateImageWithGemini(
-    String prompt, [
+    String prompt, {
     Map<String, String>? referenceImage,
-  ]) async {
+    String aspectRatio = '16:9',
+  }) async {
     final p = prompt.trim();
     if (p.isEmpty || !isVertexBackendConfigured()) return null;
     try {
       debugPrint(
         '[ImageGen] _generateImageWithGemini promptLen=${p.length} '
-        'hasReference=${referenceImage != null}',
+        'hasReference=${referenceImage != null} aspectRatio=$aspectRatio',
       );
       final imageDataUrl = await vertexGenerateNewsImageDirect(
         p,
         referenceImage: referenceImage,
+        aspectRatio: aspectRatio,
       );
       debugPrint('[ImageGen] _generateImageWithGemini received len=${imageDataUrl.length}');
       if (imageDataUrl.startsWith('data:image')) {

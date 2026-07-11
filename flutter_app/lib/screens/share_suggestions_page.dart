@@ -2184,9 +2184,17 @@ User changes: $instruction''',
                         else ...[
                           if (_loadingShareImage &&
                               !isValidHubCarouselImageUrl(_shareSuggestionImageUrl)) ...[
-                            const AspectRatio(
-                              aspectRatio: 16 / 9,
-                              child: Skeleton(variant: SkeletonVariant.image),
+                            Center(
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  maxHeight: _platform == 'instagram' ? 360 : 220,
+                                  maxWidth: double.infinity,
+                                ),
+                                child: AspectRatio(
+                                  aspectRatio: _platform == 'instagram' ? 9 / 16 : 16 / 9,
+                                  child: const Skeleton(variant: SkeletonVariant.image),
+                                ),
+                              ),
                             ),
                             const SizedBox(height: 12),
                           ],
@@ -2700,14 +2708,29 @@ class _SuggestionCard extends StatelessWidget {
         ),
       );
     } else {
+      final isInstagram = platform == 'instagram' || platform == 'reddit';
       cardContent = Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (imageUrl != null && imageUrl!.isNotEmpty)
-            AspectRatio(
-                    aspectRatio: 16 / 9,
-                    child: _SuggestionImage(url: imageUrl!, isDarkMode: isDarkMode),
+                Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    isInstagram ? 48 : 0,
+                    isInstagram ? 12 : 0,
+                    isInstagram ? 48 : 0,
+                    0,
                   ),
+                  child: AspectRatio(
+                    aspectRatio: isInstagram ? 9 / 16 : 16 / 9,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.vertical(
+                        top: Radius.circular(isInstagram ? 12 : 12),
+                        bottom: Radius.circular(isInstagram ? 12 : 0),
+                      ),
+                      child: _SuggestionImage(url: imageUrl!, isDarkMode: isDarkMode),
+                    ),
+                  ),
+                ),
           Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
@@ -3278,14 +3301,27 @@ class _SharePanelOverlayState extends State<_SharePanelOverlay> {
                   Stack(
                     alignment: Alignment.topRight,
                     children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: AspectRatio(
-                          aspectRatio: 16 / 9,
-                          child: PixelatedImageTransition(
-                            imageUrl: widget.imageUrl,
-                            isLoading: widget.imageRegenerating,
-                            fit: BoxFit.cover,
+                      Center(
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxHeight:
+                                widget.platform == 'instagram' || widget.platform == 'reddit'
+                                    ? 420
+                                    : 240,
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: AspectRatio(
+                              aspectRatio:
+                                  widget.platform == 'instagram' || widget.platform == 'reddit'
+                                      ? 9 / 16
+                                      : 16 / 9,
+                              child: PixelatedImageTransition(
+                                imageUrl: widget.imageUrl,
+                                isLoading: widget.imageRegenerating,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
                           ),
                         ),
                       ),

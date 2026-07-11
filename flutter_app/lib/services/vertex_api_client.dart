@@ -262,6 +262,7 @@ class VertexApiClient {
   Future<String> _googleGenerateImage(
     String prompt, {
     Duration? timeout,
+    String aspectRatio = '16:9',
   }) async {
     final data = await _googleGenerateContentJson(
       prompt: prompt,
@@ -269,8 +270,9 @@ class VertexApiClient {
       temperature: 0.8,
       maxOutputTokens: 32768,
       timeout: timeout ?? const Duration(seconds: 120),
-      extraGenerationConfig: const {
+      extraGenerationConfig: {
         'responseModalities': ['TEXT', 'IMAGE'],
+        'imageConfig': {'aspectRatio': aspectRatio},
       },
     );
     return _parseGoogleImageResponse(data);
@@ -597,6 +599,7 @@ ${jsonEncode(chatData ?? const [])}''';
     String prompt, {
     Duration? timeout,
     Map<String, String>? referenceImage,
+    String aspectRatio = '16:9',
   }) async {
     final p = prompt.trim();
     if (p.isEmpty) {
@@ -605,7 +608,7 @@ ${jsonEncode(chatData ?? const [])}''';
 
     debugPrint(
       '[ImageGen] E2E start backend=$baseUrl promptLen=${p.length} '
-      'hasReference=${referenceImage != null}',
+      'hasReference=${referenceImage != null} aspectRatio=$aspectRatio',
     );
 
     if (_hasBackend) {
@@ -614,6 +617,7 @@ ${jsonEncode(chatData ?? const [])}''';
           p,
           timeout: timeout,
           referenceImage: referenceImage,
+          aspectRatio: aspectRatio,
         );
       } catch (e, st) {
         debugPrint('[ImageGen] E2E backend path failed: $e');
@@ -625,7 +629,11 @@ ${jsonEncode(chatData ?? const [])}''';
 
     if (_hasGoogleApiKey) {
       try {
-        final img = await _googleGenerateImage(p, timeout: timeout);
+        final img = await _googleGenerateImage(
+          p,
+          timeout: timeout,
+          aspectRatio: aspectRatio,
+        );
         debugPrint('[ImageGen] E2E Google API success len=${img.length}');
         return img;
       } catch (e, st) {
@@ -644,6 +652,7 @@ ${jsonEncode(chatData ?? const [])}''';
     String prompt, {
     Duration? timeout,
     Map<String, String>? referenceImage,
+    String aspectRatio = '16:9',
     RenderBackendPriority priority = RenderBackendPriority.background,
   }) async {
     final p = prompt.trim();
@@ -655,6 +664,7 @@ ${jsonEncode(chatData ?? const [])}''';
         p,
         timeout: timeout,
         referenceImage: referenceImage,
+        aspectRatio: aspectRatio,
       ),
     );
   }
@@ -663,6 +673,7 @@ ${jsonEncode(chatData ?? const [])}''';
     String p, {
     Duration? timeout,
     Map<String, String>? referenceImage,
+    String aspectRatio = '16:9',
   }) async {
     final sw = Stopwatch()..start();
     void checkpoint(String stage) {
@@ -688,7 +699,10 @@ ${jsonEncode(chatData ?? const [])}''';
       throw Exception('[ImageGen] no backend URL configured for image generation');
     }
 
-    final requestBody = <String, dynamic>{'prompt': p};
+    final requestBody = <String, dynamic>{
+      'prompt': p,
+      'aspectRatio': aspectRatio,
+    };
     if (referenceImage != null &&
         (referenceImage['base64'] ?? '').trim().isNotEmpty) {
       requestBody['referenceImage'] = {
@@ -702,7 +716,7 @@ ${jsonEncode(chatData ?? const [])}''';
       checkpoint('before_http_post');
       debugPrint('[ImageGen] EXACT URL being called: $url');
       debugPrint(
-        '[ImageGen] request promptLen=${p.length} '
+        '[ImageGen] request promptLen=${p.length} aspectRatio=$aspectRatio '
         'hasReference=${requestBody.containsKey('referenceImage')} '
         'timeoutSec=${(timeout ?? const Duration(seconds: 120)).inSeconds}',
       );
@@ -878,23 +892,27 @@ Future<String> vertexGenerateNewsImageDirect(
   String prompt, {
   Duration? timeout,
   Map<String, String>? referenceImage,
+  String aspectRatio = '16:9',
 }) =>
     _vertex.vertexGenerateNewsImageDirect(
       prompt,
       timeout: timeout,
       referenceImage: referenceImage,
+      aspectRatio: aspectRatio,
     );
 
 Future<String> vertexGenerateNewsImage(
   String prompt, {
   Duration? timeout,
   Map<String, String>? referenceImage,
+  String aspectRatio = '16:9',
   RenderBackendPriority priority = RenderBackendPriority.background,
 }) =>
     _vertex.vertexGenerateNewsImage(
       prompt,
       timeout: timeout,
       referenceImage: referenceImage,
+      aspectRatio: aspectRatio,
       priority: priority,
     );
 

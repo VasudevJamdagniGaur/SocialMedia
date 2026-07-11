@@ -577,7 +577,11 @@ class VertexClient {
     throw lastErr ?? Exception('Vertex image generation failed after retries');
   }
 
-  Future<String> _generateIllustrationImage(String prompt, {required String prefix}) async {
+  Future<String> _generateIllustrationImage(
+    String prompt, {
+    required String prefix,
+    String aspectRatio = '16:9',
+  }) async {
     final body = prompt.trim();
     if (body.isEmpty) {
       stderr.writeln('[VertexImage] empty prompt — throwing');
@@ -595,7 +599,10 @@ class VertexClient {
           ],
         },
       ],
-      'generationConfig': _imageGenerationConfig(temperature: 0.9),
+      'generationConfig': _imageGenerationConfig(
+        temperature: 0.9,
+        aspectRatio: aspectRatio,
+      ),
     });
 
     try {
@@ -607,7 +614,7 @@ class VertexClient {
 
       final shortened = body.length > 900 ? body.substring(body.length - 900) : body;
       final simple = '$prefix'
-          'Scene to illustrate (medium wide shot, no face close-up, no text in image):\n'
+          'Scene to illustrate (match the requested aspect ratio, no logos):\n'
           '${shortened.length > 1200 ? shortened.substring(0, 1200) : shortened}';
       final retryPayload = jsonEncode({
         'contents': [
@@ -618,7 +625,10 @@ class VertexClient {
             ],
           },
         ],
-        'generationConfig': _imageGenerationConfig(temperature: 0.85),
+        'generationConfig': _imageGenerationConfig(
+          temperature: 0.85,
+          aspectRatio: aspectRatio,
+        ),
       });
       return _postImagePayload(retryPayload, debugLabel: 'illustration-retry');
     }
@@ -838,14 +848,28 @@ class VertexClient {
   }
 
   /// Share/reflection posts — scene-focused, not wire-service news tone.
-  Future<String> generateShareSceneImage(String prompt) async {
+  Future<String> generateShareSceneImage(
+    String prompt, {
+    String aspectRatio = '16:9',
+  }) async {
+    final isStory = aspectRatio == '9:16';
+    final prefix = isStory
+        ? 'Create ONE vertical Instagram Story frame (9:16, 1080x1920 style). '
+            'Visually tell the story in the user text — infer scene, mood, setting, '
+            'lighting, emotions, people, and objects. Do not invent an unrelated scene. '
+            'Premium aesthetic: cinematic lighting, subtle gradients, clean modern composition, '
+            'safe margins near edges. Optional: one short headline overlay (5–10 words) if it helps; '
+            'otherwise no text. Not a poster, flyer, ad, or slide. Realistic high quality unless '
+            'the text implies illustration. Match emotional tone; unique layout by context '
+            '(sports=action energy, travel=scenic, motivation=minimal symbolic, etc.).\n\n'
+        : 'Create one vivid editorial photograph for a social media post. '
+            'Depict the SCENE, objects, and mood described below — environment and situation are the focus. '
+            'Visually match the user text; do not invent an unrelated scene. '
+            'Medium or wide shot; avoid face close-ups. No logos or watermarks.\n\n';
     return _imageGenQueue.run(() => _generateIllustrationImage(
           prompt,
-          prefix:
-              'Create one vivid editorial photograph or illustration for a social media post. '
-              'Depict the SCENE, objects, and mood described below — environment and situation are the focus. '
-              'Medium or wide shot; avoid face close-ups and identifiable celebrities. '
-              'No text, captions, or logos in the image.\n\n',
+          prefix: prefix,
+          aspectRatio: aspectRatio,
         ));
   }
 

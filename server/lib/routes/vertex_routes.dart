@@ -151,6 +151,11 @@ Router buildVertexRouter(VertexClient vertex) {
       return jsonError(400, 'Missing or invalid "prompt" (non-empty string required)');
     }
 
+    final aspectRaw = body['aspectRatio'] ?? body['aspect_ratio'];
+    final aspectRatio = aspectRaw is String && aspectRaw.trim().isNotEmpty
+        ? aspectRaw.trim()
+        : '16:9';
+
     final modelId = ServerConfig.normalizeVertexModelId(ServerConfig.vertexImageModel);
     final referenceImage = body['referenceImage'];
     final hasReference = referenceImage is Map &&
@@ -158,7 +163,7 @@ Router buildVertexRouter(VertexClient vertex) {
         '${referenceImage['base64']}'.trim().isNotEmpty;
 
     stderr.writeln('[generate-news-image] ========== BEFORE VERTEX REQUEST ==========');
-    stderr.writeln('[generate-news-image] modelId=$modelId');
+    stderr.writeln('[generate-news-image] modelId=$modelId aspectRatio=$aspectRatio');
     stderr.writeln(
       '[generate-news-image] project=${ServerConfig.projectId} '
       'location=${ServerConfig.vertexLocation} '
@@ -200,7 +205,10 @@ Router buildVertexRouter(VertexClient vertex) {
         );
       } else {
         stderr.writeln('[generate-news-image] calling generateShareSceneImage…');
-        imageDataUrl = await vertex.generateShareSceneImage(prompt);
+        imageDataUrl = await vertex.generateShareSceneImage(
+          prompt,
+          aspectRatio: aspectRatio,
+        );
       }
 
       checkpoint('after_vertex_response');
