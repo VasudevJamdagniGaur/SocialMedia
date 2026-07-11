@@ -64,12 +64,28 @@ class ServerConfig {
 
   static String get vertexModel => env('VERTEX_GEMINI_MODEL') ?? 'gemini-2.5-flash';
 
+  /// Model id only (not the full publishers/google/models/... path).
+  /// Vertex URI is built as: publishers/google/models/{id}:generateContent
   static String get vertexImageModel {
-    final nano = env('VERTEX_NANO_BANANA_IMAGE_MODEL');
-    if (nano != null && nano.isNotEmpty) return nano;
-    final gemini = env('VERTEX_GEMINI_IMAGE_MODEL');
-    if (gemini != null && gemini.isNotEmpty) return gemini;
-    return 'gemini-2.5-flash-image';
+    final raw = env('VERTEX_GEMINI_IMAGE_MODEL') ??
+        env('VERTEX_NANO_BANANA_IMAGE_MODEL') ??
+        'gemini-2.5-flash-image';
+    return normalizeVertexModelId(raw);
+  }
+
+  /// Strip resource prefixes so env can be either `gemini-2.5-flash-image`
+  /// or `publishers/google/models/gemini-2.5-flash-image`.
+  static String normalizeVertexModelId(String raw) {
+    var id = raw.trim();
+    if (id.isEmpty) return 'gemini-2.5-flash-image';
+    // Full resource name → last path segment
+    if (id.contains('/')) {
+      id = id.split('/').last;
+    }
+    // Accidental ":generateContent" suffix
+    final colon = id.indexOf(':');
+    if (colon > 0) id = id.substring(0, colon);
+    return id;
   }
 
   static int get port => int.tryParse(env('PORT') ?? '') ?? 3002;
@@ -151,9 +167,13 @@ class ServerConfig {
     final fallbacks = <String>[
       primary,
       'gemini-2.5-flash-image',
+      // Legacy preview id — only if 2.5-flash-image is unavailable in the region.
       'gemini-2.0-flash-preview-image-generation',
     ];
     final seen = <String>{};
-    return fallbacks.where((m) => seen.add(m)).toList();
+    return fallbacks
+        .map(normalizeVertexModelId)
+        .where((m) => m.isNotEmpty && seen.add(m))
+        .toList();
   }
 }

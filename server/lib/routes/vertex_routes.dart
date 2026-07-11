@@ -32,6 +32,9 @@ Router buildVertexRouter(VertexClient vertex) {
       'project': ServerConfig.projectId,
       'location': ServerConfig.vertexLocation,
       'model': ServerConfig.vertexModel,
+      'imageModel': ServerConfig.vertexImageModel,
+      'imageModelResource':
+          'publishers/google/models/${ServerConfig.vertexImageModel}',
       'runtime': 'dart',
       'credentialsPath': credsPath,
       'credentialsPresent': credsFile.existsSync(),

@@ -18,7 +18,7 @@ class VertexApiClient {
 
   static const String _googleApiBase = 'https://generativelanguage.googleapis.com';
   static const String _googleTextModel = 'gemini-2.5-flash';
-  static const String _googleImageModel = 'gemini-2.0-flash-preview-image-generation';
+  static const String _googleImageModel = 'gemini-2.5-flash-image';
   static const String _brokenGcpProject = 'offgrid-492919';
   static const String _legacyBrokenHost = 'detea-backend.onrender.com';
 

@@ -57,11 +57,12 @@ class VertexClient {
   }
 
   Uri _modelUri(String modelId, {bool useBeta = false}) {
+    final id = ServerConfig.normalizeVertexModelId(modelId);
     final version = useBeta ? 'v1beta1' : 'v1';
     return Uri.parse(
       'https://${ServerConfig.vertexLocation}-aiplatform.googleapis.com/$version/'
       'projects/${ServerConfig.projectId}/locations/${ServerConfig.vertexLocation}/'
-      'publishers/google/models/$modelId:generateContent',
+      'publishers/google/models/$id:generateContent',
     );
   }
 
@@ -370,8 +371,10 @@ class VertexClient {
 
         for (final useBeta in [true, false]) {
           try {
+            final uri = _modelUri(modelId, useBeta: useBeta);
+            stderr.writeln('[VertexImage] POST $uri ${debugLabel ?? ''}');
             final res = await client.post(
-              _modelUri(modelId, useBeta: useBeta),
+              uri,
               headers: {'Content-Type': 'application/json'},
               body: payload,
             );
