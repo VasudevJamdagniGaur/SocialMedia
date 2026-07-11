@@ -285,20 +285,17 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
 
   Future<void> _bootstrapSharePage() async {
     try {
-      await _bootstrapSharePageInner().timeout(const Duration(seconds: 60));
+      await _bootstrapSharePageInner();
     } catch (e, st) {
-      debugPrint('[ShareSuggestions] bootstrap timeout/error: $e\n$st');
+      debugPrint('[ShareSuggestions] bootstrap error: $e\n$st');
       if (mounted) {
         setState(() {
           _loading = false;
-          _error ??= e.toString();
+          // Never surface raw TimeoutException under the image — posts can still show.
+          if (e is! TimeoutException) {
+            _error ??= e.toString();
+          }
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Suggestions timed out — showing your text.'),
-            duration: const Duration(seconds: 4),
-          ),
-        );
       }
     } finally {
       if (mounted && _loading) {
@@ -313,13 +310,13 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
         _loadNewsCardDetails(),
         _loadSuggestions(),
       ]);
-      await _ensureNewsShareImage();
+      // Image runs independently — do not abort it with a page-level timeout.
+      unawaited(_ensureNewsShareImage());
     } else {
-      // Load posts and kick off image in parallel for snappier UX.
-      await Future.wait([
-        _loadSuggestions(),
-        _ensureReflectionShareImage(),
-      ]);
+      // Kick off image immediately; do not Future.wait it with suggestions.
+      // A shared timeout was cancelling image gen and showing TimeoutException in the UI.
+      unawaited(_ensureReflectionShareImage());
+      await _loadSuggestions();
     }
   }
 
@@ -346,10 +343,9 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
         '[ImageGen] reflection share image START textLen=${text.length} '
         'platform=$_platform aiBackend=${Env.aiBackendUrl}',
       );
-      // Do not await resolveShareImagePrompt first — that stalled before any HTTP.
-      final generated = await ChatService.instance
-          .fetchImageForReflection(text, null, _platform)
-          .timeout(const Duration(seconds: 100));
+      // No page-level timeout — HTTP client already enforces its own limit.
+      final generated =
+          await ChatService.instance.fetchImageForReflection(text, null, _platform);
       debugPrint(
         '[ImageGen] reflection share image DONE hasImage=${generated != null} '
         'len=${generated?.length ?? 0}',
@@ -882,7 +878,10 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
           debugPrint('[ShareSuggestions] AI returned count=${items.length}');
         } catch (e, st) {
           debugPrint('[ShareSuggestions] AI failed: $e\n$st');
-          errorMessage = e.toString();
+          // Don't show TimeoutException under the image area — posts still load via fallback.
+          if (e is! TimeoutException) {
+            errorMessage = e.toString();
+          }
           items = [
             {
               'eventLabel': 'Reflection',

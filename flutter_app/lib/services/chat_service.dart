@@ -4645,8 +4645,7 @@ $contextSnippet''';
     );
 
     try {
-      final generated = await _generateImageWithGemini(prompt, null)
-          .timeout(const Duration(seconds: 90));
+      final generated = await _generateImageWithGemini(prompt, null);
       if (generated != null && generated.isNotEmpty && !skipCache) {
         _cacheReflectionImageIfPersistable(prefs, cacheKey, fullText, generated);
       }
