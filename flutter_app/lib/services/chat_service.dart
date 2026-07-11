@@ -2064,152 +2064,169 @@ Reflection:
 ${reflection.trim()}''';
   }
 
-  Future<List<Map<String, String>>> generateSocialPostSuggestions(String reflection, String platform) async {
-    Exception? lastErr;
-    try {
-      final trimmed = reflection.trim();
-      if (trimmed.isEmpty) return [];
+  Future<List<Map<String, String>>> generateSocialPostSuggestions(
+    String reflection,
+    String platform,
+  ) async {
+    final trimmed = reflection.trim();
+    if (trimmed.isEmpty) return [];
 
-      if (platform == 'x') {
-        final fallback = _reflectionSuggestionFallback(trimmed);
+    final backend = Env.baseUrl;
+    debugPrint(
+      '[ShareSuggestionsAPI] start platform=$platform backend=$backend '
+      'len=${trimmed.length}',
+    );
+
+    if (platform == 'x') {
+      final fallback = _reflectionSuggestionFallback(trimmed);
+      try {
         var items = await _generateXContentSuggestions(
           userContent: _buildXReflectionSuggestionsUserContent(trimmed),
           fallback: fallback,
           reflectionForApi: trimmed,
-        );
+        ).timeout(const Duration(seconds: 45));
         if (_isSingleReflectionFallback(items, trimmed)) {
           final apiItems = await _fetchShareSuggestionsFromApi(trimmed, 'x');
           if (apiItems.isNotEmpty) items = apiItems;
         }
+        debugPrint('[ShareSuggestionsAPI] x done count=${items.length}');
         return items.isNotEmpty ? items : fallback;
+      } catch (e, st) {
+        debugPrint('[ShareSuggestionsAPI] x failed: $e\n$st');
+        return fallback;
       }
+    }
 
-      // Race suggestions API + Vertex generateContent; first non-empty wins.
-      final sharePrompt = _buildFastShareSuggestionsPrompt(reflection, platform);
-      final apiBases = _shareSuggestionsApiBases()
-          .where((b) => b.isNotEmpty && !b.contains('detea-backend.onrender.com'))
-          .toList();
+    final sharePrompt = _buildFastShareSuggestionsPrompt(reflection, platform);
+    Exception? lastErr;
 
-      Future<List<Map<String, String>>> viaApi() async {
-        for (final apiBase in apiBases) {
-          try {
-            final res = await _postShareSuggestionsApi(apiBase, reflection, platform)
-                .timeout(const Duration(seconds: 40));
-            if (res.statusCode < 200 || res.statusCode >= 300) {
-              lastErr = Exception('Suggestions API ${res.statusCode}');
-              continue;
-            }
-            final posts = _parseSuggestionsApiPosts(res.body, platform);
-            if (posts.isNotEmpty) return posts;
-          } catch (e) {
-            lastErr = e is Exception ? e : Exception('$e');
-          }
+    // 1) Vertex /generateContent (known-good on socitea)
+    if (isVertexBackendConfigured()) {
+      try {
+        debugPrint(
+          '[ShareSuggestionsAPI] POST $backend/generateContent '
+          'maxTokens=1400 timeout=40s',
+        );
+        final raw = await callVertexGenerateContent(
+          prompt: sharePrompt,
+          temperature: 0.5,
+          maxOutputTokens: 1400,
+          timeout: const Duration(seconds: 40),
+        );
+        debugPrint(
+          '[ShareSuggestionsAPI] generateContent ok chars=${raw.length} '
+          'preview=${raw.substring(0, raw.length.clamp(0, 160))}',
+        );
+        final parsed = _parseShareSuggestionModelOutput(raw.trim(), reflection);
+        if (parsed.isNotEmpty) {
+          debugPrint('[ShareSuggestionsAPI] parsed posts=${parsed.length}');
+          return parsed;
         }
-        return const [];
+        lastErr = Exception('Vertex returned empty share suggestions');
+        debugPrint('[ShareSuggestionsAPI] parse produced 0 posts');
+      } catch (e, st) {
+        lastErr = e is Exception ? e : Exception('$e');
+        debugPrint('[ShareSuggestionsAPI] generateContent error: $e\n$st');
       }
+    }
 
-      Future<List<Map<String, String>>> viaVertex() async {
-        if (!isVertexBackendConfigured()) return const [];
-        try {
-          final raw = await callVertexGenerateContent(
-            prompt: sharePrompt,
-            temperature: 0.5,
-            maxOutputTokens: 1400,
-            timeout: const Duration(seconds: 40),
+    // 2) Dedicated suggestions endpoint
+    for (final apiBase in _shareSuggestionsApiBases()) {
+      if (apiBase.isEmpty || apiBase.contains('detea-backend.onrender.com')) {
+        continue;
+      }
+      final url = '$apiBase/api/linkedin/suggestions';
+      try {
+        debugPrint('[ShareSuggestionsAPI] POST $url platform=$platform');
+        final res = await _postShareSuggestionsApi(apiBase, reflection, platform)
+            .timeout(const Duration(seconds: 40));
+        final bodyPreview = res.body.length > 400
+            ? '${res.body.substring(0, 400)}…'
+            : res.body;
+        debugPrint(
+          '[ShareSuggestionsAPI] $url status=${res.statusCode} body=$bodyPreview',
+        );
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          lastErr = Exception(
+            'Suggestions API HTTP ${res.statusCode}: $bodyPreview',
           );
-          return _parseShareSuggestionModelOutput(raw.trim(), reflection);
-        } catch (e) {
-          lastErr = e is Exception ? e : Exception('$e');
-          return const [];
+          continue;
         }
-      }
-
-      final winner = Completer<List<Map<String, String>>>();
-      var remaining = 2;
-      void consider(List<Map<String, String>> posts) {
+        final posts = _parseSuggestionsApiPosts(res.body, platform);
         if (posts.isNotEmpty) {
-          if (!winner.isCompleted) winner.complete(posts);
-          return;
+          debugPrint('[ShareSuggestionsAPI] suggestions API posts=${posts.length}');
+          return posts;
         }
-        remaining -= 1;
-        if (remaining <= 0 && !winner.isCompleted) {
-          winner.complete(const []);
-        }
+        lastErr = Exception('Suggestions API OK but no posts parsed');
+      } catch (e, st) {
+        lastErr = e is Exception ? e : Exception('$e');
+        debugPrint('[ShareSuggestionsAPI] $url error: $e\n$st');
       }
-
-      unawaited(viaApi().then(consider));
-      unawaited(viaVertex().then(consider));
-      final raced = await winner.future.timeout(
-        const Duration(seconds: 50),
-        onTimeout: () => const <Map<String, String>>[],
-      );
-
-      if (raced.isNotEmpty) return raced;
-
-      if (lastErr != null) {
-        // Continue to OpenAI fallback below.
-      }
-    } catch (e) {
-      final msg = e.toString();
-      throw Exception('Suggestions failed: $msg');
     }
 
-    openaiApiKey = Env.openAiApiKey.trim().isNotEmpty ? Env.openAiApiKey.trim() : openaiApiKey;
+    // 3) Optional client OpenAI key
+    openaiApiKey =
+        Env.openAiApiKey.trim().isNotEmpty ? Env.openAiApiKey.trim() : openaiApiKey;
     final apiKey = openaiApiKey.trim();
-    if (apiKey.isEmpty) {
-      final fallback = _reflectionSuggestionFallback(reflection);
-      if (fallback.isNotEmpty) return fallback;
-      if (lastErr != null) throw lastErr!;
-      throw Exception(
-        'Could not generate share suggestions. Set BACKEND_URL and rebuild, or add OPENAI_API_KEY.',
-      );
-    }
-
-    final prompt = _buildFastShareSuggestionsPrompt(reflection, platform);
-    final apiUrl = '$openaiBaseURL/chat/completions';
-    final requestBody = {
-      'model': openaiModelName,
-      'messages': [
-        {'role': 'user', 'content': prompt},
-      ],
-      'temperature': 0.5,
-      'max_tokens': 1400,
-    };
-    const headers = {'Content-Type': 'application/json'};
-
-    http.Response response;
-    try {
-      response = await http
-          .post(
-            Uri.parse(apiUrl),
-            headers: {...headers, 'Authorization': 'Bearer $apiKey'},
-            body: jsonEncode(requestBody),
-          )
-          .timeout(const Duration(seconds: 45));
-    } catch (e) {
-      final name = e.runtimeType.toString();
-      final msg = e.toString();
-      throw Exception('Suggestions request failed ($name): $msg. URL=$apiUrl');
-    }
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      final errText = response.body;
-      final short200 = errText.length > 200 ? errText.substring(0, 200) : errText;
-      throw Exception('Suggestions failed: ${response.statusCode} $short200. URL=$apiUrl');
-    }
-
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    var raw = '';
-    final choices = data['choices'];
-    if (choices is List && choices.isNotEmpty) {
-      final first = choices.first;
-      if (first is Map &&
-          first['message'] is Map &&
-          (first['message'] as Map)['content'] is String) {
-        raw = (first['message'] as Map)['content'] as String;
+    if (apiKey.isNotEmpty) {
+      final apiUrl = '$openaiBaseURL/chat/completions';
+      try {
+        debugPrint('[ShareSuggestionsAPI] POST $apiUrl (OpenAI fallback)');
+        final response = await http
+            .post(
+              Uri.parse(apiUrl),
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer $apiKey',
+              },
+              body: jsonEncode({
+                'model': openaiModelName,
+                'messages': [
+                  {'role': 'user', 'content': sharePrompt},
+                ],
+                'temperature': 0.5,
+                'max_tokens': 1400,
+              }),
+            )
+            .timeout(const Duration(seconds: 40));
+        debugPrint(
+          '[ShareSuggestionsAPI] OpenAI status=${response.statusCode} '
+          'body=${response.body.substring(0, response.body.length.clamp(0, 300))}',
+        );
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          final data = jsonDecode(response.body);
+          var raw = '';
+          if (data is Map) {
+            final choices = data['choices'];
+            if (choices is List && choices.isNotEmpty) {
+              final first = choices.first;
+              if (first is Map &&
+                  first['message'] is Map &&
+                  (first['message'] as Map)['content'] is String) {
+                raw = (first['message'] as Map)['content'] as String;
+              }
+            }
+          }
+          final parsed = _parseShareSuggestionModelOutput(raw.trim(), reflection);
+          if (parsed.isNotEmpty) return parsed;
+        }
+        lastErr = Exception('OpenAI suggestions failed: ${response.statusCode}');
+      } catch (e, st) {
+        lastErr = e is Exception ? e : Exception('$e');
+        debugPrint('[ShareSuggestionsAPI] OpenAI error: $e\n$st');
       }
     }
-    return _parseShareSuggestionModelOutput(raw.trim(), reflection);
+
+    final fallback = _reflectionSuggestionFallback(reflection);
+    debugPrint(
+      '[ShareSuggestionsAPI] using local fallback count=${fallback.length} '
+      'lastErr=$lastErr',
+    );
+    if (fallback.isNotEmpty) return fallback;
+    throw lastErr ??
+        Exception(
+          'Could not generate share suggestions. backend=$backend',
+        );
   }
 
   Future<List<Map<String, String>>> generateSocialPostSuggestionsStream(

@@ -25,6 +25,7 @@ import '../components/share_platform_selector.dart';
 import '../components/skeleton/list_skeleton.dart';
 import '../components/skeleton/skeleton.dart';
 import '../components/tweet_share_card.dart';
+import '../config/env.dart';
 import '../contexts/theme_context.dart';
 import '../router/app_router.dart';
 import '../services/chat_service.dart';
@@ -285,8 +286,22 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
   Future<void> _bootstrapSharePage() async {
     try {
       await _bootstrapSharePageInner().timeout(const Duration(seconds: 60));
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('[ShareSuggestions] bootstrap timeout/error: $e\n$st');
       if (mounted) {
+        setState(() {
+          _loading = false;
+          _error ??= e.toString();
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Suggestions timed out — showing your text.'),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } finally {
+      if (mounted && _loading) {
         setState(() => _loading = false);
       }
     }
@@ -757,13 +772,22 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
   }
 
   Future<void> _loadSuggestions() async {
+    if (!mounted) return;
     setState(() {
       _loading = true;
       _error = null;
     });
 
+    String? errorMessage;
+    var usedFallback = false;
+    List<Map<String, String>> items = const [];
+
     try {
-      List<Map<String, String>> items;
+      debugPrint(
+        '[ShareSuggestions] load start platform=$_platform '
+        'backend=${Env.baseUrl} reflectionLen=${_reflection.length} news=$_isNewsMode',
+      );
+
       if (_isNewsMode) {
         var url = normalizeRedditDiscussionUrl('${_newsArticle?['url'] ?? ''}'.trim()) ??
             '${_newsArticle?['url'] ?? ''}'.trim();
@@ -788,7 +812,9 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
               });
               article = _articleForSuggestions();
             }
-          } catch (_) {}
+          } catch (e) {
+            debugPrint('[ShareSuggestions] reddit details failed: $e');
+          }
         }
 
         var cached = url.isNotEmpty
@@ -799,7 +825,8 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
         }
         if (cached != null && cached.isNotEmpty) {
           items = cleanCachedNewsSuggestions(cached, isTea: isTea);
-      } else {
+          debugPrint('[ShareSuggestions] cache hit count=${items.length}');
+        } else {
           final aiArticle = isTea ? prepareTeaArticleContextForAi(article) : article;
           final localFallback = isTea
               ? buildLocalTeaShareSuggestions(aiArticle, _platform)
@@ -813,16 +840,20 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
             items = await ChatService.instance
                 .generateNewsArticleShareSuggestions(
                   aiArticle,
-          _platform,
+                  _platform,
                   prefetchedDetails: aiArticle,
                   isTeaGossip: isTea,
                 )
                 .timeout(const Duration(seconds: 45));
             if (items.isEmpty) {
               items = localFallback;
+              usedFallback = true;
             }
-          } catch (_) {
+          } catch (e) {
+            debugPrint('[ShareSuggestions] news AI failed: $e');
             items = localFallback;
+            usedFallback = true;
+            errorMessage = e.toString();
           }
           if (url.isNotEmpty && items.isNotEmpty) {
             final toCache = isTea
@@ -832,28 +863,72 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
           }
         }
       } else {
-        items = await ChatService.instance
-            .generateSocialPostSuggestions(_reflection, _platform)
-            .timeout(const Duration(seconds: 100));
+        try {
+          items = await ChatService.instance
+              .generateSocialPostSuggestions(_reflection, _platform)
+              .timeout(const Duration(seconds: 55));
+          debugPrint('[ShareSuggestions] AI returned count=${items.length}');
+        } catch (e, st) {
+          debugPrint('[ShareSuggestions] AI failed: $e\n$st');
+          errorMessage = e.toString();
+          items = [
+            {
+              'eventLabel': 'Reflection',
+              'post': _baselineText,
+            },
+          ];
+          usedFallback = true;
+        }
       }
 
+      if (items.isEmpty) {
+        items = [
+          {
+            'eventLabel': _isNewsMode ? 'News' : 'Reflection',
+            'post': _baselineText,
+          },
+        ];
+        usedFallback = true;
+      }
+
+      final sanitized = _sanitizeSuggestionItems(items);
       if (!mounted) return;
       setState(() {
-        _suggestions = _sanitizeSuggestionItems(
-          items.isNotEmpty
-              ? items
-              : [
-                  {
-                    'eventLabel': _isNewsMode ? 'News' : 'Reflection',
-                    'post': _baselineText,
-                  },
-                ],
-        );
+        _suggestions = sanitized.isNotEmpty
+            ? sanitized
+            : _sanitizeSuggestionItems([
+                {
+                  'eventLabel': _isNewsMode ? 'News' : 'Reflection',
+                  'post': _baselineText,
+                },
+              ]);
         _selectedIndex = 0;
+        _error = errorMessage;
         _loading = false;
       });
+      debugPrint(
+        '[ShareSuggestions] done count=${_suggestions.length} '
+        'fallback=$usedFallback error=${errorMessage ?? 'none'}',
+      );
       _maybeAutoOpenSharePanel();
-    } catch (e) {
+
+      if (errorMessage != null && mounted) {
+        final short = errorMessage!.length > 120
+            ? '${errorMessage!.substring(0, 120)}…'
+            : errorMessage!;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              usedFallback
+                  ? 'Could not generate AI posts — showing your text. $short'
+                  : 'Post generation issue: $short',
+            ),
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } catch (e, st) {
+      debugPrint('[ShareSuggestions] unexpected: $e\n$st');
       if (!mounted) return;
       setState(() {
         _suggestions = _sanitizeSuggestionItems([
@@ -863,9 +938,22 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
           },
         ]);
         _selectedIndex = 0;
+        _error = e.toString();
         _loading = false;
       });
       _maybeAutoOpenSharePanel();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Post generation failed: $e'),
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } finally {
+      if (mounted && _loading) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -2075,24 +2163,33 @@ User changes: $instruction''',
                         const SizedBox(height: 12),
                         if (_loading)
                           const ListSkeleton(count: 3)
-                            else if (_loadingShareImage &&
-                                !isValidHubCarouselImageUrl(_shareSuggestionImageUrl)) ...[
-                              const AspectRatio(
-                                aspectRatio: 16 / 9,
-                                child: Skeleton(variant: SkeletonVariant.image),
-                              ),
-                              const SizedBox(height: 12),
-                              const ListSkeleton(count: 2),
-                            ] else ...[
+                        else ...[
+                          if (_loadingShareImage &&
+                              !isValidHubCarouselImageUrl(_shareSuggestionImageUrl)) ...[
+                            const AspectRatio(
+                              aspectRatio: 16 / 9,
+                              child: Skeleton(variant: SkeletonVariant.image),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
                           if (_error != null)
                             Padding(
                               padding: const EdgeInsets.only(bottom: 8),
                               child: Text(
-                                    '${_isNewsMode ? 'Using article text' : 'Using reflection'} after: $_error',
+                                '${_isNewsMode ? 'Using article text' : 'Using reflection'} after: $_error',
                                 style: TextStyle(color: secondaryText, fontSize: 12),
                               ),
                             ),
-                              FutureBuilder<_TweetUserInfo>(
+                          if (_suggestions.isEmpty)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              child: Text(
+                                'No suggestions yet. Edit your text and try again.',
+                                style: TextStyle(color: secondaryText, fontSize: 13),
+                              ),
+                            )
+                          else
+                            FutureBuilder<_TweetUserInfo>(
                                 future: _loadTweetUserInfo(),
                                 builder: (context, userSnap) {
                                   final tweetUser = userSnap.data ??
@@ -2133,14 +2230,14 @@ User changes: $instruction''',
                                   );
                                 },
                               ),
-                            ],
-                          ],
-                        ),
-                      ),
+                        ],
                       ],
                     ),
                   ),
+                ],
               ),
+            ),
+          ),
               if (_sharePanelOpen)
                 _SharePanelOverlay(
                   platform: _platform,
