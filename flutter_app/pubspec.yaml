@@ -1,7 +1,7 @@
 name: deite
 description: Deite — Your Social Tea (Flutter port).
 publish_to: 'none'
-version: 1.0.19+20
+version: 1.0.20+21
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
