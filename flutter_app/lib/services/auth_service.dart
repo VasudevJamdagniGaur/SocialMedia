@@ -26,7 +26,16 @@ class AuthService {
   factory AuthService() => instance;
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
+
+  /// Web OAuth client from google-services.json (client_type 3).
+  /// Required on Android so Google returns an ID token for Firebase Auth.
+  static const String _webClientId =
+      '300613626896-afgue1cj09n7mibt6b84t0qgjkc0avqk.apps.googleusercontent.com';
+
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    scopes: const ['email', 'profile'],
+    serverClientId: _webClientId,
+  );
 
   User? getCurrentUser() => _auth.currentUser;
 
@@ -87,10 +96,15 @@ class AuthService {
       }
       if (RegExp(r'10|12500|developer error|sign_in_failed|DEVELOPER_ERROR', caseSensitive: false)
           .hasMatch(msg)) {
+        debugPrint('[Auth] Google Sign-In DEVELOPER_ERROR/code 10: $msg');
         return AuthResult(
           success: false,
           error:
-              'Google Sign-In setup error (code 10). Your APK signing key must be registered in Firebase. For release builds, add the SHA-1 from android/app/my-release-key.jks, download a new google-services.json, then rebuild the app.',
+              'Google Sign-In is misconfigured (code 10). '
+              'If this app was installed from Play Store, add the Play App Signing SHA-1 '
+              'in Firebase Console → Project settings → Your apps → therapist.deite.app, '
+              'then download a fresh google-services.json and ship a new build. '
+              'See GOOGLE_SIGNIN_SHA.md in the repo.',
         );
       }
       return AuthResult(success: false, error: msg.isNotEmpty ? msg : 'Google sign-in failed. Please try again.');
