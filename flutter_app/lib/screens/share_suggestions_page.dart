@@ -399,6 +399,12 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
         '[ImageGen] reflection share image DONE hasImage=${generated != null} '
         'len=${generated?.length ?? 0}',
       );
+      final notice = ChatService.instance.lastImageGenNotice;
+      if (notice != null && notice.isNotEmpty && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(notice), duration: const Duration(seconds: 5)),
+        );
+      }
       if (generated == null || !mounted) return;
 
       setState(() {
@@ -922,8 +928,21 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
       } else {
         try {
           items = await ChatService.instance
-              .generateSocialPostSuggestions(_reflection, _platform)
+              .generateSocialPostSuggestions(
+                _reflection,
+                _platform,
+                instagramFormat: _instagramFormatKey,
+              )
               .timeout(const Duration(seconds: 55));
+          if (_isInstagramPlatform && _instagramFormat == _InstagramFormat.story) {
+            items = items
+                .map((item) => <String, String>{
+                      ...item,
+                      'post': ChatService.shortenInstagramStoryCaption(item['post'] ?? ''),
+                    })
+                .where((item) => (item['post'] ?? '').trim().isNotEmpty)
+                .toList();
+          }
           debugPrint('[ShareSuggestions] AI returned count=${items.length}');
         } catch (e, st) {
           debugPrint('[ShareSuggestions] AI failed: $e\n$st');
@@ -951,20 +970,42 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
         usedFallback = true;
       }
 
-      final sanitized = _sanitizeSuggestionItems(items);
+      var sanitized = _sanitizeSuggestionItems(items);
+      if (sanitized.isEmpty) {
+        sanitized = _sanitizeSuggestionItems([
+          {
+            'eventLabel': _isNewsMode ? 'News' : 'Reflection',
+            'post': _baselineText,
+          },
+        ]);
+      }
+      // Instagram Story: force ultra-short captions (few words, one sentence).
+      if (_isInstagramPlatform && _instagramFormat == _InstagramFormat.story) {
+        sanitized = sanitized
+            .map((item) => <String, String>{
+                  ...item,
+                  'post': ChatService.shortenInstagramStoryCaption(item['post'] ?? ''),
+                })
+            .where((item) => (item['post'] ?? '').trim().isNotEmpty)
+            .toList();
+        if (sanitized.isEmpty) {
+          sanitized = [
+            {
+              'eventLabel': 'Story',
+              'post': ChatService.shortenInstagramStoryCaption(_baselineText),
+            },
+          ];
+        }
+      }
       if (!mounted) return;
       setState(() {
-        _suggestions = sanitized.isNotEmpty
-            ? sanitized
-            : _sanitizeSuggestionItems([
-                {
-                  'eventLabel': _isNewsMode ? 'News' : 'Reflection',
-                  'post': _baselineText,
-                },
-              ]);
+        _suggestions = sanitized;
         _selectedIndex = 0;
         _error = errorMessage;
         _loading = false;
+        if (_sharePanelOpen && _suggestions.isNotEmpty) {
+          _editableShareText = _suggestions.first['post'] ?? _editableShareText;
+        }
       });
       debugPrint(
         '[ShareSuggestions] done count=${_suggestions.length} '
@@ -1063,12 +1104,31 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
       _generatedShareImageUrl = null;
       _media = [];
       _invalidateXShareAssets();
+      // Story mode: immediately shrink any long captions already on screen.
+      if (format == _InstagramFormat.story && _suggestions.isNotEmpty) {
+        _suggestions = _suggestions
+            .map((item) => <String, String>{
+                  ...item,
+                  'post': ChatService.shortenInstagramStoryCaption(item['post'] ?? ''),
+                })
+            .where((item) => (item['post'] ?? '').trim().isNotEmpty)
+            .toList();
+        if (_selectedIndex >= _suggestions.length) _selectedIndex = 0;
+        if (_suggestions.isNotEmpty) {
+          _editableShareText = _suggestions[_selectedIndex]['post'] ?? '';
+        }
+      }
     });
-    if (_isNewsMode) {
-      unawaited(_ensureNewsShareImage());
-    } else {
-      unawaited(_ensureReflectionShareImage());
-    }
+    // Reload captions for Story (short) vs Post (full), and regenerate image.
+    unawaited(() async {
+      await _loadSuggestions();
+      if (!mounted) return;
+      if (_isNewsMode) {
+        await _ensureNewsShareImage();
+      } else {
+        await _ensureReflectionShareImage();
+      }
+    }());
   }
 
   Future<void> _onReflectionRegenerate() async {
@@ -1445,6 +1505,12 @@ User changes: $instruction''',
       }
 
       if (!mounted) return;
+      final notice = ChatService.instance.lastImageGenNotice;
+      if (notice != null && notice.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(notice), duration: const Duration(seconds: 5)),
+        );
+      }
       if (image == null || image.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Could not generate image — try again')),

@@ -641,65 +641,139 @@ class VertexClient {
     String aspectRatio = '16:9',
     /// `publicFigure` (news/celebrity) or `user` (authenticated SociTea profile).
     String referenceKind = 'publicFigure',
+    String? label,
+  }) async {
+    return generateWithReferenceImages(
+      prompt,
+      references: [
+        {
+          'base64': referenceImageBase64,
+          'mimeType': mimeType,
+          'kind': referenceKind,
+          if (label != null && label.trim().isNotEmpty) 'label': label.trim(),
+        },
+      ],
+      aspectRatio: aspectRatio,
+    );
+  }
+
+  /// Multi-subject reference conditioning for gemini image models.
+  /// Each reference: `{base64, mimeType, kind: user|publicFigure, label?}`.
+  Future<String> generateWithReferenceImages(
+    String prompt, {
+    required List<Map<String, dynamic>> references,
+    String aspectRatio = '16:9',
   }) async {
     return _imageGenQueue.run(() async {
-      final b64 = referenceImageBase64.replaceAll(RegExp(r'\s'), '');
-      if (b64.isEmpty) {
-        throw ArgumentError('reference-image: base64 is empty');
-      }
-
       final body = prompt.trim();
       if (body.isEmpty) {
         throw ArgumentError('reference-image: prompt is empty');
       }
 
-      final isUser = referenceKind.trim().toLowerCase() == 'user';
-      final instructions = isUser
-          ? 'REFERENCE PHOTO ATTACHED: This is the REAL authenticated user of the app.\n'
-              'Generate ONE new, contextually appropriate social-media photograph (not a collage).\n'
-              'CRITICAL IDENTITY: Preserve recognizable facial features, skin tone, hairstyle, and overall '
-              'appearance from the reference as closely as the model allows. Do NOT invent a different person.\n'
-              'Do NOT simply paste the profile photo onto a background — create a new scene matching the story '
-              '(clothing, pose, expression, environment, lighting adapted to the event).\n'
-              'Keep faces away from extreme edges. No logos or watermarks.\n'
-              'If a short text overlay is requested in the scene prompt, keep it minimal and readable.\n\n'
-              'Story / scene:\n'
-          : 'REFERENCE PHOTO ATTACHED: This is the real public figure who must appear in the output.\n'
-              'Generate ONE editorial news illustration for social media.\n'
-              'CRITICAL: The person in the generated image MUST have the EXACT same face, facial structure, '
-              'skin tone, hair, and beard or hairstyle as the reference photo. Do NOT invent a different person.\n'
-              'Show their face clearly and recognizably. Match the story scene below while preserving identity.\n'
-              'No text overlays or logos unless mentioned in the story.\n\n'
-              'Story / scene:\n';
+      final cleaned = <Map<String, String>>[];
+      for (final raw in references) {
+        final b64 = '${raw['base64'] ?? ''}'.replaceAll(RegExp(r'\s'), '');
+        if (b64.isEmpty) continue;
+        final mimeRaw = '${raw['mimeType'] ?? 'image/jpeg'}'.trim();
+        final mime = mimeRaw.isEmpty ? 'image/jpeg' : mimeRaw;
+        final kind = '${raw['kind'] ?? 'publicFigure'}'.trim().isEmpty
+            ? 'publicFigure'
+            : '${raw['kind']}'.trim();
+        final label = '${raw['label'] ?? ''}'.trim();
+        cleaned.add({
+          'base64': b64,
+          'mimeType': mime,
+          'kind': kind,
+          'label': label,
+        });
+      }
+      if (cleaned.isEmpty) {
+        throw ArgumentError('reference-image: no usable references');
+      }
 
-      final full = '$instructions${body.length > 5500 ? body.substring(0, 5500) : body}';
-      final cleanMime = mimeType.trim().isEmpty ? 'image/jpeg' : mimeType.trim();
+      final hasUser = cleaned.any((r) => r['kind']!.toLowerCase() == 'user');
+      final hasPublic =
+          cleaned.any((r) => r['kind']!.toLowerCase() != 'user');
+
+      final buf = StringBuffer();
+      buf.writeln(
+        'REFERENCE PHOTOS ATTACHED (${cleaned.length}): each inline image is paired with a SUBJECT LABEL below.',
+      );
+      buf.writeln(
+        'Generate ONE new, contextually appropriate social-media photograph (not a collage, not a paste-up).',
+      );
+      buf.writeln(
+        'CRITICAL IDENTITY: For each labeled subject, preserve recognizable facial features, skin tone, '
+        'hairstyle, and overall appearance from THAT subject\'s reference as closely as the model allows.',
+      );
+      buf.writeln(
+        'Do NOT mix faces between subjects. Do NOT invent a different person for a labeled subject.',
+      );
+      buf.writeln(
+        'Do NOT simply paste reference photos onto a background — create a new scene matching the story '
+        '(clothing, pose, expression, environment, lighting adapted to the event).',
+      );
+      if (hasPublic) {
+        buf.writeln(
+          'This is an AI-generated / illustrative visual — do NOT present invented meetings or events '
+          'as authentic documentary photography. No fabricated quotes, endorsements, or logos.',
+        );
+      }
+      buf.writeln('Keep faces away from extreme edges. No watermarks.');
+      buf.writeln('');
+      for (var i = 0; i < cleaned.length; i++) {
+        final r = cleaned[i];
+        final kind = r['kind']!.toLowerCase() == 'user' ? 'authenticated user' : 'public figure';
+        final label = (r['label'] ?? '').trim();
+        final name = label.isNotEmpty ? label : 'Subject ${i + 1}';
+        buf.writeln('SUBJECT ${i + 1} ($kind): $name — use the matching reference image above/beside this label.');
+      }
+      buf.writeln('');
+      buf.writeln('Story / scene:');
+      final scene = body.length > 5500 ? body.substring(0, 5500) : body;
+      buf.write(scene);
+
+      final parts = <Map<String, dynamic>>[];
+      for (var i = 0; i < cleaned.length; i++) {
+        final r = cleaned[i];
+        parts.add({
+          'inlineData': {
+            'mimeType': r['mimeType'],
+            'data': r['base64'],
+          },
+        });
+        final kind = r['kind']!.toLowerCase() == 'user' ? 'authenticated user' : 'public figure';
+        final label = (r['label'] ?? '').trim();
+        final name = label.isNotEmpty ? label : 'Subject ${i + 1}';
+        parts.add({
+          'text': 'REFERENCE ${i + 1} identity ($kind): $name',
+        });
+      }
+      parts.add({'text': buf.toString()});
+
+      final temperature = hasUser && hasPublic
+          ? 0.4
+          : hasUser
+              ? 0.45
+              : 0.35;
 
       final payload = jsonEncode({
         'contents': [
           {
             'role': 'user',
-            'parts': [
-              {
-                'inlineData': {
-                  'mimeType': cleanMime,
-                  'data': b64,
-                },
-              },
-              {'text': full},
-            ],
+            'parts': parts,
           },
         ],
         'generationConfig': _imageGenerationConfig(
-          temperature: isUser ? 0.45 : 0.35,
+          temperature: temperature,
           aspectRatio: aspectRatio,
         ),
       });
 
-      return _postImagePayload(
-        payload,
-        debugLabel: isUser ? 'user-identity' : 'public-figure',
-      );
+      final label = cleaned.length > 1
+          ? 'multi-ref-${cleaned.length}'
+          : (hasUser ? 'user-identity' : 'public-figure');
+      return _postImagePayload(payload, debugLabel: label);
     });
   }
 

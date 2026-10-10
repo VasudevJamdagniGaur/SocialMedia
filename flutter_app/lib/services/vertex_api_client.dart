@@ -599,6 +599,7 @@ ${jsonEncode(chatData ?? const [])}''';
     String prompt, {
     Duration? timeout,
     Map<String, String>? referenceImage,
+    List<Map<String, String>>? referenceImages,
     String aspectRatio = '16:9',
     String referenceKind = 'publicFigure',
   }) async {
@@ -607,10 +608,12 @@ ${jsonEncode(chatData ?? const [])}''';
       throw Exception('vertexGenerateNewsImageDirect: prompt is required');
     }
 
+    final multiCount = referenceImages?.length ?? 0;
     debugPrint(
       '[ImageGen] E2E start backend=$baseUrl promptLen=${p.length} '
-      'hasReference=${referenceImage != null} aspectRatio=$aspectRatio '
-      'referenceKind=$referenceKind',
+      'hasReference=${referenceImage != null || multiCount > 0} '
+      'refCount=${multiCount > 0 ? multiCount : (referenceImage != null ? 1 : 0)} '
+      'aspectRatio=$aspectRatio referenceKind=$referenceKind',
     );
 
     if (_hasBackend) {
@@ -619,6 +622,7 @@ ${jsonEncode(chatData ?? const [])}''';
           p,
           timeout: timeout,
           referenceImage: referenceImage,
+          referenceImages: referenceImages,
           aspectRatio: aspectRatio,
           referenceKind: referenceKind,
         );
@@ -655,6 +659,7 @@ ${jsonEncode(chatData ?? const [])}''';
     String prompt, {
     Duration? timeout,
     Map<String, String>? referenceImage,
+    List<Map<String, String>>? referenceImages,
     String aspectRatio = '16:9',
     String referenceKind = 'publicFigure',
     RenderBackendPriority priority = RenderBackendPriority.background,
@@ -668,6 +673,7 @@ ${jsonEncode(chatData ?? const [])}''';
         p,
         timeout: timeout,
         referenceImage: referenceImage,
+        referenceImages: referenceImages,
         aspectRatio: aspectRatio,
         referenceKind: referenceKind,
       ),
@@ -678,6 +684,7 @@ ${jsonEncode(chatData ?? const [])}''';
     String p, {
     Duration? timeout,
     Map<String, String>? referenceImage,
+    List<Map<String, String>>? referenceImages,
     String aspectRatio = '16:9',
     String referenceKind = 'publicFigure',
   }) async {
@@ -709,7 +716,30 @@ ${jsonEncode(chatData ?? const [])}''';
       'prompt': p,
       'aspectRatio': aspectRatio,
     };
-    if (referenceImage != null &&
+    final multi = <Map<String, String>>[];
+    if (referenceImages != null) {
+      for (final ref in referenceImages) {
+        final b64 = (ref['base64'] ?? '').trim();
+        if (b64.isEmpty) continue;
+        multi.add({
+          'base64': b64,
+          'mimeType': ref['mimeType'] ?? 'image/jpeg',
+          'kind': ref['kind'] ?? 'publicFigure',
+          if ((ref['label'] ?? '').trim().isNotEmpty) 'label': ref['label']!.trim(),
+        });
+      }
+    }
+    if (multi.isNotEmpty) {
+      requestBody['referenceImages'] = multi;
+      // Legacy single-ref fields for older backends.
+      requestBody['referenceKind'] = multi.first['kind'] ?? referenceKind;
+      requestBody['referenceImage'] = {
+        'base64': multi.first['base64'],
+        'mimeType': multi.first['mimeType'] ?? 'image/jpeg',
+        'kind': multi.first['kind'] ?? referenceKind,
+        if ((multi.first['label'] ?? '').isNotEmpty) 'label': multi.first['label'],
+      };
+    } else if (referenceImage != null &&
         (referenceImage['base64'] ?? '').trim().isNotEmpty) {
       requestBody['referenceKind'] = referenceKind;
       requestBody['referenceImage'] = {
@@ -725,7 +755,8 @@ ${jsonEncode(chatData ?? const [])}''';
       debugPrint('[ImageGen] EXACT URL being called: $url');
       debugPrint(
         '[ImageGen] request promptLen=${p.length} aspectRatio=$aspectRatio '
-        'hasReference=${requestBody.containsKey('referenceImage')} '
+        'hasReference=${requestBody.containsKey('referenceImage') || requestBody.containsKey('referenceImages')} '
+        'refCount=${multi.isNotEmpty ? multi.length : (requestBody.containsKey('referenceImage') ? 1 : 0)} '
         'timeoutSec=${(timeout ?? const Duration(seconds: 120)).inSeconds}',
       );
 
@@ -900,6 +931,7 @@ Future<String> vertexGenerateNewsImageDirect(
   String prompt, {
   Duration? timeout,
   Map<String, String>? referenceImage,
+  List<Map<String, String>>? referenceImages,
   String aspectRatio = '16:9',
   String referenceKind = 'publicFigure',
 }) =>
@@ -907,6 +939,7 @@ Future<String> vertexGenerateNewsImageDirect(
       prompt,
       timeout: timeout,
       referenceImage: referenceImage,
+      referenceImages: referenceImages,
       aspectRatio: aspectRatio,
       referenceKind: referenceKind,
     );
@@ -915,6 +948,7 @@ Future<String> vertexGenerateNewsImage(
   String prompt, {
   Duration? timeout,
   Map<String, String>? referenceImage,
+  List<Map<String, String>>? referenceImages,
   String aspectRatio = '16:9',
   String referenceKind = 'publicFigure',
   RenderBackendPriority priority = RenderBackendPriority.background,
@@ -923,6 +957,7 @@ Future<String> vertexGenerateNewsImage(
       prompt,
       timeout: timeout,
       referenceImage: referenceImage,
+      referenceImages: referenceImages,
       aspectRatio: aspectRatio,
       referenceKind: referenceKind,
       priority: priority,

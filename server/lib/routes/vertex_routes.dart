@@ -157,10 +157,33 @@ Router buildVertexRouter(VertexClient vertex) {
         : '16:9';
 
     final modelId = ServerConfig.normalizeVertexModelId(ServerConfig.vertexImageModel);
+
+    // Prefer multi-reference array; fall back to legacy single referenceImage.
+    final referenceImages = <Map<String, dynamic>>[];
+    final rawList = body['referenceImages'];
+    if (rawList is List) {
+      for (final item in rawList) {
+        if (item is! Map) continue;
+        final b64 = item['base64'];
+        if (b64 is! String || b64.trim().isEmpty) continue;
+        referenceImages.add(Map<String, dynamic>.from(item));
+      }
+    }
     final referenceImage = body['referenceImage'];
-    final hasReference = referenceImage is Map &&
+    if (referenceImages.isEmpty &&
+        referenceImage is Map &&
         referenceImage['base64'] is String &&
-        '${referenceImage['base64']}'.trim().isNotEmpty;
+        '${referenceImage['base64']}'.trim().isNotEmpty) {
+      final kindRaw = body['referenceKind'] ?? referenceImage['kind'];
+      final referenceKind = kindRaw is String && kindRaw.trim().isNotEmpty
+          ? kindRaw.trim()
+          : 'publicFigure';
+      referenceImages.add({
+        ...Map<String, dynamic>.from(referenceImage),
+        'kind': referenceKind,
+      });
+    }
+    final hasReference = referenceImages.isNotEmpty;
 
     stderr.writeln('[generate-news-image] ========== BEFORE VERTEX REQUEST ==========');
     stderr.writeln('[generate-news-image] modelId=$modelId aspectRatio=$aspectRatio');
@@ -179,6 +202,17 @@ Router buildVertexRouter(VertexClient vertex) {
         }
         logBody['referenceImage'] = ref;
       }
+      if (logBody['referenceImages'] is List) {
+        logBody['referenceImages'] = (logBody['referenceImages'] as List).map((item) {
+          if (item is! Map) return item;
+          final ref = Map<String, dynamic>.from(item);
+          final b64 = ref['base64'];
+          if (b64 is String) {
+            ref['base64'] = '<base64 omitted len=${b64.length}>';
+          }
+          return ref;
+        }).toList();
+      }
       const encoder = JsonEncoder.withIndent('  ');
       stderr.writeln(
         '[generate-news-image] request body (no credentials):\n${encoder.convert(logBody)}',
@@ -188,29 +222,22 @@ Router buildVertexRouter(VertexClient vertex) {
       stderr.writeln('[generate-news-image] full stack trace:\n$st');
     }
     stderr.writeln(
-      '[generate-news-image] promptLen=${prompt.trim().length} hasReference=$hasReference',
+      '[generate-news-image] promptLen=${prompt.trim().length} '
+      'hasReference=$hasReference refCount=${referenceImages.length}',
     );
     checkpoint('before_vertex_call');
 
     try {
       final String imageDataUrl;
       if (hasReference) {
-        final kindRaw = body['referenceKind'] ?? referenceImage['kind'];
-        final referenceKind = kindRaw is String && kindRaw.trim().isNotEmpty
-            ? kindRaw.trim()
-            : 'publicFigure';
         stderr.writeln(
-          '[generate-news-image] calling generatePublicFigureIllustrationImage '
-          'kind=$referenceKind aspectRatio=$aspectRatio…',
+          '[generate-news-image] calling generateWithReferenceImages '
+          'count=${referenceImages.length} aspectRatio=$aspectRatio…',
         );
-        imageDataUrl = await vertex.generatePublicFigureIllustrationImage(
+        imageDataUrl = await vertex.generateWithReferenceImages(
           prompt,
-          referenceImageBase64: '${referenceImage['base64']}',
-          mimeType: referenceImage['mimeType'] is String
-              ? '${referenceImage['mimeType']}'
-              : 'image/jpeg',
+          references: referenceImages,
           aspectRatio: aspectRatio,
-          referenceKind: referenceKind,
         );
       } else {
         stderr.writeln('[generate-news-image] calling generateShareSceneImage…');

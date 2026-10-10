@@ -18,6 +18,7 @@ import '../utils/prefs_maintenance.dart';
 import '../models/chat_message.dart';
 import 'auth_service.dart';
 import 'firestore_service.dart';
+import 'public_figure_service.dart';
 import 'render_backend_queue.dart';
 import 'vertex_api_client.dart';
 
@@ -46,6 +47,9 @@ class ChatService extends ChangeNotifier {
   }
 
   static final ChatService instance = ChatService._();
+
+  /// User-facing notice from the latest share image generation (ambiguity / missing refs).
+  String? lastImageGenNotice;
 
   String openaiApiKey = '';
   String grokApiKey = '';
@@ -201,7 +205,8 @@ POLISH:
       'instagram': '''INSTAGRAM CAPTION STYLE (strict):
 - Caption voice: personal, visual, and authentic — like you're posting to your feed.
 - First person, relatable, conversational. Short lines or 1-2 tight paragraphs.
-- Emoji sparingly when natural. End with 0-5 relevant hashtags.''',
+- Emoji sparingly when natural. End with 0-5 relevant hashtags.
+- If this is for an Instagram STORY (not feed): use ONE short sentence of a few words only (max ~8 words). No hashtags, no long captions.''',
     };
 
     final normalizedPlatform = platform == 'reddit' ? 'instagram' : platform;
@@ -2047,7 +2052,11 @@ $text""";
   }
 
   /// Compact prompt for faster share suggestions (less input tokens → lower latency).
-  String _buildFastShareSuggestionsPrompt(String reflection, String platform) {
+  String _buildFastShareSuggestionsPrompt(
+    String reflection,
+    String platform, {
+    String instagramFormat = 'post',
+  }) {
     final platformLabel = platform == 'x'
         ? 'X'
         : platform == 'instagram' || platform == 'reddit'
@@ -2062,18 +2071,24 @@ $text""";
       ContentSubjectKind.generalTopic =>
         'Thought-leadership / observational voice. Do not fabricate a personal anecdote.',
     };
+    final isIgStory = (platform == 'instagram' || platform == 'reddit') &&
+        instagramFormat.trim().toLowerCase() == 'story';
     final platformRules = switch (platformLabel) {
       'LinkedIn' =>
         'LinkedIn: professional, specific, natural first person when personal; avoid corporate clichés; optional light CTA.',
       'X' =>
         'X: concise (<220 chars each when possible), punchy, no engagement bait, max 0–2 hashtags.',
+      _ when isIgStory =>
+        'INSTAGRAM STORY CAPTION (strict): ONE short sentence only — maximum 6–8 words. '
+            'No paragraphs, no hashtags, no emojis spam, no CTAs. Example: "What a night." / "Spain wins it."',
       _ =>
-        'Instagram: caption-friendly, visual, authentic; short paragraphs; 0–5 relevant hashtags.',
+        'Instagram feed: caption-friendly, visual, authentic; short paragraphs; 0–5 relevant hashtags.',
     };
-    return '''Write 3 distinct $platformLabel posts from this reflection.
+    return '''Write 3 distinct $platformLabel ${isIgStory ? 'Story captions' : 'posts'} from this reflection.
 $voiceRules
 $platformRules
-Each post: different angle, natural $platformLabel voice, ground truth only (no invented backstory).
+Each ${isIgStory ? 'caption' : 'post'}: different angle, natural $platformLabel voice, ground truth only (no invented backstory).
+${isIgStory ? 'CRITICAL: each caption body must be a single short sentence (few words only).' : ''}
 Format exactly:
 EVENT: <3-6 word label>
 <post text>
@@ -2084,17 +2099,52 @@ Reflection:
 ${reflection.trim()}''';
   }
 
+  /// Hard cap for Instagram Story captions — one short sentence, few words.
+  static String shortenInstagramStoryCaption(String text, {int maxWords = 8}) {
+    var t = sanitizeSocialPostText(text).trim();
+    if (t.isEmpty) return t;
+    // Drop hashtag/emoji-heavy tails.
+    t = t.replaceAll(RegExp(r'#\w+'), '').trim();
+    t = t.replaceAll(RegExp(r'\s+'), ' ');
+    final sentence = t.split(RegExp(r'[.!?\n]')).firstWhere(
+          (s) => s.trim().isNotEmpty,
+          orElse: () => t,
+        );
+    final words = sentence.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+    if (words.isEmpty) return '';
+    final clipped = words.take(maxWords).join(' ');
+    return clipped.replaceAll(RegExp(r'[,;:]+$'), '').trim();
+  }
+
+  List<Map<String, String>> _applyInstagramStoryCaptionLimits(
+    List<Map<String, String>> items,
+  ) {
+    return items
+        .map((item) {
+          final post = shortenInstagramStoryCaption(item['post'] ?? '');
+          if (post.isEmpty) return null;
+          return <String, String>{
+            ...item,
+            'post': post,
+          };
+        })
+        .whereType<Map<String, String>>()
+        .toList();
+  }
+
   Future<List<Map<String, String>>> generateSocialPostSuggestions(
     String reflection,
-    String platform,
-  ) async {
+    String platform, {
+    String instagramFormat = 'post',
+  }) async {
     final trimmed = reflection.trim();
     if (trimmed.isEmpty) return [];
 
     final backend = Env.baseUrl;
+    final formatKey = instagramFormat.trim().toLowerCase() == 'story' ? 'story' : 'post';
     debugPrint(
-      '[ShareSuggestionsAPI] start platform=$platform backend=$backend '
-      'len=${trimmed.length}',
+      '[ShareSuggestionsAPI] start platform=$platform format=$formatKey '
+      'backend=$backend len=${trimmed.length}',
     );
 
     if (platform == 'x') {
@@ -2117,7 +2167,19 @@ ${reflection.trim()}''';
       }
     }
 
-    final sharePrompt = _buildFastShareSuggestionsPrompt(reflection, platform);
+    final sharePrompt = _buildFastShareSuggestionsPrompt(
+      reflection,
+      platform,
+      instagramFormat: formatKey,
+    );
+    final isIgStory = formatKey == 'story' &&
+        (platform == 'instagram' || platform == 'reddit');
+    List<Map<String, String>> finish(List<Map<String, String>> items) {
+      if (!isIgStory || items.isEmpty) return items;
+      final short = _applyInstagramStoryCaptionLimits(items);
+      return short.isNotEmpty ? short : items;
+    }
+
     Exception? lastErr;
 
     // 1) Vertex /generateContent (known-good on socitea)
@@ -2125,12 +2187,12 @@ ${reflection.trim()}''';
       try {
         debugPrint(
           '[ShareSuggestionsAPI] POST $backend/generateContent '
-          'maxTokens=1400 timeout=40s',
+          'maxTokens=${isIgStory ? 400 : 1400} timeout=40s',
         );
         final raw = await callVertexGenerateContent(
           prompt: sharePrompt,
           temperature: 0.5,
-          maxOutputTokens: 1400,
+          maxOutputTokens: isIgStory ? 400 : 1400,
           timeout: const Duration(seconds: 40),
         );
         debugPrint(
@@ -2140,7 +2202,7 @@ ${reflection.trim()}''';
         final parsed = _parseShareSuggestionModelOutput(raw.trim(), reflection);
         if (parsed.isNotEmpty) {
           debugPrint('[ShareSuggestionsAPI] parsed posts=${parsed.length}');
-          return parsed;
+          return finish(parsed);
         }
         lastErr = Exception('Vertex returned empty share suggestions');
         debugPrint('[ShareSuggestionsAPI] parse produced 0 posts');
@@ -2175,7 +2237,7 @@ ${reflection.trim()}''';
         final posts = _parseSuggestionsApiPosts(res.body, platform);
         if (posts.isNotEmpty) {
           debugPrint('[ShareSuggestionsAPI] suggestions API posts=${posts.length}');
-          return posts;
+          return finish(posts);
         }
         lastErr = Exception('Suggestions API OK but no posts parsed');
       } catch (e, st) {
@@ -2205,7 +2267,7 @@ ${reflection.trim()}''';
                   {'role': 'user', 'content': sharePrompt},
                 ],
                 'temperature': 0.5,
-                'max_tokens': 1400,
+                'max_tokens': isIgStory ? 400 : 1400,
               }),
             )
             .timeout(const Duration(seconds: 40));
@@ -2228,7 +2290,7 @@ ${reflection.trim()}''';
             }
           }
           final parsed = _parseShareSuggestionModelOutput(raw.trim(), reflection);
-          if (parsed.isNotEmpty) return parsed;
+          if (parsed.isNotEmpty) return finish(parsed);
         }
         lastErr = Exception('OpenAI suggestions failed: ${response.statusCode}');
       } catch (e, st) {
@@ -2242,7 +2304,7 @@ ${reflection.trim()}''';
       '[ShareSuggestionsAPI] using local fallback count=${fallback.length} '
       'lastErr=$lastErr',
     );
-    if (fallback.isNotEmpty) return fallback;
+    if (fallback.isNotEmpty) return finish(fallback);
     throw lastErr ??
         Exception(
           'Could not generate share suggestions. backend=$backend',
@@ -4625,6 +4687,7 @@ $contextSnippet''';
     bool skipCache = false,
     String instagramFormat = 'story',
   ]) async {
+    lastImageGenNotice = null;
     if (postText.trim().isEmpty) {
       debugPrint('[ImageGen] fetchImageForReflection aborted: empty text');
       return null;
@@ -4636,6 +4699,20 @@ $contextSnippet''';
 
     final analysis = analyzeContentSubject(fullText);
     final wantsUserFace = analysis.useUserFaceReference && analysis.confidence >= 0.5;
+
+    // Resolve public figures before generation (timed; skips when none found).
+    debugPrint('[ImageGen] public-figure scan starting…');
+    final figureScan = await PublicFigureService.instance.scanAndResolve(
+      fullText,
+      timeout: const Duration(seconds: 14),
+      maxPeople: 2,
+    );
+    if (figureScan.notice != null && figureScan.notice!.isNotEmpty) {
+      lastImageGenNotice = figureScan.notice;
+    }
+    final publicFigures = figureScan.figures;
+    final usedPublicFigureRefs = publicFigures.isNotEmpty;
+
     Map<String, String>? userReference;
     var usedUserReference = false;
     if (wantsUserFace) {
@@ -4654,18 +4731,46 @@ $contextSnippet''';
       );
     }
 
+    final referenceImages = <Map<String, String>>[];
+    for (final fig in publicFigures) {
+      final ref = fig.referenceImage;
+      if (ref == null) continue;
+      referenceImages.add({
+        'base64': ref['base64']!,
+        'mimeType': ref['mimeType'] ?? 'image/jpeg',
+        'kind': 'publicFigure',
+        'label': fig.displayName,
+      });
+    }
+    if (usedUserReference && userReference != null) {
+      referenceImages.add({
+        'base64': userReference['base64']!,
+        'mimeType': userReference['mimeType'] ?? 'image/jpeg',
+        'kind': 'user',
+        'label': 'Authenticated user',
+      });
+    }
+
+    final primaryKind = referenceImages.isEmpty
+        ? 'publicFigure'
+        : (referenceImages.first['kind'] ?? 'publicFigure');
+    final figureKey = publicFigures.map((f) => f.displayName).join('|');
+
     debugPrint(
       '[ImageGen] fetchImageForReflection start platform=$platformKey '
       'instagramFormat=$formatKey subject=${analysis.kind.name} '
-      'userRef=$usedUserReference textLen=${fullText.length} '
+      'userRef=$usedUserReference publicFigs=$figureKey '
+      'refCount=${referenceImages.length} textLen=${fullText.length} '
       'aiBackend=${Env.aiBackendUrl}',
     );
 
     final keyText = fullText.length > 300 ? fullText.substring(0, 300) : fullText;
-    // v8: personalization + subject + face-ref flag in cache key.
+    // v9: personalization + public-figure refs in cache key.
     final cacheKey =
-        'post_image_cache_v8::$platformKey::$formatKey::'
-        '${analysis.kind.name}::${usedUserReference ? 'ref' : 'noref'}::$keyText';
+        'post_image_cache_v9::$platformKey::$formatKey::'
+        '${analysis.kind.name}::'
+        '${usedUserReference ? 'uref' : 'nouref'}::'
+        '${usedPublicFigureRefs ? 'pref:$figureKey' : 'nopref'}::$keyText';
     final prefs = await SharedPreferences.getInstance();
 
     if (!skipCache) {
@@ -4708,6 +4813,7 @@ $contextSnippet''';
       instagramFormat: formatKey,
       subject: analysis,
       withUserReference: usedUserReference,
+      publicFigures: publicFigures,
     );
     final aspectRatio = personalizationAspectRatio(
       platform: platformKey,
@@ -4716,15 +4822,16 @@ $contextSnippet''';
     debugPrint(
       '[ImageGen] personalized prompt ready len=${prompt.length} '
       'aspectRatio=$aspectRatio platform=$platformKey subject=${analysis.kind.name} '
-      'userRef=$usedUserReference — sending image HTTP now',
+      'userRef=$usedUserReference publicFigs=$figureKey '
+      'refCount=${referenceImages.length} — sending image HTTP now',
     );
 
     try {
       final generated = await _generateImageWithGemini(
         prompt,
-        referenceImage: userReference,
+        referenceImages: referenceImages.isEmpty ? null : referenceImages,
         aspectRatio: aspectRatio,
-        referenceKind: usedUserReference ? 'user' : 'publicFigure',
+        referenceKind: primaryKind,
       );
       if (generated != null && generated.isNotEmpty && !skipCache) {
         _cacheReflectionImageIfPersistable(prefs, cacheKey, fullText, generated);
@@ -4733,6 +4840,8 @@ $contextSnippet''';
     } catch (e, st) {
       debugPrint('[ImageGen] fetchImageForReflection failed: $e');
       debugPrint('[ImageGen] stack:\n$st');
+      lastImageGenNotice ??=
+          'Image generation failed. Try again, or simplify the request.';
       return null;
     }
   }
@@ -4768,29 +4877,46 @@ $contextSnippet''';
     String platform, {
     required ContentSubjectAnalysis subject,
     required bool withUserReference,
+    List<ResolvedPublicFigure> publicFigures = const [],
     String instagramFormat = 'story',
   }) {
     final body = postText.length > 900 ? postText.substring(0, 900) : postText;
     final p = platform.trim().toLowerCase();
 
+    final figureLines = publicFigures.map((f) {
+      final role = (f.description ?? '').trim();
+      return '- ${f.displayName}${role.isNotEmpty ? ' ($role)' : ''} '
+          '[verified Wikipedia reference photo attached]';
+    }).join('\n');
+
+    final publicFigureBlock = publicFigures.isEmpty
+        ? ''
+        : 'PUBLIC FIGURES (use attached reference photos; match faces as closely as the model allows):\n'
+            '$figureLines\n'
+            'Depict ONLY these people when a face is required for them. Do not invent extra celebrities.\n'
+            'This is an AI-generated illustrative scene — do NOT invent documentary evidence of meetings, '
+            'endorsements, quotes, or historical events that are not clearly described in the context.\n';
+
     final identityBlock = withUserReference
-        ? 'IDENTITY: A real reference photo of the authenticated user is attached. '
+        ? 'IDENTITY (USER): A real reference photo of the authenticated user is attached. '
             'Preserve their face, skin tone, and hairstyle. Place them naturally in the scene '
             'described by the story (new clothing/pose/background as needed). '
             'Do NOT invent a different person. Do NOT claim personalization without the photo.\n'
         : subject.kind == ContentSubjectKind.userSelf
-            ? 'IDENTITY: This is a personal story but NO usable profile photo was supplied. '
+            ? 'IDENTITY (USER): This is a personal story but NO usable profile photo was supplied. '
                 'Depict the scene and mood without inventing a specific recognizable face, '
                 'or use a back/side silhouette if a person is needed.\n'
-            : subject.kind == ContentSubjectKind.otherPerson
+            : subject.kind == ContentSubjectKind.otherPerson && publicFigures.isEmpty
                 ? 'IDENTITY: This story is about someone ELSE. Do NOT use or invent the authenticated user\'s face.\n'
-                : 'IDENTITY: General topic — no personal face. Focus on concepts, environments, and objects.\n';
+                : publicFigures.isEmpty
+                    ? 'IDENTITY: General topic — no personal face. Focus on concepts, environments, and objects.\n'
+                    : 'IDENTITY: Focus on the verified public figure(s). Do NOT invent the authenticated user\'s face.\n';
 
     if (p == 'instagram' || p == 'reddit') {
       if (instagramFormat == 'post') {
         return '''
 Create ONE square Instagram feed Post image (1:1, 1080x1080 style).
-$identityBlock
+$identityBlock$publicFigureBlock
 PRIMARY CONTEXT:
 """
 $body
@@ -4801,7 +4927,7 @@ Optional short overlay (5–10 words) only if helpful. Not a poster/flyer/ad.
       }
       return '''
 Create ONE vertical Instagram Story image (9:16, 1080x1920 style).
-$identityBlock
+$identityBlock$publicFigureBlock
 PRIMARY CONTEXT:
 """
 $body
@@ -4814,26 +4940,26 @@ Optional short overlay (5–10 words). Realistic high quality. Not a poster/flye
     if (p == 'linkedin') {
       return '''
 Create ONE professional LinkedIn square image (1:1).
-$identityBlock
+$identityBlock$publicFigureBlock
 PRIMARY CONTEXT:
 """
 $body
 """
-Professional, authentic career/achievement visual. Realistic lighting.
-No logos, no exaggerated stock-poster style. Medium shot preferred.
+Professional editorial style suitable for conferences, achievements, and announcements.
+Realistic lighting. No logos, no exaggerated stock-poster style. Medium shot preferred.
 '''.trim();
     }
 
     // X / default
     return '''
 Create ONE vivid horizontal image for X/Twitter (16:9).
-$identityBlock
+$identityBlock$publicFigureBlock
 PRIMARY CONTEXT:
 """
 $body
 """
-Natural social visual matching the story. Not an Instagram Story layout.
-No logos or watermarks.
+Attention-appropriate social visual matching the story. Avoid decorative clutter.
+Not an Instagram Story layout. No logos or watermarks.
 '''.trim();
   }
 
@@ -5074,20 +5200,24 @@ No logos or watermarks.
   Future<String?> _generateImageWithGemini(
     String prompt, {
     Map<String, String>? referenceImage,
+    List<Map<String, String>>? referenceImages,
     String aspectRatio = '16:9',
     String referenceKind = 'publicFigure',
   }) async {
     final p = prompt.trim();
     if (p.isEmpty || !isVertexBackendConfigured()) return null;
     try {
+      final multiCount = referenceImages?.length ?? 0;
       debugPrint(
         '[ImageGen] _generateImageWithGemini promptLen=${p.length} '
-        'hasReference=${referenceImage != null} aspectRatio=$aspectRatio '
-        'referenceKind=$referenceKind',
+        'hasReference=${referenceImage != null || multiCount > 0} '
+        'refCount=${multiCount > 0 ? multiCount : (referenceImage != null ? 1 : 0)} '
+        'aspectRatio=$aspectRatio referenceKind=$referenceKind',
       );
       final imageDataUrl = await vertexGenerateNewsImageDirect(
         p,
         referenceImage: referenceImage,
+        referenceImages: referenceImages,
         aspectRatio: aspectRatio,
         referenceKind: referenceKind,
       );

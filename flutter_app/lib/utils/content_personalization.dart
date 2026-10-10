@@ -63,9 +63,9 @@ ContentSubjectAnalysis analyzeContentSubject(String input) {
 
   // Strong first-person experience signals.
   final selfPatterns = <RegExp>[
-    RegExp(r'\bi (won|attended|got|received|started|launched|built|shipped|published|graduated|joined|spoke|presented|completed|finished|cracked|cleared)\b'),
+    RegExp(r'\bi (won|attended|got|received|started|launched|built|shipped|published|graduated|joined|spoke|presented|completed|finished|cracked|cleared|met|visited|hosted)\b'),
     RegExp(r"\bi'?m (proud|excited|thrilled|grateful|honored|happy|starting|building|launching)\b"),
-    RegExp(r"\bi'?ve (won|built|shipped|launched|started|joined|learned|completed)\b"),
+    RegExp(r"\bi'?ve (won|built|shipped|launched|started|joined|learned|completed|met)\b"),
     RegExp(r'\bmy (hackathon|project|startup|internship|offer|degree|talk|demo|pitch|app|product)\b'),
     RegExp(r'\btoday i\b'),
     RegExp(r'\bi just\b'),
