@@ -1,5 +1,4 @@
 ﻿import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -191,30 +190,6 @@ class _ProfilePageState extends State<ProfilePage> {
   String _getInitials(String? name) {
     if (name == null || name.isEmpty) return 'U';
     return name.split(' ').map((n) => n.isNotEmpty ? n[0] : '').join().toUpperCase();
-  }
-
-  Future<String?> _compressDataUrlForStorage(String dataUrl, {int maxSizeKb = 800}) async {
-    try {
-      if (!dataUrl.startsWith('data:')) return dataUrl;
-      final comma = dataUrl.indexOf(',');
-      if (comma < 0) return dataUrl;
-      final bytes = base64Decode(dataUrl.substring(comma + 1));
-      var quality = 85;
-      Uint8List? out = bytes;
-      while (quality >= 20) {
-        out = await FlutterImageCompress.compressWithList(
-          bytes,
-          minWidth: 480,
-          minHeight: 480,
-          quality: quality,
-        );
-        if (out.length <= maxSizeKb * 1024) break;
-        quality -= 10;
-      }
-      return 'data:image/jpeg;base64,${base64Encode(out!)}';
-    } catch (_) {
-      return dataUrl;
-    }
   }
 
   Future<void> _handleSave() async {
