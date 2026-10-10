@@ -281,8 +281,12 @@ class _DashboardPageState extends State<DashboardPage> {
           .timeout(const Duration(seconds: 90));
       String? imageUrl;
       try {
+        final userCtx = <String, dynamic>{
+          if (_profilePicture != null && _profilePicture!.isNotEmpty)
+            'profilePicture': _profilePicture,
+        };
         imageUrl = await ChatService.instance
-            .fetchImageForReflection(reflection, null, _platform)
+            .fetchImageForReflection(reflection, userCtx, _platform)
             .timeout(const Duration(seconds: 120));
       } catch (_) {
         imageUrl = null;

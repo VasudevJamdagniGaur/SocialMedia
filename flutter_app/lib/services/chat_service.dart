@@ -9,6 +9,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import '../config/env.dart';
 import '../lib/pod_reddit_hot.dart';
+import '../utils/content_personalization.dart';
 import '../utils/date_utils.dart';
 import '../utils/decode_google_news_url.dart';
 import '../utils/reddit_thread_comments.dart';
@@ -2052,7 +2053,26 @@ $text""";
         : platform == 'instagram' || platform == 'reddit'
             ? 'Instagram'
             : 'LinkedIn';
+    final subject = analyzeContentSubject(reflection);
+    final voiceRules = switch (subject.kind) {
+      ContentSubjectKind.userSelf =>
+        'Write in authentic first person about THEIR experience. Do not invent achievements or backstory.',
+      ContentSubjectKind.otherPerson =>
+        'Focus on the other person / event described. Do not rewrite it as the author\'s personal win.',
+      ContentSubjectKind.generalTopic =>
+        'Thought-leadership / observational voice. Do not fabricate a personal anecdote.',
+    };
+    final platformRules = switch (platformLabel) {
+      'LinkedIn' =>
+        'LinkedIn: professional, specific, natural first person when personal; avoid corporate clichés; optional light CTA.',
+      'X' =>
+        'X: concise (<220 chars each when possible), punchy, no engagement bait, max 0–2 hashtags.',
+      _ =>
+        'Instagram: caption-friendly, visual, authentic; short paragraphs; 0–5 relevant hashtags.',
+    };
     return '''Write 3 distinct $platformLabel posts from this reflection.
+$voiceRules
+$platformRules
 Each post: different angle, natural $platformLabel voice, ground truth only (no invented backstory).
 Format exactly:
 EVENT: <3-6 word label>
@@ -2871,10 +2891,21 @@ Rules:
 
   String _buildXReflectionSuggestionsUserContent(String reflection) {
     final text = reflection.trim();
+    final subject = analyzeContentSubject(text);
+    final subjectRule = switch (subject.kind) {
+      ContentSubjectKind.userSelf =>
+        'Voice: authentic first person about their own moment. Never invent wins.',
+      ContentSubjectKind.otherPerson =>
+        'Voice: about the other person/event — do not make it the author\'s personal win.',
+      ContentSubjectKind.generalTopic =>
+        'Voice: observational / opinion — do not fabricate a personal anecdote.',
+    };
     return '''You are generating X (Twitter) posts from someone's personal reflection.
 
 GOAL:
 Create short, punchy, personality-driven tweets — same format as our news X suggestions.
+
+$subjectRule
 
 CORE RULE:
 Each tweet = ONE thought, ONE reaction, ONE moment. Do NOT dump the whole reflection into one tweet.
@@ -4571,36 +4602,70 @@ $contextSnippet''';
     return _resolveShareImagePrompt(postText.trim(), platformName, userContext);
   }
 
-  Future<String?> generateShareImageFromPrompt(String prompt) async {
+  Future<String?> generateShareImageFromPrompt(
+    String prompt, {
+    String aspectRatio = '16:9',
+  }) async {
     final trimmed = prompt.trim();
     if (trimmed.isEmpty || !isVertexBackendConfigured()) return null;
     // Direct image call — skip reference-photo / entity pipeline that can stall.
     debugPrint(
       '[ImageGen] generateShareImageFromPrompt len=${trimmed.length} '
-      'aiBackend=${Env.aiBackendUrl}',
+      'aspectRatio=$aspectRatio aiBackend=${Env.aiBackendUrl}',
     );
-    return _generateImageWithGemini(trimmed);
+    return _generateImageWithGemini(trimmed, aspectRatio: aspectRatio);
   }
 
+  /// Shared personalization pipeline for LinkedIn / X / Instagram visuals.
+  /// [instagramFormat] is `post` (1:1) or `story` (9:16) for Instagram.
   Future<String?> fetchImageForReflection(
     String postText, [
     Map<String, dynamic>? userContext,
     String platform = 'x',
     bool skipCache = false,
+    String instagramFormat = 'story',
   ]) async {
     if (postText.trim().isEmpty) {
       debugPrint('[ImageGen] fetchImageForReflection aborted: empty text');
       return null;
     }
-    debugPrint(
-      '[ImageGen] fetchImageForReflection start platform=$platform '
-      'textLen=${postText.trim().length} aiBackend=${Env.aiBackendUrl}',
-    );
+    final formatKey =
+        (instagramFormat.trim().toLowerCase() == 'post') ? 'post' : 'story';
     final fullText = postText.trim();
-    final keyText = fullText.length > 300 ? fullText.substring(0, 300) : fullText;
     final platformKey = platform.trim().isEmpty ? 'x' : platform.trim().toLowerCase();
-    // v6: Instagram Story prompts + 9:16 — invalidate older unrelated caches.
-    final cacheKey = 'post_image_cache_v6::$platformKey::$keyText';
+
+    final analysis = analyzeContentSubject(fullText);
+    final wantsUserFace = analysis.useUserFaceReference && analysis.confidence >= 0.5;
+    Map<String, String>? userReference;
+    var usedUserReference = false;
+    if (wantsUserFace) {
+      userReference = await _resolveAuthenticatedUserFaceReference(userContext);
+      usedUserReference = userReference != null;
+      if (!usedUserReference) {
+        debugPrint(
+          '[ImageGen] personal story but no usable face reference '
+          '(upload a real profile photo for identity-preserving visuals)',
+        );
+      }
+    } else {
+      debugPrint(
+        '[ImageGen] subject=${analysis.kind.name} reason=${analysis.reason} '
+        '— not using user face reference',
+      );
+    }
+
+    debugPrint(
+      '[ImageGen] fetchImageForReflection start platform=$platformKey '
+      'instagramFormat=$formatKey subject=${analysis.kind.name} '
+      'userRef=$usedUserReference textLen=${fullText.length} '
+      'aiBackend=${Env.aiBackendUrl}',
+    );
+
+    final keyText = fullText.length > 300 ? fullText.substring(0, 300) : fullText;
+    // v8: personalization + subject + face-ref flag in cache key.
+    final cacheKey =
+        'post_image_cache_v8::$platformKey::$formatKey::'
+        '${analysis.kind.name}::${usedUserReference ? 'ref' : 'noref'}::$keyText';
     final prefs = await SharedPreferences.getInstance();
 
     if (!skipCache) {
@@ -4637,21 +4702,29 @@ $contextSnippet''';
       return null;
     }
 
-    // FAST PATH: build a local prompt and call /generate-news-image immediately.
-    // Do NOT wait on entity detection / structured prompt Vertex text calls —
-    // those were stalling the Future so the image HTTP request never started.
-    final prompt = _buildFastShareImagePrompt(fullText, platformKey);
-    final aspectRatio = _shareImageAspectRatio(platformKey);
+    final prompt = _buildPersonalizedShareImagePrompt(
+      fullText,
+      platformKey,
+      instagramFormat: formatKey,
+      subject: analysis,
+      withUserReference: usedUserReference,
+    );
+    final aspectRatio = personalizationAspectRatio(
+      platform: platformKey,
+      instagramFormat: formatKey,
+    );
     debugPrint(
-      '[ImageGen] fast-path prompt ready len=${prompt.length} '
-      'aspectRatio=$aspectRatio platform=$platformKey — '
-      'sending image HTTP now (no pre-Vertex text pipeline)',
+      '[ImageGen] personalized prompt ready len=${prompt.length} '
+      'aspectRatio=$aspectRatio platform=$platformKey subject=${analysis.kind.name} '
+      'userRef=$usedUserReference — sending image HTTP now',
     );
 
     try {
       final generated = await _generateImageWithGemini(
         prompt,
+        referenceImage: userReference,
         aspectRatio: aspectRatio,
+        referenceKind: usedUserReference ? 'user' : 'publicFigure',
       );
       if (generated != null && generated.isNotEmpty && !skipCache) {
         _cacheReflectionImageIfPersistable(prefs, cacheKey, fullText, generated);
@@ -4664,64 +4737,104 @@ $contextSnippet''';
     }
   }
 
-  /// Local prompt — no network. Ensures the image HTTP request can start immediately.
-  String _buildFastShareImagePrompt(String postText, String platform) {
-    final clipped = postText.trim();
-    final body = clipped.length > 900 ? clipped.substring(0, 900) : clipped;
-    final p = platform.trim().toLowerCase();
+  Future<Map<String, String>?> _resolveAuthenticatedUserFaceReference(
+    Map<String, dynamic>? userContext,
+  ) async {
+    String? pic = userContext?['profileImageUrl']?.toString().trim();
+    pic ??= userContext?['profilePicture']?.toString().trim();
 
-    if (p == 'instagram' || p == 'reddit') {
-      return _buildInstagramStoryImagePrompt(body);
+    if (!isUsableFaceReference(pic)) {
+      final user = AuthService.instance.getCurrentUser();
+      if (user != null) {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          pic = prefs.getString('user_profile_picture_${user.uid}');
+        } catch (_) {}
+        if (!isUsableFaceReference(pic)) {
+          try {
+            pic = await FirestoreService.instance.getProfilePictureUrl(user.uid);
+          } catch (_) {}
+        }
+      }
     }
 
-    final platformHint = p == 'linkedin'
-        ? 'professional LinkedIn-style editorial scene'
-        : 'vivid social media editorial scene';
-    return 'Create one $platformHint photograph for this post.\n'
-        'Visually tell the story in the text — infer scene, mood, setting, lighting, '
-        'people, and objects from the words. Do not invent an unrelated scene.\n'
-        'Medium or wide shot. No face close-ups, logos, or watermarks.\n\n'
-        'Post:\n$body';
+    if (!isUsableFaceReference(pic)) return null;
+    return _getProfileImageAsBase64(pic!);
   }
 
-  /// Instagram Story (9:16) — story-first, premium aesthetic, optional short overlay.
-  String _buildInstagramStoryImagePrompt(String body) {
-    return '''
-Create ONE vertical Instagram Story image (9:16, 1080x1920 style).
+  /// Platform-aware visual prompt. Never claims personalization without a real reference.
+  String _buildPersonalizedShareImagePrompt(
+    String postText,
+    String platform, {
+    required ContentSubjectAnalysis subject,
+    required bool withUserReference,
+    String instagramFormat = 'story',
+  }) {
+    final body = postText.length > 900 ? postText.substring(0, 900) : postText;
+    final p = platform.trim().toLowerCase();
 
-PRIMARY CONTEXT (must drive the entire visual — do not invent an unrelated scene):
+    final identityBlock = withUserReference
+        ? 'IDENTITY: A real reference photo of the authenticated user is attached. '
+            'Preserve their face, skin tone, and hairstyle. Place them naturally in the scene '
+            'described by the story (new clothing/pose/background as needed). '
+            'Do NOT invent a different person. Do NOT claim personalization without the photo.\n'
+        : subject.kind == ContentSubjectKind.userSelf
+            ? 'IDENTITY: This is a personal story but NO usable profile photo was supplied. '
+                'Depict the scene and mood without inventing a specific recognizable face, '
+                'or use a back/side silhouette if a person is needed.\n'
+            : subject.kind == ContentSubjectKind.otherPerson
+                ? 'IDENTITY: This story is about someone ELSE. Do NOT use or invent the authenticated user\'s face.\n'
+                : 'IDENTITY: General topic — no personal face. Focus on concepts, environments, and objects.\n';
+
+    if (p == 'instagram' || p == 'reddit') {
+      if (instagramFormat == 'post') {
+        return '''
+Create ONE square Instagram feed Post image (1:1, 1080x1080 style).
+$identityBlock
+PRIMARY CONTEXT:
 """
 $body
 """
-
-REQUIREMENTS:
-- Visually tell the story described above. Infer scene, mood, setting, lighting, emotions, people, and objects from the text automatically.
-- Premium aesthetic Instagram Story design: cinematic lighting, subtle gradients, social-media quality composition, clean modern look.
-- Leave safe margins near edges so UI chrome will not cover important content.
-- If appropriate, overlay ONE short impactful headline or quote (5–10 words max) taken from or inspired by the text. Typography must be minimal, modern, highly readable. Prefer no text if the scene alone is stronger.
-- Do NOT look like a poster, flyer, advertisement, presentation slide, or collage template.
-- Avoid excessive text. The image itself should communicate the message.
-- Use realistic, high-quality photography unless the text clearly implies illustration or art.
-- Every story must feel unique and match the emotional tone of the text — no fixed template.
-
-LAYOUT BY CONTEXT (pick what fits the text):
-- Sports → action shot, energetic atmosphere, stadium/pitch energy.
-- Travel → scenic immersive environment.
-- Motivation → minimal aesthetic with symbolic visuals.
-- Personal achievements → celebratory and inspiring.
-- Technology → futuristic, clean visuals.
-- News/current events → editorial-style storytelling.
-- Emotional reflections → cinematic, expressive scenes.
-
-Output a single vertical Story frame only.
+Premium Instagram feed aesthetic, clean composition, cinematic lighting.
+Optional short overlay (5–10 words) only if helpful. Not a poster/flyer/ad.
 '''.trim();
-  }
+      }
+      return '''
+Create ONE vertical Instagram Story image (9:16, 1080x1920 style).
+$identityBlock
+PRIMARY CONTEXT:
+"""
+$body
+"""
+Cinematic Story composition with safe margins from edges.
+Optional short overlay (5–10 words). Realistic high quality. Not a poster/flyer/ad.
+'''.trim();
+    }
 
-  String _shareImageAspectRatio(String platform) {
-    final p = platform.trim().toLowerCase();
-    if (p == 'instagram' || p == 'reddit') return '9:16';
-    if (p == 'linkedin') return '1:1';
-    return '16:9';
+    if (p == 'linkedin') {
+      return '''
+Create ONE professional LinkedIn square image (1:1).
+$identityBlock
+PRIMARY CONTEXT:
+"""
+$body
+"""
+Professional, authentic career/achievement visual. Realistic lighting.
+No logos, no exaggerated stock-poster style. Medium shot preferred.
+'''.trim();
+    }
+
+    // X / default
+    return '''
+Create ONE vivid horizontal image for X/Twitter (16:9).
+$identityBlock
+PRIMARY CONTEXT:
+"""
+$body
+"""
+Natural social visual matching the story. Not an Instagram Story layout.
+No logos or watermarks.
+'''.trim();
   }
 
   void _cacheReflectionImageIfPersistable(
@@ -4962,18 +5075,21 @@ Output a single vertical Story frame only.
     String prompt, {
     Map<String, String>? referenceImage,
     String aspectRatio = '16:9',
+    String referenceKind = 'publicFigure',
   }) async {
     final p = prompt.trim();
     if (p.isEmpty || !isVertexBackendConfigured()) return null;
     try {
       debugPrint(
         '[ImageGen] _generateImageWithGemini promptLen=${p.length} '
-        'hasReference=${referenceImage != null} aspectRatio=$aspectRatio',
+        'hasReference=${referenceImage != null} aspectRatio=$aspectRatio '
+        'referenceKind=$referenceKind',
       );
       final imageDataUrl = await vertexGenerateNewsImageDirect(
         p,
         referenceImage: referenceImage,
         aspectRatio: aspectRatio,
+        referenceKind: referenceKind,
       );
       debugPrint('[ImageGen] _generateImageWithGemini received len=${imageDataUrl.length}');
       if (imageDataUrl.startsWith('data:image')) {

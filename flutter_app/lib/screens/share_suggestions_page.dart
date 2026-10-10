@@ -34,11 +34,14 @@ import '../services/youtube_tea_service.dart';
 import '../utils/date_utils.dart';
 import '../utils/hub_colors.dart';
 import '../services/render_backend_queue.dart';
+import '../utils/content_personalization.dart';
 import '../utils/hub_carousel_ai_image.dart';
 import '../utils/hub_carousel_image_store.dart';
 import '../utils/reddit_thread_comments.dart';
 import '../utils/share_news_cache.dart';
 import '../utils/widget_capture.dart';
+
+enum _InstagramFormat { post, story }
 
 enum _XShareMode {
   cardImage,
@@ -68,6 +71,8 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
   String _reflection = '';
   Map<String, dynamic>? _newsArticle;
   List<String> _media = [];
+  /// Instagram feed Post vs Story — drives preview heading, aspect, and image prompt.
+  _InstagramFormat _instagramFormat = _InstagramFormat.post;
 
   List<Map<String, String>> _suggestions = [];
   bool _loading = true;
@@ -103,6 +108,27 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
   final FocusNode _reflectionFocusNode = FocusNode();
 
   bool get _isNewsMode => _newsArticle != null;
+
+  bool get _isInstagramPlatform =>
+      _platform == 'instagram' || _platform == 'reddit';
+
+  String get _instagramFormatKey =>
+      _instagramFormat == _InstagramFormat.post ? 'post' : 'story';
+
+  String get _instagramPreviewHeading =>
+      _instagramFormat == _InstagramFormat.post
+          ? 'Instagram Post'
+          : 'Instagram Story';
+
+  double get _shareImageAspectRatio {
+    if (!_isInstagramPlatform) return 16 / 9;
+    return _instagramFormat == _InstagramFormat.post ? 1 : 9 / 16;
+  }
+
+  double get _shareImageMaxHeight {
+    if (!_isInstagramPlatform) return 220;
+    return _instagramFormat == _InstagramFormat.post ? 320 : 360;
+  }
 
   String? get _shareSuggestionImageUrl {
     if (_media.isNotEmpty) return _media.first;
@@ -339,13 +365,36 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
         return;
       }
 
+      final userCtx = await _shareUserContextForPersonalization();
+      final subject = analyzeContentSubject(text);
+      final pic = userCtx['profilePicture']?.toString();
+      if (subject.useUserFaceReference &&
+          subject.confidence >= 0.5 &&
+          !isUsableFaceReference(pic) &&
+          mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Add a real profile photo in Settings for personalized visuals of you.',
+            ),
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
       debugPrint(
         '[ImageGen] reflection share image START textLen=${text.length} '
-        'platform=$_platform aiBackend=${Env.aiBackendUrl}',
+        'platform=$_platform format=$_instagramFormatKey '
+        'subject=${subject.kind.name} hasProfilePic=${isUsableFaceReference(pic)} '
+        'aiBackend=${Env.aiBackendUrl}',
       );
       // No page-level timeout — HTTP client already enforces its own limit.
-      final generated =
-          await ChatService.instance.fetchImageForReflection(text, null, _platform);
+      final generated = await ChatService.instance.fetchImageForReflection(
+        text,
+        userCtx,
+        _platform,
+        false,
+        _instagramFormatKey,
+      );
       debugPrint(
         '[ImageGen] reflection share image DONE hasImage=${generated != null} '
         'len=${generated?.length ?? 0}',
@@ -1007,6 +1056,21 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
     }());
   }
 
+  void _onInstagramFormatChanged(_InstagramFormat format) {
+    if (_instagramFormat == format) return;
+    setState(() {
+      _instagramFormat = format;
+      _generatedShareImageUrl = null;
+      _media = [];
+      _invalidateXShareAssets();
+    });
+    if (_isNewsMode) {
+      unawaited(_ensureNewsShareImage());
+    } else {
+      unawaited(_ensureReflectionShareImage());
+    }
+  }
+
   Future<void> _onReflectionRegenerate() async {
     if (_isNewsMode || _loading) return;
 
@@ -1356,19 +1420,27 @@ User changes: $instruction''',
     try {
       String? image;
       String? promptUsed;
+      final aspect = _isInstagramPlatform
+          ? (_instagramFormat == _InstagramFormat.post ? '1:1' : '9:16')
+          : (_platform == 'linkedin' ? '1:1' : '16:9');
       if (customPrompt != null && customPrompt.trim().isNotEmpty) {
         promptUsed = customPrompt.trim();
-        image = await ChatService.instance.generateShareImageFromPrompt(promptUsed);
+        image = await ChatService.instance.generateShareImageFromPrompt(
+          promptUsed,
+          aspectRatio: aspect,
+        );
       } else if (sourceText != null && sourceText.trim().isNotEmpty) {
         // Fast path: do not await resolveShareImagePrompt (can stall before HTTP).
         promptUsed = sourceText.trim().length > 200
             ? sourceText.trim().substring(0, 200)
             : sourceText.trim();
+        final userCtx = await _shareUserContextForPersonalization();
         image = await ChatService.instance.fetchImageForReflection(
           sourceText,
-          null,
+          userCtx,
           _platform,
           skipCache,
+          _instagramFormatKey,
         );
       }
 
@@ -2027,6 +2099,24 @@ User changes: $instruction''',
     );
   }
 
+  /// Profile photo for identity-preserving image gen (real photos only).
+  Future<Map<String, dynamic>> _shareUserContextForPersonalization() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return const {};
+    final prefs = await SharedPreferences.getInstance();
+    var pic = prefs.getString('user_profile_picture_${user.uid}');
+    if (pic == null || pic.isEmpty) {
+      try {
+        pic = await FirestoreService.instance.getProfilePictureUrl(user.uid);
+      } catch (_) {}
+    }
+    return {
+      if (pic != null && pic.isNotEmpty) 'profilePicture': pic,
+      'displayName':
+          prefs.getString('user_display_name_${user.uid}') ?? user.displayName,
+    };
+  }
+
   Widget _loadingScaffold({
     required bool isDarkMode,
     required String message,
@@ -2169,13 +2259,24 @@ User changes: $instruction''',
                             onChanged: _onPlatformChanged,
                           ),
                         ),
-                            const SizedBox(height: 12),
+                        if (_isInstagramPlatform) ...[
+                          const SizedBox(height: 14),
+                          Center(
+                            child: _InstagramFormatToggle(
+                              format: _instagramFormat,
+                              onChanged: _onInstagramFormatChanged,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 12),
                         Text(
-                          'Choose a post to share',
+                          _isInstagramPlatform
+                              ? _instagramPreviewHeading
+                              : 'Choose a post to share',
                           style: TextStyle(
                             color: primaryText,
                             fontSize: 14,
-                                fontWeight: FontWeight.w500,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -2187,11 +2288,11 @@ User changes: $instruction''',
                             Center(
                               child: ConstrainedBox(
                                 constraints: BoxConstraints(
-                                  maxHeight: _platform == 'instagram' ? 360 : 220,
+                                  maxHeight: _shareImageMaxHeight,
                                   maxWidth: double.infinity,
                                 ),
                                 child: AspectRatio(
-                                  aspectRatio: _platform == 'instagram' ? 9 / 16 : 16 / 9,
+                                  aspectRatio: _shareImageAspectRatio,
                                   child: const Skeleton(variant: SkeletonVariant.image),
                                 ),
                               ),
@@ -2239,19 +2340,20 @@ User changes: $instruction''',
                                     eventLabel: eventLabel,
                                     post: post,
                                     imageUrl: imageUrl,
-                                          platform: _platform,
+                                    platform: _platform,
+                                    instagramFormat: _instagramFormat,
                                     isSelected: isSelected,
-                                          isPosted: isPosted,
+                                    isPosted: isPosted,
                                     isDarkMode: isDarkMode,
                                     cardBg: cardBg,
                                     cardBorder: cardBorder,
-                                          tweetUser: tweetUser,
+                                    tweetUser: tweetUser,
                                     onTap: () {
-                                            setState(() => _selectedIndex = index);
-                                            _openSharePanel(post);
-                                          },
-                                        ),
-                                      );
+                                      setState(() => _selectedIndex = index);
+                                      _openSharePanel(post);
+                                    },
+                                  ),
+                                );
                                     }),
                                   );
                                 },
@@ -2274,6 +2376,8 @@ User changes: $instruction''',
                   xCardProfileUrl: _xShareProfileDataUrl,
                   imageLoading: _loadingShareImage || _xShareAssetsLoading,
                   imageRegenerating: _loadingShareImage,
+                  instagramFormat: _instagramFormat,
+                  onInstagramFormatChanged: _onInstagramFormatChanged,
                   xScreenshotController: _xShareScreenshotController,
                   loadTweetUser: _loadTweetUserInfo,
                   onTextChanged: (v) => setState(() {
@@ -2640,12 +2744,75 @@ class _EditableReflectionFieldState extends State<_EditableReflectionField> {
   }
 }
 
+class _InstagramFormatToggle extends StatelessWidget {
+  const _InstagramFormatToggle({
+    required this.format,
+    required this.onChanged,
+  });
+
+  final _InstagramFormat format;
+  final ValueChanged<_InstagramFormat> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    const border = Color(0xFF3B2758);
+    const track = Color(0xFF0A0A0A);
+    const selectedFill = Color(0xFF2A1845);
+    const selectedIcon = Color(0xFFC084FC);
+    const unselectedIcon = Color(0xFF6B4F8A);
+
+    Widget segment({
+      required _InstagramFormat value,
+      required IconData icon,
+    }) {
+      final selected = format == value;
+      return Expanded(
+        child: GestureDetector(
+          onTap: () => onChanged(value),
+          behavior: HitTestBehavior.opaque,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+            margin: const EdgeInsets.all(3),
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            decoration: BoxDecoration(
+              color: selected ? selectedFill : Colors.transparent,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Icon(
+              icon,
+              size: 20,
+              color: selected ? selectedIcon : unselectedIcon,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      width: 112,
+      decoration: BoxDecoration(
+        color: track,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: border, width: 1),
+      ),
+      child: Row(
+        children: [
+          segment(value: _InstagramFormat.post, icon: LucideIcons.image),
+          segment(value: _InstagramFormat.story, icon: LucideIcons.circleDashed),
+        ],
+      ),
+    );
+  }
+}
+
 class _SuggestionCard extends StatelessWidget {
   const _SuggestionCard({
     required this.eventLabel,
     required this.post,
     required this.imageUrl,
     required this.platform,
+    required this.instagramFormat,
     required this.isSelected,
     required this.isPosted,
     required this.isDarkMode,
@@ -2659,6 +2826,7 @@ class _SuggestionCard extends StatelessWidget {
   final String post;
   final String? imageUrl;
   final String platform;
+  final _InstagramFormat instagramFormat;
   final bool isSelected;
   final bool isPosted;
   final bool isDarkMode;
@@ -2709,22 +2877,22 @@ class _SuggestionCard extends StatelessWidget {
       );
     } else {
       final isInstagram = platform == 'instagram' || platform == 'reddit';
+      final isStory = isInstagram && instagramFormat == _InstagramFormat.story;
+      final aspect = !isInstagram
+          ? 16 / 9
+          : (isStory ? 9 / 16 : 1.0);
+      final sidePad = isStory ? 48.0 : (isInstagram ? 24.0 : 0.0);
       cardContent = Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (imageUrl != null && imageUrl!.isNotEmpty)
                 Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    isInstagram ? 48 : 0,
-                    isInstagram ? 12 : 0,
-                    isInstagram ? 48 : 0,
-                    0,
-                  ),
+                  padding: EdgeInsets.fromLTRB(sidePad, isInstagram ? 12 : 0, sidePad, 0),
                   child: AspectRatio(
-                    aspectRatio: isInstagram ? 9 / 16 : 16 / 9,
+                    aspectRatio: aspect,
                     child: ClipRRect(
                       borderRadius: BorderRadius.vertical(
-                        top: Radius.circular(isInstagram ? 12 : 12),
+                        top: const Radius.circular(12),
                         bottom: Radius.circular(isInstagram ? 12 : 0),
                       ),
                       child: _SuggestionImage(url: imageUrl!, isDarkMode: isDarkMode),
@@ -2865,6 +3033,8 @@ class _SharePanelOverlay extends StatefulWidget {
     required this.xCardProfileUrl,
     required this.imageLoading,
     required this.imageRegenerating,
+    required this.instagramFormat,
+    required this.onInstagramFormatChanged,
     required this.xScreenshotController,
     required this.loadTweetUser,
     required this.onTextChanged,
@@ -2882,6 +3052,8 @@ class _SharePanelOverlay extends StatefulWidget {
   final String? xCardProfileUrl;
   final bool imageLoading;
   final bool imageRegenerating;
+  final _InstagramFormat instagramFormat;
+  final ValueChanged<_InstagramFormat> onInstagramFormatChanged;
   final ScreenshotController xScreenshotController;
   final Future<_TweetUserInfo> Function() loadTweetUser;
   final ValueChanged<String> onTextChanged;
@@ -3166,6 +3338,29 @@ class _SharePanelOverlayState extends State<_SharePanelOverlay> {
       widget.imageUrl != null &&
       widget.imageUrl!.trim().isNotEmpty;
 
+  bool get _isInstagram =>
+      widget.platform == 'instagram' || widget.platform == 'reddit';
+
+  String get _previewHeading {
+    if (_isXCardShare) return 'Preview before sharing';
+    if (_isInstagram) {
+      return widget.instagramFormat == _InstagramFormat.post
+          ? 'Instagram Post'
+          : 'Instagram Story';
+    }
+    return 'Edit before sharing';
+  }
+
+  double get _previewAspect {
+    if (!_isInstagram) return 16 / 9;
+    return widget.instagramFormat == _InstagramFormat.post ? 1 : 9 / 16;
+  }
+
+  double get _previewMaxHeight {
+    if (!_isInstagram) return 240;
+    return widget.instagramFormat == _InstagramFormat.post ? 340 : 420;
+  }
+
   Widget _buildCaptionEditor(Color primary) {
     return Stack(
       children: [
@@ -3256,14 +3451,21 @@ class _SharePanelOverlayState extends State<_SharePanelOverlay> {
                     onPressed: widget.onClose,
                     icon: Icon(LucideIcons.arrowLeft, color: primary),
                   ),
-                  Text(
-                    _isXCardShare ? 'Preview before sharing' : 'Edit before sharing',
-                    style: TextStyle(
-                      color: primary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
+                  Expanded(
+                    child: Text(
+                      _previewHeading,
+                      style: TextStyle(
+                        color: primary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
+                  if (_isInstagram)
+                    _InstagramFormatToggle(
+                      format: widget.instagramFormat,
+                      onChanged: widget.onInstagramFormatChanged,
+                    ),
                 ],
               ),
               if (_isXCardShare)
@@ -3303,19 +3505,11 @@ class _SharePanelOverlayState extends State<_SharePanelOverlay> {
                     children: [
                       Center(
                         child: ConstrainedBox(
-                          constraints: BoxConstraints(
-                            maxHeight:
-                                widget.platform == 'instagram' || widget.platform == 'reddit'
-                                    ? 420
-                                    : 240,
-                          ),
+                          constraints: BoxConstraints(maxHeight: _previewMaxHeight),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(12),
                             child: AspectRatio(
-                              aspectRatio:
-                                  widget.platform == 'instagram' || widget.platform == 'reddit'
-                                      ? 9 / 16
-                                      : 16 / 9,
+                              aspectRatio: _previewAspect,
                               child: PixelatedImageTransition(
                                 imageUrl: widget.imageUrl,
                                 isLoading: widget.imageRegenerating,

@@ -638,26 +638,39 @@ class VertexClient {
     String prompt, {
     required String referenceImageBase64,
     String mimeType = 'image/jpeg',
+    String aspectRatio = '16:9',
+    /// `publicFigure` (news/celebrity) or `user` (authenticated SociTea profile).
+    String referenceKind = 'publicFigure',
   }) async {
     return _imageGenQueue.run(() async {
       final b64 = referenceImageBase64.replaceAll(RegExp(r'\s'), '');
       if (b64.isEmpty) {
-        throw ArgumentError('public-figure: reference image base64 is empty');
+        throw ArgumentError('reference-image: base64 is empty');
       }
 
       final body = prompt.trim();
       if (body.isEmpty) {
-        throw ArgumentError('public-figure: prompt is empty');
+        throw ArgumentError('reference-image: prompt is empty');
       }
 
-      const instructions =
-          'REFERENCE PHOTO ATTACHED: This is the real public figure who must appear in the output.\n'
-          'Generate ONE editorial news illustration for social media.\n'
-          'CRITICAL: The person in the generated image MUST have the EXACT same face, facial structure, '
-          'skin tone, hair, and beard or hairstyle as the reference photo. Do NOT invent a different person.\n'
-          'Show their face clearly and recognizably. Match the story scene below while preserving identity.\n'
-          'No text overlays or logos unless mentioned in the story.\n\n'
-          'Story / scene:\n';
+      final isUser = referenceKind.trim().toLowerCase() == 'user';
+      final instructions = isUser
+          ? 'REFERENCE PHOTO ATTACHED: This is the REAL authenticated user of the app.\n'
+              'Generate ONE new, contextually appropriate social-media photograph (not a collage).\n'
+              'CRITICAL IDENTITY: Preserve recognizable facial features, skin tone, hairstyle, and overall '
+              'appearance from the reference as closely as the model allows. Do NOT invent a different person.\n'
+              'Do NOT simply paste the profile photo onto a background — create a new scene matching the story '
+              '(clothing, pose, expression, environment, lighting adapted to the event).\n'
+              'Keep faces away from extreme edges. No logos or watermarks.\n'
+              'If a short text overlay is requested in the scene prompt, keep it minimal and readable.\n\n'
+              'Story / scene:\n'
+          : 'REFERENCE PHOTO ATTACHED: This is the real public figure who must appear in the output.\n'
+              'Generate ONE editorial news illustration for social media.\n'
+              'CRITICAL: The person in the generated image MUST have the EXACT same face, facial structure, '
+              'skin tone, hair, and beard or hairstyle as the reference photo. Do NOT invent a different person.\n'
+              'Show their face clearly and recognizably. Match the story scene below while preserving identity.\n'
+              'No text overlays or logos unless mentioned in the story.\n\n'
+              'Story / scene:\n';
 
       final full = '$instructions${body.length > 5500 ? body.substring(0, 5500) : body}';
       final cleanMime = mimeType.trim().isEmpty ? 'image/jpeg' : mimeType.trim();
@@ -677,10 +690,16 @@ class VertexClient {
             ],
           },
         ],
-        'generationConfig': _imageGenerationConfig(temperature: 0.35),
+        'generationConfig': _imageGenerationConfig(
+          temperature: isUser ? 0.45 : 0.35,
+          aspectRatio: aspectRatio,
+        ),
       });
 
-      return _postImagePayload(payload, debugLabel: 'public-figure');
+      return _postImagePayload(
+        payload,
+        debugLabel: isUser ? 'user-identity' : 'public-figure',
+      );
     });
   }
 

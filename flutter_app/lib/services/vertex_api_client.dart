@@ -600,6 +600,7 @@ ${jsonEncode(chatData ?? const [])}''';
     Duration? timeout,
     Map<String, String>? referenceImage,
     String aspectRatio = '16:9',
+    String referenceKind = 'publicFigure',
   }) async {
     final p = prompt.trim();
     if (p.isEmpty) {
@@ -608,7 +609,8 @@ ${jsonEncode(chatData ?? const [])}''';
 
     debugPrint(
       '[ImageGen] E2E start backend=$baseUrl promptLen=${p.length} '
-      'hasReference=${referenceImage != null} aspectRatio=$aspectRatio',
+      'hasReference=${referenceImage != null} aspectRatio=$aspectRatio '
+      'referenceKind=$referenceKind',
     );
 
     if (_hasBackend) {
@@ -618,6 +620,7 @@ ${jsonEncode(chatData ?? const [])}''';
           timeout: timeout,
           referenceImage: referenceImage,
           aspectRatio: aspectRatio,
+          referenceKind: referenceKind,
         );
       } catch (e, st) {
         debugPrint('[ImageGen] E2E backend path failed: $e');
@@ -653,6 +656,7 @@ ${jsonEncode(chatData ?? const [])}''';
     Duration? timeout,
     Map<String, String>? referenceImage,
     String aspectRatio = '16:9',
+    String referenceKind = 'publicFigure',
     RenderBackendPriority priority = RenderBackendPriority.background,
   }) async {
     final p = prompt.trim();
@@ -665,6 +669,7 @@ ${jsonEncode(chatData ?? const [])}''';
         timeout: timeout,
         referenceImage: referenceImage,
         aspectRatio: aspectRatio,
+        referenceKind: referenceKind,
       ),
     );
   }
@@ -674,6 +679,7 @@ ${jsonEncode(chatData ?? const [])}''';
     Duration? timeout,
     Map<String, String>? referenceImage,
     String aspectRatio = '16:9',
+    String referenceKind = 'publicFigure',
   }) async {
     final sw = Stopwatch()..start();
     void checkpoint(String stage) {
@@ -705,9 +711,11 @@ ${jsonEncode(chatData ?? const [])}''';
     };
     if (referenceImage != null &&
         (referenceImage['base64'] ?? '').trim().isNotEmpty) {
+      requestBody['referenceKind'] = referenceKind;
       requestBody['referenceImage'] = {
         'base64': referenceImage['base64'],
         'mimeType': referenceImage['mimeType'] ?? 'image/jpeg',
+        'kind': referenceKind,
       };
     }
 
@@ -893,12 +901,14 @@ Future<String> vertexGenerateNewsImageDirect(
   Duration? timeout,
   Map<String, String>? referenceImage,
   String aspectRatio = '16:9',
+  String referenceKind = 'publicFigure',
 }) =>
     _vertex.vertexGenerateNewsImageDirect(
       prompt,
       timeout: timeout,
       referenceImage: referenceImage,
       aspectRatio: aspectRatio,
+      referenceKind: referenceKind,
     );
 
 Future<String> vertexGenerateNewsImage(
@@ -906,6 +916,7 @@ Future<String> vertexGenerateNewsImage(
   Duration? timeout,
   Map<String, String>? referenceImage,
   String aspectRatio = '16:9',
+  String referenceKind = 'publicFigure',
   RenderBackendPriority priority = RenderBackendPriority.background,
 }) =>
     _vertex.vertexGenerateNewsImage(
@@ -913,6 +924,7 @@ Future<String> vertexGenerateNewsImage(
       timeout: timeout,
       referenceImage: referenceImage,
       aspectRatio: aspectRatio,
+      referenceKind: referenceKind,
       priority: priority,
     );
 

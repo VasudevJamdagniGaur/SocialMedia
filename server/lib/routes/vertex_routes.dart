@@ -195,13 +195,22 @@ Router buildVertexRouter(VertexClient vertex) {
     try {
       final String imageDataUrl;
       if (hasReference) {
-        stderr.writeln('[generate-news-image] calling generatePublicFigureIllustrationImage…');
+        final kindRaw = body['referenceKind'] ?? referenceImage['kind'];
+        final referenceKind = kindRaw is String && kindRaw.trim().isNotEmpty
+            ? kindRaw.trim()
+            : 'publicFigure';
+        stderr.writeln(
+          '[generate-news-image] calling generatePublicFigureIllustrationImage '
+          'kind=$referenceKind aspectRatio=$aspectRatio…',
+        );
         imageDataUrl = await vertex.generatePublicFigureIllustrationImage(
           prompt,
           referenceImageBase64: '${referenceImage['base64']}',
           mimeType: referenceImage['mimeType'] is String
               ? '${referenceImage['mimeType']}'
               : 'image/jpeg',
+          aspectRatio: aspectRatio,
+          referenceKind: referenceKind,
         );
       } else {
         stderr.writeln('[generate-news-image] calling generateShareSceneImage…');
