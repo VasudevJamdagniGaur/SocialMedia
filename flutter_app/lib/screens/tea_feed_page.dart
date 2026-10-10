@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../components/trending_tea.dart';
 import '../router/app_router.dart';
+import '../services/tea_news_refresh_mode.dart';
 import '../services/youtube_tea_service.dart';
 import '../utils/hub_carousel_ai_image.dart';
 import '../utils/hub_carousel_image_store.dart';
@@ -135,7 +136,7 @@ class _TeaFeedPageState extends State<TeaFeedPage> {
     _rawItems = _mergeWithMemoryTeaCache(_rawItems);
     _rawItems = teaItemsWithResolvedHeroes(_rawItems);
 
-    if (_rawItems.isEmpty) {
+    if (_rawItems.isEmpty && !kManualTeaNewsRefreshOnly) {
       try {
         _rawItems = await fetchTrendingTea();
       } catch (_) {}

@@ -14,6 +14,7 @@ import '../utils/hub_carousel_ai_image.dart';
 import '../utils/hub_carousel_image_store.dart';
 import '../utils/hub_colors.dart';
 import '../utils/share_news_cache.dart';
+import '../services/tea_news_refresh_mode.dart';
 import '../utils/tea_trending_storage.dart';
 import 'skeleton/card_skeleton.dart';
 
@@ -349,7 +350,40 @@ class _TrendingTeaState extends State<TrendingTea> {
   @override
   void initState() {
     super.initState();
+    teaNewsManualRefreshTick.addListener(_onManualRefreshTick);
     _load();
+  }
+
+  @override
+  void dispose() {
+    teaNewsManualRefreshTick.removeListener(_onManualRefreshTick);
+    super.dispose();
+  }
+
+  void _onManualRefreshTick() {
+    unawaited(_applyMemoryAfterManualRefresh());
+  }
+
+  Future<void> _applyMemoryAfterManualRefresh() async {
+    final snap = memoryTeaCacheSnapshot;
+    if (!mounted) return;
+    if (snap != null && snap.isNotEmpty) {
+      final hydrated = await _hydrateTeaItemsFast(snap);
+      if (!mounted) return;
+      setState(() {
+        _items = hydrated;
+        _loading = false;
+        _error = null;
+      });
+      unawaited(_syncCachedAiImages());
+      return;
+    }
+    setState(() {
+      _loading = false;
+      _error = kManualTeaNewsRefreshOnly
+          ? 'No tea yet. Tap “Refresh Tea & News”.'
+          : 'Could not load tea.';
+    });
   }
 
   @override
@@ -372,13 +406,17 @@ class _TrendingTeaState extends State<TrendingTea> {
         _error = null;
       });
       unawaited(_syncCachedAiImages());
-      unawaited(_refreshFromNetwork());
+      if (!kManualTeaNewsRefreshOnly) {
+        unawaited(_refreshFromNetwork());
+      }
       return;
     }
 
     if (_items.isNotEmpty && _memoryTeaCache != null && _memoryTeaCache!.isNotEmpty) {
       unawaited(_syncCachedAiImages());
-      unawaited(_refreshFromNetwork());
+      if (!kManualTeaNewsRefreshOnly) {
+        unawaited(_refreshFromNetwork());
+      }
       return;
     }
 
@@ -400,7 +438,18 @@ class _TrendingTeaState extends State<TrendingTea> {
         _memoryTeaCache = hydrated;
       }
       unawaited(_syncCachedAiImages());
-      unawaited(_refreshFromNetwork());
+      if (!kManualTeaNewsRefreshOnly) {
+        unawaited(_refreshFromNetwork());
+      }
+      return;
+    }
+
+    if (kManualTeaNewsRefreshOnly) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'No tea yet. Tap “Refresh Tea & News”.';
+      });
       return;
     }
 
@@ -415,6 +464,7 @@ class _TrendingTeaState extends State<TrendingTea> {
   }
 
   Future<void> _refreshFromNetwork() async {
+    if (kManualTeaNewsRefreshOnly) return;
     final hadItems = _items.isNotEmpty;
     final stale = _memoryTeaCacheAt == null ||
         DateTime.now().difference(_memoryTeaCacheAt!) >= _teaCacheMaxAge;
@@ -567,6 +617,7 @@ class _TrendingTeaState extends State<TrendingTea> {
     const hubDivider = HubColors.divider;
 
     return Container(
+      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: HubColors.bg,
         borderRadius: BorderRadius.circular(16),

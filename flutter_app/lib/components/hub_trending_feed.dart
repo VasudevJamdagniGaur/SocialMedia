@@ -11,6 +11,7 @@ import '../services/youtube_tea_service.dart';
 import 'package:deite/lib/pod_topic_news_shared.dart';
 import '../lib/hub_trending_algorithms.dart';
 import '../utils/hub_carousel_ai_image.dart';
+import '../services/tea_news_refresh_mode.dart';
 import '../utils/hub_carousel_image_store.dart';
 import '../utils/hub_colors.dart';
 import '../utils/hub_news_trending_storage.dart';
@@ -265,7 +266,41 @@ class _HubTrendingFeedState extends State<HubTrendingFeed> {
   @override
   void initState() {
     super.initState();
+    teaNewsManualRefreshTick.addListener(_onManualRefreshTick);
     _load();
+  }
+
+  @override
+  void dispose() {
+    teaNewsManualRefreshTick.removeListener(_onManualRefreshTick);
+    super.dispose();
+  }
+
+  void _onManualRefreshTick() {
+    unawaited(_applyMemoryAfterManualRefresh());
+  }
+
+  Future<void> _applyMemoryAfterManualRefresh() async {
+    final snap = _hubCache;
+    if (!mounted) return;
+    if (snap != null && snap.isNotEmpty) {
+      final hydrated = await _hydrateHubNewsItemsFast(snap);
+      if (!mounted) return;
+      setState(() {
+        _items = hydrated;
+        _loading = false;
+        _error = '';
+      });
+      unawaited(_syncCachedAiImages());
+      unawaited(_enrichMissingAiImages());
+      return;
+    }
+    setState(() {
+      _loading = false;
+      _error = kManualTeaNewsRefreshOnly
+          ? 'No headlines yet. Tap “Refresh Tea & News”.'
+          : 'Could not load news.';
+    });
   }
 
   @override
@@ -278,7 +313,9 @@ class _HubTrendingFeedState extends State<HubTrendingFeed> {
       });
     }
     unawaited(_syncCachedAiImages());
-    unawaited(_enrichMissingAiImages());
+    if (!kManualTeaNewsRefreshOnly) {
+      unawaited(_enrichMissingAiImages());
+    }
   }
 
   Future<void> _load() async {
@@ -290,14 +327,18 @@ class _HubTrendingFeedState extends State<HubTrendingFeed> {
       });
       unawaited(_syncCachedAiImages());
       unawaited(_enrichMissingAiImages());
-      unawaited(_refreshFromNetwork());
+      if (!kManualTeaNewsRefreshOnly) {
+        unawaited(_refreshFromNetwork());
+      }
       return;
     }
 
     if (_items.isNotEmpty && _hubCache != null && _hubCache!.isNotEmpty) {
       unawaited(_syncCachedAiImages());
       unawaited(_enrichMissingAiImages());
-      unawaited(_refreshFromNetwork());
+      if (!kManualTeaNewsRefreshOnly) {
+        unawaited(_refreshFromNetwork());
+      }
       return;
     }
 
@@ -319,7 +360,18 @@ class _HubTrendingFeedState extends State<HubTrendingFeed> {
       }
       unawaited(_syncCachedAiImages());
       unawaited(_enrichMissingAiImages());
-      unawaited(_refreshFromNetwork());
+      if (!kManualTeaNewsRefreshOnly) {
+        unawaited(_refreshFromNetwork());
+      }
+      return;
+    }
+
+    if (kManualTeaNewsRefreshOnly) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'No headlines yet. Tap “Refresh Tea & News”.';
+      });
       return;
     }
 
@@ -331,6 +383,7 @@ class _HubTrendingFeedState extends State<HubTrendingFeed> {
   }
 
   Future<void> _refreshFromNetwork() async {
+    if (kManualTeaNewsRefreshOnly) return;
     final hadItems = _items.isNotEmpty;
     try {
       final items = await fetchHubTrendingItems(forceRefresh: !hadItems || _hubCache == null);
