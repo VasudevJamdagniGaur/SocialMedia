@@ -301,21 +301,34 @@ class FirestoreService {
     }
   }
 
-  /// Profile avatar — stored as HTTPS URL in Firestore (not base64).
+  /// Profile avatar — HTTPS URL in Firestore (not base64).
+  /// Tries `profiles/` first; falls back to `posts/` which is already allowed
+  /// by live Storage rules if `profiles/` has not been deployed yet.
   Future<String?> uploadProfilePicture(String uid, Uint8List jpegBytes) async {
     if (uid.isEmpty || jpegBytes.isEmpty) return null;
-    try {
-      final path = 'profiles/$uid/avatar-${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final storageRef = _storage.ref(path);
-      await storageRef.putData(
-        jpegBytes,
-        SettableMetadata(contentType: 'image/jpeg'),
-      );
-      return await storageRef.getDownloadURL();
-    } catch (error) {
-      debugPrint('Error uploading profile picture: $error');
-      return null;
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    final candidates = <String>[
+      'profiles/$uid/avatar-$stamp.jpg',
+      'posts/$uid/profile-avatar-$stamp.jpg',
+    ];
+    Object? lastErr;
+    for (final path in candidates) {
+      try {
+        final storageRef = _storage.ref(path);
+        await storageRef.putData(
+          jpegBytes,
+          SettableMetadata(contentType: 'image/jpeg'),
+        );
+        final url = await storageRef.getDownloadURL();
+        debugPrint('[Profile] uploaded avatar to $path');
+        return url;
+      } catch (error) {
+        lastErr = error;
+        debugPrint('[Profile] upload to $path failed: $error');
+      }
     }
+    debugPrint('Error uploading profile picture: $lastErr');
+    return null;
   }
 
   Future<String?> uploadPostImageToPath(String uid, String postId, dynamic file) async {

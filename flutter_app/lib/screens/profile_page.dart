@@ -385,7 +385,7 @@ class _ProfilePageState extends State<ProfilePage> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
-                'Could not upload photo. Deploy storage.rules (profiles path) if you have not yet.',
+                'Could not upload photo. Check you are signed in and Firebase Storage is enabled.',
               ),
             ),
           );
@@ -942,26 +942,35 @@ class _ProfilePageState extends State<ProfilePage> {
                 const SizedBox(height: 16),
                 GridView.count(
                   shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
                   crossAxisCount: 3,
                   mainAxisSpacing: 12,
                   crossAxisSpacing: 12,
+                  // Extra height so 80px avatar + label fit (fixes BOTTOM OVERFLOWED BY 11).
+                  childAspectRatio: 0.78,
                   children: _avatars.map((a) {
                     return InkWell(
                       onTap: () => _handleAvatarSelect(a.$2),
                       borderRadius: BorderRadius.circular(12),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           ClipOval(
                             child: Image.asset(
                               a.$2,
-                              width: 80,
-                              height: 80,
+                              width: 72,
+                              height: 72,
                               fit: BoxFit.cover,
                             ),
                           ),
-                          const SizedBox(height: 8),
-                          Text(a.$1, style: const TextStyle(color: HubColors.textSecondary, fontSize: 11)),
+                          const SizedBox(height: 6),
+                          Text(
+                            a.$1,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: HubColors.textSecondary, fontSize: 11),
+                          ),
                         ],
                       ),
                     );
