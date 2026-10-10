@@ -724,6 +724,7 @@ String buildLocalTeaCardSummary(
     source = stripUrlsAndSourceNoise(
       [
         details?['selftext'],
+        details?['text'],
         details?['gossip'],
         details?['description'],
       ].whereType<String>().join(' '),
@@ -756,8 +757,38 @@ String buildLocalTeaCardSummary(
   }
 
   final cleaned = sanitizeTeaCardSummary(out);
-  if (cleaned.isEmpty || teaCardSummaryLooksLikeTitleOnly(cleaned, title)) return '';
+  if (cleaned.isEmpty) return '';
+  // Prefer real body context even when the headline is repeated inside it.
+  if (teaCardSummaryLooksLikeTitleOnly(cleaned, title) &&
+      teaCardSummaryWordCount(cleaned) < 18) {
+    return '';
+  }
   return cleaned;
+}
+
+/// Best available Tea body from a seed article map (gossip / description / text).
+String teaSeedContextSummary(
+  Map<String, dynamic>? article, {
+  String? headlineFallback,
+}) {
+  if (article == null) return '';
+  final local = buildLocalTeaCardSummary(article, headlineFallback: headlineFallback);
+  if (local.isNotEmpty) return local;
+
+  final title = cleanTeaCardTitle(
+    headlineFallback?.isNotEmpty == true
+        ? headlineFallback
+        : '${article['title'] ?? ''}',
+  );
+  for (final key in ['gossip', 'description', 'text', 'selftext']) {
+    final raw = stripHtmlBoilerplate('${article[key] ?? ''}').trim();
+    if (raw.isEmpty) continue;
+    final cleaned = sanitizeTeaCardSummary(raw);
+    if (cleaned.isEmpty) continue;
+    if (teaTextLooksLikeTitleEcho(cleaned, title) && cleaned.length < 40) continue;
+    return cleaned;
+  }
+  return '';
 }
 
 /// Local fallback when AI summary is unavailable — port of ShareSuggestionsPage.js

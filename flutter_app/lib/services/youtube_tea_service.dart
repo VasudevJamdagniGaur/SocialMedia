@@ -161,6 +161,52 @@ String? youtubeTeaThumbnailFromUrl(String? url) {
   return 'https://i.ytimg.com/vi/$id/hqdefault.jpg';
 }
 
+/// Fetch title + description for a YouTube Tea URL (Data API when key is set).
+Future<Map<String, String>?> fetchYouTubeTeaVideoContext(String? url) async {
+  final id = youtubeTeaVideoId(url);
+  if (id == null || id.isEmpty) return null;
+
+  final apiKey = Env.youtubeApiKey.trim();
+  if (apiKey.isEmpty) return null;
+
+  try {
+    final uri = Uri.parse('https://www.googleapis.com/youtube/v3/videos').replace(
+      queryParameters: {
+        'part': 'snippet',
+        'id': id,
+        'key': apiKey,
+      },
+    );
+    final res = await http
+        .get(uri, headers: {'Accept': 'application/json'})
+        .timeout(const Duration(seconds: 10));
+    if (res.statusCode != 200) return null;
+    final body = jsonDecode(res.body);
+    if (body is! Map) return null;
+    final items = body['items'];
+    if (items is! List || items.isEmpty || items.first is! Map) return null;
+    final snippet = (items.first as Map)['snippet'];
+    if (snippet is! Map) return null;
+    final title = '${snippet['title'] ?? ''}'.trim();
+    final description = '${snippet['description'] ?? ''}'.trim();
+    final channel = '${snippet['channelTitle'] ?? ''}'.trim();
+    if (title.isEmpty && description.isEmpty) return null;
+    final gossip = description.length > 480
+        ? '${description.substring(0, 480).trimRight()}…'
+        : description;
+    return {
+      if (title.isNotEmpty) 'title': title,
+      if (gossip.isNotEmpty) 'description': gossip,
+      if (gossip.isNotEmpty) 'gossip': gossip,
+      if (description.isNotEmpty) 'selftext': description,
+      if (channel.isNotEmpty) 'source': channel,
+    };
+  } catch (e) {
+    debugPrint('[YouTubeTea] video context fetch failed: $e');
+    return null;
+  }
+}
+
 String? _bestYouTubeThumbnail(Map<String, dynamic>? thumbnails) {
   if (thumbnails == null) return null;
   for (final key in ['maxres', 'high', 'medium', 'default']) {

@@ -2680,8 +2680,12 @@ ${reflection.trim()}''';
     }
 
     final preGossip =
-        (article?['gossip'] ?? article?['description'] ?? '').toString().trim();
-    if (_isRedditThreadUrl(url) && preGossip.length >= 12) {
+        (article?['gossip'] ?? article?['description'] ?? article?['selftext'] ?? '')
+            .toString()
+            .trim();
+    // Prefer existing Tea/Reddit body so share card isn't stuck on title-only.
+    if (preGossip.length >= 40 ||
+        (_isRedditThreadUrl(url) && preGossip.length >= 12)) {
       return {
         ...base,
         'description': preGossip,

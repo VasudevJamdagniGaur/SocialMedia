@@ -265,10 +265,18 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
 
       if (extra['newsArticle'] is Map) {
         _newsArticle = Map<String, dynamic>.from(extra['newsArticle'] as Map);
-      _sanitizeNewsArticleFields();
-      final headline = '${_newsArticle?['title'] ?? ''}'.trim();
-      if (headline.isNotEmpty) _newsCardHeadline = headline;
-    }
+        _sanitizeNewsArticleFields();
+        final headline = cleanTeaCardTitle('${_newsArticle?['title'] ?? ''}');
+        if (headline.isNotEmpty) _newsCardHeadline = headline;
+        // Show seed gossip/description immediately so Tea isn't title-only + skeleton.
+        final seedSummary = teaSeedContextSummary(
+          _newsArticle,
+          headlineFallback: headline,
+        );
+        if (seedSummary.isNotEmpty) {
+          _newsCardSummary = seedSummary;
+        }
+      }
   }
 
   void _sanitizeNewsArticleFields() {
@@ -595,6 +603,32 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
           seed: _newsArticle,
         ).timeout(const Duration(seconds: 25));
       } catch (_) {}
+    } else if (isTea && isYouTubeTeaUrl(url)) {
+      // Pull real video description when the carousel only passed a title.
+      try {
+        final yt = await fetchYouTubeTeaVideoContext(url)
+            .timeout(const Duration(seconds: 10));
+        if (yt != null && yt.isNotEmpty && _newsArticle != null) {
+          final next = Map<String, dynamic>.from(_newsArticle!);
+          for (final e in yt.entries) {
+            final v = e.value.trim();
+            if (v.isEmpty) continue;
+            final existing = '${next[e.key] ?? ''}'.trim();
+            if (existing.isEmpty ||
+                teaTextLooksLikeTitleEcho(existing, '${next['title'] ?? ''}')) {
+              next[e.key] = v;
+            }
+          }
+          _newsArticle = next;
+          final seeded = teaSeedContextSummary(
+            next,
+            headlineFallback: cleanTeaCardTitle('${next['title'] ?? ''}'),
+          );
+          if (seeded.isNotEmpty && mounted) {
+            setState(() => _newsCardSummary = seeded);
+          }
+        }
+      } catch (_) {}
     }
 
     final cached = await getCachedNewsCardForUrl(url);
@@ -666,15 +700,23 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
     if (effective == null) return;
     final articleDetails = effective;
 
-    final gossipFallback = isTea ? '' : buildRedditGossipSummary(articleDetails);
     final headlineFallback = _newsCardHeadline.isNotEmpty
         ? _newsCardHeadline
         : cleanTeaCardTitle('${_newsArticle?['title'] ?? ''}');
     final localTeaFallback = isTea
-        ? buildLocalTeaCardSummary(articleDetails, headlineFallback: headlineFallback)
+        ? teaSeedContextSummary(articleDetails, headlineFallback: headlineFallback)
         : '';
+    final gossipFallback = isTea
+        ? (localTeaFallback.isNotEmpty
+            ? localTeaFallback
+            : teaSeedContextSummary(_newsArticle, headlineFallback: headlineFallback))
+        : buildRedditGossipSummary(articleDetails);
     final aiArticleDetails = isTea
-        ? prepareTeaArticleContextForAi(articleDetails)
+        ? prepareTeaArticleContextForAi({
+            ...articleDetails,
+            if (gossipFallback.isNotEmpty) 'gossip': gossipFallback,
+            if (gossipFallback.isNotEmpty) 'description': gossipFallback,
+          })
         : articleDetails;
 
     final results = await Future.wait<String>([
@@ -709,13 +751,22 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
         finalSummary.isNotEmpty &&
         (teaCardSummaryHasDisplayIssues(finalSummary, articleDetails, headlineFallback) ||
             teaCardSummaryLooksLikeTitleOnly(finalSummary, headlineFallback))) {
-      finalSummary = localTeaFallback;
+      finalSummary = localTeaFallback.isNotEmpty ? localTeaFallback : gossipFallback;
     }
     if (isScrapeBlockedBoilerplate(finalSummary)) {
       finalSummary = '';
     }
     if (isTea && finalSummary.isNotEmpty) {
       finalSummary = sanitizeTeaCardSummary(finalSummary);
+    }
+    // Never leave Tea title-only when we still have seed/article body context.
+    if (isTea && finalSummary.isEmpty) {
+      finalSummary = gossipFallback.isNotEmpty
+          ? gossipFallback
+          : teaSeedContextSummary(
+              {...?_newsArticle, ...articleDetails},
+              headlineFallback: headlineFallback,
+            );
     }
     var finalHeadline = results[1].trim();
     if (finalHeadline.isEmpty) {
@@ -777,29 +828,54 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
 
   String get _displayNewsSummary {
     if (!_isNewsMode) return '';
-    if (_loadingNewsDetails) return '';
-    if (isScrapeBlockedBoilerplate(_newsCardSummary)) return '';
+    final headline = _newsCardHeadline.isNotEmpty
+        ? _newsCardHeadline
+        : cleanTeaCardTitle('${_newsArticle?['title'] ?? ''}');
+
+    // While enriching, keep any seed/context text on screen (avoid title + skeleton only).
+    if (_loadingNewsDetails) {
+      if (_newsCardSummary.trim().isNotEmpty &&
+          !isScrapeBlockedBoilerplate(_newsCardSummary)) {
+        return _isTeaArticleShare
+            ? sanitizeTeaCardSummary(_newsCardSummary)
+            : _newsCardSummary;
+      }
+      if (_isTeaArticleShare) {
+        return teaSeedContextSummary(_newsArticle, headlineFallback: headline);
+      }
+      return '';
+    }
+
+    if (isScrapeBlockedBoilerplate(_newsCardSummary)) {
+      if (_isTeaArticleShare) {
+        return teaSeedContextSummary(
+          _newsArticleDetails ?? _newsArticle,
+          headlineFallback: headline,
+        );
+      }
+      return '';
+    }
     if (_newsCardSummary.isNotEmpty) {
       if (_isTeaArticleShare &&
           teaCardSummaryHasDisplayIssues(
             _newsCardSummary,
             _newsArticleDetails ?? _newsArticle,
-            _newsCardHeadline.isNotEmpty
-                ? _newsCardHeadline
-                : cleanTeaCardTitle('${_newsArticle?['title'] ?? ''}'),
+            headline,
           )) {
-        return '';
+        final seed = teaSeedContextSummary(
+          _newsArticleDetails ?? _newsArticle,
+          headlineFallback: headline,
+        );
+        return seed.isNotEmpty ? seed : sanitizeTeaCardSummary(_newsCardSummary);
       }
       return _isTeaArticleShare
           ? sanitizeTeaCardSummary(_newsCardSummary)
           : _newsCardSummary;
     }
     if (_isTeaArticleShare) {
-      return buildLocalTeaCardSummary(
+      return teaSeedContextSummary(
         _newsArticleDetails ?? _newsArticle,
-        headlineFallback: _newsCardHeadline.isNotEmpty
-            ? _newsCardHeadline
-            : cleanTeaCardTitle('${_newsArticle?['title'] ?? ''}'),
+        headlineFallback: headline,
       );
     }
     return buildLocalNewsCardSummary(_newsArticleDetails ?? _newsArticle);
@@ -1005,6 +1081,20 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
         _loading = false;
         if (_sharePanelOpen && _suggestions.isNotEmpty) {
           _editableShareText = _suggestions.first['post'] ?? _editableShareText;
+        }
+        // If Tea card still has no body, use the generated post as context.
+        if (_isTeaArticleShare &&
+            _displayNewsSummary.trim().isEmpty &&
+            sanitized.isNotEmpty) {
+          final fromPost = sanitizeTeaCardSummary(sanitized.first['post'] ?? '');
+          if (fromPost.isNotEmpty) {
+            _newsCardSummary = fromPost;
+            _newsArticle = {
+              ...Map<String, dynamic>.from(_newsArticle ?? {}),
+              'description': fromPost,
+              'gossip': fromPost,
+            };
+          }
         }
       });
       debugPrint(
@@ -2562,10 +2652,17 @@ class _SourceCard extends StatelessWidget {
           description: newsArticle?['description'] as String?,
           bodyText: '${newsArticle?['text'] ?? newsArticle?['selftext'] ?? ''}',
         );
+    final teaBodyFallback = isTeaArticle
+        ? teaSeedContextSummary(
+            newsArticle,
+            headlineFallback: resolvedHeadline,
+          )
+        : '';
     final showYouTubeSourceFallback = isTeaArticle &&
         isYouTubeTeaUrl(discussionUrl) &&
         !loadingNewsDetails &&
         newsSummary.trim().isEmpty &&
+        teaBodyFallback.isEmpty &&
         stripHtmlBoilerplate(newsArticle?['description'] as String?).trim().isEmpty;
     final showNewsSourceFallback = !isTeaArticle &&
         isNewsMode &&
@@ -2695,27 +2792,36 @@ class _SourceCard extends StatelessWidget {
                     ),
                   ),
                 ),
-              ] else if (loadingNewsDetails && newsSummary.trim().isEmpty) ...[
+              ] else if (newsSummary.trim().isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  newsSummary,
+                  style: TextStyle(color: primary, fontSize: 15, height: 1.45),
+                ),
+              ] else if (teaBodyFallback.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  teaBodyFallback,
+                  style: TextStyle(color: primary, fontSize: 15, height: 1.45),
+                ),
+              ] else if (loadingNewsDetails) ...[
                 const SizedBox(height: 8),
                 const Skeleton(variant: SkeletonVariant.text, height: 14, width: double.infinity),
                 const SizedBox(height: 8),
                 const Skeleton(variant: SkeletonVariant.text, height: 14, width: double.infinity),
                 const SizedBox(height: 8),
                 const Skeleton(variant: SkeletonVariant.text, height: 14, width: 220),
-              ] else if (newsSummary.trim().isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text(
-                  newsSummary,
-                  style: TextStyle(color: primary, fontSize: 15, height: 1.45),
-                ),
-              ] else if (!isTeaArticle &&
-                  stripHtmlBoilerplate(newsArticle?['description'] as String?).isNotEmpty) ...[
+              ] else if (stripHtmlBoilerplate(
+                    '${newsArticle?['description'] ?? newsArticle?['gossip'] ?? newsArticle?['text'] ?? ''}',
+                  ).isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Text(
-                  stripHtmlBoilerplate(newsArticle?['description'] as String?),
-                style: TextStyle(color: primary, fontSize: 15, height: 1.45),
-              ),
-            ],
+                  stripHtmlBoilerplate(
+                    '${newsArticle?['description'] ?? newsArticle?['gossip'] ?? newsArticle?['text'] ?? ''}',
+                  ),
+                  style: TextStyle(color: primary, fontSize: 15, height: 1.45),
+                ),
+              ],
             ],
           ] else if (reflectionController != null) ...[
             _EditableReflectionField(
