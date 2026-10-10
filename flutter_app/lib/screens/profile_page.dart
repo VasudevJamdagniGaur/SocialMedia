@@ -3,11 +3,14 @@ import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:image_picker_android/image_picker_android.dart';
+import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -55,6 +58,7 @@ class _ProfilePageState extends State<ProfilePage> {
   String? _profilePicture;
   bool _showAvatarModal = false;
   bool _showPhotoPreviewModal = false;
+  bool _profilePictureUploading = false;
   bool _showBirthdayCalendar = false;
   bool _helpExpanded = false;
   DateTime? _birthdayDate;
@@ -238,25 +242,36 @@ class _ProfilePageState extends State<ProfilePage> {
         await prefs.setString('user_birthday_${user.uid}', _editData.birthday);
       }
 
-      if (_profilePicture != null) {
-        await prefs.setString('user_profile_picture_${user.uid}', _profilePicture!);
-      } else {
-        await prefs.remove('user_profile_picture_${user.uid}');
-      }
-
       setState(() => _editData.age = ageToSave);
 
       try {
-        var pictureForFirestore = _profilePicture;
-        if (pictureForFirestore != null && pictureForFirestore.startsWith('data:')) {
-          pictureForFirestore = await _compressDataUrlForStorage(pictureForFirestore);
+        var pictureForFirestore = await _profilePictureForRemoteStorage(user.uid, _profilePicture);
+        if (pictureForFirestore != null && pictureForFirestore != _profilePicture) {
+          _profilePicture = pictureForFirestore;
         }
-        await FirestoreService.instance.ensureUser(user.uid, {
+        if (_profilePicture != null) {
+          await prefs.setString('user_profile_picture_${user.uid}', _profilePicture!);
+        } else {
+          await prefs.remove('user_profile_picture_${user.uid}');
+        }
+
+        final ensureResult = await FirestoreService.instance.ensureUser(user.uid, {
           'displayName': _editData.displayName.trim().isNotEmpty ? _editData.displayName.trim() : user.displayName ?? 'User',
           'email': user.email,
           'profilePicture': pictureForFirestore,
         });
-      } catch (_) {}
+        if (ensureResult['success'] != true && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not sync profile photo: ${ensureResult['error'] ?? 'unknown error'}')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not sync profile photo: $e')),
+          );
+        }
+      }
 
       ProfilePictureNotifier.instance.notifyUpdated();
       setState(() => _isEditing = false);
@@ -302,50 +317,126 @@ class _ProfilePageState extends State<ProfilePage> {
     });
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('user_profile_picture_${user.uid}', assetPath);
-    try {
-      await FirestoreService.instance.ensureUser(user.uid, {'profilePicture': assetPath});
-    } catch (_) {}
+    final ensureResult = await FirestoreService.instance.ensureUser(user.uid, {'profilePicture': assetPath});
+    if (ensureResult['success'] != true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Avatar saved locally but could not sync to cloud.')),
+      );
+    }
     ProfilePictureNotifier.instance.notifyUpdated();
   }
 
-  Future<void> _pickAndCropImage(ImageSource source) async {
-    final file = await _picker.pickImage(source: source, maxWidth: 2000);
-    if (file == null) return;
+  /// Uploads gallery photos to Storage; leaves assets / https URLs unchanged.
+  Future<String?> _profilePictureForRemoteStorage(String uid, String? picture) async {
+    if (picture == null || picture.isEmpty) return picture;
+    if (!picture.startsWith('data:')) return picture;
 
-    final cropped = await ImageCropper().cropImage(
-      sourcePath: file.path,
-      aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
-      uiSettings: [
-        AndroidUiSettings(toolbarTitle: 'Adjust your photo', hideBottomControls: false),
-        IOSUiSettings(title: 'Adjust your photo'),
-      ],
+    final comma = picture.indexOf(',');
+    if (comma < 0) return null;
+    final bytes = base64Decode(picture.substring(comma + 1));
+    final compressed = await FlutterImageCompress.compressWithList(
+      bytes,
+      minWidth: 512,
+      minHeight: 512,
+      quality: 82,
     );
-    if (cropped == null) return;
+    return FirestoreService.instance.uploadProfilePicture(uid, compressed);
+  }
 
-    final bytes = await cropped.readAsBytes();
-    if (bytes.length > 5 * 1024 * 1024) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Image size should be less than 5MB')));
-      }
-      return;
+  Future<void> _persistProfilePicture(String uid, String pictureUrl) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('user_profile_picture_$uid', pictureUrl);
+    final ensureResult = await FirestoreService.instance.ensureUser(uid, {'profilePicture': pictureUrl});
+    if (ensureResult['success'] != true) {
+      throw Exception(ensureResult['error']?.toString() ?? 'Firestore sync failed');
     }
+    ProfilePictureNotifier.instance.notifyUpdated();
+  }
 
-    final dataUrl = 'data:image/jpeg;base64,${base64Encode(bytes)}';
-    setState(() {
-      _profilePicture = dataUrl;
-      _showAvatarModal = false;
-      _showPhotoPreviewModal = false;
-    });
+  void _configureGalleryPickerForAndroid() {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    final impl = ImagePickerPlatform.instance;
+    if (impl is ImagePickerAndroid) {
+      impl.useAndroidPhotoPicker = false;
+    }
+  }
 
+  Future<void> _pickAndCropImage(ImageSource source) async {
     final user = _user;
-    if (user != null) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('user_profile_picture_${user.uid}', dataUrl);
-      try {
-        final toStore = await _compressDataUrlForStorage(dataUrl);
-        await FirestoreService.instance.ensureUser(user.uid, {'profilePicture': toStore});
-      } catch (_) {}
-      ProfilePictureNotifier.instance.notifyUpdated();
+    if (user == null) return;
+
+    try {
+      _configureGalleryPickerForAndroid();
+      final file = await _picker.pickImage(source: source, maxWidth: 2000, imageQuality: 92);
+      if (file == null) return;
+
+      final cropped = await ImageCropper().cropImage(
+        sourcePath: file.path,
+        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: 'Adjust your photo',
+            hideBottomControls: false,
+            toolbarColor: HubColors.bgSecondary,
+            toolbarWidgetColor: Colors.white,
+          ),
+          IOSUiSettings(title: 'Adjust your photo'),
+        ],
+      );
+      if (cropped == null) return;
+
+      if (!mounted) return;
+      setState(() => _profilePictureUploading = true);
+
+      final rawBytes = await cropped.readAsBytes();
+      final jpegBytes = await FlutterImageCompress.compressWithList(
+        rawBytes,
+        minWidth: 512,
+        minHeight: 512,
+        quality: 82,
+      );
+      if (jpegBytes.length > 5 * 1024 * 1024) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Image is too large after compression. Try another photo.')),
+          );
+        }
+        return;
+      }
+
+      final downloadUrl = await FirestoreService.instance.uploadProfilePicture(user.uid, jpegBytes);
+      if (downloadUrl == null || downloadUrl.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Could not upload photo. Deploy storage.rules (profiles path) if you have not yet.',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+
+      await _persistProfilePicture(user.uid, downloadUrl);
+      if (!mounted) return;
+      setState(() {
+        _profilePicture = downloadUrl;
+        _showAvatarModal = false;
+        _showPhotoPreviewModal = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profile photo updated')),
+      );
+    } catch (e) {
+      debugPrint('[Profile] gallery upload failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not upload photo: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _profilePictureUploading = false);
     }
   }
 
@@ -905,9 +996,17 @@ class _ProfilePageState extends State<ProfilePage> {
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
-                    onPressed: () => _pickAndCropImage(ImageSource.gallery),
-                    icon: const Icon(LucideIcons.image),
-                    label: const Text('Upload from Gallery'),
+                    onPressed: _profilePictureUploading
+                        ? null
+                        : () => _pickAndCropImage(ImageSource.gallery),
+                    icon: _profilePictureUploading
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(LucideIcons.image),
+                    label: Text(_profilePictureUploading ? 'Uploading…' : 'Upload from Gallery'),
                     style: FilledButton.styleFrom(backgroundColor: HubColors.accent, foregroundColor: Colors.white),
                   ),
                 ),

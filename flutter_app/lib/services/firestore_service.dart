@@ -2,6 +2,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -296,6 +297,23 @@ class FirestoreService {
       return await storageRef.getDownloadURL();
     } catch (error) {
       debugPrint('Error uploading post image file: $error');
+      return null;
+    }
+  }
+
+  /// Profile avatar — stored as HTTPS URL in Firestore (not base64).
+  Future<String?> uploadProfilePicture(String uid, Uint8List jpegBytes) async {
+    if (uid.isEmpty || jpegBytes.isEmpty) return null;
+    try {
+      final path = 'profiles/$uid/avatar-${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final storageRef = _storage.ref(path);
+      await storageRef.putData(
+        jpegBytes,
+        SettableMetadata(contentType: 'image/jpeg'),
+      );
+      return await storageRef.getDownloadURL();
+    } catch (error) {
+      debugPrint('Error uploading profile picture: $error');
       return null;
     }
   }
