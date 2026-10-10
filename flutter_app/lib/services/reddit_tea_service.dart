@@ -10,6 +10,8 @@ import '../lib/pod_topic_news_shared.dart';
 import '../lib/reddit_post_filter.dart';
 import '../utils/hub_carousel_ai_image.dart';
 import '../utils/reddit_thread_comments.dart';
+import '../utils/share_news_cache.dart';
+import '../utils/tea_content_extraction.dart';
 import 'youtube_tea_service.dart';
 
 const _pullPushBase = 'https://api.pullpush.io/reddit/search/submission/';
@@ -63,9 +65,18 @@ Future<String?> fetchArticleOgImage(String articleUrl) async {
   return null;
 }
 
-/// Fill missing gossip text and hero images.
-/// Reddit thread URLs: enriched via thread JSON (gossip + image).
-/// Non-Reddit article URLs: OG image fetched via the backend article extractor.
+bool _teaRowNeedsBodyEnrichment(Map<String, dynamic> row) {
+  final title = cleanTeaCardTitle('${row['title'] ?? ''}');
+  final gossip =
+      '${row['gossip'] ?? row['description'] ?? row['selftext'] ?? row['body'] ?? ''}'
+          .trim();
+  if (gossip.length < 40) return true;
+  if (teaTextLooksLikeTitleEcho(gossip, title)) return true;
+  return false;
+}
+
+/// Fill missing gossip/body and hero images for Tea rows.
+/// Reddit → thread JSON; YouTube → Data API description; articles → backend extractor.
 Future<List<Map<String, dynamic>>> enrichTeaRows(
   List<Map<String, dynamic>> rows, {
   int maxEnrich = 10,
@@ -81,46 +92,60 @@ Future<List<Map<String, dynamic>>> enrichTeaRows(
     final url = '${row['url'] ?? ''}'.trim();
     if (url.isEmpty) continue;
 
-    final gossip = '${row['gossip'] ?? row['description'] ?? row['selftext'] ?? ''}'.trim();
     final image = '${row['image'] ?? row['thumbnail'] ?? ''}'.trim();
-    final needsGossip = gossip.length < 40;
+    final needsGossip = _teaRowNeedsBodyEnrichment(row);
     final needsImage = !RegExp(r'^https?://', caseSensitive: false).hasMatch(image);
     if (!needsGossip && !needsImage) continue;
-
-    final isReddit = isRedditTeaThreadUrl(url);
-    // Non-Reddit articles only benefit from image fetching, not gossip enrichment.
-    if (!isReddit && !needsImage) continue;
 
     final idx = i;
     queued++;
     tasks.add(() async {
       try {
-        if (isReddit) {
-          final details = await fetchRedditThreadDetails(url, seed: out[idx]);
-          if (details == null) return;
+        if (needsGossip) {
+          final extracted = await resolveTeaPostContent(out[idx]);
           final merged = out[idx];
-          final g = '${details['gossip'] ?? details['description'] ?? ''}'.trim();
-          if (needsGossip && g.isNotEmpty) {
-            merged['gossip'] = g;
-            merged['description'] = g;
-            merged['selftext'] = '${details['selftext'] ?? g}';
+          if (extracted.title.isNotEmpty) merged['title'] = extracted.title;
+          if (extracted.hasSubstantialBody || extracted.body.trim().length >= 40) {
+            merged['gossip'] = extracted.body;
+            merged['description'] = extracted.body;
+            merged['selftext'] = extracted.body;
+            merged['body'] = extracted.body;
+            merged['extractionStatus'] = extracted.extractionStatus.name;
+          } else {
+            merged['extractionStatus'] = extracted.extractionStatus.name;
+            if (extracted.diagnostic.isNotEmpty) {
+              merged['extractionDiagnostic'] = extracted.diagnostic;
+            }
           }
-          final img = '${details['image'] ?? ''}'.trim();
-          if (needsImage && img.startsWith('http')) {
-            merged['image'] = img;
-            merged['thumbnail'] = img;
+          if (extracted.author.isNotEmpty) merged['author'] = extracted.author;
+          if (extracted.media.isNotEmpty) {
+            merged['image'] = extracted.media.first;
+            merged['thumbnail'] = extracted.media.first;
           }
-          final title = '${details['title'] ?? ''}'.trim();
-          if (title.isNotEmpty) merged['title'] = title;
-        } else {
-          // Non-Reddit article: fetch the real og:image from the article page.
-          final img = await fetchArticleOgImage(url);
-          if (img != null) {
-            out[idx]['image'] = img;
-            out[idx]['thumbnail'] = img;
+          debugPrint(
+            '[TeaEnrich] idx=$idx status=${extracted.extractionStatus.name} '
+            'bodyLen=${extracted.body.length}',
+          );
+        } else if (needsImage) {
+          final isReddit = isRedditTeaThreadUrl(url);
+          if (isReddit) {
+            final details = await fetchRedditThreadDetails(url, seed: out[idx]);
+            final img = '${details?['image'] ?? ''}'.trim();
+            if (img.startsWith('http')) {
+              out[idx]['image'] = img;
+              out[idx]['thumbnail'] = img;
+            }
+          } else {
+            final img = await fetchArticleOgImage(url);
+            if (img != null) {
+              out[idx]['image'] = img;
+              out[idx]['thumbnail'] = img;
+            }
           }
         }
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('[TeaEnrich] failed idx=$idx: $e');
+      }
     }());
   }
 
@@ -386,16 +411,27 @@ Future<List<Map<String, dynamic>>> fetchTeaRowsFromClassicReddit() async {
 List<Map<String, dynamic>> teaRowsFromRssArticles(List<Map<String, dynamic>> rss) {
   return normalizeArticles(rss)
       .where((a) => '${a['url'] ?? ''}'.trim().isNotEmpty)
-      .map((a) => {
-            'title': a['title'],
-            'url': a['url'],
-            'image': a['image'],
-            'thumbnail': a['image'],
-            'score': 0,
-            'num_comments': 0,
-            'author': a['source'] ?? 'News',
-            'source': a['source'] ?? 'News',
-          })
+      .map((a) {
+        final title = '${a['title'] ?? ''}'.trim();
+        final desc = '${a['description'] ?? ''}'.trim();
+        // Only keep real prose snippets — reject Google News link/HTML junk.
+        final body = cleanFeedSnippetForDisplay(desc, title: title);
+        return {
+          'title': title,
+          'url': a['url'],
+          'image': a['image'],
+          'thumbnail': a['image'],
+          'score': 0,
+          'num_comments': 0,
+          'author': a['source'] ?? 'News',
+          'source': a['source'] ?? 'News',
+          'extractionStatus': body.isNotEmpty ? 'partial' : 'titleOnly',
+          if (body.isNotEmpty) 'description': body,
+          if (body.isNotEmpty) 'gossip': body,
+          if (body.isNotEmpty) 'selftext': body,
+          if (a['publishedAt'] != null) 'publishedAt': a['publishedAt'],
+        };
+      })
       .toList();
 }
 

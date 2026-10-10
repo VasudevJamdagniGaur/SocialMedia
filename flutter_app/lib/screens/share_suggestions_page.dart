@@ -39,6 +39,7 @@ import '../utils/hub_carousel_ai_image.dart';
 import '../utils/hub_carousel_image_store.dart';
 import '../utils/reddit_thread_comments.dart';
 import '../utils/share_news_cache.dart';
+import '../utils/tea_content_extraction.dart';
 import '../utils/widget_capture.dart';
 
 enum _InstagramFormat { post, story }
@@ -514,12 +515,42 @@ class _ShareSuggestionsPageState extends State<ShareSuggestionsPage> {
       }
 
       // 4. Generate AI image via the centralized server pipeline.
-      //    Pass the existing article image as sourceImageUrl so it gets stored alongside.
-      final storyParts = <String>[
-        if (_displayNewsSummary.trim().isNotEmpty) _displayNewsSummary.trim(),
+      //    For Tea: resolve full post body first so we never send headline-only.
+      var storyText = [
+        _displayNewsSummary.trim(),
+        stripHtmlBoilerplate('${_newsArticle?['gossip'] ?? ''}'),
         stripHtmlBoilerplate('${_newsArticle?['description'] ?? ''}'),
-      ].where((s) => s.isNotEmpty).toList();
-      final storyText = storyParts.join('\n\n');
+        stripHtmlBoilerplate('${_newsArticle?['text'] ?? ''}'),
+        stripHtmlBoilerplate('${_newsArticle?['selftext'] ?? ''}'),
+      ].where((s) => s.isNotEmpty).toSet().join('\n\n');
+
+      if (_isTeaArticleShare) {
+        final extracted = await resolveTeaPostContent(_articleForSuggestions());
+        if (extracted.storyTextForAi.isNotEmpty) {
+          storyText = extracted.storyTextForAi;
+          if (mounted) {
+            setState(() {
+              _newsCardSummary = teaSeedContextSummary(
+                extracted.toArticleSeed(),
+                headlineFallback: headline,
+              );
+              _newsArticle = {
+                ...Map<String, dynamic>.from(_newsArticle ?? {}),
+                ...extracted.toArticleSeed(),
+              };
+            });
+          }
+          debugPrint(
+            '[ImageGen] tea share using body status=${extracted.extractionStatus.name} '
+            'len=${storyText.length}',
+          );
+        } else {
+          debugPrint(
+            '[ImageGen] tea share body missing status=${extracted.extractionStatus.name} '
+            'diag=${extracted.diagnostic}',
+          );
+        }
+      }
 
       final existingImg = ('${_newsArticle?['image'] ?? ''}').trim();
       final result = await getOrGenerateHubCarouselImageFull(

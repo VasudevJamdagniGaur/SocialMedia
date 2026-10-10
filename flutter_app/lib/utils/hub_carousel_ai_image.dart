@@ -11,6 +11,7 @@ import '../services/vertex_api_client.dart';
 import '../services/youtube_tea_service.dart';
 import 'hub_carousel_image_store.dart';
 import 'share_news_cache.dart';
+import 'tea_content_extraction.dart';
 
 export '../services/render_backend_queue.dart' show HubCarouselImagePriority;
 
@@ -281,18 +282,62 @@ Future<HubCarouselImageResult?> _getOrGenerateHubCarouselImageFullImpl({
 
   if (!isVertexBackendConfigured()) return null;
 
+  // Drop feed markup / URL junk; resolve real body before image gen when needed.
+  var effectiveStory = cleanFeedSnippetForDisplay(storyText, title: title);
+  var effectiveTitle = title;
+  final needsBodyResolve = url.startsWith('http') &&
+      (effectiveStory.length < 40 ||
+          isFeedMarkupOrUrlOnly(storyText) ||
+          teaTextLooksLikeTitleEcho(effectiveStory, effectiveTitle));
+  if (needsBodyResolve &&
+      (kind == HubCarouselImageKind.tea || kind == HubCarouselImageKind.news)) {
+    try {
+      final extracted = await resolveTeaPostContent({
+        'title': effectiveTitle,
+        'url': url,
+        'gossip': effectiveStory,
+        'description': effectiveStory,
+      });
+      if (extracted.title.isNotEmpty) effectiveTitle = extracted.title;
+      if (extracted.storyTextForAi.isNotEmpty) {
+        effectiveStory = extracted.storyTextForAi;
+      } else {
+        effectiveStory = '';
+      }
+      final visual = analyzeTeaVisualContext(extracted);
+      if (effectiveStory.isNotEmpty) {
+        effectiveStory = '${visual.toImagePromptBlock()}\n\nSTORY BODY:\n$effectiveStory';
+      } else {
+        // Title-only / unavailable: conceptual visual only — no invented plot.
+        effectiveStory = visual.toImagePromptBlock();
+      }
+      debugPrint(
+        '[ImageGen] body resolved kind=${kind.name} '
+        'status=${extracted.extractionStatus.name} '
+        'storyLen=${effectiveStory.length}',
+      );
+    } catch (e) {
+      debugPrint('[ImageGen] body resolve skipped: $e');
+      if (isFeedMarkupOrUrlOnly(effectiveStory)) effectiveStory = '';
+    }
+  }
+
   // 2. Call /api/tea/ensure-image on the Render backend.
   //    - Server checks Firestore first (cache hit) and returns instantly.
   //    - On cache miss, generates AI image, uploads to Storage, persists, returns URL.
   try {
-    debugPrint('[ImageGen] ensure-image: headlineLen=${title.length} url=${url.length > 60 ? url.substring(0, 60) : url}');
+    debugPrint(
+      '[ImageGen] ensure-image: headlineLen=${effectiveTitle.length} '
+      'storyLen=${effectiveStory.length} '
+      'url=${url.length > 60 ? url.substring(0, 60) : url}',
+    );
     final effSource = sourceImageUrl?.trim();
     final response = await VertexApiClient.instance.fetchJson(
       '/api/tea/ensure-image',
       body: {
         'articleUrl': url,
-        'title': title,
-        if (storyText.trim().isNotEmpty) 'storyText': stripHtmlBoilerplate(storyText),
+        'title': effectiveTitle,
+        if (effectiveStory.isNotEmpty) 'storyText': effectiveStory,
         'kind': kind.name,
         if (effSource != null && effSource.startsWith('http')) 'sourceImageUrl': effSource,
       },
@@ -309,7 +354,7 @@ Future<HubCarouselImageResult?> _getOrGenerateHubCarouselImageFullImpl({
 
     await persistHubCarouselImage(
       url: url,
-      title: title,
+      title: effectiveTitle,
       imageUrl: aiImageUrl,
       kind: kind,
       fallbackId: key,
@@ -331,13 +376,13 @@ Future<HubCarouselImageResult?> _getOrGenerateHubCarouselImageFullImpl({
   // 3. Fallback when the server is unreachable — not when quota is exhausted.
   try {
     final generated = await ChatService.instance.fetchSingleNewsShareIllustrationImage({
-      'headline': title,
-      if (storyText.trim().isNotEmpty) 'storyText': stripHtmlBoilerplate(storyText),
+      'headline': effectiveTitle,
+      if (effectiveStory.isNotEmpty) 'storyText': effectiveStory,
     });
     if (generated == null || !generated.startsWith('data:image')) return null;
     await persistHubCarouselImage(
       url: url,
-      title: title,
+      title: effectiveTitle,
       imageUrl: generated,
       kind: kind,
       fallbackId: key,

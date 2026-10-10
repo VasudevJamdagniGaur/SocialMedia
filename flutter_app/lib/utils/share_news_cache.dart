@@ -131,18 +131,81 @@ bool teaCardContentIsBlocked({
       isScrapeBlockedBoilerplate(bodyText);
 }
 
-/// Strip HTML tags from RSS / scrape descriptions for display and AI prompts.
-String stripHtmlBoilerplate(String? text) {
+/// Decode common HTML entities (run before tag stripping so `&lt;a` becomes stripable).
+String decodeHtmlEntities(String? text) {
   var s = '${text ?? ''}';
   if (s.isEmpty) return '';
-  s = s.replaceAll(RegExp(r'<[^>]+>'), ' ');
   s = s.replaceAll(RegExp(r'&nbsp;', caseSensitive: false), ' ');
   s = s.replaceAll(RegExp(r'&amp;', caseSensitive: false), '&');
   s = s.replaceAll(RegExp(r'&lt;', caseSensitive: false), '<');
   s = s.replaceAll(RegExp(r'&gt;', caseSensitive: false), '>');
   s = s.replaceAll(RegExp(r'&quot;', caseSensitive: false), '"');
   s = s.replaceAll(RegExp(r'&#39;', caseSensitive: false), "'");
+  s = s.replaceAll(RegExp(r'&apos;', caseSensitive: false), "'");
+  s = s.replaceAllMapped(RegExp(r'&#(\d+);'), (m) {
+    final code = int.tryParse(m.group(1) ?? '');
+    if (code == null || code < 0 || code > 0x10ffff) return m.group(0)!;
+    return String.fromCharCode(code);
+  });
+  s = s.replaceAllMapped(RegExp(r'&#x([0-9a-fA-F]+);'), (m) {
+    final code = int.tryParse(m.group(1) ?? '', radix: 16);
+    if (code == null || code < 0 || code > 0x10ffff) return m.group(0)!;
+    return String.fromCharCode(code);
+  });
+  return s;
+}
+
+/// Strip HTML tags from RSS / scrape descriptions for display and AI prompts.
+/// Decodes entities first so escaped tags like `&lt;a href=...` are removed.
+String stripHtmlBoilerplate(String? text) {
+  var s = '${text ?? ''}';
+  if (s.isEmpty) return '';
+  // Decode → strip → decode → strip once more (nested/partial entity encodings).
+  for (var i = 0; i < 2; i++) {
+    s = decodeHtmlEntities(s);
+    s = s.replaceAll(RegExp(r'<[^>]+>'), ' ');
+  }
+  s = s.replaceAll(RegExp(r'[<>]'), ' ');
   return s.replaceAll(RegExp(r'\s+'), ' ').trim();
+}
+
+/// True when text is feed markup, a bare URL, or Google News link junk — not prose.
+bool isFeedMarkupOrUrlOnly(String? text) {
+  final raw = '${text ?? ''}'.trim();
+  if (raw.isEmpty) return true;
+  final s = stripHtmlBoilerplate(raw);
+  if (s.isEmpty) return true;
+  if (RegExp(r'https?://', caseSensitive: false).hasMatch(s) &&
+      s.replaceAll(RegExp(r'https?://[^\s]+', caseSensitive: false), '').trim().length < 24) {
+    return true;
+  }
+  if (RegExp(r'news\.google\.com', caseSensitive: false).hasMatch(raw) ||
+      RegExp(r'news\.google\.com', caseSensitive: false).hasMatch(s)) {
+    // Google News RSS descriptions are almost always link wrappers.
+    final withoutUrls =
+        s.replaceAll(RegExp(r'https?://[^\s]+', caseSensitive: false), ' ').trim();
+    if (withoutUrls.length < 40) return true;
+  }
+  if (RegExp(r'^\s*<?\s*a\s+href', caseSensitive: false).hasMatch(raw)) return true;
+  if (RegExp(r'&lt;\s*a\s+href', caseSensitive: false).hasMatch(raw)) return true;
+  if (RegExp(r'<[^>]+>').hasMatch(raw) &&
+      stripHtmlBoilerplate(raw).length < raw.length * 0.35) {
+    return true;
+  }
+  // Mostly punctuation / path fragments after cleanup.
+  final letters = RegExp(r'[A-Za-z]').allMatches(s).length;
+  if (letters < 12) return true;
+  return false;
+}
+
+/// Clean RSS/snippet text for card display; empty if only markup/URL junk.
+String cleanFeedSnippetForDisplay(String? text, {String? title}) {
+  if (isFeedMarkupOrUrlOnly(text)) return '';
+  final cleaned = sanitizeTeaCardSummary(stripHtmlBoilerplate(text));
+  if (cleaned.isEmpty) return '';
+  final t = '${title ?? ''}'.trim();
+  if (t.isNotEmpty && cleaned.toLowerCase() == t.toLowerCase()) return '';
+  return cleaned;
 }
 
 bool isTeaSourceLabel(String? source) {

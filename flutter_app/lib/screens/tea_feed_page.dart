@@ -13,6 +13,7 @@ import '../utils/hub_carousel_image_store.dart';
 import '../utils/hub_colors.dart';
 import '../utils/reddit_thread_comments.dart';
 import '../utils/share_news_cache.dart';
+import '../utils/tea_content_extraction.dart';
 import '../utils/tea_watchlist_storage.dart';
 
 const _hubMuted = Color(0x9EFFFFFF);
@@ -286,17 +287,23 @@ class _TeaFeedPageState extends State<TeaFeedPage> {
 
   Future<void> _openShareSuggestions(TeaItem item) async {
     if (item.url.isEmpty) return;
-    final story = item.gossip.trim().isNotEmpty ? item.gossip.trim() : item.title.trim();
+    final extracted = await resolveTeaPostContent({
+      'title': item.title,
+      'url': item.url,
+      'gossip': item.gossip,
+      'description': item.gossip,
+      'selftext': item.gossip,
+      'image': teaHeroImageUrl(item) ?? item.thumbnail,
+      'author': item.author,
+      'source': isYouTubeTeaUrl(item.url) ? 'YouTube' : 'Tea',
+    });
+    final seed = extracted.toArticleSeed();
+    seed['image'] = teaHeroImageUrl(item) ?? item.thumbnail;
+    if (extracted.diagnostic.isNotEmpty) {
+      seed['extractionDiagnostic'] = extracted.diagnostic;
+    }
     final payload = {
-      'newsArticle': {
-        'title': item.title,
-        'url': item.url,
-        'description': story,
-        'text': story,
-        'gossip': story,
-        'image': teaHeroImageUrl(item) ?? item.thumbnail,
-        'source': isYouTubeTeaUrl(item.url) ? 'YouTube' : 'Tea',
-      },
+      'newsArticle': seed,
       'returnTo': AppRoutes.teaFeed,
       'platform': 'linkedin',
       'autoOpenSharePanel': true,

@@ -9,6 +9,23 @@ import '../services/firebase_admin_service.dart';
 import '../utils/http_utils.dart';
 import '../vertex/vertex_client.dart';
 
+/// Reject RSS HTML wrappers / bare URLs that must not be treated as story body.
+bool _isJunkStoryText(String raw) {
+  final s = raw.trim();
+  if (s.isEmpty) return true;
+  if (RegExp(r'&lt;\s*a\s+href', caseSensitive: false).hasMatch(s)) return true;
+  if (RegExp(r'^\s*<\s*a\s+href', caseSensitive: false).hasMatch(s)) return true;
+  if (RegExp(r'news\.google\.com/rss/articles', caseSensitive: false).hasMatch(s)) {
+    return true;
+  }
+  final withoutUrls =
+      s.replaceAll(RegExp(r'https?://[^\s]+', caseSensitive: false), ' ').trim();
+  if (withoutUrls.length < 24 && RegExp(r'https?://', caseSensitive: false).hasMatch(s)) {
+    return true;
+  }
+  return false;
+}
+
 Router buildVertexRouter(VertexClient vertex) {
   final router = Router();
   final _firebase = FirebaseAdminService();
@@ -356,10 +373,15 @@ Router buildVertexRouter(VertexClient vertex) {
     if (articleUrl.isEmpty || title.isEmpty) {
       return jsonError(400, 'articleUrl and title are required');
     }
-    final storyText = (body['storyText'] as String? ?? '').trim();
+    var storyText = (body['storyText'] as String? ?? '').trim();
     final kind = (body['kind'] as String? ?? 'tea').trim();
     // Optional source image (YouTube thumb / article image) supplied by client.
     final sourceImageUrl = (body['sourceImageUrl'] as String? ?? '').trim();
+
+    // Reject RSS/HTML/URL junk so it never becomes "body" for image prompts.
+    if (_isJunkStoryText(storyText)) {
+      storyText = '';
+    }
 
     // 1. Check Firestore — return both URLs immediately if the AI image was already generated.
     final cached = await _firebase.getHubCarouselBothUrls(articleUrl);
@@ -374,13 +396,27 @@ Router buildVertexRouter(VertexClient vertex) {
       });
     }
 
-    // 2. Generate AI image via Vertex AI immediately — no waiting for source images.
-    final combined = storyText.isNotEmpty ? '$title\n\n$storyText' : title;
-    final prompt =
-        'Create one vivid editorial illustration for a trending social story.\n'
-        'Atmospheric, symbolic, tasteful. No embedded text, captions, logos, or identifiable private individuals.\n'
-        'Medium or wide shot when people appear; avoid face close-ups.\n\n'
-        '${combined.length > 5500 ? combined.substring(0, 5500) : combined}';
+    // 2. Generate AI image via Vertex AI — ground in story body when present.
+    final hasBody = storyText.isNotEmpty &&
+        storyText.toLowerCase().trim() != title.toLowerCase().trim() &&
+        storyText.trim().length >= 40 &&
+        !storyText.contains('news.google.com');
+    final prompt = hasBody
+        ? 'Create ONE vivid editorial illustration for this social story.\n'
+            'CRITICAL: Ground the scene in the FULL STORY BODY below — not only the headline.\n'
+            'Identify the main subject and situation from the body. Depict that context.\n'
+            'Only include a recognizable public figure if they are clearly the central subject of the body text.\n'
+            'Do not invent meetings, endorsements, or biographical events not supported by the body.\n'
+            'Atmospheric, tasteful. No embedded logos or watermarks. Medium/wide shot preferred.\n\n'
+            'HEADLINE:\n$title\n\n'
+            'STORY BODY:\n${storyText.length > 4500 ? storyText.substring(0, 4500) : storyText}'
+        : 'Create one vivid editorial illustration for a trending social story.\n'
+            'NOTE: Only the headline was available — full post body was not extracted.\n'
+            'Use a symbolic/environmental scene for the topic. Do NOT invent a biographical '
+            'portrait of a celebrity from the headline alone.\n'
+            'Atmospheric, tasteful. No embedded text, captions, logos.\n'
+            'Medium or wide shot when people appear; avoid face close-ups.\n\n'
+            'HEADLINE:\n$title';
 
     final String dataUrl;
     try {

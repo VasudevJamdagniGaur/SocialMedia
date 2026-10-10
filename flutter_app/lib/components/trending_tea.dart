@@ -15,10 +15,11 @@ import '../utils/hub_carousel_image_store.dart';
 import '../utils/hub_colors.dart';
 import '../utils/share_news_cache.dart';
 import '../services/tea_news_refresh_mode.dart';
+import '../utils/tea_content_extraction.dart';
 import '../utils/tea_trending_storage.dart';
 import 'skeleton/card_skeleton.dart';
 
-const _teaItemsCacheKey = 'deite_tea_items_cache_v3';
+const _teaItemsCacheKey = 'deite_tea_items_cache_v4';
 const _teaCacheMaxAge = Duration(hours: 6);
 
 List<TeaItem>? _memoryTeaCache;
@@ -102,15 +103,20 @@ bool _isDirectImageUrl(String? postUrl) {
 
 TeaItem _rowToTeaItem(Map<String, dynamic> row) {
   final url = row['url'] is String ? row['url'] as String : '';
-  final gossip = '${row['gossip'] ?? row['description'] ?? row['selftext'] ?? ''}'.trim();
+  final title = row['title'] is String ? row['title'] as String : '';
+  // Never show feed markup / Google News link junk on cards.
+  final gossip = cleanFeedSnippetForDisplay(
+    '${row['gossip'] ?? row['bodyText'] ?? row['selftext'] ?? row['description'] ?? ''}',
+    title: title,
+  );
   var thumbnail = '${row['image'] ?? row['thumbnail'] ?? ''}'.replaceAll('&amp;', '&');
   if (!isValidHubCarouselImageUrl(thumbnail)) {
     final yt = youtubeTeaThumbnailFromUrl(url);
     if (yt != null) thumbnail = yt;
   }
   return TeaItem(
-    id: url.isNotEmpty ? hubNewsDocIdFromUrl(url) : '${row['title']}'.hashCode.toString(),
-    title: row['title'] is String ? row['title'] as String : '',
+    id: url.isNotEmpty ? hubNewsDocIdFromUrl(url) : title.hashCode.toString(),
+    title: title,
     url: url,
     postUrl: url,
     thumbnail: thumbnail,
@@ -136,16 +142,24 @@ Future<List<TeaItem>> _loadTeaFromDisk() async {
     if (items is! List) return [];
     return items
         .whereType<Map>()
-        .map((m) => TeaItem(
-              id: '${m['id'] ?? ''}',
-              title: '${m['title'] ?? ''}',
-              url: '${m['url'] ?? ''}',
-              postUrl: '${m['postUrl'] ?? m['url'] ?? ''}',
-              thumbnail: '${m['thumbnail'] ?? ''}',
-              author: '${m['author'] ?? 'unknown'}',
-              score: m['score'] is num ? (m['score'] as num).toInt() : 0,
-              numComments: m['num_comments'] is num ? (m['num_comments'] as num).toInt() : 0,
-            ))
+        .map((m) {
+          final title = '${m['title'] ?? ''}';
+          final gossip = cleanFeedSnippetForDisplay(
+            '${m['gossip'] ?? m['description'] ?? ''}',
+            title: title,
+          );
+          return TeaItem(
+            id: '${m['id'] ?? ''}',
+            title: title,
+            url: '${m['url'] ?? ''}',
+            postUrl: '${m['postUrl'] ?? m['url'] ?? ''}',
+            thumbnail: '${m['thumbnail'] ?? ''}',
+            gossip: gossip,
+            author: '${m['author'] ?? 'unknown'}',
+            score: m['score'] is num ? (m['score'] as num).toInt() : 0,
+            numComments: m['num_comments'] is num ? (m['num_comments'] as num).toInt() : 0,
+          );
+        })
         .where((t) => t.title.isNotEmpty && t.url.isNotEmpty)
         .toList();
   } catch (_) {
@@ -322,6 +336,8 @@ Future<void> _enrichTeaRowsInBackground(
     _memoryTeaCache = items;
     _memoryTeaCacheAt = DateTime.now();
     unawaited(_saveTeaToDisk(items));
+    // Notify hub Tea carousel / feed to pick up enriched body text.
+    teaNewsManualRefreshTick.value++;
   } catch (_) {}
 }
 
@@ -497,17 +513,28 @@ class _TrendingTeaState extends State<TrendingTea> {
 
   Future<void> _openShare(TeaItem item) async {
     if (item.url.isEmpty) return;
-    final story = item.gossip.trim().isNotEmpty ? item.gossip.trim() : item.title.trim();
+    // Resolve full post body before share — never silently pass title as "body".
+    final extracted = await resolveTeaPostContent({
+      'title': item.title,
+      'url': item.url,
+      'gossip': item.gossip,
+      'description': item.gossip,
+      'selftext': item.gossip,
+      'image': teaHeroImageUrl(item) ?? item.thumbnail,
+      'author': item.author,
+      'source': isYouTubeTeaUrl(item.url) ? 'YouTube' : 'Tea',
+    });
+    final body = extracted.storyTextForAi;
+    final seed = extracted.toArticleSeed();
+    seed['image'] = teaHeroImageUrl(item) ?? item.thumbnail;
+    if (body.isEmpty) {
+      seed['extractionStatus'] = extracted.extractionStatus.name;
+      seed['extractionDiagnostic'] = extracted.diagnostic.isNotEmpty
+          ? extracted.diagnostic
+          : 'Full post body unavailable — paste context if needed';
+    }
     final payload = {
-      'newsArticle': {
-        'title': item.title,
-        'url': item.url,
-        'description': story,
-        'text': story,
-        'gossip': story,
-        'image': teaHeroImageUrl(item) ?? item.thumbnail,
-        'source': isYouTubeTeaUrl(item.url) ? 'YouTube' : 'Tea',
-      },
+      'newsArticle': seed,
       'returnTo': GoRouterState.of(context).uri.path,
       'platform': 'linkedin',
       'autoOpenSharePanel': true,

@@ -2608,6 +2608,9 @@ ${reflection.trim()}''';
       'image': seed['image'],
       'source': (seed['source'] ?? '').toString().trim(),
       'text': '',
+      'bodyText': '',
+      'contentStatus': '',
+      'extractionError': '',
     };
 
     // Reddit blocks scrapers; Jina often returns 403 boilerplate - thread text comes from .json API instead.
@@ -2627,18 +2630,26 @@ ${reflection.trim()}''';
           continue;
         }
         if (data is! Map) continue;
-        final text = (data['text'] ?? '').toString().trim();
+        final text =
+            (data['bodyText'] ?? data['text'] ?? '').toString().trim();
         final prevText = (out['text'] ?? '').toString();
-        if (text.length > prevText.length) {
+        final status = (data['contentStatus'] ?? '').toString().trim();
+        // Accept longer body, or first structured unavailable/partial response.
+        if (text.length > prevText.length ||
+            (prevText.isEmpty && status.isNotEmpty)) {
+          final image = (data['imageUrl'] ?? data['image'] ?? '').toString().trim();
           out = {
             'title': (data['title'] ?? out['title'] ?? '').toString().trim(),
             'url': (data['sourceUrl'] ?? data['url'] ?? targetUrl).toString().trim(),
-            'description': (data['description'] ?? out['description'] ?? '').toString().trim(),
-            'image': (data['image'] is String && (data['image'] as String).trim().isNotEmpty)
-                ? (data['image'] as String).trim()
-                : out['image'],
+            'description':
+                (data['description'] ?? out['description'] ?? '').toString().trim(),
+            'image': image.isNotEmpty ? image : out['image'],
             'source': (data['source'] ?? out['source'] ?? '').toString().trim(),
             'text': text,
+            'bodyText': text,
+            'contentStatus': status,
+            'extractionError':
+                (data['extractionError'] ?? '').toString().trim(),
           };
         }
       } catch (_) {
@@ -2647,8 +2658,15 @@ ${reflection.trim()}''';
     }
 
     final jina = await _fetchReadableTextViaJina(targetUrl);
-    if (jina.length > (out['text'] ?? '').toString().length) {
-      out = {...out, 'text': jina};
+    if (jina.length > (out['text'] ?? '').toString().length &&
+        !isFeedMarkupOrUrlOnly(jina)) {
+      out = {
+        ...out,
+        'text': jina,
+        'bodyText': jina,
+        if ('${out['contentStatus'] ?? ''}'.isEmpty)
+          'contentStatus': jina.length >= 400 ? 'complete' : 'partial',
+      };
     }
     return out;
   }
@@ -2664,34 +2682,62 @@ ${reflection.trim()}''';
     final image = (article?['image'] ?? '').toString().trim();
     final source = (article?['source'] ?? '').toString().trim();
 
+    final cleanedDesc = cleanFeedSnippetForDisplay(description, title: title);
     final base = <String, dynamic>{
       'title': title,
       'url': url,
-      'description': description,
+      'description': cleanedDesc,
       'image': image.isNotEmpty ? image : null,
       'source': source,
       'text': '',
+      'bodyText': '',
+      'contentStatus': '',
+      'extractionError': '',
     };
-    if (url.isEmpty) return base;
-
-    final maybeText = (article?['text'] is String) ? (article!['text'] as String).trim() : '';
-    if (maybeText.isNotEmpty && maybeText.length >= minTextLen) {
-      return {...base, 'text': maybeText};
+    if (url.isEmpty) {
+      return {
+        ...base,
+        'contentStatus': 'unavailable',
+        'extractionError': 'missing_url',
+      };
     }
 
-    final preGossip =
-        (article?['gossip'] ?? article?['description'] ?? article?['selftext'] ?? '')
-            .toString()
-            .trim();
+    final maybeText = (article?['bodyText'] is String
+            ? article!['bodyText'] as String
+            : (article?['text'] is String ? article!['text'] as String : ''))
+        .trim();
+    if (maybeText.isNotEmpty &&
+        !isFeedMarkupOrUrlOnly(maybeText) &&
+        maybeText.length >= minTextLen) {
+      return {
+        ...base,
+        'text': maybeText,
+        'bodyText': maybeText,
+        'contentStatus': 'complete',
+      };
+    }
+
+    final preGossip = cleanFeedSnippetForDisplay(
+      (article?['gossip'] ?? article?['selftext'] ?? article?['description'] ?? '')
+          .toString(),
+      title: title,
+    );
     // Prefer existing Tea/Reddit body so share card isn't stuck on title-only.
+    // Never treat feed markup / URL junk as body.
     if (preGossip.length >= 40 ||
         (_isRedditThreadUrl(url) && preGossip.length >= 12)) {
       return {
         ...base,
-        'description': preGossip,
+        'description': cleanedDesc.isNotEmpty ? cleanedDesc : preGossip,
         'gossip': preGossip,
         'selftext': preGossip,
-        'text': maybeText.isNotEmpty ? maybeText : preGossip,
+        'text': maybeText.isNotEmpty && !isFeedMarkupOrUrlOnly(maybeText)
+            ? maybeText
+            : preGossip,
+        'bodyText': maybeText.isNotEmpty && !isFeedMarkupOrUrlOnly(maybeText)
+            ? maybeText
+            : preGossip,
+        'contentStatus': preGossip.length >= 400 ? 'complete' : 'partial',
       };
     }
 
@@ -2739,13 +2785,41 @@ ${reflection.trim()}''';
       }
     }
 
+    final bestText = cleanFeedSnippetForDisplay(
+          (best['bodyText'] ?? best['text'] ?? '').toString(),
+          title: (best['title'] ?? title).toString(),
+        ).isNotEmpty
+        ? sanitizeTeaCardSummary(
+            stripHtmlBoilerplate((best['bodyText'] ?? best['text'] ?? '').toString()),
+          )
+        : (maybeText.isNotEmpty && !isFeedMarkupOrUrlOnly(maybeText) ? maybeText : '');
+    final bestDesc = cleanFeedSnippetForDisplay(
+      (best['description'] ?? '').toString().isNotEmpty
+          ? best['description'].toString()
+          : description,
+      title: (best['title'] ?? title).toString(),
+    );
+    var contentStatus = (best['contentStatus'] ?? '').toString().trim();
+    if (contentStatus.isEmpty) {
+      if (bestText.length >= 400) {
+        contentStatus = 'complete';
+      } else if (bestText.length >= 40) {
+        contentStatus = 'partial';
+      } else {
+        contentStatus = 'unavailable';
+      }
+    }
+
     return {
       'title': (best['title'] ?? title).toString(),
       'url': (best['url'] ?? url).toString(),
-      'description': ((best['description'] ?? '').toString().isNotEmpty ? best['description'] : description).toString(),
+      'description': bestDesc,
       'image': best['image'] ?? (image.isNotEmpty ? image : null),
       'source': ((best['source'] ?? '').toString().isNotEmpty ? best['source'] : source).toString(),
-      'text': ((best['text'] ?? '').toString().isNotEmpty ? best['text'] : maybeText).toString(),
+      'text': bestText,
+      'bodyText': bestText,
+      'contentStatus': contentStatus,
+      'extractionError': (best['extractionError'] ?? '').toString(),
     };
   }
 

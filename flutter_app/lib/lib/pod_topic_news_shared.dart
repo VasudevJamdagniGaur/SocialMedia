@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../components/hub_theme.dart';
 import '../config/env.dart';
 import '../utils/decode_google_news_url.dart';
+import '../utils/share_news_cache.dart';
 
 export '../utils/decode_google_news_url.dart' show decodeGoogleNewsUrl;
 
@@ -694,8 +695,8 @@ List<Map<String, dynamic>> _parseGoogleNewsRssXml(String xml) {
     final pubDateRaw = _xmlTagText(block, 'pubDate');
     final publishedAt = _parseRssPubDate(pubDateRaw);
     final rawDesc = _xmlTagRaw(block, 'description') ?? '';
-    final description =
-        rawDesc.replaceAll(RegExp(r'<[^>]*>'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    // Decode entities before tag strip so escaped Google News link wrappers are removed.
+    final description = stripHtmlBoilerplate(rawDesc);
     var image = _firstImageUrlFromHtml(rawDesc);
     final publisherUrl = _extractPublisherUrlFromRssItemHtml(rawDesc);
     final decoded = _isGoogleNewsArticleUrl(link) ? decodeGoogleNewsUrl(link) : null;
@@ -786,10 +787,7 @@ Future<List<Map<String, dynamic>>> _fetchItemsThroughRss2Json(String rssUrl) asy
         it['description'],
         it['contentSnippet'],
       ].where((e) => e != null && '$e'.isNotEmpty).join(' ');
-      final description = '${it['contentSnippet'] ?? ''}'
-          .replaceAll(RegExp(r'<[^>]*>'), ' ')
-          .replaceAll(RegExp(r'\s+'), ' ')
-          .trim();
+      final description = stripHtmlBoilerplate('${it['contentSnippet'] ?? it['description'] ?? ''}');
 
       String? image;
       final enclosure = it['enclosure'];
@@ -930,13 +928,16 @@ List<Map<String, dynamic>> normalizeArticles(List<dynamic> list) {
                 : null;
         final rawTitle = '${m['title'] ?? ''}';
         var img = m['urlToImage'] ?? _firstImageUrlFromHtml('${m['description'] ?? ''}');
-        final pubFromDesc = _extractPublisherUrlFromRssItemHtml('${m['description'] ?? ''}');
+        final rawDesc = '${m['description'] ?? ''}';
+        final pubFromDesc = _extractPublisherUrlFromRssItemHtml(rawDesc);
+        final cleanedTitle = _cleanPublisherSuffixFromTitle(rawTitle, source);
+        final cleanedDesc = cleanFeedSnippetForDisplay(rawDesc, title: cleanedTitle);
         return {
-          'title': _cleanPublisherSuffixFromTitle(rawTitle, source),
+          'title': cleanedTitle,
           'source': source,
           'url': direct.isNotEmpty ? direct : googleNewsSearchUrl(rawTitle),
           'image': img,
-          'description': '${m['description'] ?? ''}',
+          'description': cleanedDesc,
           'publishedAt': publishedAt,
           'sourceSiteUrl': '',
           'publisherUrl': pubFromDesc ?? '',

@@ -27,12 +27,45 @@ Future<Response> _handleArticle(Request req) async {
   final rawUrl = queryParam(req, 'url') ?? '';
   try {
     final payload = await extractArticleFromUrl(rawUrl);
+    // Always 200 with contentStatus so clients can distinguish unavailable vs network 502.
     return jsonOk(payload, headers: apiCorsHeaders);
   } on ArgumentError catch (e) {
     return jsonError(400, e.message?.toString() ?? 'Invalid url');
   } on ArticleFetchException catch (e) {
-    return jsonError(502, e.message);
+    return jsonOk(
+      {
+        'url': rawUrl,
+        'sourceUrl': rawUrl,
+        'title': '',
+        'image': '',
+        'imageUrl': '',
+        'source': '',
+        'publishedAt': '',
+        'description': '',
+        'bodyText': '',
+        'text': '',
+        'contentStatus': 'unavailable',
+        'extractionError': e.message,
+      },
+      headers: apiCorsHeaders,
+    );
   } catch (e) {
-    return jsonError(500, e.toString());
+    return jsonOk(
+      {
+        'url': rawUrl,
+        'sourceUrl': rawUrl,
+        'title': '',
+        'image': '',
+        'imageUrl': '',
+        'source': '',
+        'publishedAt': '',
+        'description': '',
+        'bodyText': '',
+        'text': '',
+        'contentStatus': 'unavailable',
+        'extractionError': 'server_error',
+      },
+      headers: apiCorsHeaders,
+    );
   }
 }

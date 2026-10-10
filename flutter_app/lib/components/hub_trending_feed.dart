@@ -181,11 +181,15 @@ List<HubTrendingItem> _hubItemsFromArticleMaps(
     if (url.isEmpty || seen.contains(url)) continue;
     seen.add(url);
     final img = a['image'];
+    final title = a['title'] as String? ?? '';
     items.add(HubTrendingItem(
       id: '${a['id'] ?? hubNewsDocIdFromUrl(url)}',
-      title: a['title'] as String? ?? '',
+      title: title,
       url: url,
-      description: a['description'] as String? ?? '',
+      description: cleanFeedSnippetForDisplay(
+        a['description'] as String? ?? '',
+        title: title,
+      ),
       image: img is String && img.trim().startsWith('http') ? img.trim() : '',
       source: a['source'] as String? ?? defaultSource,
       category: a['category'] as String? ?? defaultCategory,
@@ -481,7 +485,7 @@ class _HubTrendingFeedState extends State<HubTrendingFeed> {
         return getOrGenerateHubCarouselImage(
           cacheKey: hubCarouselImageCacheKey(item.url, item.id),
           headline: item.title,
-          storyText: stripHtmlBoilerplate(item.description),
+          storyText: cleanFeedSnippetForDisplay(item.description, title: item.title),
           articleUrl: item.url,
           kind: HubCarouselImageKind.news,
           sourceImageUrl: existingImg.startsWith('http') ? existingImg : null,
@@ -498,13 +502,18 @@ class _HubTrendingFeedState extends State<HubTrendingFeed> {
 
   Future<void> _openShare(BuildContext context, HubTrendingItem item) async {
     if (item.url.isEmpty) return;
+    final cleanedDesc = cleanFeedSnippetForDisplay(item.description, title: item.title);
     final payload = {
       'newsArticle': {
         'title': item.title,
         'url': item.url,
-        'description': item.description,
+        'description': cleanedDesc,
         'image': item.image,
         'source': item.source,
+        // Do not invent body from title; share flow may resolve article text.
+        'text': '',
+        'bodyText': '',
+        'contentStatus': cleanedDesc.isNotEmpty ? 'partial' : 'titleOnly',
       },
       'returnTo': GoRouterState.of(context).uri.path,
     };
