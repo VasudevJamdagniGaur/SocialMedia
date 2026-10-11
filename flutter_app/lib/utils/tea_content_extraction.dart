@@ -416,16 +416,42 @@ class TeaVisualContext {
     buf.writeln('MAIN SUBJECT: $mainSubject');
     if (centralClaim.isNotEmpty) buf.writeln('CENTRAL CLAIM: $centralClaim');
     if (peopleCentral.isNotEmpty) {
-      buf.writeln('CENTRAL PEOPLE (only if essential to the scene): ${peopleCentral.join(', ')}');
+      buf.writeln(
+        'CENTRAL PEOPLE (must appear recognizably when the story is about them): '
+        '${peopleCentral.join(', ')}',
+      );
     } else {
       buf.writeln('CENTRAL PEOPLE: none — do not invent or feature unrelated celebrities.');
     }
     buf.writeln('TONE: $tone');
     buf.writeln('VISUAL CONCEPT: $visualConcept');
+    buf.writeln(
+      'PHOTO STYLE: Photorealistic documentary / editorial news photograph, '
+      'shot on a real camera, natural skin texture, believable lighting and depth of field, '
+      'landscape 16:9 composition with clear lower third for a UI headline overlay. '
+      'No illustration, cartoon, 3D render, poster, abstract AI graphic, glowing brain, '
+      'or stock-photo cliché. No embedded headlines, captions, logos, or watermarks.',
+    );
+    final sensitive = RegExp(
+      r'protest|detain|police|arrest|crime|accident|attack|riot|violence',
+      caseSensitive: false,
+    ).hasMatch('$tone $mainSubject $centralClaim');
     if (!bodyGrounded) {
       buf.writeln(
-        'WARNING: Full post body was unavailable. Stay symbolic for the headline topic; '
-        'do not invent biographical scenes or claim specific events.',
+        'WARNING: Full article body unavailable. Depict a plausible illustrative scene '
+        'for the headline topic only — do not invent specific unverified events or '
+        'present the image as documentary evidence of a real incident.',
+      );
+      if (sensitive) {
+        buf.writeln(
+          'SENSITIVE NEWS: Illustrative editorial recreation only — not genuine evidence '
+          'of a specific detention or incident.',
+        );
+      }
+    } else if (sensitive) {
+      buf.writeln(
+        'SENSITIVE NEWS: Illustrative editorial recreation only — do not fabricate a '
+        'photograph that could be mistaken for genuine news evidence of a specific incident.',
       );
     }
     return buf.toString().trim();
@@ -441,15 +467,47 @@ TeaVisualContext analyzeTeaVisualContext(ExtractedTeaContent content) {
 
   // People mentioned: capitalized multi-word names (lightweight; not a celeb list).
   final nameRe = RegExp(r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})\b');
+  const nameStop = {
+    'google news',
+    'new york',
+    'united states',
+    'south india',
+    'the hindu',
+    'indian express',
+    'police detain',
+    'police detain protesters',
+    'police detain protesters during',
+    'dramatic victory',
+    'major policy',
+    'major policy decision',
+    'artificial intelligence',
+    'film premiere',
+    'popular actor',
+    'new artificial',
+  };
+  bool looksLikePersonName(String n) {
+    final lower = n.toLowerCase();
+    if (nameStop.contains(lower)) return false;
+    // Drop phrases that start with common non-name title words.
+    if (RegExp(
+      r'^(police|indian|delhi|mumbai|protest|protesters|during|demonstrations|'
+      r'dramatic|major|popular|artificial|film|new|the|a|an)\b',
+      caseSensitive: false,
+    ).hasMatch(n)) {
+      return false;
+    }
+    return true;
+  }
+
   final titleNames = nameRe
       .allMatches(title)
       .map((m) => m.group(1)!.trim())
-      .where((n) => n.toLowerCase() != 'google news')
+      .where(looksLikePersonName)
       .toSet();
   final bodyNames = nameRe
       .allMatches(body)
       .map((m) => m.group(1)!.trim())
-      .where((n) => n.toLowerCase() != 'google news')
+      .where(looksLikePersonName)
       .toSet();
 
   bool nameAppearsInBody(String n) {
@@ -464,56 +522,91 @@ TeaVisualContext analyzeTeaVisualContext(ExtractedTeaContent content) {
     return false;
   }
 
-  // A person is "central" only if in title AND (in body, or body missing).
+  // Title people are central when: body missing (headline-only), or they appear in body.
+  // Never invent people who are not named in the headline.
   final centralPeople = <String>[];
   for (final n in titleNames) {
     final inBody = nameAppearsInBody(n);
-    if (!grounded || inBody || body.isEmpty) {
-      // Prefer the shorter real person name from the body when title appended junk words.
-      final preferred = bodyNames.cast<String?>().firstWhere(
-            (bn) =>
-                bn != null &&
-                (n.toLowerCase().contains(bn.toLowerCase()) ||
-                    bn.toLowerCase().contains(n.toLowerCase())),
-            orElse: () => null,
-          ) ??
-          n;
-      if (RegExp(r'net worth|biography|profile|career|wealth', caseSensitive: false)
-              .hasMatch(title) ||
-          inBody) {
-        if (!centralPeople.contains(preferred)) centralPeople.add(preferred);
-      }
+    final include = !grounded || body.isEmpty || inBody;
+    if (!include) continue;
+    final preferred = bodyNames.cast<String?>().firstWhere(
+          (bn) =>
+              bn != null &&
+              (n.toLowerCase().contains(bn.toLowerCase()) ||
+                  bn.toLowerCase().contains(n.toLowerCase())),
+          orElse: () => null,
+        ) ??
+        n;
+    // Skip publisher / place-only tokens mistaken for names.
+    if (RegExp(
+      r'^(New York|The Hindu|Indian Express|Google News|United States|South India)$',
+      caseSensitive: false,
+    ).hasMatch(preferred)) {
+      continue;
     }
+    if (!centralPeople.contains(preferred)) centralPeople.add(preferred);
   }
 
-  String subject = title.isNotEmpty ? title : 'trending social story';
-  if (centralPeople.isNotEmpty &&
-      RegExp(r'net worth', caseSensitive: false).hasMatch(title)) {
-    subject = '${centralPeople.first} wealth / career profile';
-  } else if (grounded) {
+  String subject = title.isNotEmpty ? title : 'trending news story';
+  if (grounded) {
     final firstSentence = body.split(RegExp(r'(?<=[.!?])\s+')).first.trim();
     if (firstSentence.length >= 24) subject = firstSentence;
   }
 
-  var tone = 'editorial social';
-  if (RegExp(r'gossip|scandal|drama|affair', caseSensitive: false).hasMatch(lower)) {
-    tone = 'entertainment gossip';
-  } else if (RegExp(r'net worth|crore|wealth|business', caseSensitive: false).hasMatch(lower)) {
+  var tone = 'news';
+  if (RegExp(r'net worth|crore|wealth|business profile', caseSensitive: false).hasMatch(lower)) {
     tone = 'business profile';
-  } else if (RegExp(r'cricket|match|ipl|football', caseSensitive: false).hasMatch(lower)) {
+  } else if (RegExp(r'protest|detain|barricad|lock.?down|police|rally|demonstration',
+          caseSensitive: false)
+      .hasMatch(lower)) {
+    tone = 'protest / civic';
+  } else if (RegExp(r'cricket|kohli|ipl|football|match|stadium', caseSensitive: false)
+      .hasMatch(lower)) {
     tone = 'sports';
+  } else if (RegExp(
+        r'gossip|scandal|\bdrama\b|affair|premiere|red carpet',
+        caseSensitive: false,
+      ).hasMatch(lower)) {
+    tone = 'entertainment';
+  } else if (RegExp(r'\bAI\b|startup|technology|product launch|app\b', caseSensitive: false)
+      .hasMatch(lower)) {
+    tone = 'technology';
+  } else if (RegExp(r'modi|parliament|election|minister|CEC|policy|politics', caseSensitive: false)
+      .hasMatch(lower)) {
+    tone = 'politics';
   }
 
-  var visual = 'Symbolic editorial scene matching the story topic';
+  var visual = 'Photorealistic news photograph of the actual event, place, or subject';
   if (tone == 'business profile' && centralPeople.isNotEmpty) {
     visual =
-        'Professional editorial portrait context about career and wealth — '
-        'boardroom, stadium suite, or profile feature aesthetic; '
-        'feature ${centralPeople.first} only if a verified reference is attached';
+        'Professional editorial photograph about ${centralPeople.first} in a '
+        'plausible career context — not a fabricated wealth montage';
+  } else if (tone == 'protest / civic') {
+    visual =
+        'Documentary-style protest scene: crowd, police presence, urban Delhi/city '
+        'streets, barricades or public square — atmospheric, not graphic violence; '
+        'illustrative recreation, not staged evidence of a specific detention';
+  } else if (tone == 'sports' && centralPeople.isNotEmpty) {
+    visual =
+        'Live cricket/sports action photograph featuring ${centralPeople.first} '
+        'in authentic kit, stadium lighting, crowd depth, realistic motion';
   } else if (tone == 'sports') {
-    visual = 'Sports editorial atmosphere tied to the match/career story';
-  } else if (tone == 'entertainment gossip') {
-    visual = 'Entertainment magazine-style scene matching the gossip topic';
+    visual = 'Live sports-ground photograph matching the match/story context';
+  } else if (tone == 'politics' && centralPeople.isNotEmpty) {
+    visual =
+        'Editorial news photograph of ${centralPeople.first} in a plausible '
+        'official setting (podium, parliament, press event) with natural lighting';
+  } else if (tone == 'entertainment' && centralPeople.isNotEmpty) {
+    visual =
+        'Red-carpet or premiere event photograph featuring ${centralPeople.first}, '
+        'realistic flash photography, venue atmosphere';
+  } else if (tone == 'technology') {
+    visual =
+        'Realistic product-launch / startup environment: device, stage, or office '
+        'demo — not abstract glowing brains or sci-fi graphics';
+  } else if (centralPeople.isNotEmpty) {
+    visual =
+        'Photorealistic scene centered on ${centralPeople.first} in the context of the story';
   }
 
   final claim = grounded

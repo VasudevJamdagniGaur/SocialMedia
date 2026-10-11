@@ -33,27 +33,27 @@ void main() {
     test('preserves RSS prose as gossip/body (not title-only)', () {
       final rows = teaRowsFromRssArticles([
         {
-          'title': 'Sourav Ganguly Net Worth',
-          'url': 'https://example.com/ganguly',
+          'title': 'Delhi police restrict movement ahead of weekend rally',
+          'url': 'https://example.com/delhi-rally',
           'description':
-              'Former India captain Sourav Ganguly has built wealth through cricket, commentary and business ventures estimated in crores.',
-          'source': 'Sports Desk',
+              'Authorities increased security across central Delhi as organizers prepared for a large public demonstration.',
+          'source': 'News Desk',
           'image': 'https://example.com/img.jpg',
         },
       ]);
       expect(rows, hasLength(1));
-      expect(rows.first['gossip'], contains('Former India captain'));
-      expect(rows.first['description'], contains('business ventures'));
+      expect(rows.first['gossip'], contains('Authorities increased security'));
+      expect(rows.first['description'], contains('demonstration'));
       expect(rows.first['selftext'], isNotEmpty);
     });
 
     test('rejects Google News HTML/URL junk as body', () {
       final rows = teaRowsFromRssArticles([
         {
-          'title': 'Sourav Ganguly Net Worth',
+          'title': 'Delhi police restrict movement ahead of weekend rally',
           'url': 'https://news.google.com/rss/articles/CBMigFBVV95cUxNM',
           'description':
-              '&lt;a href="https://news.google.com/rss/articles/CBMigFBVV95cUxNM21xbkc1"&gt;Sourav Ganguly Net Worth&lt;/a&gt;',
+              '&lt;a href="https://news.google.com/rss/articles/CBMigFBVV95cUxNM21xbkc1"&gt;Delhi police restrict movement&lt;/a&gt;',
           'source': 'Google News',
         },
       ]);
@@ -64,13 +64,25 @@ void main() {
     test('does not invent body when description equals title', () {
       final rows = teaRowsFromRssArticles([
         {
-          'title': 'Sourav Ganguly Net Worth',
+          'title': 'Delhi police restrict movement ahead of weekend rally',
           'url': 'https://example.com/x',
-          'description': 'Sourav Ganguly Net Worth',
+          'description': 'Delhi police restrict movement ahead of weekend rally',
           'source': 'News',
         },
       ]);
       expect(rows.first.containsKey('gossip'), isFalse);
+    });
+
+    test('filters net-worth SEO junk titles', () {
+      final rows = teaRowsFromRssArticles([
+        {
+          'title': 'Sourav Ganguly Net Worth',
+          'url': 'https://example.com/ganguly',
+          'description': 'Celebrity Net Worth profile filler.',
+          'source': 'Sports Desk',
+        },
+      ]);
+      expect(rows, isEmpty);
     });
   });
 
@@ -162,6 +174,41 @@ void main() {
         visual.toImagePromptBlock().toLowerCase(),
         contains('unavailable'),
       );
+    });
+
+    test('politics headline marks named leader as central for photoreal prompt', () {
+      final content = extractedTeaContentFromRow({
+        'title': 'Narendra Modi Announces a Major Policy Decision',
+        'url': 'https://example.com/modi',
+      });
+      final visual = analyzeTeaVisualContext(content);
+      expect(visual.peopleCentral.any((p) => p.contains('Modi')), isTrue);
+      expect(visual.tone, 'politics');
+      expect(visual.toImagePromptBlock().toLowerCase(), contains('photorealistic'));
+    });
+
+    test('cricket headline features Kohli in sports photoreal concept', () {
+      final content = extractedTeaContentFromRow({
+        'title': 'Virat Kohli Leads India to a Dramatic Victory',
+        'url': 'https://example.com/kohli',
+      });
+      final visual = analyzeTeaVisualContext(content);
+      expect(visual.peopleCentral.any((p) => p.contains('Kohli')), isTrue);
+      expect(visual.tone, 'sports');
+      expect(visual.visualConcept.toLowerCase(), contains('kohli'));
+    });
+
+    test('protest headline uses illustrative civic scene guidance', () {
+      final content = extractedTeaContentFromRow({
+        'title': 'Police Detain Protesters During Demonstrations in Delhi',
+        'url': 'https://example.com/protest',
+      });
+      final visual = analyzeTeaVisualContext(content);
+      expect(visual.tone, 'protest / civic');
+      expect(visual.peopleCentral, isEmpty);
+      final block = visual.toImagePromptBlock().toLowerCase();
+      expect(block, contains('illustrative'));
+      expect(block, contains('sensitive news'));
     });
   });
 }

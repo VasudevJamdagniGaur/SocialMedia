@@ -402,25 +402,37 @@ Router buildVertexRouter(VertexClient vertex) {
         storyText.trim().length >= 40 &&
         !storyText.contains('news.google.com');
     final prompt = hasBody
-        ? 'Create ONE vivid editorial illustration for this social story.\n'
-            'CRITICAL: Ground the scene in the FULL STORY BODY below — not only the headline.\n'
-            'Identify the main subject and situation from the body. Depict that context.\n'
-            'Only include a recognizable public figure if they are clearly the central subject of the body text.\n'
-            'Do not invent meetings, endorsements, or biographical events not supported by the body.\n'
-            'Atmospheric, tasteful. No embedded logos or watermarks. Medium/wide shot preferred.\n\n'
+        ? 'Create ONE photorealistic editorial NEWS PHOTOGRAPH for this story.\n'
+            'CRITICAL: Ground the scene in the FULL STORY CONTEXT below — not only the headline.\n'
+            'Identify people, location, event, objects, and action. Depict that context accurately.\n'
+            'If a named public figure is central to the story, include a recognizable depiction of them '
+            'in a plausible setting. Do not add unrelated celebrities.\n'
+            'Style: authentic professional news photography — natural skin texture, realistic anatomy, '
+            'believable lighting/shadows, real-camera depth of field, documentary composition.\n'
+            'Landscape 16:9 framing with clear lower-third space for a UI headline overlay.\n'
+            'NOT an illustration, cartoon, 3D render, poster, abstract AI graphic, or stock cliché.\n'
+            'NO embedded text, captions, logos, watermarks, or fake newspaper headlines in the image.\n'
+            'For protests/crimes/accidents: illustrative editorial recreation only — never fabricate '
+            'a photo that could be mistaken for genuine evidence of a specific incident.\n'
+            'Do not invent meetings, endorsements, or events not supported by the context.\n\n'
             'HEADLINE:\n$title\n\n'
-            'STORY BODY:\n${storyText.length > 4500 ? storyText.substring(0, 4500) : storyText}'
-        : 'Create one vivid editorial illustration for a trending social story.\n'
-            'NOTE: Only the headline was available — full post body was not extracted.\n'
-            'Use a symbolic/environmental scene for the topic. Do NOT invent a biographical '
-            'portrait of a celebrity from the headline alone.\n'
-            'Atmospheric, tasteful. No embedded text, captions, logos.\n'
-            'Medium or wide shot when people appear; avoid face close-ups.\n\n'
+            'STORY CONTEXT:\n${storyText.length > 4500 ? storyText.substring(0, 4500) : storyText}'
+        : 'Create ONE photorealistic editorial NEWS PHOTOGRAPH for this headline.\n'
+            'NOTE: Only the headline was available — full article body was not extracted.\n'
+            'Infer a plausible real-world scene from the headline entities (people, place, event).\n'
+            'If the headline clearly names a public figure as the subject, include a recognizable '
+            'depiction of them in a plausible setting. Do not invent unverified biographical events.\n'
+            'Style: authentic professional news photography — natural lighting, real textures, '
+            'documentary composition, landscape 16:9 with lower-third space for UI text.\n'
+            'NOT an illustration, cartoon, 3D render, poster, or abstract graphic.\n'
+            'NO embedded text, captions, logos, or watermarks.\n'
+            'For sensitive topics: illustrative recreation only, not documentary evidence.\n\n'
             'HEADLINE:\n$title';
 
     final String dataUrl;
     try {
-      dataUrl = await vertex.generateNewsIllustrationImage(prompt);
+      // Same Vertex image model as LinkedIn/X/Instagram share scenes (photoreal path).
+      dataUrl = await vertex.generateShareSceneImage(prompt, aspectRatio: '16:9');
     } catch (e, st) {
       stderr.writeln('[EnsureImage] AI generation failed: $e');
       stderr.writeln('[EnsureImage] full stack trace:\n$st');

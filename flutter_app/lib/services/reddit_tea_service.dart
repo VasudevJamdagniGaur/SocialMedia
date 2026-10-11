@@ -418,7 +418,14 @@ Future<List<Map<String, dynamic>>> fetchTeaRowsFromClassicReddit() async {
 
 List<Map<String, dynamic>> teaRowsFromRssArticles(List<Map<String, dynamic>> rss) {
   return normalizeArticles(rss)
-      .where((a) => '${a['url'] ?? ''}'.trim().isNotEmpty)
+      .where((a) {
+        final url = '${a['url'] ?? ''}'.trim();
+        final title = '${a['title'] ?? ''}'.trim();
+        if (url.isEmpty || title.isEmpty) return false;
+        // Drop SEO "Net Worth" farms and other excluded title junk.
+        if (titleHasExcludedKeyword(title)) return false;
+        return true;
+      })
       .map((a) {
         final title = '${a['title'] ?? ''}'.trim();
         final desc = '${a['description'] ?? ''}'.trim();

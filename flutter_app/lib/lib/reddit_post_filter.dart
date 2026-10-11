@@ -11,6 +11,9 @@ const defaultExcludedTitleKeywords = [
   'announcement',
   'meta',
   'policy',
+  // Low-signal SEO / gossip-farm cards (not real Tea stories).
+  'net worth',
+  'celebrity net worth',
 ];
 
 const bollywoodTeaTopicKeywords = [

@@ -10,9 +10,11 @@ import '../services/cached_news_service.dart';
 import '../services/reddit_tea_service.dart';
 import '../services/youtube_tea_service.dart';
 import '../lib/hub_trending_algorithms.dart';
+import '../lib/reddit_post_filter.dart';
 import '../utils/hub_carousel_ai_image.dart';
 import '../utils/hub_carousel_image_store.dart';
 import '../utils/hub_colors.dart';
+import '../utils/reddit_thread_comments.dart';
 import '../utils/share_news_cache.dart';
 import '../services/tea_news_refresh_mode.dart';
 import '../utils/tea_content_extraction.dart';
@@ -20,8 +22,12 @@ import '../utils/tea_topic_context.dart';
 import '../utils/tea_trending_storage.dart';
 import 'skeleton/card_skeleton.dart';
 
-const _teaItemsCacheKey = 'deite_tea_items_cache_v4';
+const _teaItemsCacheKey = 'deite_tea_items_cache_v5';
 const _teaCacheMaxAge = Duration(hours: 6);
+
+List<TeaItem> _filterExcludedTeaItems(List<TeaItem> items) {
+  return items.where((t) => !titleHasExcludedKeyword(t.title)).toList();
+}
 
 List<TeaItem>? _memoryTeaCache;
 DateTime? _memoryTeaCacheAt;
@@ -208,7 +214,12 @@ Future<List<TeaItem>> _loadTeaFromDisk() async {
             ),
           );
         })
-        .where((t) => t.title.isNotEmpty && t.url.isNotEmpty)
+        .where(
+          (t) =>
+              t.title.isNotEmpty &&
+              t.url.isNotEmpty &&
+              !titleHasExcludedKeyword(t.title),
+        )
         .toList();
   } catch (_) {
     return [];
@@ -255,7 +266,11 @@ Future<List<TeaItem>> fetchTrendingTea({
       _memoryTeaCache!.isNotEmpty &&
       _memoryTeaCacheAt != null &&
       DateTime.now().difference(_memoryTeaCacheAt!) < _teaCacheMaxAge) {
-    return List<TeaItem>.from(_memoryTeaCache!);
+    final filtered = _filterExcludedTeaItems(_memoryTeaCache!);
+    if (filtered.length != _memoryTeaCache!.length) {
+      _memoryTeaCache = filtered;
+    }
+    return List<TeaItem>.from(filtered);
   }
 
   final rows = await fetchTrendingTeaRows(deferEnrich: deferEnrich);
@@ -264,7 +279,10 @@ Future<List<TeaItem>> fetchTrendingTea({
   }
 
   var items = prioritizeWithImagesFirst(
-    rows.map(_rowToTeaItem).toList(),
+    rows
+        .map(_rowToTeaItem)
+        .where((t) => !titleHasExcludedKeyword(t.title))
+        .toList(),
     teaHasDisplayableHeroImage,
   ).take(10).toList();
   items = await _hydrateTeaItemsFast(items);
@@ -317,6 +335,27 @@ String? teaCarouselInitialUrl(TeaItem item) {
   if (isReliableCarouselImageUrl(hero)) return hero;
   return null;
 }
+
+/// Prefer persisted AI / Firebase heroes for Tea home cards (not RSS / YouTube fillers).
+String? teaAiHeroInitialUrl(TeaItem item) {
+  final hero = teaHeroImageUrl(item);
+  if (hero == null) return null;
+  final h = hero.trim();
+  if (h.startsWith('data:image')) return h;
+  if (h.contains('firebasestorage.googleapis.com')) return h;
+  // Memory/disk AI cache often lands on item.thumbnail after resolve.
+  for (final key in [
+    hubCarouselImageCacheKey(item.url, item.id),
+    hubCarouselImageCacheKey(item.url, ''),
+    if (item.title.trim().isNotEmpty) hubCarouselImageCacheKey('', item.title),
+  ]) {
+    final mem = peekHubCarouselMemory(key);
+    if (mem != null && isReliableCarouselImageUrl(mem)) return mem;
+  }
+  return null;
+}
+
+String teaCardHeadline(TeaItem item) => cleanTeaCardTitle(item.title);
 
 bool teaHasDisplayableHeroImage(TeaItem item) {
   final hero = teaHeroImageUrl(item);
@@ -444,8 +483,10 @@ class _TrendingTeaState extends State<TrendingTea> {
 
   Future<void> _load() async {
     if (_items.isEmpty && _memoryTeaCache != null && _memoryTeaCache!.isNotEmpty && mounted) {
+      final filtered = _filterExcludedTeaItems(_memoryTeaCache!);
+      _memoryTeaCache = filtered;
       setState(() {
-        _items = List<TeaItem>.from(_memoryTeaCache!);
+        _items = List<TeaItem>.from(filtered);
         _loading = false;
         _error = null;
       });
@@ -457,6 +498,11 @@ class _TrendingTeaState extends State<TrendingTea> {
     }
 
     if (_items.isNotEmpty && _memoryTeaCache != null && _memoryTeaCache!.isNotEmpty) {
+      final filtered = _filterExcludedTeaItems(_items);
+      if (filtered.length != _items.length && mounted) {
+        setState(() => _items = filtered);
+        _memoryTeaCache = filtered;
+      }
       unawaited(_syncCachedAiImages());
       if (!kManualTeaNewsRefreshOnly) {
         unawaited(_refreshFromNetwork());
@@ -585,23 +631,13 @@ class _TrendingTeaState extends State<TrendingTea> {
     var changed = false;
     final updated = <TeaItem>[];
     for (final item in _items) {
-      if (teaHasDisplayableHeroImage(item)) {
-        updated.add(item);
-        continue;
-      }
-      final yt = youtubeTeaThumbnailFromUrl(item.url);
-      if (yt != null) {
-        updated.add(item.copyWith(thumbnail: yt));
-        changed = true;
-        continue;
-      }
       final cached = await resolveCachedHubCarouselImage(
         url: item.url,
         title: item.title,
         fallbackId: item.id,
         kind: HubCarouselImageKind.tea,
       );
-      if (cached != null) {
+      if (cached != null && cached != item.thumbnail) {
         updated.add(item.copyWith(thumbnail: cached));
         changed = true;
       } else {
@@ -612,12 +648,34 @@ class _TrendingTeaState extends State<TrendingTea> {
       setState(() {
         _items = prioritizeWithImagesFirst(
           updated,
-          teaHasDisplayableHeroImage,
+          (t) => teaAiHeroInitialUrl(t) != null,
         );
         _memoryTeaCache = _items;
       });
       unawaited(_saveTeaToDisk(_items));
     }
+
+    // Generate missing photoreal heroes (bounded) via existing /api/tea/ensure-image pipeline.
+    unawaited(enrichCarouselSlotsWithAiImages(
+      slotCount: _items.length,
+      maxGenerate: 6,
+      needsImage: (i) => teaAiHeroInitialUrl(_items[i]) == null,
+      generateForIndex: (i) async {
+        final item = _items[i];
+        return getOrGenerateHubCarouselImage(
+          cacheKey: hubCarouselImageCacheKey(item.url, item.id),
+          headline: teaCardHeadline(item),
+          storyText: item.gossip,
+          articleUrl: item.url,
+          kind: HubCarouselImageKind.tea,
+          priority: HubCarouselImagePriority.podTeaHome,
+        );
+      },
+      applyImage: (i, url) {
+        if (!mounted) return;
+        unawaited(_applyTeaImageAt(i, url));
+      },
+    ));
   }
 
   Future<void> _applyTeaImageAt(int index, String imageUrl) {
@@ -703,19 +761,20 @@ class _TrendingTeaState extends State<TrendingTea> {
                     : _items.isEmpty
                         ? const Text('No tea right now.', style: TextStyle(color: hubMuted))
                         : SizedBox(
-                            height: 220,
+                            height: 228,
                             child: ListView.separated(
                               scrollDirection: Axis.horizontal,
                               itemCount: _items.length,
                               separatorBuilder: (_, __) => const SizedBox(width: 12),
                               itemBuilder: (context, idx) {
                                 final item = _items[idx];
+                                final headline = teaCardHeadline(item);
                                 return GestureDetector(
                                   onTap: () => _openShare(item),
                                   child: Container(
-                                    width: 260,
+                                    width: 268,
                                     decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(12),
+                                      borderRadius: BorderRadius.circular(14),
                                       border: Border.all(color: hubDivider),
                                     ),
                                     clipBehavior: Clip.antiAlias,
@@ -723,16 +782,16 @@ class _TrendingTeaState extends State<TrendingTea> {
                                       fit: StackFit.expand,
                                       children: [
                                         HubCarouselResolvingHero(
-                                          initialUrl: teaCarouselInitialUrl(item),
+                                          initialUrl: teaAiHeroInitialUrl(item),
                                           articleUrl: item.url,
-                                          title: item.title,
+                                          title: headline,
                                           storyText: item.gossip,
                                           fallbackId: item.id,
                                           kind: HubCarouselImageKind.tea,
-                                          tryYouTubeThumbnail: true,
+                                          tryYouTubeThumbnail: false,
                                           imagePriority: HubCarouselImagePriority.podTeaHome,
-                                          generateAiImage: false,
-                                          errorWidget: _gradientFallback(idx),
+                                          generateAiImage: true,
+                                          errorWidget: const _TeaImageLoadingPlaceholder(),
                                           onResolved: (url) => unawaited(_applyTeaImageAt(idx, url)),
                                         ),
                                         Positioned(
@@ -740,45 +799,37 @@ class _TrendingTeaState extends State<TrendingTea> {
                                           right: 0,
                                           bottom: 0,
                                           child: Container(
-                                            padding: const EdgeInsets.all(12),
+                                            padding: const EdgeInsets.fromLTRB(14, 36, 14, 14),
                                             decoration: BoxDecoration(
                                               gradient: LinearGradient(
                                                 begin: Alignment.topCenter,
                                                 end: Alignment.bottomCenter,
                                                 colors: [
                                                   Colors.transparent,
-                                                  Colors.black.withValues(alpha: 0.85),
+                                                  Colors.black.withValues(alpha: 0.55),
+                                                  Colors.black.withValues(alpha: 0.92),
                                                 ],
+                                                stops: const [0.0, 0.45, 1.0],
                                               ),
                                             ),
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Text(
-                                                  item.title,
-                                                  maxLines: 2,
-                                                  overflow: TextOverflow.ellipsis,
-                                                  style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize: 14,
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                                ),
-                                                if (item.gossip.isNotEmpty) ...[
-                                                  const SizedBox(height: 4),
-                                                  Text(
-                                                    item.gossip,
-                                                    maxLines: 2,
-                                                    overflow: TextOverflow.ellipsis,
-                                                    style: TextStyle(
-                                                      color: Colors.white.withValues(alpha: 0.82),
-                                                      fontSize: 12,
-                                                      height: 1.3,
-                                                    ),
+                                            child: Text(
+                                              headline,
+                                              maxLines: 3,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 15,
+                                                fontWeight: FontWeight.w700,
+                                                height: 1.25,
+                                                letterSpacing: -0.2,
+                                                shadows: [
+                                                  Shadow(
+                                                    color: Colors.black87,
+                                                    blurRadius: 8,
+                                                    offset: Offset(0, 1),
                                                   ),
                                                 ],
-                                              ],
+                                              ),
                                             ),
                                           ),
                                         ),
@@ -794,22 +845,24 @@ class _TrendingTeaState extends State<TrendingTea> {
       ),
     );
   }
+}
 
-  Widget _gradientFallback(int idx) {
-    const gradients = [
-      [Color(0xFF1A1A2E), Color(0xFF16213E), Color(0xFF0F3460)],
-      [Color(0xFF2D132C), Color(0xFF801336), Color(0xFFC72C41)],
-      [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
-      [Color(0xFF1E3C72), Color(0xFF2A5298), Color(0xFF7E8BA3)],
-      [Color(0xFF232526), Color(0xFF414345)],
-    ];
-    final g = gradients[idx % gradients.length];
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: g,
+/// Dark loading surface while photoreal Tea images generate (not a story image).
+class _TeaImageLoadingPlaceholder extends StatelessWidget {
+  const _TeaImageLoadingPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return const ColoredBox(
+      color: Color(0xFF141414),
+      child: Center(
+        child: SizedBox(
+          width: 28,
+          height: 28,
+          child: CircularProgressIndicator(
+            strokeWidth: 2.2,
+            color: HubColors.accent,
+          ),
         ),
       ),
     );

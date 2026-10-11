@@ -933,10 +933,11 @@ class VertexClient {
     return _imageGenQueue.run(() => _generateIllustrationImage(
           prompt,
           prefix:
-              'Create a single editorial illustration for a news story. '
-              'Tasteful and symbolic or environmental; no graphic violence, gore, or identifiable private individuals. '
-              'No text, captions, or logos in the image. '
-              'Use a medium or wide shot when people appear; avoid face close-ups.\n\n',
+              'Create a single photorealistic editorial news photograph. '
+              'Documentary camera look, natural lighting, realistic textures; '
+              'no graphic violence or gore. No text, captions, or logos in the image. '
+              'Landscape composition with space in the lower third. '
+              'Not an illustration, cartoon, or 3D render.\n\n',
         ));
   }
 
