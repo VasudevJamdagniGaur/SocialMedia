@@ -2868,15 +2868,22 @@ ${reflection.trim()}''';
     final description = (ctx['description'] ?? '').toString().trim();
     final source = (ctx['source'] ?? '').toString().trim();
     final articleText = (ctx['articleText'] ?? '').toString().trim();
+    final contextLevel = (ctx['contextLevel'] ?? '').toString().trim();
     final sourceLine = _teaPromptSourceLine(source);
     final summaryLine = description.isNotEmpty ? 'Discussion summary:\n$description\n' : '';
     final articleSection = articleText.isNotEmpty
         ? '\nThread highlights:\n${articleText.length > 5000 ? articleText.substring(0, 5000) : articleText}\n'
         : '';
+    final evidenceRule = contextLevel == 'headlineOnly'
+        ? '\nCRITICAL: contextLevel=headlineOnly. Only write discussion questions, framed opinions, or general reactions. '
+            'Do NOT invent quotes, statistics, events, dates, or claim you read the full story.\n'
+        : (contextLevel == 'snippetBased'
+            ? '\nCRITICAL: contextLevel=snippetBased. Stay within the available snippet; do not invent article details.\n'
+            : '\nCRITICAL: Only use corroborated evidence from the context. Do not invent facts.\n');
     return '''You write LinkedIn posts about celebrity/gossip tea — like a real person sharing their take, NOT a news bot or scraper.
 
 GOAL: 4 distinct, human-sounding posts someone would actually publish on LinkedIn.
-
+$evidenceRule
 Requirements:
 1. Generate exactly 4 posts with these angle types (use exact "type" values):
    - hot_take — bold reaction to the drama
@@ -2896,6 +2903,7 @@ Requirements:
 
 Context (for your eyes only — do not copy verbatim into posts):
 Title: $title
+Context level: ${contextLevel.isNotEmpty ? contextLevel : 'unknown'}
 ${sourceLine}${summaryLine}${articleSection}
 
 Output — return ONLY valid JSON (no markdown fences):
@@ -2991,15 +2999,19 @@ Rules for JSON:
     final description = (ctx['description'] ?? '').toString().trim();
     final source = (ctx['source'] ?? '').toString().trim();
     final articleText = (ctx['articleText'] ?? '').toString().trim();
+    final contextLevel = (ctx['contextLevel'] ?? '').toString().trim();
     final sourceLine = _teaPromptSourceLine(source);
     final summaryLine = description.isNotEmpty ? 'Discussion summary:\n$description\n' : '';
     final articleSection = articleText.isNotEmpty
         ? '\nThread highlights:\n${articleText.length > 5000 ? articleText.substring(0, 5000) : articleText}\n'
         : '';
+    final evidenceRule = contextLevel == 'headlineOnly'
+        ? '\nCRITICAL: headlineOnly — reactions/questions only; invent nothing.\n'
+        : '\nCRITICAL: Stay within available evidence; invent nothing.\n';
     return '''You write X (Twitter) posts about celebrity/gossip tea — like a real person reacting, NOT a scraper.
 
 GOAL: 5–8 distinct, human-sounding tweets someone would actually post.
-
+$evidenceRule
 Requirements:
 1. Generate 5–8 tweets with these style types (use exact "type" values, each once):
    funny, sarcastic, supportive, critical, relatable, shock, meme, insight, question
@@ -3018,6 +3030,7 @@ Requirements:
 
 Context (for your eyes only — do not copy verbatim into tweets):
 Title: $title
+Context level: ${contextLevel.isNotEmpty ? contextLevel : 'unknown'}
 ${sourceLine}${summaryLine}${articleSection}
 
 Output — return ONLY valid JSON (no markdown fences):
@@ -3464,6 +3477,7 @@ Rules:
             'description': description,
             'source': source,
             'articleText': articleText,
+            'contextLevel': (details['contextLevel'] ?? '').toString(),
           })
         : isLinkedInNews
         ? _buildLinkedInNewsArticleSuggestionsUserContent({
@@ -3479,6 +3493,7 @@ Rules:
                 'description': description,
                 'source': source,
                 'articleText': articleText,
+                'contextLevel': (details['contextLevel'] ?? '').toString(),
               })
         : isXNews
             ? _buildXNewsArticleSuggestionsUserContent({

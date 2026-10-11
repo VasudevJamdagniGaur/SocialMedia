@@ -5,6 +5,7 @@ import '../services/chat_service.dart';
 import '../services/youtube_tea_service.dart';
 import 'reddit_thread_comments.dart';
 import 'share_news_cache.dart';
+import 'tea_topic_context.dart';
 
 /// How complete Tea post extraction was for a source URL.
 enum TeaExtractionStatus {
@@ -249,10 +250,12 @@ ExtractedTeaContent extractedTeaContentFromRow(Map<String, dynamic> row) {
   );
 }
 
-/// Fetch full post/article body when the row is title-only or partial.
+/// Resolve Tea content: prefer social/API bodies; fall back to headline-first
+/// multi-source enrichment. Full article scrape is optional, never required.
 Future<ExtractedTeaContent> resolveTeaPostContent(
   Map<String, dynamic> seed, {
   Duration timeout = const Duration(seconds: 22),
+  bool allowArticleScrape = false,
 }) async {
   final initial = extractedTeaContentFromRow(seed);
   if (initial.extractionStatus == TeaExtractionStatus.complete) {
@@ -264,16 +267,11 @@ Future<ExtractedTeaContent> resolveTeaPostContent(
   }
 
   final url = initial.url;
-  if (url.isEmpty) {
-    debugPrint('[TeaExtract] unavailable: empty url title="${initial.title}"');
-    return initial;
-  }
-
   final merged = Map<String, dynamic>.from(seed);
   var diagnostic = initial.diagnostic;
 
   try {
-    if (isRedditThreadUrl(url)) {
+    if (url.isNotEmpty && isRedditThreadUrl(url)) {
       final details = await fetchRedditThreadDetails(url, seed: seed)
           .timeout(timeout);
       if (details != null) {
@@ -286,7 +284,7 @@ Future<ExtractedTeaContent> resolveTeaPostContent(
       } else {
         diagnostic = 'Reddit thread details unavailable (blocked or empty)';
       }
-    } else if (isYouTubeTeaUrl(url)) {
+    } else if (url.isNotEmpty && isYouTubeTeaUrl(url)) {
       final yt = await fetchYouTubeTeaVideoContext(url).timeout(timeout);
       if (yt != null) {
         merged.addAll(yt);
@@ -294,7 +292,8 @@ Future<ExtractedTeaContent> resolveTeaPostContent(
         diagnostic =
             'YouTube description unavailable (missing YOUTUBE_API_KEY or API error)';
       }
-    } else {
+    } else if (allowArticleScrape && url.isNotEmpty) {
+      // Optional scrape — not the default Tea path.
       final details = await ChatService.instance
           .fetchNewsArticleDetails(
             seed,
@@ -317,8 +316,7 @@ Future<ExtractedTeaContent> resolveTeaPostContent(
         if (v is String && v.trim().isEmpty) continue;
         merged[k] = v;
       }
-      final text =
-          '${details['bodyText'] ?? details['text'] ?? ''}'.trim();
+      final text = '${details['bodyText'] ?? details['text'] ?? ''}'.trim();
       final cleaned = sanitizeTeaCardSummary(stripHtmlBoilerplate(text));
       if (cleaned.length >= 40 && !isFeedMarkupOrUrlOnly(cleaned)) {
         merged['gossip'] =
@@ -326,36 +324,63 @@ Future<ExtractedTeaContent> resolveTeaPostContent(
         merged['selftext'] = cleaned;
         merged['body'] = cleaned;
         merged['bodyText'] = cleaned;
-      } else if (cleaned.isEmpty) {
-        diagnostic = '${details['extractionError'] ?? ''}'.trim().isNotEmpty
-            ? '${details['extractionError']}'
-            : 'Article extractor returned no body (paywall, JS-only page, or blocked)';
       }
     }
+
+    // Headline-first enrichment (RSS / NewsAPI / web) — works without scrape.
+    var mid = extractedTeaContentFromRow(merged);
+    if (!mid.hasSubstantialBody) {
+      final ctx = await enrichTeaTopicContext(merged).timeout(timeout);
+      merged.addAll(ctx.toArticleFields());
+      if (ctx.displaySummary.isNotEmpty) {
+        merged['gossip'] = ctx.displaySummary;
+        merged['description'] = ctx.displaySummary;
+        if (ctx.contextLevel != TeaContextLevel.headlineOnly) {
+          merged['body'] = ctx.displaySummary;
+          merged['bodyText'] = ctx.displaySummary;
+        }
+      }
+      diagnostic = ctx.isLimited
+          ? 'Headline-first context: ${ctx.contextLevelLabel}'
+          : 'Enriched via ${ctx.relatedSources.length} related sources';
+    }
   } catch (e) {
-    diagnostic = 'Extraction failed: $e';
+    diagnostic = 'Extraction/enrichment failed: $e';
     debugPrint('[TeaExtract] resolve failed url=$url err=$e');
   }
 
   final resolved = extractedTeaContentFromRow(merged);
+  // Headline-only with useful contextSummary still counts as partial for UI.
+  var status = resolved.extractionStatus;
+  final ctxLevel = '${merged['contextLevel'] ?? ''}';
+  if (status == TeaExtractionStatus.titleOnly &&
+      (ctxLevel == 'snippetBased' || ctxLevel == 'multiSource')) {
+    status = TeaExtractionStatus.partial;
+  }
+
   final withDiag = ExtractedTeaContent(
     platform: resolved.platform,
-    url: resolved.url,
+    url: resolved.url.isNotEmpty ? resolved.url : initial.url,
     postId: resolved.postId,
     title: resolved.title.isNotEmpty ? resolved.title : initial.title,
-    body: resolved.body,
+    body: resolved.body.isNotEmpty
+        ? resolved.body
+        : cleanFeedSnippetForDisplay(
+            '${merged['contextSummary'] ?? ''}',
+            title: resolved.title.isNotEmpty ? resolved.title : initial.title,
+          ),
     description: resolved.description.isNotEmpty
         ? resolved.description
         : initial.description,
     author: resolved.author.isNotEmpty ? resolved.author : initial.author,
     publishedAt: resolved.publishedAt,
-    contentStatus: resolved.contentStatus,
+    contentStatus: ctxLevel.isNotEmpty ? ctxLevel : resolved.contentStatus,
     hashtags: resolved.hashtags,
     mentions: resolved.mentions,
     media: resolved.media.isNotEmpty ? resolved.media : initial.media,
-    extractionStatus: resolved.extractionStatus,
+    extractionStatus: status,
     missingFields: resolved.missingFields,
-    diagnostic: resolved.extractionStatus == TeaExtractionStatus.complete
+    diagnostic: status == TeaExtractionStatus.complete
         ? ''
         : (diagnostic.isNotEmpty ? diagnostic : resolved.diagnostic),
   );
@@ -363,7 +388,7 @@ Future<ExtractedTeaContent> resolveTeaPostContent(
   debugPrint(
     '[TeaExtract] status=${withDiag.extractionStatus.name} '
     'platform=${withDiag.platform} bodyLen=${withDiag.body.length} '
-    'missing=${withDiag.missingFields} diag=${withDiag.diagnostic}',
+    'ctx=$ctxLevel diag=${withDiag.diagnostic}',
   );
   return withDiag;
 }

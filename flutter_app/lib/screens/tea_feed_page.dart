@@ -14,6 +14,7 @@ import '../utils/hub_colors.dart';
 import '../utils/reddit_thread_comments.dart';
 import '../utils/share_news_cache.dart';
 import '../utils/tea_content_extraction.dart';
+import '../utils/tea_topic_context.dart';
 import '../utils/tea_watchlist_storage.dart';
 
 const _hubMuted = Color(0x9EFFFFFF);
@@ -194,33 +195,32 @@ class _TeaFeedPageState extends State<TeaFeedPage> {
   }
 
   TeaItem _copyTeaItem(TeaItem item, {String? thumbnail}) {
-    return TeaItem(
-      id: item.id,
-      title: item.title,
-      url: item.url,
-      postUrl: item.postUrl,
-      thumbnail: thumbnail ?? item.thumbnail,
-      gossip: item.gossip,
-      author: item.author,
-      score: item.score,
-      numComments: item.numComments,
-    );
+    return item.copyWith(thumbnail: thumbnail);
   }
 
   TeaItem? _parseTeaItem(dynamic e) {
     if (e is TeaItem) return e;
     if (e is Map) {
       final m = Map<String, dynamic>.from(e);
+      final title = m['title'] as String? ?? '';
       return TeaItem(
         id: '${m['id'] ?? ''}',
-        title: m['title'] as String? ?? '',
+        title: title,
         url: m['url'] as String? ?? '',
         postUrl: m['postUrl'] as String? ?? '',
         thumbnail: '${m['thumbnail'] ?? m['image'] ?? ''}',
-        gossip: '${m['gossip'] ?? m['description'] ?? ''}'.trim(),
+        gossip: cleanFeedSnippetForDisplay(
+          '${m['gossip'] ?? m['description'] ?? ''}',
+          title: title,
+        ),
         author: m['author'] as String? ?? 'unknown',
         score: (m['score'] as num?)?.toInt() ?? 0,
         numComments: (m['num_comments'] as num?)?.toInt() ?? 0,
+        contextLevel: '${m['contextLevel'] ?? ''}',
+        contextSummary: cleanFeedSnippetForDisplay(
+          '${m['contextSummary'] ?? ''}',
+          title: title,
+        ),
       );
     }
     return null;
@@ -296,9 +296,14 @@ class _TeaFeedPageState extends State<TeaFeedPage> {
       'image': teaHeroImageUrl(item) ?? item.thumbnail,
       'author': item.author,
       'source': isYouTubeTeaUrl(item.url) ? 'YouTube' : 'Tea',
+      'contextLevel': item.contextLevel,
+      'contextSummary': item.contextSummary,
     });
     final seed = extracted.toArticleSeed();
     seed['image'] = teaHeroImageUrl(item) ?? item.thumbnail;
+    final ctx = peekTeaTopicContext(item.url, item.title) ??
+        await enrichTeaTopicContext(seed);
+    seed.addAll(ctx.toArticleFields());
     if (extracted.diagnostic.isNotEmpty) {
       seed['extractionDiagnostic'] = extracted.diagnostic;
     }
@@ -311,6 +316,22 @@ class _TeaFeedPageState extends State<TeaFeedPage> {
     await prepareShareSuggestionsRoute(payload);
     if (!mounted) return;
     await context.push(AppRoutes.shareSuggestions, extra: payload);
+  }
+
+  Future<void> _openTopicContext(TeaItem item) async {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF0C0C0C),
+      barrierColor: Colors.black54,
+      builder: (ctx) => _TeaTopicContextSheet(
+        item: item,
+        onGeneratePost: () {
+          Navigator.of(ctx).pop();
+          unawaited(_openShareSuggestions(item));
+        },
+      ),
+    );
   }
 
   void _openComments(TeaItem item) {
@@ -378,6 +399,7 @@ class _TeaFeedPageState extends State<TeaFeedPage> {
                         onOpenComments: () => _openComments(item),
                         onToggleWatchlist: () => _toggleWatchlist(item),
                         onOpenShare: () => _openShareSuggestions(item),
+                        onOpenContext: () => unawaited(_openTopicContext(item)),
                       );
                     },
                   ),
@@ -713,6 +735,7 @@ class _TeaSlide extends StatelessWidget {
     required this.onOpenComments,
     required this.onToggleWatchlist,
     required this.onOpenShare,
+    required this.onOpenContext,
   });
 
   final TeaItem item;
@@ -723,6 +746,7 @@ class _TeaSlide extends StatelessWidget {
   final VoidCallback onOpenComments;
   final VoidCallback onToggleWatchlist;
   final VoidCallback onOpenShare;
+  final VoidCallback onOpenContext;
 
   @override
   Widget build(BuildContext context) {
@@ -781,6 +805,12 @@ class _TeaSlide extends StatelessWidget {
                 onPressed: item.url.isEmpty ? null : onOpenShare,
                 semanticLabel: 'Share to LinkedIn, X, or Reddit',
               ),
+              const SizedBox(height: 20),
+              _ActionButton(
+                icon: Icons.info_outline_rounded,
+                onPressed: onOpenContext,
+                semanticLabel: 'View topic context and sources',
+              ),
             ],
           ),
         ),
@@ -788,58 +818,303 @@ class _TeaSlide extends StatelessWidget {
           left: 16,
           right: 80,
           bottom: 20 + bottomPad,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                decoration: BoxDecoration(
-                  color: _hubPillBg,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: HubColors.accent.withValues(alpha: 0.35)),
+          child: GestureDetector(
+            onTap: onOpenContext,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: _hubPillBg,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: HubColors.accent.withValues(alpha: 0.35)),
+                      ),
+                      child: const Text(
+                        'GOSSIP',
+                        style: TextStyle(
+                          color: HubColors.accent,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.6,
+                        ),
+                      ),
+                    ),
+                    if (item.contextLevel == 'headlineOnly' ||
+                        (item.gossip.isEmpty && item.contextSummary.isEmpty))
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          'Limited context',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.85),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
-                child: const Text(
-                  'GOSSIP',
-                  style: TextStyle(
-                    color: HubColors.accent,
-                    fontSize: 12,
+                const SizedBox(height: 10),
+                Text(
+                  item.title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
                     fontWeight: FontWeight.w800,
-                    letterSpacing: 0.6,
+                    height: 1.2,
+                    letterSpacing: -0.4,
+                    shadows: [Shadow(color: Colors.black54, blurRadius: 8)],
+                  ),
+                ),
+                if (item.author.isNotEmpty && item.author != 'unknown') ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    item.author,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.65),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+                if (item.gossip.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    item.gossip,
+                    maxLines: 4,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.88),
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      height: 1.35,
+                      shadows: const [Shadow(color: Colors.black54, blurRadius: 6)],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 6),
+                Text(
+                  'Tap for sources & context',
+                  style: TextStyle(
+                    color: HubColors.accent.withValues(alpha: 0.9),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TeaTopicContextSheet extends StatefulWidget {
+  const _TeaTopicContextSheet({
+    required this.item,
+    required this.onGeneratePost,
+  });
+
+  final TeaItem item;
+  final VoidCallback onGeneratePost;
+
+  @override
+  State<_TeaTopicContextSheet> createState() => _TeaTopicContextSheetState();
+}
+
+class _TeaTopicContextSheetState extends State<_TeaTopicContextSheet> {
+  TeaTopicContext? _ctx;
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_load());
+  }
+
+  Future<void> _load() async {
+    try {
+      final ctx = await enrichTeaTopicContext({
+        'title': widget.item.title,
+        'url': widget.item.url,
+        'gossip': widget.item.gossip,
+        'description': widget.item.gossip,
+        'source': widget.item.author,
+        'image': widget.item.thumbnail,
+        'contextLevel': widget.item.contextLevel,
+        'contextSummary': widget.item.contextSummary,
+      });
+      if (!mounted) return;
+      setState(() {
+        _ctx = ctx;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Could not load context.';
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _openUrl(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.paddingOf(context).bottom;
+    final ctx = _ctx;
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.62,
+      minChildSize: 0.4,
+      maxChildSize: 0.92,
+      builder: (context, scrollController) {
+        return Padding(
+          padding: EdgeInsets.fromLTRB(20, 12, 20, 16 + bottom),
+          child: ListView(
+            controller: scrollController,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(99),
                   ),
                 ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 16),
               Text(
-                item.title,
+                widget.item.title,
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 24,
+                  fontSize: 20,
                   fontWeight: FontWeight.w800,
-                  height: 1.2,
-                  letterSpacing: -0.4,
-                  shadows: [Shadow(color: Colors.black54, blurRadius: 8)],
+                  height: 1.25,
                 ),
               ),
-              if (item.gossip.isNotEmpty) ...[
-                const SizedBox(height: 8),
+              const SizedBox(height: 8),
+              if (_loading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Center(child: CircularProgressIndicator(color: HubColors.accent)),
+                )
+              else if (_error != null)
+                Text(_error!, style: const TextStyle(color: Colors.white70))
+              else if (ctx != null) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: ctx.isLimited
+                        ? Colors.orange.withValues(alpha: 0.18)
+                        : HubColors.accent.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    ctx.contextLevelLabel,
+                    style: TextStyle(
+                      color: ctx.isLimited ? Colors.orange.shade200 : HubColors.accent,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (ctx.publisher.isNotEmpty)
+                  Text(
+                    'Source: ${ctx.publisher}',
+                    style: const TextStyle(color: Colors.white70, fontSize: 13),
+                  ),
+                const SizedBox(height: 12),
                 Text(
-                  item.gossip,
-                  maxLines: 4,
-                  overflow: TextOverflow.ellipsis,
+                  'Context',
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.88),
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                    height: 1.35,
-                    shadows: const [Shadow(color: Colors.black54, blurRadius: 6)],
+                    color: Colors.white.withValues(alpha: 0.9),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  ctx.displaySummary.isNotEmpty
+                      ? ctx.displaySummary
+                      : 'Only the headline is available for this topic.',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.85),
+                    fontSize: 14,
+                    height: 1.4,
+                  ),
+                ),
+                if (ctx.relatedSources.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    'Supporting sources',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.9),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ...ctx.relatedSources.take(5).map(
+                        (s) => ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                          title: Text(
+                            s.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: Colors.white, fontSize: 13),
+                          ),
+                          subtitle: Text(
+                            s.publisher,
+                            style: const TextStyle(color: Colors.white54, fontSize: 12),
+                          ),
+                          trailing: s.url.isEmpty
+                              ? null
+                              : IconButton(
+                                  icon: const Icon(Icons.open_in_new, color: Colors.white54, size: 18),
+                                  onPressed: () => unawaited(_openUrl(s.url)),
+                                ),
+                        ),
+                      ),
+                ],
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: widget.onGeneratePost,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: HubColors.accent,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: const Text('Generate personalized post'),
                   ),
                 ),
               ],
             ],
           ),
-        ),
-      ],
+        );
+      },
     );
   }
 }

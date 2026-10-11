@@ -117,6 +117,14 @@ Future<List<Map<String, dynamic>>> enrichTeaRows(
               merged['extractionDiagnostic'] = extracted.diagnostic;
             }
           }
+          // Propagate headline-first context fields when present on seed merge.
+          final seedCtx = extracted.contentStatus;
+          if (seedCtx.isNotEmpty) merged['contextLevel'] = seedCtx;
+          if (extracted.body.isNotEmpty &&
+              '${merged['gossip'] ?? ''}'.trim().isEmpty) {
+            merged['gossip'] = extracted.body;
+            merged['description'] = extracted.body;
+          }
           if (extracted.author.isNotEmpty) merged['author'] = extracted.author;
           if (extracted.media.isNotEmpty) {
             merged['image'] = extracted.media.first;

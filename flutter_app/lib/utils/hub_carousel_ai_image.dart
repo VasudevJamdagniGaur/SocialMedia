@@ -12,6 +12,7 @@ import '../services/youtube_tea_service.dart';
 import 'hub_carousel_image_store.dart';
 import 'share_news_cache.dart';
 import 'tea_content_extraction.dart';
+import 'tea_topic_context.dart';
 
 export '../services/render_backend_queue.dart' show HubCarouselImagePriority;
 
@@ -292,28 +293,42 @@ Future<HubCarouselImageResult?> _getOrGenerateHubCarouselImageFullImpl({
   if (needsBodyResolve &&
       (kind == HubCarouselImageKind.tea || kind == HubCarouselImageKind.news)) {
     try {
-      final extracted = await resolveTeaPostContent({
+      final seed = {
         'title': effectiveTitle,
         'url': url,
         'gossip': effectiveStory,
         'description': effectiveStory,
-      });
+      };
+      final extracted = await resolveTeaPostContent(seed);
       if (extracted.title.isNotEmpty) effectiveTitle = extracted.title;
-      if (extracted.storyTextForAi.isNotEmpty) {
-        effectiveStory = extracted.storyTextForAi;
-      } else {
-        effectiveStory = '';
-      }
+
+      // Prefer structured headline-first context for image grounding.
+      TeaTopicContext? topicCtx = peekTeaTopicContext(url, effectiveTitle);
+      topicCtx ??= await enrichTeaTopicContext({
+        ...seed,
+        if (extracted.body.isNotEmpty) 'body': extracted.body,
+        'contextLevel': extracted.contentStatus,
+        'contextSummary': extracted.body,
+      });
+
       final visual = analyzeTeaVisualContext(extracted);
-      if (effectiveStory.isNotEmpty) {
-        effectiveStory = '${visual.toImagePromptBlock()}\n\nSTORY BODY:\n$effectiveStory';
+      final ctxBlock = topicCtx.storyTextForAi;
+      if (topicCtx.contextLevel == TeaContextLevel.headlineOnly) {
+        effectiveStory =
+            '${visual.toImagePromptBlock()}\n\n$ctxBlock\n\n'
+            'VISUAL RULE: Conceptual / atmospheric only. Do not invent a biographical '
+            'scene for a celebrity from the headline alone.';
+      } else if (extracted.storyTextForAi.isNotEmpty || ctxBlock.isNotEmpty) {
+        effectiveStory =
+            '${visual.toImagePromptBlock()}\n\n$ctxBlock\n\n'
+            'STORY BODY:\n${extracted.storyTextForAi.isNotEmpty ? extracted.storyTextForAi : topicCtx.displaySummary}';
       } else {
-        // Title-only / unavailable: conceptual visual only — no invented plot.
         effectiveStory = visual.toImagePromptBlock();
       }
       debugPrint(
         '[ImageGen] body resolved kind=${kind.name} '
         'status=${extracted.extractionStatus.name} '
+        'ctx=${topicCtx.contextLevel.name} '
         'storyLen=${effectiveStory.length}',
       );
     } catch (e) {

@@ -16,6 +16,7 @@ import '../utils/hub_colors.dart';
 import '../utils/share_news_cache.dart';
 import '../services/tea_news_refresh_mode.dart';
 import '../utils/tea_content_extraction.dart';
+import '../utils/tea_topic_context.dart';
 import '../utils/tea_trending_storage.dart';
 import 'skeleton/card_skeleton.dart';
 
@@ -42,17 +43,7 @@ List<TeaItem> teaItemsWithResolvedHeroes(Iterable<TeaItem> items) {
   return items.map((item) {
     final hero = teaHeroImageUrl(item);
     if (hero == null || hero == item.thumbnail) return item;
-    return TeaItem(
-      id: item.id,
-      title: item.title,
-      url: item.url,
-      postUrl: item.postUrl,
-      thumbnail: hero,
-      gossip: item.gossip,
-      author: item.author,
-      score: item.score,
-      numComments: item.numComments,
-    );
+    return item.copyWith(thumbnail: hero);
   }).toList();
 }
 
@@ -70,6 +61,8 @@ class TeaItem {
     this.author = 'unknown',
     this.score = 0,
     this.numComments = 0,
+    this.contextLevel = '',
+    this.contextSummary = '',
   });
 
   final String id;
@@ -81,6 +74,8 @@ class TeaItem {
   final String author;
   final int score;
   final int numComments;
+  final String contextLevel;
+  final String contextSummary;
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -92,7 +87,30 @@ class TeaItem {
         'author': author,
         'score': score,
         'num_comments': numComments,
+        if (contextLevel.isNotEmpty) 'contextLevel': contextLevel,
+        if (contextSummary.isNotEmpty) 'contextSummary': contextSummary,
       };
+
+  TeaItem copyWith({
+    String? thumbnail,
+    String? gossip,
+    String? contextLevel,
+    String? contextSummary,
+  }) {
+    return TeaItem(
+      id: id,
+      title: title,
+      url: url,
+      postUrl: postUrl,
+      thumbnail: thumbnail ?? this.thumbnail,
+      gossip: gossip ?? this.gossip,
+      author: author,
+      score: score,
+      numComments: numComments,
+      contextLevel: contextLevel ?? this.contextLevel,
+      contextSummary: contextSummary ?? this.contextSummary,
+    );
+  }
 }
 
 bool _isDirectImageUrl(String? postUrl) {
@@ -114,16 +132,29 @@ TeaItem _rowToTeaItem(Map<String, dynamic> row) {
     final yt = youtubeTeaThumbnailFromUrl(url);
     if (yt != null) thumbnail = yt;
   }
+  final ctx = peekTeaTopicContext(url, title);
+  final contextSummary = cleanFeedSnippetForDisplay(
+    '${row['contextSummary'] ?? ctx?.contextSummary ?? ''}',
+    title: title,
+  );
+  final displayGossip = gossip.isNotEmpty
+      ? gossip
+      : (contextSummary.isNotEmpty &&
+              '${row['contextLevel'] ?? ctx?.contextLevel.name ?? ''}' != 'headlineOnly'
+          ? contextSummary
+          : '');
   return TeaItem(
     id: url.isNotEmpty ? hubNewsDocIdFromUrl(url) : title.hashCode.toString(),
     title: title,
     url: url,
     postUrl: url,
     thumbnail: thumbnail,
-    gossip: gossip,
+    gossip: displayGossip,
     author: row['author'] is String ? row['author'] as String : 'unknown',
     score: row['score'] is num ? (row['score'] as num).toInt() : 0,
     numComments: row['num_comments'] is num ? (row['num_comments'] as num).toInt() : 0,
+    contextLevel: '${row['contextLevel'] ?? ctx?.contextLevel.name ?? ''}',
+    contextSummary: contextSummary,
   );
 }
 
@@ -158,6 +189,11 @@ Future<List<TeaItem>> _loadTeaFromDisk() async {
             author: '${m['author'] ?? 'unknown'}',
             score: m['score'] is num ? (m['score'] as num).toInt() : 0,
             numComments: m['num_comments'] is num ? (m['num_comments'] as num).toInt() : 0,
+            contextLevel: '${m['contextLevel'] ?? ''}',
+            contextSummary: cleanFeedSnippetForDisplay(
+              '${m['contextSummary'] ?? ''}',
+              title: title,
+            ),
           );
         })
         .where((t) => t.title.isNotEmpty && t.url.isNotEmpty)
@@ -283,17 +319,7 @@ Future<List<TeaItem>> _hydrateTeaItemsFast(List<TeaItem> items) async {
 
     final yt = youtubeTeaThumbnailFromUrl(item.url);
     if (yt != null) {
-      return TeaItem(
-        id: item.id,
-        title: item.title,
-        url: item.url,
-        postUrl: item.postUrl,
-        thumbnail: yt,
-        gossip: item.gossip,
-        author: item.author,
-        score: item.score,
-        numComments: item.numComments,
-      );
+      return item.copyWith(thumbnail: yt);
     }
 
     final cached = await resolveCachedHubCarouselImage(
@@ -303,17 +329,7 @@ Future<List<TeaItem>> _hydrateTeaItemsFast(List<TeaItem> items) async {
       kind: HubCarouselImageKind.tea,
     );
     if (cached != null) {
-      return TeaItem(
-        id: item.id,
-        title: item.title,
-        url: item.url,
-        postUrl: item.postUrl,
-        thumbnail: cached,
-        gossip: item.gossip,
-        author: item.author,
-        score: item.score,
-        numComments: item.numComments,
-      );
+      return item.copyWith(thumbnail: cached);
     }
     return item;
   }));
@@ -513,7 +529,7 @@ class _TrendingTeaState extends State<TrendingTea> {
 
   Future<void> _openShare(TeaItem item) async {
     if (item.url.isEmpty) return;
-    // Resolve full post body before share — never silently pass title as "body".
+    // Headline-first resolve + multi-source enrichment (scrape not required).
     final extracted = await resolveTeaPostContent({
       'title': item.title,
       'url': item.url,
@@ -523,15 +539,22 @@ class _TrendingTeaState extends State<TrendingTea> {
       'image': teaHeroImageUrl(item) ?? item.thumbnail,
       'author': item.author,
       'source': isYouTubeTeaUrl(item.url) ? 'YouTube' : 'Tea',
+      'contextLevel': item.contextLevel,
+      'contextSummary': item.contextSummary,
     });
     final body = extracted.storyTextForAi;
     final seed = extracted.toArticleSeed();
     seed['image'] = teaHeroImageUrl(item) ?? item.thumbnail;
-    if (body.isEmpty) {
-      seed['extractionStatus'] = extracted.extractionStatus.name;
-      seed['extractionDiagnostic'] = extracted.diagnostic.isNotEmpty
-          ? extracted.diagnostic
-          : 'Full post body unavailable — paste context if needed';
+    final ctx = peekTeaTopicContext(item.url, item.title) ??
+        await enrichTeaTopicContext(seed);
+    seed.addAll(ctx.toArticleFields());
+    if (body.isEmpty && ctx.displaySummary.isNotEmpty) {
+      seed['gossip'] = ctx.displaySummary;
+      seed['description'] = ctx.displaySummary;
+    }
+    if (body.isEmpty && ctx.contextLevel == TeaContextLevel.headlineOnly) {
+      seed['extractionStatus'] = 'titleOnly';
+      seed['extractionDiagnostic'] = ctx.contextLevelLabel;
     }
     final payload = {
       'newsArticle': seed,
@@ -555,17 +578,7 @@ class _TrendingTeaState extends State<TrendingTea> {
       }
       final yt = youtubeTeaThumbnailFromUrl(item.url);
       if (yt != null) {
-        updated.add(TeaItem(
-          id: item.id,
-          title: item.title,
-          url: item.url,
-          postUrl: item.postUrl,
-          thumbnail: yt,
-          gossip: item.gossip,
-          author: item.author,
-          score: item.score,
-          numComments: item.numComments,
-        ));
+        updated.add(item.copyWith(thumbnail: yt));
         changed = true;
         continue;
       }
@@ -576,17 +589,7 @@ class _TrendingTeaState extends State<TrendingTea> {
         kind: HubCarouselImageKind.tea,
       );
       if (cached != null) {
-        updated.add(TeaItem(
-          id: item.id,
-          title: item.title,
-          url: item.url,
-          postUrl: item.postUrl,
-          thumbnail: cached,
-          gossip: item.gossip,
-          author: item.author,
-          score: item.score,
-          numComments: item.numComments,
-        ));
+        updated.add(item.copyWith(thumbnail: cached));
         changed = true;
       } else {
         updated.add(item);
@@ -611,17 +614,7 @@ class _TrendingTeaState extends State<TrendingTea> {
     if (!mounted) return Future.value();
     setState(() {
       final updated = [..._items];
-      updated[index] = TeaItem(
-        id: item.id,
-        title: item.title,
-        url: item.url,
-        postUrl: item.postUrl,
-        thumbnail: imageUrl,
-        gossip: item.gossip,
-        author: item.author,
-        score: item.score,
-        numComments: item.numComments,
-      );
+      updated[index] = item.copyWith(thumbnail: imageUrl);
       _items = prioritizeWithImagesFirst(updated, teaHasDisplayableHeroImage);
       _memoryTeaCache = _items;
     });

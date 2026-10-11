@@ -416,29 +416,84 @@ bool teaCardSummaryLooksLikeRawScrape(String summary, [Map<String, dynamic>? det
 /// Clean Reddit/Tea article fields before sending to AI or local templates.
 Map<String, dynamic> prepareTeaArticleContextForAi(Map<String, dynamic> article) {
   final title = cleanTeaCardTitle('${article['title'] ?? ''}');
+  final contextLevel = '${article['contextLevel'] ?? ''}'.trim();
+  final contextSummary = cleanFeedSnippetForDisplay(
+    '${article['contextSummary'] ?? ''}',
+    title: title,
+  );
+  final teaContext = article['teaContext'];
   final snippets = extractRedditContentSnippets(article)
       .map(stripUrlsAndSourceNoise)
       .where((s) => s.length >= 20)
       .toList();
   final gossip = stripSubredditMentionsFromText(
     stripUrlsAndSourceNoise(
-      snippets.isNotEmpty
-          ? snippets.take(3).join('\n\n')
-          : '${article['gossip'] ?? article['description'] ?? ''}',
+      contextSummary.isNotEmpty
+          ? contextSummary
+          : snippets.isNotEmpty
+              ? snippets.take(3).join('\n\n')
+              : '${article['gossip'] ?? article['description'] ?? ''}',
     ),
   );
-  final articleText = snippets.isEmpty
-      ? stripSubredditMentionsFromText(stripUrlsAndSourceNoise('${article['text'] ?? ''}'))
-      : [
-          'Thread title: $title',
-          'What people are saying:',
-          ...snippets.take(4).map((s) => '• $s'),
-        ].join('\n');
+
+  final evidenceLines = <String>[];
+  if (teaContext is Map) {
+    final facts = teaContext['verifiedFacts'];
+    if (facts is List) {
+      for (final f in facts.take(5)) {
+        final s = cleanFeedSnippetForDisplay('$f', title: title);
+        if (s.isNotEmpty) evidenceLines.add('• $s');
+      }
+    }
+    final related = teaContext['relatedSources'];
+    if (related is List && related.isNotEmpty) {
+      evidenceLines.add('Related sources:');
+      for (final r in related.take(4)) {
+        if (r is! Map) continue;
+        final pub = '${r['publisher'] ?? 'Source'}'.trim();
+        final rt = cleanTeaCardTitle('${r['title'] ?? ''}');
+        if (rt.isNotEmpty) evidenceLines.add('• $pub — $rt');
+      }
+    }
+  }
+
+  final levelRule = contextLevel == 'headlineOnly'
+      ? 'EVIDENCE RULE: Only the headline is confirmed. Write discussion questions, '
+          'clearly framed opinions, or general reactions. Do NOT invent quotes, stats, '
+          'dates, relationships, or claim the full story was read.'
+      : (contextLevel == 'snippetBased'
+          ? 'EVIDENCE RULE: Only a short snippet is available. Stay within that blurb; '
+              'do not invent article details.'
+          : 'EVIDENCE RULE: Use only supported points and related-source overlap. '
+              'Do not invent facts beyond the evidence.');
+
+  final articleText = [
+    if (snippets.isNotEmpty) ...[
+      'Thread title: $title',
+      'What people are saying:',
+      ...snippets.take(4).map((s) => '• $s'),
+    ] else
+      stripSubredditMentionsFromText(
+        stripUrlsAndSourceNoise('${article['text'] ?? article['bodyText'] ?? ''}'),
+      ),
+    if (evidenceLines.isNotEmpty) ...[
+      '',
+      'Structured evidence:',
+      ...evidenceLines,
+    ],
+    '',
+    levelRule,
+  ].where((s) => s.trim().isNotEmpty).join('\n');
+
   return {
     ...article,
     'description': gossip,
     'gossip': gossip,
     'text': articleText,
+    'contextLevel': contextLevel.isNotEmpty ? contextLevel : article['contextLevel'],
+    'contextSummary': contextSummary.isNotEmpty
+        ? contextSummary
+        : article['contextSummary'],
   };
 }
 
@@ -490,11 +545,23 @@ List<Map<String, String>> buildLocalTeaShareSuggestions(
   String platform,
 ) {
   final title = '${article['title'] ?? ''}'.trim();
+  final contextLevel = '${article['contextLevel'] ?? ''}'.trim();
+  final headlineOnly = contextLevel == 'headlineOnly' ||
+      (cleanFeedSnippetForDisplay(
+            '${article['gossip'] ?? article['description'] ?? ''}',
+            title: title,
+          ).isEmpty &&
+          extractRedditContentSnippets(article).isEmpty);
   final snippets = extractRedditContentSnippets(article)
       .map(stripUrlsAndSourceNoise)
       .where((s) => s.length >= 12)
       .toList();
-  final body = snippets.isNotEmpty ? snippets.first : title;
+  final body = snippets.isNotEmpty
+      ? snippets.first
+      : cleanFeedSnippetForDisplay(
+          '${article['contextSummary'] ?? article['gossip'] ?? ''}',
+          title: title,
+        );
   final second = snippets.length > 1 ? snippets[1] : '';
   final third = snippets.length > 2 ? snippets[2] : '';
   final maxLen = platform == 'x' ? 220 : 650;
@@ -505,13 +572,44 @@ List<Map<String, String>> buildLocalTeaShareSuggestions(
     return clean.length <= maxLen ? clean : '${clean.substring(0, maxLen).trimRight()}…';
   }
 
+  if (headlineOnly) {
+    // No invented article details — discussion / opinion only.
+    return [
+      {
+        'eventLabel': 'Question',
+        'post': clip(
+          'Seeing the headline "$title" everywhere.\n\n'
+          'Genuine question — what do you make of it so far?',
+        ),
+      },
+      {
+        'eventLabel': 'Hot take',
+        'post': clip(
+          'Hot take on "$title": the chatter is loud, but I am waiting for clearer reporting before locking a side.',
+        ),
+      },
+      {
+        'eventLabel': 'Real talk',
+        'post': clip(
+          'Real talk: "$title" is trending hard. I have only seen the headline so far — curious what details hold up.',
+        ),
+      },
+      {
+        'eventLabel': 'Different angle',
+        'post': clip(
+          'Different angle on "$title": instead of rushing a take, maybe the interesting part is why this story is resonating right now.',
+        ),
+      },
+    ];
+  }
+
   final posts = <Map<String, String>>[
     {
       'eventLabel': 'Hot take',
       'post': clip(
         second.isNotEmpty
             ? 'Okay but the internet is not holding back on this one.\n\n$title\n\nThe part that got me: $second'
-            : 'Hot take: $title\n\n$body',
+            : 'Hot take: $title\n\n${body.isNotEmpty ? body : 'Curious what you think.'}',
       ),
     },
     {
