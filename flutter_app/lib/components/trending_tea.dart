@@ -63,6 +63,8 @@ class TeaItem {
     this.numComments = 0,
     this.contextLevel = '',
     this.contextSummary = '',
+    this.eventId = '',
+    this.isBreaking = false,
   });
 
   final String id;
@@ -76,6 +78,8 @@ class TeaItem {
   final int numComments;
   final String contextLevel;
   final String contextSummary;
+  final String eventId;
+  final bool isBreaking;
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -89,6 +93,8 @@ class TeaItem {
         'num_comments': numComments,
         if (contextLevel.isNotEmpty) 'contextLevel': contextLevel,
         if (contextSummary.isNotEmpty) 'contextSummary': contextSummary,
+        if (eventId.isNotEmpty) 'eventId': eventId,
+        if (isBreaking) 'isBreaking': isBreaking,
       };
 
   TeaItem copyWith({
@@ -96,6 +102,8 @@ class TeaItem {
     String? gossip,
     String? contextLevel,
     String? contextSummary,
+    String? eventId,
+    bool? isBreaking,
   }) {
     return TeaItem(
       id: id,
@@ -109,6 +117,8 @@ class TeaItem {
       numComments: numComments,
       contextLevel: contextLevel ?? this.contextLevel,
       contextSummary: contextSummary ?? this.contextSummary,
+      eventId: eventId ?? this.eventId,
+      isBreaking: isBreaking ?? this.isBreaking,
     );
   }
 }
@@ -155,6 +165,8 @@ TeaItem _rowToTeaItem(Map<String, dynamic> row) {
     numComments: row['num_comments'] is num ? (row['num_comments'] as num).toInt() : 0,
     contextLevel: '${row['contextLevel'] ?? ctx?.contextLevel.name ?? ''}',
     contextSummary: contextSummary,
+    eventId: '${row['eventId'] ?? ''}',
+    isBreaking: row['isBreaking'] == true,
   );
 }
 
@@ -559,8 +571,9 @@ class _TrendingTeaState extends State<TrendingTea> {
     final payload = {
       'newsArticle': seed,
       'returnTo': GoRouterState.of(context).uri.path,
+      // Land on Share Suggestions with LinkedIn / X / Instagram picker first.
+      // Do not auto-open the "Edit before sharing" panel.
       'platform': 'linkedin',
-      'autoOpenSharePanel': true,
     };
     await prepareShareSuggestionsRoute(payload);
     if (!mounted) return;

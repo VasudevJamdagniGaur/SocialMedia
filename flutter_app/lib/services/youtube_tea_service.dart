@@ -224,6 +224,7 @@ Map<String, dynamic>? rowFromYouTubeSnippet(
   String? videoId,
   int viewCount = 0,
   int commentCount = 0,
+  bool skipTeaFilter = false,
 }) {
   final id = videoId ??
       (snippet['resourceId'] is Map
@@ -239,11 +240,12 @@ Map<String, dynamic>? rowFromYouTubeSnippet(
 
   final description = '${snippet['description'] ?? ''}'.trim();
   final channel = '${snippet['channelTitle'] ?? 'YouTube'}'.trim();
-  if (!isRelevantIndianTeaYouTubeContent(
-    title: title,
-    description: description,
-    channel: channel,
-  )) {
+  if (!skipTeaFilter &&
+      !isRelevantIndianTeaYouTubeContent(
+        title: title,
+        description: description,
+        channel: channel,
+      )) {
     return null;
   }
   final gossip = description.length > 320
@@ -437,4 +439,100 @@ Future<List<Map<String, dynamic>>> fetchTeaRowsFromYouTube({
     if (direct.length > rows.length) rows = direct;
   }
   return rows;
+}
+
+/// Topic/event search via YouTube Data API (requires YOUTUBE_API_KEY).
+/// Returns [] when the key is missing — callers must not invent videos.
+Future<List<Map<String, dynamic>>> fetchYouTubeRowsByQuery(
+  String query, {
+  int maxKeep = 8,
+}) async {
+  final q = query.trim();
+  final apiKey = Env.youtubeApiKey.trim();
+  if (q.isEmpty || apiKey.isEmpty) return [];
+
+  try {
+    final searchUri = Uri.parse('https://www.googleapis.com/youtube/v3/search').replace(
+      queryParameters: {
+        'part': 'snippet',
+        'type': 'video',
+        'order': 'relevance',
+        'q': q,
+        'maxResults': '${maxKeep.clamp(1, 15)}',
+        'regionCode': 'IN',
+        'relevanceLanguage': 'en',
+        'publishedAfter': _teaYouTubePublishedAfter(),
+        'key': apiKey,
+      },
+    );
+    final searchRes = await http
+        .get(searchUri, headers: {'Accept': 'application/json'})
+        .timeout(const Duration(seconds: 10));
+    if (searchRes.statusCode != 200) return [];
+    final searchBody = jsonDecode(searchRes.body);
+    if (searchBody is! Map) return [];
+    final items = searchBody['items'];
+    if (items is! List || items.isEmpty) return [];
+
+    final videoIds = <String>[];
+    final snippets = <String, Map<String, dynamic>>{};
+    for (final item in items) {
+      if (item is! Map) continue;
+      final idObj = item['id'];
+      final snippet = item['snippet'];
+      if (idObj is! Map || snippet is! Map) continue;
+      final vid = '${idObj['videoId'] ?? ''}'.trim();
+      if (vid.isEmpty) continue;
+      snippets[vid] = Map<String, dynamic>.from(snippet);
+      videoIds.add(vid);
+    }
+    if (videoIds.isEmpty) return [];
+
+    final statsUri = Uri.parse('https://www.googleapis.com/youtube/v3/videos').replace(
+      queryParameters: {
+        'part': 'statistics,snippet',
+        'id': videoIds.join(','),
+        'key': apiKey,
+      },
+    );
+    final statsRes = await http
+        .get(statsUri, headers: {'Accept': 'application/json'})
+        .timeout(const Duration(seconds: 8));
+    if (statsRes.statusCode != 200) return [];
+    final statsBody = jsonDecode(statsRes.body);
+    final statItems = statsBody is Map ? statsBody['items'] : null;
+    if (statItems is! List) return [];
+
+    final rows = <Map<String, dynamic>>[];
+    for (final statItem in statItems) {
+      if (statItem is! Map) continue;
+      final vid = '${statItem['id'] ?? ''}'.trim();
+      if (vid.isEmpty) continue;
+      final snippet = statItem['snippet'] is Map
+          ? Map<String, dynamic>.from(statItem['snippet'] as Map)
+          : snippets[vid];
+      if (snippet == null) continue;
+      final stats = statItem['statistics'] is Map
+          ? Map<String, dynamic>.from(statItem['statistics'] as Map)
+          : <String, dynamic>{};
+      final views = int.tryParse('${stats['viewCount'] ?? '0'}') ?? 0;
+      final comments = int.tryParse('${stats['commentCount'] ?? '0'}') ?? 0;
+      final row = rowFromYouTubeSnippet(
+        snippet,
+        videoId: vid,
+        viewCount: views,
+        commentCount: comments,
+        skipTeaFilter: true,
+      );
+      if (row == null) continue;
+      row['sourceType'] = 'youtube';
+      row['category'] = 'social';
+      rows.add(row);
+      if (rows.length >= maxKeep) break;
+    }
+    return rows;
+  } catch (e) {
+    debugPrint('[YouTubeTea] query search failed: $e');
+    return [];
+  }
 }

@@ -444,13 +444,26 @@ List<Map<String, dynamic>> teaRowsFromRssArticles(List<Map<String, dynamic>> rss
 }
 
 Future<List<Map<String, dynamic>>> _fetchTeaRssQuickRows() async {
-  try {
-    const query = '(bollywood gossip OR celebrity scandal OR "bollywood drama") india when:7d';
-    final rss = await fetchLiveFromGoogleRssByQueryFast(query, timeoutMs: 5500);
-    return teaRowsFromRssArticles(rss);
-  } catch (_) {
-    return [];
+  // Broader India discovery — gossip is one lane, not the only lane.
+  const queries = [
+    '(bollywood gossip OR celebrity scandal OR "bollywood drama") india when:7d',
+    '(India OR Delhi OR Mumbai) (breaking OR politics OR protest) when:2d',
+    '(cricket OR IPL OR technology OR AI) India when:3d',
+  ];
+  final merged = <Map<String, dynamic>>[];
+  final seen = <String>{};
+  for (final query in queries) {
+    try {
+      final rss = await fetchLiveFromGoogleRssByQueryFast(query, timeoutMs: 5500);
+      for (final row in teaRowsFromRssArticles(rss)) {
+        final url = '${row['url'] ?? ''}'.trim();
+        if (url.isEmpty || seen.contains(url)) continue;
+        seen.add(url);
+        merged.add(row);
+      }
+    } catch (_) {}
   }
+  return merged;
 }
 
 List<Map<String, dynamic>> _mergeTeaRowLists(
@@ -535,6 +548,8 @@ Future<List<Map<String, dynamic>>> _fetchTeaRssFallbackRows() async {
     '(IPL OR "cricket gossip" OR "cricket controversy") india when:7d',
     '(ISL OR football OR soccer) (gossip OR controversy OR viral) india when:7d',
     '(viral OR trending OR meme OR famous) india when:3d',
+    '(protest OR parliament OR election OR "voter list") India when:3d',
+    '(startup OR AI OR technology) India when:3d',
   ];
 
   final merged = <Map<String, dynamic>>[];

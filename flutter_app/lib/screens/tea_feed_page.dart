@@ -6,6 +6,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../components/trending_tea.dart';
 import '../router/app_router.dart';
+import '../services/cached_news_service.dart';
+import '../services/tea_multi_source_service.dart';
 import '../services/tea_news_refresh_mode.dart';
 import '../services/youtube_tea_service.dart';
 import '../utils/hub_carousel_ai_image.dart';
@@ -14,6 +16,8 @@ import '../utils/hub_colors.dart';
 import '../utils/reddit_thread_comments.dart';
 import '../utils/share_news_cache.dart';
 import '../utils/tea_content_extraction.dart';
+import '../utils/tea_event_topics.dart';
+import '../utils/tea_story_cluster.dart';
 import '../utils/tea_topic_context.dart';
 import '../utils/tea_watchlist_storage.dart';
 
@@ -32,7 +36,15 @@ const _fallbackGradients = <List<Color>>[
 const _quickEmojis = ['❤️', '🔥', '👏', '😂', '✨', '😮'];
 const _usernameMax = 17;
 
-enum _TeaTab { forYou, trending }
+String _teaLaneLabel(TeaItem item) {
+  final url = item.url.toLowerCase();
+  final author = item.author.toLowerCase();
+  if (item.eventId.isNotEmpty) return 'EVENT';
+  if (item.isBreaking) return 'NEWS';
+  if (url.contains('reddit.com') || author.startsWith('r/')) return 'REDDIT';
+  if (url.contains('youtube.com') || url.contains('youtu.be')) return 'SOCIAL';
+  return 'TEA';
+}
 
 class _CommentEntry {
   _CommentEntry({this.status = 'idle', this.comments = const [], this.error});
@@ -53,8 +65,11 @@ class _TeaFeedPageState extends State<TeaFeedPage> {
   List<TeaItem> _rawItems = [];
   String _returnTo = AppRoutes.dashboard;
   bool _parsedExtra = false;
+  bool _sectionLoading = false;
+  String? _sectionError;
 
-  _TeaTab _tab = _TeaTab.forYou;
+  TeaFeedSection _tab = TeaFeedSection.forYou;
+  final Map<TeaFeedSection, List<TeaItem>> _sectionCache = {};
   final Set<String> _liked = {};
   final Set<String> _watchlisted = {};
   final Map<String, _CommentEntry> _commentsByPostId = {};
@@ -63,8 +78,16 @@ class _TeaFeedPageState extends State<TeaFeedPage> {
 
   List<TeaItem> get _displayItems {
     final items = teaItemsWithResolvedHeroes(_rawItems);
-    if (_tab == _TeaTab.trending) {
+    if (_tab == TeaFeedSection.trending || _tab == TeaFeedSection.breaking) {
       items.sort((a, b) => b.score.compareTo(a.score));
+    }
+    if (_tab == TeaFeedSection.forYou && _watchlisted.isNotEmpty) {
+      items.sort((a, b) {
+        final aw = _watchlisted.contains(a.id) ? 1 : 0;
+        final bw = _watchlisted.contains(b.id) ? 1 : 0;
+        if (aw != bw) return bw.compareTo(aw);
+        return b.score.compareTo(a.score);
+      });
     }
     return items;
   }
@@ -139,14 +162,77 @@ class _TeaFeedPageState extends State<TeaFeedPage> {
     _rawItems = teaItemsWithResolvedHeroes(_rawItems);
 
     if (_rawItems.isEmpty && !kManualTeaNewsRefreshOnly) {
-      try {
-        _rawItems = await fetchTrendingTea();
-      } catch (_) {}
+      await _loadSection(TeaFeedSection.forYou, force: false);
+    } else {
+      _sectionCache[TeaFeedSection.forYou] = List<TeaItem>.from(_rawItems);
     }
     if (!mounted) return;
     setState(() {});
     await _refreshWatchlistIds();
     await _hydrateTeaFeedImages();
+  }
+
+  Future<void> _loadSection(TeaFeedSection section, {bool force = false}) async {
+    if (!force && _sectionCache[section] != null && _sectionCache[section]!.isNotEmpty) {
+      setState(() {
+        _tab = section;
+        _rawItems = List<TeaItem>.from(_sectionCache[section]!);
+        _sectionError = null;
+      });
+      return;
+    }
+    setState(() {
+      _tab = section;
+      _sectionLoading = true;
+      _sectionError = null;
+    });
+    try {
+      final rows = await fetchTeaSectionRows(section, forceRefresh: force);
+      final items = rows
+          .map((r) => _parseTeaItem({
+                ...r,
+                'id': hubNewsDocIdFromUrl('${r['url'] ?? ''}'),
+                'postUrl': r['url'],
+                'thumbnail': r['image'] ?? r['thumbnail'],
+                'num_comments': r['num_comments'] ?? 0,
+              }))
+          .whereType<TeaItem>()
+          .toList();
+      if (!mounted) return;
+      _sectionCache[section] = items;
+      setState(() {
+        _rawItems = items;
+        _sectionLoading = false;
+        if (items.isEmpty) {
+          _sectionError =
+              'No accessible stories for ${section.label} right now. Pull to refresh later.';
+        }
+      });
+      await _hydrateTeaFeedImages();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _sectionLoading = false;
+        _sectionError = 'Could not refresh ${section.label}.';
+      });
+      debugPrint('[TeaFeed] section ${section.id} failed: $e');
+    }
+  }
+
+  Future<void> _openEventDetail(String eventId) async {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF0C0C0C),
+      builder: (ctx) => _TeaEventDetailSheet(
+        eventId: eventId,
+        onGeneratePost: (cluster) {
+          Navigator.of(ctx).pop();
+          final item = _parseTeaItem(cluster.toTeaRow());
+          if (item != null) unawaited(_openShareSuggestions(item));
+        },
+      ),
+    );
   }
 
   Future<void> _hydrateTeaFeedImages() async {
@@ -213,7 +299,7 @@ class _TeaFeedPageState extends State<TeaFeedPage> {
           '${m['gossip'] ?? m['description'] ?? ''}',
           title: title,
         ),
-        author: m['author'] as String? ?? 'unknown',
+        author: m['author'] as String? ?? m['source'] as String? ?? 'unknown',
         score: (m['score'] as num?)?.toInt() ?? 0,
         numComments: (m['num_comments'] as num?)?.toInt() ?? 0,
         contextLevel: '${m['contextLevel'] ?? ''}',
@@ -221,6 +307,8 @@ class _TeaFeedPageState extends State<TeaFeedPage> {
           '${m['contextSummary'] ?? ''}',
           title: title,
         ),
+        eventId: '${m['eventId'] ?? ''}',
+        isBreaking: m['isBreaking'] == true,
       );
     }
     return null;
@@ -310,8 +398,9 @@ class _TeaFeedPageState extends State<TeaFeedPage> {
     final payload = {
       'newsArticle': seed,
       'returnTo': AppRoutes.teaFeed,
+      // Land on Share Suggestions with LinkedIn / X / Instagram picker first.
+      // Do not auto-open the "Edit before sharing" panel.
       'platform': 'linkedin',
-      'autoOpenSharePanel': true,
     };
     await prepareShareSuggestionsRoute(payload);
     if (!mounted) return;
@@ -370,12 +459,28 @@ class _TeaFeedPageState extends State<TeaFeedPage> {
           _TeaFeedHeader(
             topPadding: topPad,
             tab: _tab,
+            loading: _sectionLoading,
+            lastRefresh: lastTeaRefreshAt,
             onBack: _goBack,
-            onTabForYou: () => setState(() => _tab = _TeaTab.forYou),
-            onTabTrending: () => setState(() => _tab = _TeaTab.trending),
+            onSelectSection: (s) => unawaited(_loadSection(s)),
+            onRefresh: () => unawaited(_loadSection(_tab, force: true)),
+            onOpenEvents: () {
+              final id = teaEventTopics.isNotEmpty ? teaEventTopics.first.eventId : '';
+              if (id.isNotEmpty) unawaited(_openEventDetail(id));
+            },
           ),
+          if (_sectionError != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Text(
+                _sectionError!,
+                style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 12),
+              ),
+            ),
           Expanded(
-            child: items.isEmpty
+            child: _sectionLoading && items.isEmpty
+                ? const Center(child: CircularProgressIndicator(color: HubColors.accent))
+                : items.isEmpty
                 ? _TeaEmptyState(onBack: _goBack)
                 : PageView.builder(
                     key: ValueKey(_tab),
@@ -400,6 +505,9 @@ class _TeaFeedPageState extends State<TeaFeedPage> {
                         onToggleWatchlist: () => _toggleWatchlist(item),
                         onOpenShare: () => _openShareSuggestions(item),
                         onOpenContext: () => unawaited(_openTopicContext(item)),
+                        onOpenEvent: item.eventId.isNotEmpty
+                            ? () => unawaited(_openEventDetail(item.eventId))
+                            : null,
                       );
                     },
                   ),
@@ -414,59 +522,112 @@ class _TeaFeedHeader extends StatelessWidget {
   const _TeaFeedHeader({
     required this.topPadding,
     required this.tab,
+    required this.loading,
+    required this.lastRefresh,
     required this.onBack,
-    required this.onTabForYou,
-    required this.onTabTrending,
+    required this.onSelectSection,
+    required this.onRefresh,
+    required this.onOpenEvents,
   });
 
   final double topPadding;
-  final _TeaTab tab;
+  final TeaFeedSection tab;
+  final bool loading;
+  final DateTime? lastRefresh;
   final VoidCallback onBack;
-  final VoidCallback onTabForYou;
-  final VoidCallback onTabTrending;
+  final ValueChanged<TeaFeedSection> onSelectSection;
+  final VoidCallback onRefresh;
+  final VoidCallback onOpenEvents;
 
   @override
   Widget build(BuildContext context) {
+    final refreshLabel = lastRefresh == null
+        ? ''
+        : 'Updated ${_fmtAgo(lastRefresh!)}';
     return Container(
-      padding: EdgeInsets.fromLTRB(12, topPadding + 4, 12, 12),
-      decoration: BoxDecoration(
-        color: const Color(0xB80A080E),
-        border: const Border(bottom: BorderSide(color: _hubDivider)),
+      padding: EdgeInsets.fromLTRB(8, topPadding + 4, 8, 10),
+      decoration: const BoxDecoration(
+        color: Color(0xB80A080E),
+        border: Border(bottom: BorderSide(color: _hubDivider)),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          IconButton(
-            onPressed: onBack,
-            icon: const Icon(Icons.arrow_back, color: Colors.white, size: 24),
-            style: IconButton.styleFrom(
-              minimumSize: const Size(40, 40),
-              shape: const CircleBorder(),
-            ),
-          ),
-          const Expanded(
-            child: Center(
-              child: Text(
-                'Tea',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.3,
+          Row(
+            children: [
+              IconButton(
+                onPressed: onBack,
+                icon: const Icon(Icons.arrow_back, color: Colors.white, size: 24),
+                style: IconButton.styleFrom(
+                  minimumSize: const Size(40, 40),
+                  shape: const CircleBorder(),
                 ),
               ),
-            ),
-          ),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _TabChip(label: 'For You', selected: tab == _TeaTab.forYou, onTap: onTabForYou),
-              const SizedBox(width: 4),
-              _TabChip(label: 'Trending', selected: tab == _TeaTab.trending, onTap: onTabTrending),
+              const Expanded(
+                child: Text(
+                  'Tea',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+              ),
+              IconButton(
+                onPressed: onOpenEvents,
+                tooltip: 'Open featured event',
+                icon: const Icon(Icons.campaign_outlined, color: Colors.white70, size: 22),
+              ),
+              IconButton(
+                onPressed: loading ? null : onRefresh,
+                tooltip: 'Refresh',
+                icon: loading
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: HubColors.accent),
+                      )
+                    : const Icon(Icons.refresh, color: Colors.white70, size: 22),
+              ),
             ],
           ),
+          SizedBox(
+            height: 36,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                for (final s in TeaFeedSection.values) ...[
+                  _TabChip(
+                    label: s.label,
+                    selected: tab == s,
+                    onTap: () => onSelectSection(s),
+                  ),
+                  const SizedBox(width: 6),
+                ],
+              ],
+            ),
+          ),
+          if (refreshLabel.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6, left: 8),
+              child: Text(
+                refreshLabel,
+                style: TextStyle(color: Colors.white.withValues(alpha: 0.45), fontSize: 11),
+              ),
+            ),
         ],
       ),
     );
+  }
+
+  static String _fmtAgo(DateTime t) {
+    final d = DateTime.now().difference(t);
+    if (d.inMinutes < 1) return 'just now';
+    if (d.inMinutes < 60) return '${d.inMinutes}m ago';
+    if (d.inHours < 24) return '${d.inHours}h ago';
+    return '${d.inDays}d ago';
   }
 }
 
@@ -736,6 +897,7 @@ class _TeaSlide extends StatelessWidget {
     required this.onToggleWatchlist,
     required this.onOpenShare,
     required this.onOpenContext,
+    this.onOpenEvent,
   });
 
   final TeaItem item;
@@ -747,16 +909,17 @@ class _TeaSlide extends StatelessWidget {
   final VoidCallback onToggleWatchlist;
   final VoidCallback onOpenShare;
   final VoidCallback onOpenContext;
+  final VoidCallback? onOpenEvent;
 
   @override
   Widget build(BuildContext context) {
-    final canShare = item.url.isNotEmpty;
     final bottomPad = MediaQuery.paddingOf(context).bottom;
 
     return Stack(
       fit: StackFit.expand,
       children: [
-        _TeaHeroBackground(item: item, index: index, onTap: canShare ? onOpenShare : null),
+        // Tap hero → topic context. Share icon opens platform picker (LinkedIn/X/IG).
+        _TeaHeroBackground(item: item, index: index, onTap: onOpenContext),
         IgnorePointer(
           child: DecoratedBox(
             decoration: BoxDecoration(
@@ -835,9 +998,9 @@ class _TeaSlide extends StatelessWidget {
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(color: HubColors.accent.withValues(alpha: 0.35)),
                       ),
-                      child: const Text(
-                        'GOSSIP',
-                        style: TextStyle(
+                      child: Text(
+                        _teaLaneLabel(item),
+                        style: const TextStyle(
                           color: HubColors.accent,
                           fontSize: 12,
                           fontWeight: FontWeight.w800,
@@ -845,6 +1008,42 @@ class _TeaSlide extends StatelessWidget {
                         ),
                       ),
                     ),
+                    if (item.isBreaking)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withValues(alpha: 0.25),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Text(
+                          'BREAKING',
+                          style: TextStyle(
+                            color: Color(0xFFFF8A80),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    if (item.eventId.isNotEmpty)
+                      GestureDetector(
+                        onTap: onOpenEvent,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: HubColors.accent.withValues(alpha: 0.22),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: HubColors.accent.withValues(alpha: 0.45)),
+                          ),
+                          child: const Text(
+                            'EVENT',
+                            style: TextStyle(
+                              color: HubColors.accentHighlight,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ),
                     if (item.contextLevel == 'headlineOnly' ||
                         (item.gossip.isEmpty && item.contextSummary.isEmpty))
                       Container(
@@ -1102,6 +1301,205 @@ class _TeaTopicContextSheetState extends State<_TeaTopicContextSheet> {
                   width: double.infinity,
                   child: FilledButton(
                     onPressed: widget.onGeneratePost,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: HubColors.accent,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: const Text('Generate personalized post'),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _TeaEventDetailSheet extends StatefulWidget {
+  const _TeaEventDetailSheet({
+    required this.eventId,
+    required this.onGeneratePost,
+  });
+
+  final String eventId;
+  final void Function(TeaStoryCluster cluster) onGeneratePost;
+
+  @override
+  State<_TeaEventDetailSheet> createState() => _TeaEventDetailSheetState();
+}
+
+class _TeaEventDetailSheetState extends State<_TeaEventDetailSheet> {
+  TeaStoryCluster? _cluster;
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_load());
+  }
+
+  Future<void> _load() async {
+    try {
+      final bundle = await fetchEventStoryBundle(widget.eventId);
+      if (!mounted) return;
+      setState(() {
+        _cluster = bundle;
+        _loading = false;
+        if (bundle == null) {
+          _error =
+              'No accessible public coverage found yet for this event. Sources may be delayed or blocked.';
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'Failed to load event coverage.';
+      });
+    }
+  }
+
+  Future<void> _openUrl(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.paddingOf(context).bottom;
+    final topic = teaEventTopicById(widget.eventId);
+    final c = _cluster;
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.78,
+      minChildSize: 0.45,
+      maxChildSize: 0.95,
+      builder: (context, scrollController) {
+        return Padding(
+          padding: EdgeInsets.fromLTRB(20, 12, 20, 16 + bottom),
+          child: ListView(
+            controller: scrollController,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                topic?.label ?? 'Event',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 8),
+              if (_loading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 32),
+                  child: Center(child: CircularProgressIndicator(color: HubColors.accent)),
+                )
+              else if (_error != null)
+                Text(_error!, style: const TextStyle(color: Colors.white70))
+              else if (c != null) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: HubColors.accent.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '${c.relatedSources.length} sources · ${c.contextLevel} · '
+                    '${c.isDeveloping ? 'Developing' : 'Update'}',
+                    style: const TextStyle(
+                      color: HubColors.accent,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Summary',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  c.summary.isNotEmpty
+                      ? c.summary
+                      : 'Coverage is still gathering from accessible sources.',
+                  style: TextStyle(color: Colors.white.withValues(alpha: 0.85), height: 1.4),
+                ),
+                if (c.verifiedFacts.isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  const Text(
+                    'Supported points',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 6),
+                  ...c.verifiedFacts.map(
+                    (f) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text('• $f', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                    ),
+                  ),
+                ],
+                if (c.unverifiedClaims.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Unresolved / single-source',
+                    style: TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 6),
+                  ...c.unverifiedClaims.map(
+                    (f) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text('• $f', style: const TextStyle(color: Colors.white60, fontSize: 13)),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 14),
+                const Text(
+                  'Timeline & related coverage',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                ...c.relatedSources.take(12).map(
+                      (s) => ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                        title: Text(
+                          s['title'] ?? '',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: Colors.white, fontSize: 13),
+                        ),
+                        subtitle: Text(
+                          '${s['publisher'] ?? ''} · ${s['sourceType'] ?? 'news'}',
+                          style: const TextStyle(color: Colors.white54, fontSize: 11),
+                        ),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.open_in_new, color: Colors.white54, size: 18),
+                          onPressed: () => unawaited(_openUrl(s['url'] ?? '')),
+                        ),
+                      ),
+                    ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: () => widget.onGeneratePost(c),
                     style: FilledButton.styleFrom(
                       backgroundColor: HubColors.accent,
                       foregroundColor: Colors.white,

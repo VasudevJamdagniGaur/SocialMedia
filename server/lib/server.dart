@@ -10,6 +10,7 @@ import 'routes/api_routes.dart';
 import 'routes/article_routes.dart';
 import 'routes/news_routes.dart';
 import 'routes/tea_context_routes.dart';
+import 'routes/tea_events_routes.dart';
 import 'routes/vertex_routes.dart';
 import 'routes/youtube_routes.dart';
 import 'vertex/vertex_client.dart';
@@ -25,6 +26,7 @@ Future<void> runServer() async {
     ..mount('/', buildSuggestionsRouter(vertex).call)
     ..mount('/', buildArticleRouter().call)
     ..mount('/', buildTeaContextRouter().call)
+    ..mount('/', buildTeaEventsRouter().call)
     ..mount('/', buildAccountRouter().call);
 
   final handler = Pipeline()
