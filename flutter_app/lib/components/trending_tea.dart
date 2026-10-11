@@ -20,6 +20,7 @@ import '../services/tea_news_refresh_mode.dart';
 import '../utils/tea_content_extraction.dart';
 import '../utils/tea_topic_context.dart';
 import '../utils/tea_trending_storage.dart';
+import 'hub_section_refresh_pill.dart';
 import 'skeleton/card_skeleton.dart';
 
 const _teaItemsCacheKey = 'deite_tea_items_cache_v5';
@@ -428,6 +429,7 @@ class TrendingTea extends StatefulWidget {
 class _TrendingTeaState extends State<TrendingTea> {
   List<TeaItem> _items = _memoryTeaCache ?? [];
   bool _loading = _memoryTeaCache == null || _memoryTeaCache!.isEmpty;
+  bool _refreshing = false;
   String? _error;
 
   @override
@@ -463,8 +465,8 @@ class _TrendingTeaState extends State<TrendingTea> {
     }
     setState(() {
       _loading = false;
-      _error = kManualTeaNewsRefreshOnly
-          ? 'No tea yet. Tap “Refresh Tea & News”.'
+        _error = kManualTeaNewsRefreshOnly
+          ? 'No tea yet. Tap Refresh.'
           : 'Could not load tea.';
     });
   }
@@ -538,7 +540,7 @@ class _TrendingTeaState extends State<TrendingTea> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = 'No tea yet. Tap “Refresh Tea & News”.';
+        _error = 'No tea yet. Tap Refresh.';
       });
       return;
     }
@@ -551,6 +553,33 @@ class _TrendingTeaState extends State<TrendingTea> {
     }
 
     await _refreshFromNetwork();
+  }
+
+  Future<void> _onHeaderRefresh() async {
+    if (_refreshing) return;
+    setState(() => _refreshing = true);
+    try {
+      final items = await fetchTrendingTea(
+        allowCache: false,
+        deferEnrich: false,
+      );
+      if (!mounted) return;
+      final hydrated = await _hydrateTeaItemsFast(items);
+      setState(() {
+        _items = hydrated;
+        _loading = false;
+        _error = hydrated.isEmpty ? 'No tea right now.' : null;
+      });
+      _memoryTeaCache = hydrated;
+      unawaited(_syncCachedAiImages());
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        if (_items.isEmpty) _error = 'Could not refresh tea.';
+      });
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
   }
 
   Future<void> _refreshFromNetwork() async {
@@ -738,15 +767,24 @@ class _TrendingTeaState extends State<TrendingTea> {
                     style: TextStyle(color: hubText, fontSize: 18, fontWeight: FontWeight.w600),
                   ),
                 ),
+                HubSectionRefreshPill(
+                  refreshing: _refreshing,
+                  onRefresh: () => unawaited(_onHeaderRefresh()),
+                ),
+                const SizedBox(width: 8),
                 TextButton(
                   onPressed: _loading ? null : _openTeaFeed,
                   style: TextButton.styleFrom(
                     foregroundColor: hubAccent,
                     side: const BorderSide(color: hubDivider),
                     backgroundColor: hubAccent.withValues(alpha: 0.09),
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    minimumSize: const Size(0, 36),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
                   ),
-                  child: const Text('See all', style: TextStyle(fontWeight: FontWeight.w600)),
+                  child: const Text('See all', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
                 ),
               ],
             ),

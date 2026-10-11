@@ -16,6 +16,7 @@ import '../utils/hub_carousel_image_store.dart';
 import '../utils/hub_colors.dart';
 import '../utils/hub_news_trending_storage.dart';
 import '../utils/share_news_cache.dart';
+import 'hub_section_refresh_pill.dart';
 import 'skeleton/card_skeleton.dart';
 
 class HubTrendingItem {
@@ -264,6 +265,7 @@ class HubTrendingFeed extends StatefulWidget {
 class _HubTrendingFeedState extends State<HubTrendingFeed> {
   List<HubTrendingItem> _items = _hubCache ?? [];
   bool _loading = _hubCache == null || _hubCache!.isEmpty;
+  bool _refreshing = false;
   String _error = '';
   int _aiImageGen = 0;
 
@@ -302,7 +304,7 @@ class _HubTrendingFeedState extends State<HubTrendingFeed> {
     setState(() {
       _loading = false;
       _error = kManualTeaNewsRefreshOnly
-          ? 'No headlines yet. Tap “Refresh Tea & News”.'
+          ? 'No headlines yet. Tap Refresh.'
           : 'Could not load news.';
     });
   }
@@ -374,7 +376,7 @@ class _HubTrendingFeedState extends State<HubTrendingFeed> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = 'No headlines yet. Tap “Refresh Tea & News”.';
+        _error = 'No headlines yet. Tap Refresh.';
       });
       return;
     }
@@ -384,6 +386,32 @@ class _HubTrendingFeedState extends State<HubTrendingFeed> {
     }
 
     await _refreshFromNetwork();
+  }
+
+  Future<void> _onHeaderRefresh() async {
+    if (_refreshing) return;
+    setState(() => _refreshing = true);
+    try {
+      final items = await fetchHubTrendingItems(forceRefresh: true);
+      if (!mounted) return;
+      final hydrated = await _hydrateHubNewsItemsFast(items);
+      setState(() {
+        _items = hydrated;
+        _loading = false;
+        _error = hydrated.isEmpty ? 'No headlines yet.' : '';
+      });
+      _hubCache = hydrated;
+      unawaited(_syncCachedAiImages());
+      unawaited(_enrichMissingAiImages());
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        if (_items.isEmpty) _error = 'Could not refresh news.';
+      });
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
   }
 
   Future<void> _refreshFromNetwork() async {
@@ -552,12 +580,38 @@ class _HubTrendingFeedState extends State<HubTrendingFeed> {
                   child: const Icon(Icons.local_fire_department, color: HubColors.accent, size: 18),
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  'News',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: widget.isDarkMode ? Colors.white : Colors.black87,
+                Expanded(
+                  child: Text(
+                    'News',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: widget.isDarkMode ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                ),
+                HubSectionRefreshPill(
+                  refreshing: _refreshing,
+                  onRefresh: () => unawaited(_onHeaderRefresh()),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: _loading
+                      ? null
+                      : () => context.push(AppRoutes.podCurrentAffairs),
+                  style: TextButton.styleFrom(
+                    foregroundColor: HubColors.accent,
+                    side: const BorderSide(color: HubColors.divider),
+                    backgroundColor: HubColors.accent.withValues(alpha: 0.09),
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    minimumSize: const Size(0, 36),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+                  ),
+                  child: const Text(
+                    'See all',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
                   ),
                 ),
               ],

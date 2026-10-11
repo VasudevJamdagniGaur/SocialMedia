@@ -27,7 +27,6 @@ class PodPage extends StatefulWidget {
 
 class _PodPageState extends State<PodPage> {
   String? _profilePicture;
-  bool _manualRefreshing = false;
 
   @override
   void initState() {
@@ -40,30 +39,7 @@ class _PodPageState extends State<PodPage> {
     if (!kManualTeaNewsRefreshOnly) {
       Future.delayed(const Duration(seconds: 60), prefetchAllSportsExploreTopicsNow);
     }
-    teaNewsManualRefreshing.addListener(_onRefreshingChanged);
     _loadProfilePicture();
-  }
-
-  @override
-  void dispose() {
-    teaNewsManualRefreshing.removeListener(_onRefreshingChanged);
-    super.dispose();
-  }
-
-  void _onRefreshingChanged() {
-    if (!mounted) return;
-    setState(() => _manualRefreshing = teaNewsManualRefreshing.value);
-  }
-
-  Future<void> _onManualRefresh() async {
-    await manualRefreshTeaAndNews();
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Tea & News refreshed'),
-        duration: Duration(seconds: 2),
-      ),
-    );
   }
 
   Future<void> _loadProfilePicture() async {
@@ -98,13 +74,6 @@ class _PodPageState extends State<PodPage> {
                     ),
                     onProfile: () => context.push(AppRoutes.profile),
                   ),
-                  if (kManualTeaNewsRefreshOnly) ...[
-                    _ManualTeaNewsRefreshButton(
-                      refreshing: _manualRefreshing,
-                      onRefresh: _onManualRefresh,
-                    ),
-                    const SizedBox(height: 12),
-                  ],
                   const TrendingTea(),
                   HubTrendingFeed(isDarkMode: isDark),
                   _CategoriesCard(
@@ -190,41 +159,6 @@ class _PodHeader extends StatelessWidget {
                 : const Icon(LucideIcons.user, color: HubTheme.accent, size: 22),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _ManualTeaNewsRefreshButton extends StatelessWidget {
-  const _ManualTeaNewsRefreshButton({
-    required this.refreshing,
-    required this.onRefresh,
-  });
-
-  final bool refreshing;
-  final Future<void> Function() onRefresh;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: FilledButton.icon(
-        onPressed: refreshing ? null : () => unawaited(onRefresh()),
-        icon: refreshing
-            ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-              )
-            : const Icon(LucideIcons.refreshCw, size: 18),
-        label: Text(refreshing ? 'Refreshing Tea & News…' : 'Refresh Tea & News'),
-        style: FilledButton.styleFrom(
-          backgroundColor: HubTheme.accent,
-          foregroundColor: Colors.white,
-          disabledBackgroundColor: HubTheme.accent.withValues(alpha: 0.55),
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
       ),
     );
   }
